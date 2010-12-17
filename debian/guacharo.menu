@@ -1,0 +1,4 @@
+?package(guacharo):needs="x11" section="Applications/Network/Communication" \
+	title="Guacharo Mail" \
+        icon="/usr/share/pixmaps/guacharo.xpm" \
+        command="guacharo" hints="Mail"
