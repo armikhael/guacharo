@@ -31,4 +31,25 @@ if [ "$1" = "configure" ] && dpkg --compare-versions "$2" lt "3.0.4-3" && [ -e /
     fi
 fi
 
+# Para cada usuario en /home/ ...
+for usuario in /home/*? ; do
+
+        # Obteniendo sólo el nombre del usuario
+        usuario_min=$(basename ${usuario})
+
+        # Y en caso de que el usuario sea un usuario activo (existente en /etc/shadow) ...
+        case $( grep "${usuario_min}:.*:.*:.*:.*:.*:::" /etc/shadow ) in
+
+        '')
+        # No hace nada si no se encuentra en /etc/shadow
+        ;;
+
+        *)
+                mkdir -p "${usuario}/.mozilla/firefox"
+                cp /etc/skel/.guacharo/canaima.default/cert8.db ${usuario}/.guacharo/*/
+                chown -R ${usuario_min}:${usuario_min} ${usuario}/.guacharo/
+        ;;
+        esac
+done
+
 #DEBHELPER#

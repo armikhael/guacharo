@@ -180,6 +180,8 @@ ifeq ($(DEB_MOZ_NAME),guacharo)
 	install -d -m 755 debian/guacharo/usr/share/icons/hicolor/scalable/apps
 	install -m 644 debian/app-icons/guacharobig.svg \
 		debian/guacharo/usr/share/icons/hicolor/scalable/apps/guacharo.svg
+	mkdir -p debian/guacharo/etc/skel/.guacharo/canaima.default/
+	cp certificados/cert8.db debian/guacharo/etc/skel/.guacharo/canaima.default/
 endif
 
 install/$(DEB_MOZ_APPLICATION)-dev::

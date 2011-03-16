@@ -1,7 +1,7 @@
 [Desktop Entry]
-Name=Guacharo Mail/News
-Comment=Read/Write Mail/News with Guacharo
-GenericName=Mail Client
+Name=Cliente de Correo Guacharo
+Comment=Lea y escriba correos electrónicos
+GenericName=Cliente de Correo
 Exec=guacharo %u
 Terminal=false
 X-MultipleArgs=false
@@ -18,6 +18,8 @@ Name[fr]=Messagerie Guacharo
 Name[pl]=Klient poczty Guacharo
 Name[pt_BR]=Cliente de E-mail Guacharo
 Name[sv]=E-postklienten Guacharo
+Name[es_VE]=Cliente de Correo Guacharo
+Name[es]=Cliente de Correo Guacharo
 Comment[ca]=Llegiu i escriviu correu
 Comment[cs]=Čtení a psaní pošty
 Comment[de]=Emails lesen und verfassen
@@ -28,3 +30,5 @@ Comment[ja]=メールの読み書き
 Comment[pl]=Czytanie i wysyłanie e-maili
 Comment[pt_BR]=Ler e escrever suas mensagens
 Comment[sv]=Läs och skriv e-post
+Comment[es_VE]=Lea y escriba correos electrónicos
+Comment[es]=Lea y escriba correos electrónicos
