@@ -1,8 +1,9 @@
 guacharo (3.1.7+4) testing; urgency=low
 
   * [644b90f] Corrigiendo error en el postinst
+  * [b60849d] Mejorando el postinstall
 
- -- Luis Alejandro Martínez Faneyth <martinez.faneyth@gmail.com>  Wed, 16 Mar 2011 03:22:15 -0430
+ -- Luis Alejandro Martínez Faneyth <martinez.faneyth@gmail.com>  Thu, 17 Mar 2011 22:03:38 -0430
 
 guacharo (3.1.7+3) testing; urgency=low
 
