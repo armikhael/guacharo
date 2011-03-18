@@ -1,3 +1,9 @@
+guacharo (3.1.7+5) testing; urgency=low
+
+  * [a1352a3] Nueva versión
+
+ -- Luis Alejandro Martínez Faneyth <martinez.faneyth@gmail.com>  Thu, 17 Mar 2011 22:06:07 -0430
+
 guacharo (3.1.7+4) testing; urgency=low
 
   * [644b90f] Corrigiendo error en el postinst
