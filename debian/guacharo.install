@@ -1,0 +1,87 @@
+debian/guacharo.desktop usr/share/applications
+
+debian/tmp/usr/lib/guacharo/[LR]*
+debian/tmp/usr/lib/guacharo/lib*
+debian/tmp/usr/lib/guacharo/*.ini
+debian/tmp/usr/lib/guacharo/defaults/autoconfig usr/share/guacharo/defaults
+debian/tmp/usr/lib/guacharo/defaults/pref usr/share/guacharo/defaults
+debian/tmp/usr/lib/guacharo/defaults/profile etc/guacharo
+debian/tmp/usr/lib/guacharo/defaults/messenger usr/share/guacharo/defaults
+debian/tmp/usr/lib/guacharo/extensions/\{972ce4c6-7e08-4474-a285-3208198ce6fd\} usr/share/guacharo/extensions
+debian/tmp/usr/lib/guacharo/greprefs usr/share/guacharo
+debian/tmp/usr/lib/guacharo/modules usr/share/guacharo
+debian/tmp/usr/lib/guacharo/isp usr/share/guacharo
+debian/tmp/usr/lib/guacharo/res usr/share/guacharo
+debian/tmp/usr/lib/guacharo/guacharo*
+debian/tmp/usr/lib/guacharo/chrome usr/share/guacharo
+debian/tmp/usr/lib/guacharo/run-mozilla.sh
+debian/tmp/usr/lib/guacharo/mozilla-xremote-client
+debian/tmp/usr/lib/guacharo/removed-files
+
+debian/tmp/usr/lib/guacharo/components/newsblog.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsSetDefaultMail.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsBadCertHandler.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/offlineStartup.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsMailDefaultHandler.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/mdn-service.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/smime-service.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/FeedProcessor.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsAbLDAPAttributeMap.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsHelperAppDlg.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsDownloadManagerUI.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsContentDispatchChooser.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsHandlerService.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsWebHandlerApp.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsPhishingProtectionApplication.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsUrlClassifierListManager.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsUrlClassifierLib.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsProxyAutoConfig.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsAddonRepository.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsExtensionManager.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsBlocklistService.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsUpdateTimerManager.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsFormAutoComplete.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsURLFormatter.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/jsconsole-clhandler.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsTryToClose.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/pluginGlue.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/txEXSLTRegExFunctions.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsContentPrefService.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsDefaultCLH.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsFilePicker.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/*.xpt
+
+debian/tmp/usr/lib/guacharo/components/glautocomp.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/jsmimeemitter.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsAbAutoCompleteMyDomain.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsAbAutoCompleteSearch.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsMsgTraitService.js usr/share/guacharo/components
+
+debian/tmp/usr/lib/guacharo/components/aboutRights.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsActivity.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsActivityManager.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsActivityManagerUI.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsLDAPProtocolHandler.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsLoginInfo.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsLoginManager.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsLoginManagerPrompter.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsMailNewsCommandLineHandler.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsSMTPProtocolHandler.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/steelApplication.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/storage-Legacy.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/storage-mozStorage.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/mailContentHandler.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/msgAsyncPrompter.js usr/share/guacharo/components
+
+debian/tmp/usr/lib/guacharo/components/NetworkGeolocationProvider.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/GPSDGeolocationProvider.js usr/share/guacharo/components
+debian/tmp/usr/lib/guacharo/components/nsINIProcessor.js usr/share/guacharo/components
+
+debian/tmp/usr/lib/guacharo/components/components.list usr/share/guacharo/components
+
+debian/tmp/usr/lib/guacharo/components/lib*.so
+
+debian/guacharo.js etc/guacharo/pref
+debian/vendor.js usr/share/guacharo/defaults/pref
+
+debian/account-autoconfig/* usr/share/guacharo/isp

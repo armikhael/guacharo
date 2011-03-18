@@ -1,0 +1,10 @@
+<SearchPlugin xmlns="http://www.mozilla.org/2006/browser/search/">
+<ShortName>eBay</ShortName>
+<Description>eBay - Online auctions</Description>
+<InputEncoding>ISO-8859-1</InputEncoding>
+<Image width="16" height="16" type="image/x-icon">http://www.ebay.com/favicon.ico</Image>
+<Url type="text/html" method="GET" template="http://rover.ebay.com/rover/1/711-47294-18009-3/4">
+  <Param name="satitle" value="{searchTerms}"/>
+</Url>
+<SearchForm>http://search.ebay.com/</SearchForm>
+</SearchPlugin>
