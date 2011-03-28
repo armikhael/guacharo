@@ -1,8 +1,10 @@
 guacharo (3.1.7+6) testing; urgency=low
 
   * [25cae78] Cambiando páginas de notas de lanzamiento y soporte.
+  * [4578ad8] Corrección de acento en el nombre del lanzador de la
+    aplicación
 
- -- Luis Alejandro Martínez Faneyth <martinez.faneyth@gmail.com>  Mon, 28 Mar 2011 00:31:48 -0430
+ -- Luis Alejandro Martínez Faneyth <martinez.faneyth@gmail.com>  Sun, 27 Mar 2011 15:46:55 -0430
 
 guacharo (3.1.7+5) testing; urgency=low
 
