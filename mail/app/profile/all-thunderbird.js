@@ -125,10 +125,10 @@ pref("app.update.idletime", 60);
 pref("app.update.showInstalledUI", false);
 
 // Release notes URL
-pref("app.releaseNotesURL", "http://live.mozillamessaging.com/thunderbird/releasenotes?locale=%LOCALE%&version=%VERSION%&os=%OS%&buildid=%APPBUILDID%");
+pref("app.releaseNotesURL", "http://canaima.softwarelibre.gob.ve/");
 
 // Base URL for web-based support pages.
-pref("app.support.baseURL", "http://support.live.mozillamessaging.com/%LOCALE%/thunderbird/%APPBUILDID%/");
+pref("app.support.baseURL", "http://canaima.softwarelibre.gob.ve/soporte");
 
 // Blocklist preferences
 pref("extensions.blocklist.enabled", true);
