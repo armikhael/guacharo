@@ -1,0 +1,585 @@
+<?xml version="1.0"?>
+<!-- ***** BEGIN LICENSE BLOCK *****
+   - Version: MPL 1.1/GPL 2.0/LGPL 2.1
+   -
+   - The contents of this file are subject to the Mozilla Public License Version
+   - 1.1 (the "License"); you may not use this file except in compliance with
+   - the License. You may obtain a copy of the License at
+   - http://www.mozilla.org/MPL/
+   -
+   - Software distributed under the License is distributed on an "AS IS" basis,
+   - WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+   - for the specific language governing rights and limitations under the
+   - License.
+   -
+   - The Original Code is Mozilla Communicator client code.
+   -
+   - The Initial Developer of the Original Code is
+   - Netscape Communications Corporation.
+   - Portions created by the Initial Developer are Copyright (C) 1998-1999
+   - the Initial Developer. All Rights Reserved.
+   -
+   - Contributor(s):
+   -   Joachim Herb <herb@leo.org>
+   -
+   - Alternatively, the contents of this file may be used under the terms of
+   - either the GNU General Public License Version 2 or later (the "GPL"), or
+   - the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+   - in which case the provisions of the GPL or the LGPL are applicable instead
+   - of those above. If you wish to allow use of your version of this file only
+   - under the terms of either the GPL or the LGPL, and not to allow others to
+   - use your version of this file under the terms of the MPL, indicate your
+   - decision by deleting the provisions above and replace them with the notice
+   - and other provisions required by the LGPL or the GPL. If you do not delete
+   - the provisions above, a recipient may use your version of this file under
+   - the terms of any one of the MPL, the GPL or the LGPL.
+   -
+   - ***** END LICENSE BLOCK ***** -->
+<!DOCTYPE overlay [
+<!ENTITY % msgHdrViewOverlayDTD SYSTEM "chrome://messenger/locale/msgHdrViewOverlay.dtd">
+%msgHdrViewOverlayDTD;
+<!ENTITY % messengerDTD SYSTEM "chrome://messenger/locale/messenger.dtd">
+%messengerDTD;
+]>
+
+<?xml-stylesheet href="chrome://messenger/skin/messageHeader.css" type="text/css"?>
+<overlay xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+         xmlns:html="http://www.w3.org/1999/xhtml">
+
+<script type="application/javascript"
+        src="chrome://messenger/content/msgHdrViewOverlay.js"/>
+<script type="application/javascript"
+        src="chrome://global/content/nsDragAndDrop.js"/>
+
+<stringbundleset id="stringbundleset">
+  <stringbundle id="bundle_messenger" src="chrome://messenger/locale/messenger.properties"/>
+</stringbundleset>
+
+<menupopup id="messageIdContext" popupanchor="bottomleft"
+           onpopupshowing="FillMessageIdContextMenu(document.popupNode);">
+  <menuitem id="messageIdContext-messageIdTarget"
+            disabled="true"/>
+  <menuseparator id="messageIdContext-separator"/>
+  <menuitem id="messageIdContext-openMessageForMsgId"
+            label="&OpenMessageForMsgId.label;"
+            oncommand="var messageId = GetMessageIdFromNode(document.popupNode, true);
+                       OpenMessageForMessageId(messageId)"/>
+  <menuitem id="messageIdContext-openBrowserWithMsgId"
+            label="&OpenBrowserWithMsgId.label;"
+            oncommand="var messageId = GetMessageIdFromNode(document.popupNode, true);
+                       OpenBrowserWithMessageId(messageId)"/>
+  <menuitem id="messageIdContext-copyMessageId"
+            label="&CopyMessageId.label;"
+            oncommand="var messageId = GetMessageIdFromNode(document.popupNode, false);
+                       CopyMessageId(messageId);"/>
+</menupopup>
+
+<menupopup id="attachmentListContext"
+           onpopupshowing="return onShowAttachmentContextMenu();"
+           onpopuphiding="return onHideAttachmentContextMenu();">
+  <menuitem id="context-openAttachment"
+            label="&openAttachmentCmd.label;"
+            accesskey="&openAttachmentCmd.accesskey;"
+            oncommand="HandleMultipleAttachments(this.parentNode.attachments, 'open');"/>
+  <menuitem id="context-saveAttachment"
+            label="&saveAsAttachmentCmd.label;"
+            accesskey="&saveAsAttachmentCmd.accesskey;"
+            oncommand="HandleMultipleAttachments(this.parentNode.attachments, 'saveAs');"/>
+  <menuseparator id="context-menu-separator"/>
+  <menuitem id="context-detachAttachment"
+            label="&detachAttachmentCmd.label;"
+            accesskey="&detachAttachmentCmd.accesskey;"
+            oncommand="HandleMultipleAttachments(this.parentNode.attachments, 'detach');"/>
+  <menuitem id="context-deleteAttachment"
+            label="&deleteAttachmentCmd.label;"
+            accesskey="&deleteAttachmentCmd.accesskey;"
+            oncommand="HandleMultipleAttachments(this.parentNode.attachments, 'delete');"/>
+  <menuitem id="context-openAllAttachments"
+            label="&openAllAttachmentsCmd.label;"
+            accesskey="&openAllAttachmentsCmd.accesskey;"
+            oncommand="HandleAllAttachments('open');"/>
+  <menuitem id="context-saveAllAttachments"
+            label="&saveAllAttachmentsCmd.label;"
+            accesskey="&saveAllAttachmentsCmd.accesskey;"
+            oncommand="HandleAllAttachments('save');"/>
+  <menuseparator id="context-menu-separator-all"/>
+  <menuitem id="context-detachAllAttachments"
+            label="&detachAllAttachmentsCmd.label;"
+            accesskey="&detachAllAttachmentsCmd.accesskey;"
+            oncommand="HandleAllAttachments('detach');"/>
+  <menuitem id="context-deleteAllAttachments"
+            label="&deleteAllAttachmentsCmd.label;"
+            accesskey="&deleteAllAttachmentsCmd.accesskey;"
+            oncommand="HandleAllAttachments('delete');"/>
+ </menupopup>
+ 
+ <menupopup id="attachmentMenuList">
+   <menuseparator/>
+   <menuitem id="file-openAllAttachments"
+             label="&openAllAttachmentsCmd.label;"
+             accesskey="&openAllAttachmentsCmd.accesskey;"
+             oncommand="HandleAllAttachments('open');" />
+   <menuitem id="file-saveAllAttachments"
+             label="&saveAllAttachmentsCmd.label;"
+             accesskey="&saveAllAttachmentsCmd.accesskey;"
+             oncommand="HandleAllAttachments('save');"/>
+   <menuitem id="file-detachAllAttachments"
+             label="&detachAllAttachmentsCmd.label;"
+             accesskey="&detachAllAttachmentsCmd.accesskey;"
+             oncommand="HandleAllAttachments('detach');" />
+   <menuitem id="file-deleteAllAttachments"
+             label="&deleteAllAttachmentsCmd.label;"
+             accesskey="&deleteAllAttachmentsCmd.accesskey;"
+             oncommand="HandleAllAttachments('delete');" />
+</menupopup>
+
+<menupopup id="header-toolbar-context-menu">
+  <menuitem id="CustomizeHeaderToolbar"
+            oncommand="CustomizeMailToolbar('header-view-toolbox', 'CustomizeHeaderToolbar')"
+            label="&customizeToolbar.label;"
+            accesskey="&customizeToolbar.accesskey;"/>
+</menupopup>
+
+<menupopup id="attachment-toolbar-context-menu">
+  <menuitem id="CustomizeAttachmentToolbar"
+            oncommand="CustomizeMailToolbar('attachment-view-toolbox', 'CustomizeAttachmentToolbar')"
+            label="&customizeToolbar.label;"
+            accesskey="&customizeToolbar.accesskey;"/>
+</menupopup>
+
+<menupopup id="copyUrlPopup" popupanchor="bottomleft">
+  <menuitem label="&copyLinkCmd.label;" accesskey="&copyLinkCmd.accesskey;" oncommand="CopyWebsiteAddress(document.popupNode)"/>
+</menupopup>
+
+<hbox id="msgHeaderView" collapsed="true" class="main-header-area">
+  <deck id="msgHeaderViewDeck" selectedIndex="0"
+        persist="selectedIndex" flex="1"
+        context="header-toolbar-context-menu">
+
+    <!-- the message pane consists of 3 'boxes'. Box #2 is the expanded headers view (the default view) -->
+    <vbox id="expandedHeaderView" flex="1">
+
+      <!-- a convenience box for ease of extension overlaying -->
+      <vbox id="expandedHeadersBox" flex="1">
+
+        <html:div id="expandedHeadersTopBox" flex="1">
+
+          <toolbox id="header-view-toolbox"
+                   class="inline-toolbox"
+                   defaulticonsize="small"
+                   minwidth="50px"
+                   defaultlabelalign="end"
+                   defaultmode="full"
+                   inlinetoolbox="true">
+            <toolbarpalette id="header-view-toolbar-palette">
+              <!-- XXXdmose need to move these commands to a controller, either
+                   on the header view, the message pane, or the default
+                   controller -->
+
+              <!-- XXXdmose need to audit our shortcut/a11y setup and make sure
+                   these buttons are doing the right thing -->
+
+              <toolbarbutton id="hdrForwardButton"
+                             label="&hdrForwardButton.label;"
+                             tooltiptext="&hdrForwardButton.tooltip;"
+                             oncommand="MsgForwardMessage(event);RestoreFocusAfterHdrButton();"
+                             observes="button_forward"
+                             class="toolbarbutton-1 msgHeaderView-button hdrForwardButton"/>
+              <toolbarbutton id="hdrArchiveButton"
+                             label="&hdrArchiveButton.label;"
+                             tooltiptext="&hdrArchiveButton.tooltip;"
+                             oncommand="MsgArchiveSelectedMessages(event);RestoreFocusAfterHdrButton();"
+                             observes="button_archive"
+                             class="toolbarbutton-1 msgHeaderView-button hdrArchiveButton"/>
+              <toolbarbutton id="hdrJunkButton" label="&hdrJunkButton.label;"
+                             tooltiptext="&hdrJunkButton.tooltip;"
+                             observes="button_junk"
+                             class="toolbarbutton-1 msgHeaderView-button hdrJunkButton"
+                             oncommand="goDoCommand('button_junk');RestoreFocusAfterHdrButton();"/>
+              <toolbarbutton id="hdrTrashButton"
+                             label="&hdrTrashButton.label;"
+                             tooltiptext="&hdrTrashButton.tooltip;"
+                             observes="button_delete"
+                             class="toolbarbutton-1 msgHeaderView-button hdrTrashButton"
+                             oncommand="goDoCommand(event.shiftKey ? 'cmd_shiftDelete' :
+                                                    'cmd_delete');RestoreFocusAfterHdrButton();"/>
+              <toolbarbutton id="hdrReplyToSenderButton" label="&hdrReplyButton.label;"
+                             tooltiptext="&hdrReplyButton.tooltip;"
+                             oncommand="MsgReplyMessage(event);RestoreFocusAfterHdrButton();"
+                             observes="button_reply"
+                             class="toolbarbutton-1 msgHeaderView-button hdrReplyToSenderButton"/>
+              <toolbaritem id="hdrSmartReplyButton">
+                <toolbarbutton id="hdrReplyButton" label="&hdrReplyButton.label;"
+                               tooltiptext="&hdrReplyButton.tooltip;"
+                               oncommand="MsgReplyMessage(event);RestoreFocusAfterHdrButton();"
+                               observes="button_reply"
+                               class="toolbarbutton-1 msgHeaderView-button hdrReplyButton"
+                               type="menu-button">
+                  <menupopup id="hdrReplyDropdown">
+                    <menuitem id="hdrReplySubButton"
+                              label="&hdrReplyButton.label;"
+                              tooltiptext="&hdrReplyButton.tooltip;"
+                              observes="button_reply"/>
+                    <menuseparator id="hdrReplyAllSubButtonSep"/>
+                    <menuitem id="hdrReplyAllSubButton"
+                              label="&hdrReplyAllButton.label;"
+                              tooltiptext="&hdrReplyAllButton.tooltip;"
+                              observes="button_replyall"
+                              oncommand="MsgReplyToAllMessage(event); event.stopPropagation();
+                                         RestoreFocusAfterHdrButton();"/>
+                  </menupopup>
+                </toolbarbutton>
+                <toolbarbutton id="hdrReplyAllButton"
+                               label="&hdrReplyAllButton.label;"
+                               tooltiptext="&hdrReplyAllButton.tooltip;"
+                               oncommand="MsgReplyToAllMessage(event);RestoreFocusAfterHdrButton();"
+                               observes="button_replyall"
+                               class="toolbarbutton-1 msgHeaderView-button hdrReplyButton hdrReplyAllButton"
+                               type="menu-button"
+                               hidden="true">
+                  <menupopup id="hdrReplyAllDropdown">
+                    <menuitem id="hdrReplyAllSubButton"
+                              label="&hdrReplyAllButton.label;"
+                              tooltiptext="&hdrReplyAllButton.tooltip;"
+                              observes="button_replyall"/>
+                    <menuseparator id="hdrReplyAllSubSeparator"/>
+                    <menuitem id="hdrReplySubButton"
+                              label="&hdrReplyButton.label;"
+                              tooltiptext="&hdrReplyButton.tooltip;"
+                              observes="button_reply"
+                              oncommand="MsgReplyMessage(event); event.stopPropagation();
+                                         RestoreFocusAfterHdrButton();"/>
+                  </menupopup>
+                </toolbarbutton>
+                <toolbarbutton id="hdrReplyListButton"
+                               label="&hdrReplyListButton.label;"
+                               tooltiptext="&hdrReplyListButton.tooltip;"
+                               oncommand="MsgReplyToListMessage(event);RestoreFocusAfterHdrButton();"
+                               observes="button_replylist"
+                               class="toolbarbutton-1 msgHeaderView-button hdrReplyButton hdrReplyListButton"
+                               type="menu-button"
+                               hidden="true">
+                  <menupopup id="hdrReplyListDropdown">
+                    <menuitem id="hdrReplyListSubButton"
+                              label="&hdrReplyListButton.label;"
+                              tooltiptext="&hdrReplyListButton.tooltip;"
+                              observes="button_replylist"/>
+                    <menuseparator id="hdrReplyListSubSeparator"/>
+                    <menuitem id="hdrReplyAllSubButton"
+                              label="&hdrReplyAllButton.label;"
+                              tooltiptext="&hdrReplyAllButton.tooltip;"
+                              observes="button_replyall"
+                              oncommand="MsgReplyToAllMessage(event); event.stopPropagation();
+                                         RestoreFocusAfterHdrButton();"/>
+                    <menuitem id="hdrReplySubButton"
+                              label="&hdrReplyButton.label;"
+                              tooltiptext="&hdrReplyButton.tooltip;"
+                              observes="button_reply"
+                              oncommand="MsgReplyMessage(event); event.stopPropagation();
+                                         RestoreFocusAfterHdrButton();"/>
+                  </menupopup>
+                </toolbarbutton>
+              </toolbaritem>
+            </toolbarpalette>
+
+            <toolbar id="header-view-toolbar" class="inline-toolbar" align="start"
+                     customizable="true" mode="full"
+                     context="header-toolbar-context-menu"
+                     defaulticonsize="small" defaultmode="full"
+                     defaultset="hdrReplyToSenderButton,hdrSmartReplyButton,hdrForwardButton,hdrArchiveButton,hdrJunkButton,hdrTrashButton"/>
+          </toolbox>
+
+          <!-- Theoretically, we should be able to replace this grid with just
+               an hbox.  Unfortunately, doing that makes it very hard to sync
+               the column sizes between the name columns, because for currently
+               unclear reasons, the .clientWidth of a column is wider than the
+               .clientWidth of its largest contained child by an unspecified
+               amount. -->
+          <grid id="expandedHeaders">
+
+            <columns id="expandedHeadersColumns">
+              <column id="expandedHeadersNameColumn"/>
+              <column id="expandedHeadersValueColumn" flex="1"/>
+            </columns>
+
+            <rows id="expandedHeaderRows">
+              <row id="expandedfromRow">
+                <label id="expandedfromLabel" class="headerName"
+                       value="&fromField2.label;" control="expandedfromBox"/>
+                <mail-multi-emailHeaderField id="expandedfromBox" flex="1"/>
+              </row>
+            </rows>
+          </grid>
+
+        </html:div>
+
+        <hbox id="expandedHeadersBottomBox">
+
+          <!-- The grid that contains all headers except the first one,
+                including any headers created dynamically from JavaScript -->
+          <grid id="expandedHeaders2" flex="1">
+
+            <columns id="expandedHeaders2Columns">
+              <column id="expandedHeaders2NameColumn"/>
+              <column id="expandedHeaders2ValueColumn" flex="1"/>
+            </columns>
+
+            <rows id="expandedHeader2Rows">
+
+              <!-- Commonly used rows are pre-specified in the XUL to avoid the
+                   performance hit of creating them dynamically. -->
+              <row id="expandedsubjectRow">
+                <label id="expandedsubjectLabel" class="headerName"
+                       value="&subjectField2.label;"
+                       control="expandedsubjectBox"/>
+                <mail-headerfield id="expandedsubjectBox" flex="1"/>
+              </row>
+              <row id="expandedorganizationRow" collapsed="true">
+                <label id="expandedorganizationLabel" class="headerName"
+                       value="&organizationField2.label;"
+                       control="expandedorganizationBox"/>
+                <mail-headerfield id="expandedorganizationBox"/>
+              </row>
+              <row id="expandedsenderRow" collapsed="true">
+                <label id="expandedsenderLabel" class="headerName"
+                       value="&senderField2.label;" control="expandedsenderBox"/>
+                <mail-emailheaderfield id="expandedsenderBox"/>
+              </row>
+              <row id="expandedreply-toRow" collapsed="true">
+                <label id="expandedreply-toLabel" class="headerName"
+                       value="&replyToField2.label;"
+                       control="expandedreply-toBox"/>
+                <mail-multi-emailHeaderField id="expandedreply-toBox"/>
+              </row>
+              <row id="expandedtoRow" collapsed="true">
+                <label id="expandedtoLabel" class="headerName"
+                       value="&toField2.label;" control="expandedtoBox"/>
+                <mail-multi-emailHeaderField id="expandedtoBox" flex="1"/>
+              </row>
+              <row id="expandedccRow" collapsed="true">
+                <label id="expandedccLabel" class="headerName"
+                       value="&ccField2.label;" control="expandedccBox"/>
+                <mail-multi-emailHeaderField id="expandedccBox" flex="1"/>
+              </row>
+              <row id="expandedbccRow" collapsed="true">
+                <label id="expandedbccLabel" class="headerName"
+                       value="&bccField2.label;" control="expandedbccBox"/>
+                <mail-multi-emailHeaderField id="expandedbccBox"/>
+              </row>
+              <row id="expandednewsgroupsRow" collapsed="true">
+                <label id="expandednewsgroupsLabel" class="headerName"
+                       value="&newsgroupsField2.label;"
+                       control="expandednewsgroupsBox"/>
+                <mail-newsgroups-headerfield id="expandednewsgroupsBox"/>
+              </row>
+              <row id="expandedfollowup-toRow" collapsed="true">
+                <label id="expandedfollowup-toLabel" class="headerName"
+                       value="&followupToField2.label;"
+                       control="expandedfollowup-toBox"/>
+                <mail-newsgroups-headerfield id="expandedfollowup-toBox"/>
+              </row>
+              <row id="expandeddateRow" collapsed="true">
+                <label id="expandeddateLabel" class="headerName"
+                       value="&dateField2.label;" control="expandeddateBox"/>
+                <mail-headerfield id="expandeddateBox" flex="1"/>
+              </row>
+              <row id="expandedmessage-idRow" collapsed="true">
+                <label id="expandedmessage-idLabel" class="headerName"
+                       value="&messageIdField2.label;"
+                       control="expandedmessage-idBox"/>
+                <mail-messageids-headerfield id="expandedmessage-idBox"/>
+              </row>
+              <row id="expandedin-reply-toRow" collapsed="true">
+                <label id="expandedin-reply-toLabel" class="headerName"
+                       value="&inReplyToField2.label;"
+                       control="expandedin-reply-toBox"/>
+                <mail-messageids-headerfield id="expandedin-reply-toBox"/>
+              </row>
+              <row id="expandedreferencesRow" collapsed="true">
+                <label id="expandedreferencesLabel" class="headerName"
+                       value="&referencesField2.label;"
+                       control="expandedReferencesBox"/>
+                <mail-messageids-headerfield id="expandedreferencesBox"
+                                             flex="1"/>
+              </row>
+              <row id="expandedtagsRow" collapsed="true">
+                <label id="expandedtagsLabel" class="headerName"
+                       value="&tagsHdr2.label;" control="expandedtagsBox"/>
+                <mail-tagfield id="expandedtagsBox"/>
+              </row>
+              <row id="expandedcontent-baseRow" collapsed="true">
+                <label id="expandedcontent-baseLabel" class="headerName"
+                       value="&originalWebsite2.label;"
+                       control="expandedcontent-baseBox"/>
+                <mail-urlfield id="expandedcontent-baseBox"/>
+              </row>
+              <row id="expandeduser-agentRow" collapsed="true">
+                <label id="expandeduser-agentLabel" class="headerName"
+                       value="&userAgentField2.label;"
+                       control="expandeduser-agentBox"/>
+                <mail-headerfield id="expandeduser-agentBox" flex="1"/>
+              </row>
+            </rows>
+          </grid>
+
+          <!-- perhaps this should be a customizable toolbar too -->
+          <vbox id="otherActionsBox" align="end">
+            <hbox id="dateValueBox" align="top" flex="1">  <!--For extensions-->
+              <label id="dateLabel" class="dateLabel" flex="1" role="textbox"
+                     aria-readonly="true"/>
+            </hbox>
+            <button type="menu" id="otherActionsButton"
+                    label="&otherActionsButton.label;"
+                    class="msgHeaderView-button msgHeaderView-flat-button">
+              <menupopup id="otherActionsPopup"
+                         onpopupshowing="onShowOtherActionsPopup();">
+                <menuitem id="otherActionsOpenConversation"
+                          label="&otherActionsOpenConversation.label;"
+                          accesskey="&otherActionsOpenConversation.accesskey;"
+                          oncommand="gConversationOpener.openConversationForMessages(gFolderDisplay.selectedMessages);"/>
+                <menuitem id="otherActionsOpenInNewWindow"
+                          label="&otherActionsOpenInNewWindow.label;"
+                          accesskey="&otherActionsOpenInNewWindow.accesskey;"
+                          oncommand="MsgOpenNewWindowForMessage();"/>
+                <menuitem id="otherActionsOpenInNewTab"
+                          label="&otherActionsOpenInNewTab.label;"
+                          accesskey="&otherActionsOpenInNewTab.accesskey;"
+                          oncommand="OpenMessageInNewTab(event);"/>
+                <menuitem id="viewSourceMenuItem"
+                          label="&viewSourceMenuItem.label;"
+                          accesskey="&viewSourceMenuItem.accesskey;"
+                          oncommand="ViewPageSource(gFolderDisplay.selectedMessageUris);" />
+                <menuseparator id="otherActionsSeparator"/>
+                <menuitem id="markAsReadMenuItem"
+                          label="&markAsReadMenuItem.label;"
+                          accesskey="&markAsReadMenuItem.accesskey;"
+                          oncommand="MsgMarkMsgAsRead();"/>
+                <menuitem id="markAsUnreadMenuItem"
+                          label="&markAsUnreadMenuItem.label;"
+                          accesskey="&markAsUnreadMenuItem.accesskey;"
+                          oncommand="MsgMarkMsgAsRead();"/>
+                <menuitem id="saveAsMenuItem" label="&saveAsMenuItem.label;"
+                          accesskey="&saveAsMenuItem.accesskey;"
+                          oncommand="MsgSaveAsFile();"/>
+                <menuitem id="otherActionsPrint"
+                          label="&otherActionsPrint.label;"
+                          accesskey="&otherActionsPrint.accesskey;"
+                          oncommand="PrintEnginePrint();"/>
+              </menupopup>
+            </button>
+          </vbox>
+        </hbox>
+      </vbox>
+    </vbox>
+  </deck>
+</hbox>
+
+<hbox id="editMessageBox" pack="start" align="center" collapsed="true"
+      class="main-header-area">
+  <label id="editMessageDescription" control="editMessageButton"
+         value="&editMessageDescription.label;"/>
+  <button id="editMessageButton" label="&editMessageButton.label;"
+          oncommand="MsgComposeDraftMessage()"/>
+</hbox>
+
+<!-- the message pane consists of 4 'boxes'. Box #4 is the attachment box which
+     can be toggled into a slim or an expanded view -->
+<vbox id="attachmentView" collapsed="true">
+  <hbox align="center" id="attachmentBar"
+        context="attachment-toolbar-context-menu"
+        onclick="if (event.button == 0 &amp;&amp; event.originalTarget.id == 'attachmentBar') toggleAttachmentList();">
+    <button type="checkbox" id="attachmentToggle"
+            oncommand="toggleAttachmentList(this.checked);"/>
+    <image id="attachmentIcon"/>
+    <label id="attachmentCount"/>
+    <label id="attachmentName" crop="center" flex="1"
+           context="attachmentListContext"
+           onclick="if (event.button == 0) { HandleAllAttachments('open'); RestoreFocusAfterHdrButton(); }"
+           ondraggesture="nsDragAndDrop.startDrag(event,attachmentNameDNDObserver);"/>
+    <label id="attachmentSize"/>
+    <!-- Use a very large flex value here so that attachmentCount doesn't take
+         up more space than necessary, but still crops itself if there's not
+         enough space. -->
+    <spacer flex="9999"/>
+
+    <toolbox id="attachment-view-toolbox"
+             class="inline-toolbox"
+             defaulticonsize="small"
+             minwidth="50px"
+             defaultlabelalign="end"
+             defaultmode="full"
+             inlinetoolbox="true">
+      <toolbarpalette id="attachment-view-toolbar-palette">
+        <toolbaritem id="attachmentSaveAll">
+          <toolbarbutton type="menu-button" id="attachmentSaveAllSingle"
+                         class="toolbarbutton-1 msgHeaderView-button"
+                         label="&saveAttachmentButton.label;"
+                         tooltiptext="&saveAttachmentButton.tooltip;"
+                         oncommand="HandleAllAttachments('saveAs'); RestoreFocusAfterHdrButton();"
+                         hidden="true">
+            <menupopup onpopupshowing="onShowSaveAttachmentMenuSingle();">
+              <menuitem id="button-openAttachment"
+                        oncommand="HandleAllAttachments('open'); event.stopPropagation(); RestoreFocusAfterHdrButton();"
+                        label="&openAttachmentMenuItem.label;"
+                        accesskey="&openAttachmentMenuItem.accesskey;"/>
+              <menuitem id="button-saveAttachment"
+                        oncommand="HandleAllAttachments('saveAs'); event.stopPropagation(); RestoreFocusAfterHdrButton();"
+                        label="&saveAsAttachmentMenuItem.label;"
+                        accesskey="&saveAsAttachmentMenuItem.accesskey;"/>
+              <menuseparator id="button-menu-separator"/>
+              <menuitem id="button-detachAttachment"
+                        oncommand="HandleAllAttachments('detach'); event.stopPropagation(); RestoreFocusAfterHdrButton();"
+                        label="&detachAttachmentMenuItem.label;"
+                        accesskey="&detachAttachmentMenuItem.accesskey;"/>
+              <menuitem id="button-deleteAttachment"
+                        oncommand="HandleAllAttachments('delete'); event.stopPropagation(); RestoreFocusAfterHdrButton();"
+                        label="&deleteAttachmentMenuItem.label;"
+                        accesskey="&deleteAttachmentMenuItem.accesskey;"/>
+            </menupopup>
+          </toolbarbutton>
+          <toolbarbutton type="menu-button" id="attachmentSaveAllMultiple"
+                         class="toolbarbutton-1 msgHeaderView-button"
+                         label="&saveAllAttachmentsButton.label;"
+                         tooltiptext="&saveAllAttachmentsButton.tooltip;"
+                         oncommand="HandleAllAttachments('save'); RestoreFocusAfterHdrButton();"
+                         hidden="true">
+            <menupopup onpopupshowing="onShowSaveAttachmentMenuMultiple();">
+              <menuitem id="button-openAllAttachments"
+                        oncommand="HandleAllAttachments('open'); event.stopPropagation(); RestoreFocusAfterHdrButton();"
+                        label="&openAllAttachmentsMenuItem.label;"
+                        accesskey="&openAllAttachmentsMenuItem.accesskey;"/>
+              <menuitem id="button-saveAllAttachments"
+                        oncommand="HandleAllAttachments('save'); event.stopPropagation(); RestoreFocusAfterHdrButton();"
+                        label="&saveAllAttachmentsMenuItem.label;"
+                        accesskey="&saveAllAttachmentsMenuItem.accesskey;"/>
+              <menuseparator id="button-menu-separator-all"/>
+              <menuitem id="button-detachAllAttachments"
+                        oncommand="HandleAllAttachments('detach'); event.stopPropagation(); RestoreFocusAfterHdrButton();"
+                        label="&detachAllAttachmentsMenuItem.label;"
+                        accesskey="&detachAllAttachmentsMenuItem.accesskey;"/>
+              <menuitem id="button-deleteAllAttachments"
+                        oncommand="HandleAllAttachments('delete'); event.stopPropagation(); RestoreFocusAfterHdrButton();"
+                        label="&deleteAllAttachmentsMenuItem.label;"
+                        accesskey="&deleteAllAttachmentsMenuItem.accesskey;"/>
+            </menupopup>
+          </toolbarbutton>
+        </toolbaritem>
+      </toolbarpalette>
+      <toolbar id="attachment-view-toolbar" class="inline-toolbar" align="start"
+               customizable="true" mode="full"
+               context="attachment-toolbar-context-menu"
+               defaulticonsize="small" defaultmode="full"
+               defaultset="attachmentSaveAll"/>
+    </toolbox>
+  </hbox>
+  <box id="attachmentListWrapper" flex="1" collapsed="true">
+    <description selectable="true" id="attachmentList" flex="1"
+                 seltype="multiple" context="attachmentListContext"
+                 onclick="attachmentListClick(event);"
+                 ondraggesture="nsDragAndDrop.startDrag(event,attachmentListDNDObserver);"
+                 ondragover="nsDragAndDrop.dragOver(event, attachmentListDNDObserver);">
+    </description>
+  </box>
+</vbox>
+
+</overlay>

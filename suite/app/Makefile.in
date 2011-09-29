@@ -1,0 +1,393 @@
+# ***** BEGIN LICENSE BLOCK *****
+# Version: MPL 1.1/GPL 2.0/LGPL 2.1
+#
+# The contents of this file are subject to the Mozilla Public License Version
+# 1.1 (the "License"); you may not use this file except in compliance with
+# the License. You may obtain a copy of the License at
+# http://www.mozilla.org/MPL/
+#
+# Software distributed under the License is distributed on an "AS IS" basis,
+# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+# for the specific language governing rights and limitations under the
+# License.
+#
+# The Original Code is mozilla.org code.
+#
+# The Initial Developer of the Original Code is
+# the mozilla.org SeaMonkey project.
+# Portions created by the Initial Developer are Copyright (C) 2006
+# the Initial Developer. All Rights Reserved.
+#
+# Contributor(s):
+#  Mark Banner <bugzilla@standard8.demon.co.uk>
+#
+# Alternatively, the contents of this file may be used under the terms of
+# either the GNU General Public License Version 2 or later (the "GPL"), or
+# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+# in which case the provisions of the GPL or the LGPL are applicable instead
+# of those above. If you wish to allow use of your version of this file only
+# under the terms of either the GPL or the LGPL, and not to allow others to
+# use your version of this file under the terms of the MPL, indicate your
+# decision by deleting the provisions above and replace them with the notice
+# and other provisions required by the GPL or the LGPL. If you do not delete
+# the provisions above, a recipient may use your version of this file under
+# the terms of any one of the MPL, the GPL or the LGPL.
+#
+# ***** END LICENSE BLOCK *****
+
+DEPTH		= ../..
+topsrcdir	= @top_srcdir@
+srcdir		= @srcdir@
+VPATH		= @srcdir@
+
+include $(DEPTH)/config/autoconf.mk
+
+AB_CD = $(MOZ_UI_LOCALE) 
+
+GRE_MILESTONE = $(shell $(PYTHON) $(MOZILLA_SRCDIR)/config/printconfigsetting.py $(LIBXUL_DIST)/bin/platform.ini Build Milestone)
+GRE_BUILDID = $(shell $(PYTHON) $(MOZILLA_SRCDIR)/config/printconfigsetting.py $(LIBXUL_DIST)/bin/platform.ini Build BuildID)
+
+DEFINES += \
+	-DSEAMONKEY_ICO=\"$(DIST)/branding/seamonkey.ico\" \
+	-DAB_CD=$(AB_CD) \
+	-DAPP_VERSION="$(MOZ_APP_VERSION)" \
+	-DGRE_MILESTONE=$(GRE_MILESTONE) \
+	-DGRE_BUILDID=$(GRE_BUILDID) \
+	$(NULL)
+
+MOZ_SOURCE_STAMP = $(firstword $(shell hg -R $(topsrcdir) parent --template="{node|short}\n" 2>/dev/null))
+ifdef MOZ_SOURCE_STAMP
+DEFINES += -DMOZ_SOURCE_STAMP="$(MOZ_SOURCE_STAMP)"
+endif
+
+SOURCE_REPO := $(shell hg -R $(topsrcdir) showconfig paths.default 2>/dev/null | sed -e "s/^ssh:/http:/")
+ifdef SOURCE_REPO
+DEFINES += -DMOZ_SOURCE_REPO="$(SOURCE_REPO)"
+endif
+
+ifneq (,$(filter OS2 WINCE WINNT,$(OS_ARCH)))
+PROGRAM = $(MOZ_APP_NAME)$(BIN_SUFFIX)
+else
+PROGRAM = $(MOZ_APP_NAME)-bin$(BIN_SUFFIX)
+endif
+
+
+CPPSRCS = nsSuiteApp.cpp
+
+DIST_FILES = application.ini
+
+LOCAL_INCLUDES += \
+  -I$(MOZILLA_SRCDIR)/toolkit/xre \
+  -I$(MOZILLA_SRCDIR)/xpcom/base \
+  $(NULL)
+
+ifdef BUILD_STATIC_LIBS
+ifdef _MSC_VER
+STATIC_COMPONENTS_LINKER_PATH = -LIBPATH:$(MOZDEPTH)/staticlib
+else
+STATIC_COMPONENTS_LINKER_PATH = -L$(MOZDEPTH)/staticlib
+endif
+LIBS += $(MOZDEPTH)/toolkit/xre/$(LIB_PREFIX)xulapp_s.$(LIB_SUFFIX)
+else
+ifeq (cocoa,$(MOZ_WIDGET_TOOLKIT))
+LIBS += $(DIST)/bin/XUL
+else
+EXTRA_DSO_LIBS += xul
+endif
+endif
+
+ifeq (cocoa,$(MOZ_WIDGET_TOOLKIT))
+TK_LIBS := -framework Cocoa $(TK_LIBS)
+ifdef BUILD_STATIC_LIBS
+TK_LIBS := -framework SystemConfiguration $(TK_LIBS)
+endif
+endif
+
+ifdef MOZ_ENABLE_LIBXUL
+APP_XPCOM_LIBS = $(XPCOM_GLUE_LDOPTS)
+else
+MOZILLA_INTERNAL_API = 1
+APP_XPCOM_LIBS = $(XPCOM_LIBS)
+endif
+
+LIBS += \
+	$(STATIC_COMPONENTS_LINKER_PATH) \
+	$(EXTRA_DSO_LIBS) \
+	$(APP_XPCOM_LIBS) \
+	$(NSPR_LIBS) \
+	$(NULL)
+
+ifdef BUILD_STATIC_LIBS
+LIBS += \
+	$(MOZ_JS_LIBS) \
+	$(TK_LIBS) \
+	$(NULL)
+
+# Add explicit X11 dependency when building against X11 toolkits
+ifneq (,$(filter gtk gtk2 xlib,$(MOZ_WIDGET_TOOLKIT)))
+LIBS += $(XLDFLAGS) $(XLIBS)
+endif
+endif
+
+ifdef MOZ_JPROF
+LIBS += -ljprof
+endif
+
+ifdef MOZ_ENABLE_DBUS
+LIBS += $(MOZ_DBUS_GLIB_LIBS)
+endif
+
+ifndef MOZ_ENABLE_LIBXUL
+ifdef MOZ_NATIVE_HUNSPELL
+LIBS += $(MOZ_HUNSPELL_LIBS)
+endif
+endif
+
+ifndef MOZ_WINCONSOLE
+ifdef MOZ_DEBUG
+MOZ_WINCONSOLE = 1
+else
+MOZ_WINCONSOLE = 0
+endif
+endif
+
+NSDISTMODE = copy
+
+include $(topsrcdir)/config/config.mk
+
+ifdef _MSC_VER
+WIN32_EXE_LDFLAGS += -ENTRY:wmainCRTStartup
+endif
+
+ifdef BUILD_STATIC_LIBS
+
+ifneq (,$(filter windows cocoa gtk2, $(MOZ_WIDGET_TOOLKIT)))
+LIBS += ../shell/src/$(LIB_PREFIX)shellservice_s.$(LIB_SUFFIX)
+endif
+
+include $(topsrcdir)/config/static-config.mk
+
+EXTRA_DEPS	+= \
+	$(STATIC_EXTRA_DEPS) \
+	$(NULL)
+DEFINES		+= $(STATIC_DEFINES)
+CPPSRCS		+= $(STATIC_CPPSRCS)
+EXTRA_DSO_LIBS	+= $(STATIC_EXTRA_DSO_LIBS)
+EXTRA_LIBS	+= \
+	$(STATIC_EXTRA_LIBS) \
+	$(MOZ_HARFBUZZ_LIBS) \
+	$(NULL)
+endif
+
+# OpenGL is required by (mozilla/)content/canvas: see (mozilla/)layout/build/Makefile.in.
+ifeq (cocoa,$(MOZ_WIDGET_TOOLKIT))
+OS_LIBS += -framework OpenGL
+endif
+
+ifeq ($(OS_ARCH),WINNT)
+OS_LIBS += $(call EXPAND_LIBNAME,comctl32 comdlg32 uuid shell32 ole32 oleaut32 version winspool)
+RCINCLUDE = splash.rc
+ifndef GNU_CC
+RCFLAGS += -DMOZ_SUITE -I$(srcdir)
+else
+RCFLAGS += -DMOZ_SUITE --include-dir $(srcdir)
+endif
+ifdef BUILD_STATIC_LIBS
+OS_LIBS += $(call EXPAND_LIBNAME, msimg32 shlwapi)
+RCFLAGS += -DMOZ_STATIC_BUILD
+endif
+endif
+
+ifeq ($(OS_ARCH),BeOS)
+BEOS_PROGRAM_RESOURCE = apprunner-beos.rsrc
+ifdef BUILD_STATIC_LIBS
+OS_LIBS += -ltracker -lgame
+endif
+endif
+
+ifeq ($(OS_ARCH),OS2)
+RESFILE = splashos2.res
+RCFLAGS += -i $(MOZILLA_SRCDIR)/toolkit/xre
+ifdef BUILD_STATIC_LIBS
+RCFLAGS += -DMOZ_STATIC_BUILD -i $(DIST)/include
+endif
+RCFLAGS += -DSEAMONKEY_ICO=\"$(DIST)/branding/seamonkey.ico\"
+endif
+
+LIBS += $(JEMALLOC_LIBS)
+
+include $(topsrcdir)/config/rules.mk
+
+ifdef MOZILLA_OFFICIAL
+DEFINES += -DMOZILLA_OFFICIAL
+endif
+
+ifdef BUILD_STATIC_LIBS
+include $(topsrcdir)/config/static-rules.mk
+endif
+
+ifeq (cocoa,$(MOZ_WIDGET_TOOLKIT))
+ifdef BUILD_STATIC_LIBS
+LIBS	+= -lcups
+endif
+LIBS	+= -framework CoreAudio -framework AudioToolbox -framework AudioUnit -framework Carbon
+endif
+
+ifeq ($(OS_ARCH),WINNT)
+#
+# Control the default heap size.
+# This is the heap returned by GetProcessHeap().
+# As we use the CRT heap, the default size is too large and wastes VM.
+#
+# The default heap size is 1MB on Win32.
+# The heap will grow if need be.
+#
+# Set it to 256k.  See bug 127069.
+#
+ifndef GNU_CC
+LDFLAGS += /HEAP:0x40000
+endif
+endif
+
+ifneq (,$(filter-out OS2 WINNT Darwin,$(OS_ARCH)))
+$(MOZ_APP_NAME).1: seamonkey.man.in $(GLOBAL_DEPS) $(DEPTH)/config/autoconf.mk
+	@sed -e "s|\@bindir\@|$(bindir)|g" -e "s|\@mozappdir\@|$(mozappdir)|g" \
+		-e "s|\@MOZ_APP_DISPLAYNAME\@|$(MOZ_APP_DISPLAYNAME)|g" \
+		-e "s|\@MOZ_APP_NAME\@|$(MOZ_APP_NAME)|g" \
+		-e "s|\@MOZ_APP_VERSION\@|${MOZ_APP_VERSION}|g" < $< > $@
+
+libs:: $(MOZ_APP_NAME).1
+	$(INSTALL) $< $(DIST)/man/man1
+
+install:: $(MOZ_APP_NAME).1
+	$(SYSINSTALL) $(IFLAGS1) $< $(DESTDIR)$(mandir)/man1
+
+$(MOZ_APP_NAME):: $(MOZILLA_DIR)/build/unix/mozilla.in $(GLOBAL_DEPS) $(DEPTH)/config/autoconf.mk
+	cat $< | sed -e "s|%MOZAPPDIR%|$(installdir)|" \
+		-e "s|%MOZ_APP_DISPLAYNAME%|$(MOZ_APP_DISPLAYNAME)|" \
+		-e "s|%MOZILLA-BIN%|$(PROGRAM)|g" > $@
+	chmod +x $@
+
+libs:: $(MOZ_APP_NAME)
+	$(INSTALL) $< $(DIST)/bin
+
+install:: $(MOZ_APP_NAME)
+	$(SYSINSTALL) $< $(DESTDIR)$(bindir)
+
+GARBAGE += $(MOZ_APP_NAME) $(MOZ_APP_NAME).1
+GARBAGE += $(addprefix $(DIST)/bin/defaults/pref/, browser-prefs.js)
+endif
+
+ifeq ($(MOZ_WIDGET_TOOLKIT),photon)
+LIBS += -lphexlib
+endif
+
+ifdef WINCE
+ifdef MOZ_FASTSTART
+libs::
+	cp -f $(DIST)/bin/faststartstub.exe $(DIST)/bin/$(MOZ_APP_NAME)faststart.exe
+endif
+endif
+
+libs::
+ifeq ($(OS_ARCH),WINNT)
+	$(EXIT_ON_ERROR) \
+	$(PERL) -pe 's/(?<!\r)\n/\r\n/g;' < $(topsrcdir)/suite/installer/license.txt > $(DIST)/bin/license.txt
+else
+	$(INSTALL) $(topsrcdir)/suite/installer/license.txt $(DIST)/bin/
+endif
+
+libs:: blocklist.xml
+	$(INSTALL) $(IFLAGS1) $^ $(DIST)/bin
+
+ifdef MOZ_OMNIJAR
+# Make extensions end up as XPIs instead of flat chrome when doing omni.jar.
+# APP_EXTENSIONS exist only bundled with the application,
+# PROFILE_EXTENSIONS will be copied to the profile in installed builds.
+# NOTE: This is a hack to run this at the end of compilation, would be nicer
+# if this was done right away for built-in extensions in omnijar mode.
+# Listed extension GUIDs:
+# 972ce4c6-... Classic Theme, 59c81df5-... ChatZilla, f13b157f-... Venkman
+APP_EXTENSIONS = \
+  {972ce4c6-7e08-4474-a285-3208198ce6fd} \
+  modern@themes.mozilla.org \
+  $(NULL)
+
+PROFILE_EXTENSIONS = \
+  debugQA@mozilla.org \
+  {59c81df5-4b7a-477b-912d-4e0fdf64e5f2} \
+  {f13b157f-b174-47e7-a34d-4815ddfdfeb8} \
+  inspector@mozilla.org \
+  $(NULL)
+
+ifneq (en-US, $(AB_CD))
+PROFILE_EXTENSIONS += \
+  langpack-$(AB_CD)@chatzilla.mozilla.org \
+  langpack-$(AB_CD)@venkman.mozilla.org \
+  $(NULL)
+endif
+
+ABS_DIST = $(call core_abspath,$(STAGEDIST))
+
+define _PACKAGE_APP_EXTENSIONS
+@echo "Packaging $(dir).xpi..."
+if test -d "$(ABS_DIST)/extensions/$(dir)"; then \
+cd $(ABS_DIST)/extensions/$(dir)/; \
+$(ZIP) -r9mX ../$(dir).xpi *; \
+cd ..; rm -rf $(ABS_DIST)/extensions/$(dir); \
+fi
+
+endef # do not remove the blank line!
+
+define _PACKAGE_PROFILE_EXTENSIONS
+@echo "Packaging $(dir).xpi..."
+if test -d "$(ABS_DIST)/extensions/$(dir)"; then \
+cd $(ABS_DIST)/extensions/$(dir)/; \
+$(ZIP) -r9mX ../../distribution/extensions/$(dir).xpi *; \
+cd ..; rm -rf $(ABS_DIST)/extensions/$(dir); \
+fi
+
+endef # do not remove the blank line!
+
+pack-ext: $(STAGEDIST)
+	@echo "Packaging extensions..."
+	$(NSINSTALL) -D $(STAGEDIST)/distribution/extensions;
+	$(foreach dir,$(APP_EXTENSIONS),$(_PACKAGE_APP_EXTENSIONS))
+	$(foreach dir,$(PROFILE_EXTENSIONS),$(_PACKAGE_PROFILE_EXTENSIONS))
+
+libs::
+	@$(MAKE) pack-ext STAGEDIST="$(DIST)/bin"
+
+endif
+
+ifeq (cocoa,$(MOZ_WIDGET_TOOLKIT))
+
+AB := $(firstword $(subst -, ,$(AB_CD)))
+
+ifdef MOZ_DEBUG
+APP_NAME = $(MOZ_APP_DISPLAYNAME)Debug
+else
+APP_NAME = $(MOZ_APP_DISPLAYNAME)
+endif
+
+libs:: $(PROGRAM)
+	mkdir -p $(DIST)/$(APP_NAME).app/Contents/MacOS
+	rsync -a --exclude CVS --exclude "*.in" $(srcdir)/macbuild/Contents $(DIST)/$(APP_NAME).app --exclude English.lproj
+	mkdir -p $(DIST)/$(APP_NAME).app/Contents/Resources/$(AB).lproj
+	rsync -a --exclude CVS --exclude "*.in" $(srcdir)/macbuild/Contents/Resources/English.lproj/ $(DIST)/$(APP_NAME).app/Contents/Resources/$(AB).lproj
+	sed -e "s/\@MOZ_APP_NAME\@/$(MOZ_APP_NAME)/" -e "s/\@MOZ_APP_DISPLAYNAME\@/$(MOZ_APP_DISPLAYNAME)/" -e "s/\@MOZ_APP_VERSION\@/$(MOZ_APP_VERSION)/" $(srcdir)/macbuild/Contents/Info.plist.in > $(DIST)/$(APP_NAME).app/Contents/Info.plist
+	sed -e "s/\@MOZ_APP_NAME\@/$(MOZ_APP_NAME)/" -e "s/\@MOZ_APP_DISPLAYNAME\@/$(MOZ_APP_DISPLAYNAME)/" -e "s/\@MOZ_APP_VERSION\@/$(MOZ_APP_VERSION)/" $(srcdir)/macbuild/Contents/Resources/English.lproj/InfoPlist.strings.in | iconv -f UTF-8 -t UTF-16 > $(DIST)/$(APP_NAME).app/Contents/Resources/$(AB).lproj/InfoPlist.strings
+	rsync -a $(DIST)/bin/ $(DIST)/$(APP_NAME).app/Contents/MacOS
+	rm -f $(DIST)/$(APP_NAME).app/Contents/MacOS/$(PROGRAM)
+	rsync -aL $(PROGRAM) $(DIST)/$(APP_NAME).app/Contents/MacOS
+	cp -RL $(DIST)/branding/icons/*.icns $(DIST)/$(APP_NAME).app/Contents/Resources/
+	printf APPLMOZZ > $(DIST)/$(APP_NAME).app/Contents/PkgInfo
+#       remove CVS dirs from packaged app
+	find $(DIST)/$(APP_NAME).app -type d -name "CVS" -prune -exec rm -rf {} \;
+
+clean clobber::
+	rm -rf $(DIST)/$(APP_NAME).app
+endif
+
+# Anything below the above ifdef won't be included in mac builds. So be very
+# careful what you add here.

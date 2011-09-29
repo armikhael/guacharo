@@ -1,0 +1,22 @@
+#app-picker {
+  width: 57ch;
+}
+
+#content-description {
+  font-weight: bold;
+}
+
+.listitem-iconic {
+  border-bottom: 1px dotted #C7D0D9;
+}
+
+#content-icon,
+.listcell-icon {
+  margin: 5px;
+  width: 32px;
+  height: 32px;
+}
+
+.listcell-label {
+  padding: 5px;
+}
