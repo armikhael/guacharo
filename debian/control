@@ -1,8 +1,8 @@
 Source: guacharo
 Section: mail
 Priority: optional
-Maintainer: Alexander Sack <asac@debian.org>
-Uploaders: Guido Günther <agx@sigxcpu.org>, Christoph Goehre <chris@sigxcpu.org>
+Maintainer: Equipo de Desarrollo de Canaima GNU/Linux <desarrolladores@canaima.softwarelibre.gob.ve>
+Uploaders: Luis Alejandro Martínez Faneyth <martinez.faneyth@gmail.com>
 Build-Depends: bzip2,
 	debhelper (>= 5),
 	autoconf2.13,
@@ -35,9 +35,10 @@ Build-Depends: bzip2,
 	libevent-dev (>= 1.4.1),
 	libvpx-dev,
 	mesa-common-dev
-Vcs-Git: git://git.debian.org/pkg-mozilla/guacharo.git
-Vcs-Browser: http://git.debian.org/?p=pkg-mozilla/guacharo.git;a=summary
-Standards-Version: 3.9.2
+Standards-Version: 3.9.1
+Homepage: http://canaima.softwarelibre.gob.ve/
+Vcs-Git: git://gitorious.org/canaima-gnu-linux/guacharo.git
+Vcs-Browser: http://gitorious.org/canaima-gnu-linux/guacharo/trees/master
 
 Package: guacharo
 Architecture: any

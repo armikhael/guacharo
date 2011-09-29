@@ -11,6 +11,14 @@ for REEMPLAZAR in ${OPCIONES}; do
 	ICEDOVE=${REEMPLAZAR%_____________________*}
 	GUACHARO=${REEMPLAZAR#${ICEDOVE}_____________________}
 
+	for ARCHIVO in $( find . -type d | grep -v ".git/" | grep -v "convertir-a-guacharo.sh" ); do
+		NUEVO=$( echo ${ARCHIVO} | sed "s/${ICEDOVE}/${GUACHARO}/g" )
+		if [ "${ARCHIVO}" != "${NUEVO}" ]; then
+			echo "Renombrando ${ARCHIVO} a ${NUEVO}"
+			mv ${ARCHIVO} ${NUEVO}
+		fi
+	done
+
 	for ARCHIVO in $( find . -type f | grep -v ".git/" | grep -v "convertir-a-guacharo.sh" ); do
 		NUEVO=$( echo ${ARCHIVO} | sed "s/${ICEDOVE}/${GUACHARO}/g" )
 		if [ "${ARCHIVO}" != "${NUEVO}" ]; then
