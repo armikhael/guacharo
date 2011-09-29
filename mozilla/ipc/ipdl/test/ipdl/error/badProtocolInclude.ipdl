@@ -1,7 +1,0 @@
-include protocol "I.DONT.EXIST.ipdl";
-
-// error: nonexistent protocol ^^^
-
-protocol badProtocolInclude {
-child: Msg();
-};

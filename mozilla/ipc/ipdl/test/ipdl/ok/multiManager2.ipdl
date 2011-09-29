@@ -1,8 +1,0 @@
-include protocol "multiManaged.ipdl";
-
-protocol multiManager2 {
-    manages multiManaged;
-
-child:
-    multiManaged();
-};

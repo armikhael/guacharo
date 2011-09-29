@@ -1,7 +1,0 @@
-debian/tmp/usr/share/idl/guacharo/* usr/share/idl/guacharo/
-debian/tmp/usr/include/guacharo/* usr/include/guacharo/
-debian/tmp/usr/lib/guacharo-devel usr/lib/
-debian/tmp/usr/lib/guacharo/xpidl usr/lib/guacharo/
-debian/tmp/usr/lib/guacharo/xpt_dump usr/lib/guacharo/
-debian/tmp/usr/lib/guacharo/xpt_link usr/lib/guacharo/
-debian/guacharo.pc usr/lib/pkgconfig/
