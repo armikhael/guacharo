@@ -35,7 +35,7 @@ Build-Depends: bzip2,
 	libevent-dev (>= 1.4.1),
 	libvpx-dev,
 	mesa-common-dev
-Standards-Version: 3.9.1
+Standards-Version: 3.9.2
 Homepage: http://canaima.softwarelibre.gob.ve/
 Vcs-Git: git://gitorious.org/canaima-gnu-linux/guacharo.git
 Vcs-Browser: http://gitorious.org/canaima-gnu-linux/guacharo/trees/master
