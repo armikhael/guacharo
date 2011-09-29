@@ -5,8 +5,9 @@ guacharo (5.0-3) stable; urgency=low
 
   [ Luis Alejandro Martínez Faneyth ]
   * [5796c0c] Corrigiendo Standards Version en debian/control
+  * [a9fef5d] Corrigiendo Standards Version en debian/control
 
- -- Luis Alejandro Martínez Faneyth <martinez.faneyth@gmail.com>  Thu, 29 Sep 2011 05:32:43 +0000
+ -- Luis Alejandro Martínez Faneyth <martinez.faneyth@gmail.com>  Thu, 29 Sep 2011 05:40:52 +0000
 
 guacharo (5.0-2) experimental; urgency=low
 
