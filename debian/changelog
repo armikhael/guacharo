@@ -1,3 +1,9 @@
+guacharo (5.0-3) stable; urgency=low
+
+  * Versión Inicial para Canaima GNU/Linux
+
+ -- Christoph Goehre <chris@sigxcpu.org>  Sun, 07 Aug 2011 15:35:09 +0200
+
 guacharo (5.0-2) experimental; urgency=low
 
   * [7f92927] fix FTBFS on ia64: use gcc with -O2 instead of -Os
