@@ -1,8 +1,12 @@
 guacharo (5.0-3) stable; urgency=low
 
+  [ Christoph Goehre ]
   * Versión Inicial para Canaima GNU/Linux
 
- -- Christoph Goehre <chris@sigxcpu.org>  Sun, 07 Aug 2011 15:35:09 +0200
+  [ Luis Alejandro Martínez Faneyth ]
+  * [5796c0c] Corrigiendo Standards Version en debian/control
+
+ -- Luis Alejandro Martínez Faneyth <martinez.faneyth@gmail.com>  Thu, 29 Sep 2011 05:32:43 +0000
 
 guacharo (5.0-2) experimental; urgency=low
 
