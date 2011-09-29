@@ -18,17 +18,17 @@ index 8c25640..29fcd45 100644
  exec_prefix	= @exec_prefix@
  bindir		= @bindir@
 -includedir	= @includedir@/$(MOZ_APP_NAME)-$(MOZ_APP_VERSION)
-+includedir	= @includedir@/icedove
++includedir	= @includedir@/guacharo
  libdir		= @libdir@
  datadir		= @datadir@
  mandir		= @mandir@
 -idldir		= $(datadir)/idl/$(MOZ_APP_NAME)-$(MOZ_APP_VERSION)
-+idldir		= $(datadir)/idl/icedove
++idldir		= $(datadir)/idl/guacharo
  
 -installdir	= $(libdir)/$(MOZ_APP_NAME)-$(MOZ_APP_VERSION)
 -sdkdir		= $(libdir)/$(MOZ_APP_NAME)-devel-$(MOZ_APP_VERSION)
-+installdir	= $(libdir)/icedove
-+sdkdir		= $(libdir)/icedove-devel
++installdir	= $(libdir)/guacharo
++sdkdir		= $(libdir)/guacharo-devel
  
  MOZDEPTH	= $(DEPTH)/mozilla
  DIST		= $(MOZDEPTH)/dist
@@ -54,7 +54,7 @@ index eb1a9fd..b7f0f5a 100755
  # ***** END LICENSE BLOCK *****
  
 -MOZ_APP_NAME=thunderbird
-+MOZ_APP_NAME=icedove
++MOZ_APP_NAME=guacharo
  MOZ_UPDATER=1
  MOZ_THUNDERBIRD=1
  MOZ_CHROME_FILE_FORMAT=omni

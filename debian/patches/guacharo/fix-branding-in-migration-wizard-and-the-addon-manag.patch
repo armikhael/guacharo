@@ -2,7 +2,7 @@ From: "Edward J. Shornock" <ed.shornock@gmail.com>
 Date: Mon, 1 Feb 2010 19:16:08 +0100
 Subject: fix branding in migration wizard and the addon manager
 
-Replace /Thunderbird/ with /Icedove/
+Replace /Thunderbird/ with /Guacharo/
 Update %APP% with the respective Mozilla names so
 addon-checking/installing/updating will work
 
@@ -90,7 +90,7 @@ index 21693e5..64b444d 100644
  <!ENTITY changeSettings.accesskey        "S">
  
 -<!ENTITY contactYourProvider.description "&brandShortName; can allow you to get to your mail using the provided configurations. However, you should contact your administrator or email provider regarding these improper connections. See the Thunderbird FAQ for more information.">
-+<!ENTITY contactYourProvider.description "&brandShortName; can allow you to get to your mail using the provided configurations. However, you should contact your administrator or email provider regarding these improper connections. See the Icedove FAQ for more information.">
++<!ENTITY contactYourProvider.description "&brandShortName; can allow you to get to your mail using the provided configurations. However, you should contact your administrator or email provider regarding these improper connections. See the Guacharo FAQ for more information.">
  
  <!ENTITY insecureServer.tooltip.title    "Warning! This is an insecure server.">
  <!ENTITY insecureServer.tooltip.details  "Click circle for more details.">
