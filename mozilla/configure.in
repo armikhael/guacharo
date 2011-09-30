@@ -130,7 +130,7 @@ GCONF_VERSION=1.2.1
 GIO_VERSION=2.0
 STARTUP_NOTIFICATION_VERSION=0.8
 DBUS_VERSION=0.60
-SQLITE_VERSION=3.7.1
+SQLITE_VERSION=3.7.5
 LIBNOTIFY_VERSION=0.4
 
 MSMANIFEST_TOOL=
@@ -2868,6 +2868,8 @@ alpha*-*-osf*)
     else
         MOZ_OPTIMIZE_FLAGS="-Os -freorder-blocks -fno-reorder-functions -fno-omit-frame-pointer"
     fi
+    # The Maemo builders don't know about this flag
+    MOZ_ARM_VFP_FLAGS="-mfpu=vfp"
     ;;
 
 esac
@@ -3586,6 +3588,38 @@ AC_SUBST(XLIBS)
 AC_SUBST(XEXT_LIBS)
 AC_SUBST(XT_LIBS)
 AC_SUBST(XSS_LIBS)
+
+AC_MSG_CHECKING(for ARM SIMD support in compiler)
+# We try to link so that this also fails when
+# building with LTO.
+AC_TRY_LINK([],
+               [asm("uqadd8 r1, r1, r2");],
+               result="yes", result="no")
+AC_MSG_RESULT("$result")
+if test "$result" = "yes"; then
+    AC_DEFINE(HAVE_ARM_SIMD)
+    HAVE_ARM_SIMD=1
+fi
+AC_SUBST(HAVE_ARM_SIMD)
+
+AC_MSG_CHECKING(for ARM NEON support in compiler)
+_SAVE_CFLAGS="$CFLAGS"
+if test "$GNU_CC"; then
+  # gcc needs -mfpu=neon to recognize NEON instructions
+  CFLAGS="$CFLAGS -mfpu=neon -mfloat-abi=softfp"
+fi
+# We try to link so that this also fails when
+# building with LTO.
+AC_TRY_LINK([],
+               [asm("vadd.i8 d0, d0, d0");],
+               result="yes", result="no")
+AC_MSG_RESULT("$result")
+if test "$result" = "yes"; then
+    AC_DEFINE(HAVE_ARM_NEON)
+    HAVE_ARM_NEON=1
+fi
+CFLAGS="$_SAVE_CFLAGS"
+AC_SUBST(HAVE_ARM_NEON)
 
 dnl ========================================================
 dnl = pthread support
@@ -4593,7 +4627,7 @@ MOZ_ARG_WITH_BOOL(system-nspr,
     _USE_SYSTEM_NSPR=1 )
 
 if test -n "$_USE_SYSTEM_NSPR"; then
-    AM_PATH_NSPR(4.8.6, [MOZ_NATIVE_NSPR=1], [AC_MSG_ERROR([your don't have NSPR installed or your version is too old])])
+    AM_PATH_NSPR(4.8.7, [MOZ_NATIVE_NSPR=1], [AC_MSG_ERROR([your don't have NSPR installed or your version is too old])])
 fi
 
 if test -n "$MOZ_NATIVE_NSPR"; then
@@ -4737,7 +4771,7 @@ else
     AC_CHECK_LIB(jpeg, jpeg_destroy_compress, [SYSTEM_JPEG=1 JPEG_LIBS="-ljpeg $JPEG_LIBS"], SYSTEM_JPEG=, $JPEG_LIBS)
 fi
 
-if test "$SYSTEM_JPEG" = 0; then
+if test "$SYSTEM_JPEG" = 1; then
     LIBS="$JPEG_LIBS $LIBS"
     AC_TRY_COMPILE([ #include <stdio.h>
                      #include <sys/types.h>
@@ -4747,11 +4781,6 @@ if test "$SYSTEM_JPEG" = 0; then
                      #endif ],
                    SYSTEM_JPEG=1,
                    [SYSTEM_JPEG= JPEG_CFLAGS= JPEG_LIBS=]) 
-fi
-
-MOZ_LIBJPEG_TURBO=
-if test -z "$SYSTEM_JPEG"; then
-    MOZ_LIBJPEG_TURBO=1
 fi 
 CFLAGS=$_SAVE_CFLAGS
 LDFLAGS=$_SAVE_LDFLAGS
@@ -4782,7 +4811,7 @@ else
     AC_CHECK_LIB(z, gzread, [SYSTEM_ZLIB=1 ZLIB_LIBS="-lz $ZLIB_LIBS"], 
 	[SYSTEM_ZLIB= ZLIB_CFLAGS= ZLIB_LIBS=], $ZLIB_LIBS)
 fi
-if test "$SYSTEM_ZLIB" = 0; then
+if test "$SYSTEM_ZLIB" = 1; then
     LIBS="$ZLIB_LIBS $LIBS"
     AC_TRY_COMPILE([ #include <stdio.h>
                      #include <string.h>
@@ -4819,10 +4848,8 @@ fi
 if test -z "$BZ2_DIR" -o "$BZ2_DIR" = no; then
     SYSTEM_BZ2=
 else
-    AC_CHECK_LIB(bz2, BZ2_bzread, [SYSTEM_BZ2=1 BZ2_LIBS="-lbz2"], [
-        echo "You have run configure with --with-system-bz2, but there is no libbz2 around."
-        exit 1
-        ], $BZ2_LIBS)
+    AC_CHECK_LIB(bz2, BZ2_bzread, [SYSTEM_BZ2=1 BZ2_LIBS="-lbz2"],
+	[SYSTEM_BZ2= BZ2_CFLAGS= BZ2_LIBS=])
 fi
 CFLAGS=$_SAVE_CFLAGS
 LDFLAGS=$_SAVE_LDFLAGS
@@ -4860,7 +4887,7 @@ else
                  AC_MSG_ERROR([--with-system-png won't work because the system's libpng doesn't have APNG support]),
                  $_SAVE_PNG_LIBS)
 fi
-if test "$SYSTEM_PNG" = 0; then
+if test "$SYSTEM_PNG" = 1; then
     LIBS="$PNG_LIBS $LIBS"
     AC_TRY_COMPILE([ #include <stdio.h>
                      #include <sys/types.h>
@@ -4897,24 +4924,6 @@ if test -n "$SYSTEM_HUNSPELL"; then
 fi
 
 AC_SUBST(SYSTEM_HUNSPELL)
-
-dnl ========================================================
-dnl system libffi Support
-dnl ========================================================
-MOZ_ARG_ENABLE_BOOL(system-ffi,
-[  --enable-system-ffi       Use system libffi (located with pkgconfig)],
-    MOZ_NATIVE_FFI=1 )
-
-if test -n "$MOZ_NATIVE_FFI"; then
-    # Vanilla libffi 3.0.9 needs a few patches from upcoming version 3.0.10
-    # for non-GCC compilers.
-    if test -z "$GNU_CC"; then
-        PKG_CHECK_MODULES(MOZ_FFI, libffi > 3.0.9)
-    else
-        PKG_CHECK_MODULES(MOZ_FFI, libffi >= 3.0.9)
-    fi
-    MOZ_JS_STATIC_LIBS="$MOZ_JS_STATIC_LIBS $MOZ_FFI_LIBS"
-fi
 
 dnl ========================================================
 dnl Java SDK support
@@ -4964,6 +4973,7 @@ VPX_AS_CONVERSION=
 VPX_ASM_SUFFIX=
 VPX_X86_ASM=
 VPX_ARM_ASM=
+MOZ_LIBJPEG_TURBO=1
 LIBJPEG_TURBO_AS=
 LIBJPEG_TURBO_ASFLAGS=
 LIBJPEG_TURBO_X86_ASM=
@@ -4983,6 +4993,7 @@ MOZ_SPELLCHECK=1
 MOZ_SPLASHSCREEN=
 MOZ_STORAGE=1
 MOZ_SVG=1
+MOZ_THUMB2=
 MOZ_TIMELINE=
 MOZ_TOOLKIT_SEARCH=1
 MOZ_UI_LOCALE=en-US
@@ -5034,6 +5045,7 @@ case "${target}" in
         USE_ARM_KUSER=1
         MOZ_INSTALLER=
         NECKO_WIFI=
+        MOZ_THUMB2=1
         MOZ_THEME_FASTSTRIPE=1
         MOZ_TREE_FREETYPE=1
         MOZ_MEMORY=1
@@ -7090,6 +7102,8 @@ if test $MOZ_PLATFORM_MAEMO; then
             AC_SUBST(MOZ_ENABLE_CONTENTACTION)
          fi
       fi
+
+      MOZ_THUMB2=1
    fi
 
    PKG_CHECK_MODULES(LIBLOCATION,liblocation, _LIB_FOUND=1, _LIB_FOUND=)
@@ -7118,204 +7132,80 @@ if test $MOZ_PLATFORM_MAEMO; then
    AC_SUBST(MOZ_PLATFORM_MAEMO_CFLAGS)
 fi
 
+dnl Setup default CPU arch for arm target
+case "$target_cpu" in
+  arm*)
+    MOZ_ARM_ARCH=armv7
+  ;;
+esac
 dnl ========================================================
-dnl = ARM toolchain tweaks
+dnl = Enable building the Thumb2 instruction set
 dnl ========================================================
-
-dnl Defaults
-case "${target}" in
-arm-android-eabi)
-    MOZ_THUMB=yes
-    MOZ_ARCH=armv7-a
-    MOZ_FPU=vfp
-    MOZ_FLOAT_ABI=softfp
-    ;;
-arm*-*)
-    if test -n "$MOZ_PLATFORM_MAEMO"; then
-        MOZ_THUMB=no
-        MOZ_ARCH=armv7-a
-        MOZ_FLOAT_ABI=softfp
-    fi
-    if test "$MOZ_PLATFORM_MAEMO" = 6; then
-        MOZ_THUMB=yes
-    fi
-    ;;
-esac
-
-dnl Kept for compatibility with some buildbot mozconfig
-MOZ_ARG_DISABLE_BOOL(thumb2, [], MOZ_THUMB=no, MOZ_THUMB=yes)
-
-MOZ_ARG_WITH_STRING(thumb,
-[  --with-thumb[[=yes|no|toolchain]]]
-[                          Use Thumb instruction set (-mthumb)],
-    if test -z "$GNU_CC"; then
-        AC_MSG_ERROR([--with-thumb is not supported on non-GNU toolchains])
-    fi
-    MOZ_THUMB=$withval)
-
-MOZ_ARG_WITH_STRING(thumb-interwork,
-[  --with-thumb-interwork[[=yes|no|toolchain]]
-                           Use Thumb/ARM instuctions interwork (-mthumb-interwork)],
-    if test -z "$GNU_CC"; then
-        AC_MSG_ERROR([--with-thumb-interwork is not supported on non-GNU toolchains])
-    fi
-    MOZ_THUMB_INTERWORK=$withval)
-
-MOZ_ARG_WITH_STRING(arch,
-[  --with-arch=[[type|toolchain]]
-                           Use specific CPU features (-march=type)],
-    if test -z "$GNU_CC"; then
-        AC_MSG_ERROR([--with-arch is not supported on non-GNU toolchains])
-    fi
-    MOZ_ARCH=$withval)
-
-MOZ_ARG_WITH_STRING(fpu,
-[  --with-fpu=[[type|toolchain]]
-                           Use specific FPU type (-mfpu=type)],
-    if test -z "$GNU_CC"; then
-        AC_MSG_ERROR([--with-fpu is not supported on non-GNU toolchains])
-    fi
-    MOZ_FPU=$withval)
-
-MOZ_ARG_WITH_STRING(float-abi,
-[  --with-float-abi=[[type|toolchain]]
-                           Use specific arm float ABI (-mfloat-abi=type)],
-    if test -z "$GNU_CC"; then
-        AC_MSG_ERROR([--with-float-abi is not supported on non-GNU toolchains])
-    fi
-    MOZ_FLOAT_ABI=$withval)
-
-MOZ_ARG_WITH_STRING(soft-float,
-[  --with-soft-float[[=yes|no|toolchain]]
-                           Use soft float library (-msoft-float)],
-    if test -z "$GNU_CC"; then
-        AC_MSG_ERROR([--with-soft-float is not supported on non-GNU toolchains])
-    fi
-    MOZ_SOFT_FLOAT=$withval)
-
-case "$MOZ_ARCH" in
-toolchain|"")
-    arch_flag=""
-    ;;
-*)
-    arch_flag="-march=$MOZ_ARCH"
-    ;;
-esac
-
-case "$MOZ_THUMB" in
-yes)
-    MOZ_THUMB2=1
-    thumb_flag="-mthumb"
-    ;;
-no)
-    MOZ_THUMB2=
-    thumb_flag="-marm"
-    ;;
-*)
-    _SAVE_CFLAGS="$CFLAGS"
-    CFLAGS="$arch_flag"
-    AC_TRY_COMPILE([],[return sizeof(__thumb2__);],
-        MOZ_THUMB2=1,
-        MOZ_THUMB2=)
-    CFLAGS="$_SAVE_CFLAGS"
-    thumb_flag=""
-    ;;
-esac
-
-if test "$MOZ_THUMB2" = 1; then
-    AC_DEFINE(MOZ_THUMB2)
+MOZ_ARG_ENABLE_BOOL(thumb2,
+ [  --enable-thumb2         Enable Thumb2 instruction set (implies ARMv7)],
+    MOZ_THUMB2=1,
+    MOZ_THUMB2=)
+if test -n "$MOZ_THUMB2"; then
+  MOZ_ARM_ARCH=armv7
 fi
 
-case "$MOZ_THUMB_INTERWORK" in
-yes)
-    thumb_interwork_flag="-mthumb-interwork"
-    ;;
-no)
-    thumb_interwork_flag="-mno-thumb-interwork"
-    ;;
-*) # toolchain
-    thumb_interwork_flag=""
-    ;;
-esac
+dnl ========================================================
+dnl = Enable building for ARM specific CPU features
+dnl ========================================================
+MOZ_ARG_WITH_STRING(cpu-arch,
+[  --with-cpu-arch=arch      Use specific arm architecture CPU features, default armv7],
+    MOZ_ARM_ARCH=$withval)
 
-case "$MOZ_FPU" in
-toolchain|"")
-    fpu_flag=""
+if test -n "$MOZ_THUMB2"; then
+  case "$target_cpu" in
+    arm*)
+      if test "$MOZ_ARM_ARCH" != "armv7"; then
+        AC_MSG_ERROR([--enable-thumb2 is not compatible with cpu-arch=$MOZ_ARM_ARCH])
+      fi
+      if test "$GNU_CC"; then
+        AC_DEFINE(MOZ_THUMB2)
+        AC_DEFINE(MOZ_ARM_ARCH)
+        CFLAGS="$CFLAGS -march=armv7-a -mthumb -mfloat-abi=softfp $MOZ_ARM_VFP_FLAGS"
+        CXXFLAGS="$CXXFLAGS -march=armv7-a -mthumb -mfloat-abi=softfp $MOZ_ARM_VFP_FLAGS"
+        ASFLAGS="$ASFLAGS -march=armv7-a -mthumb -mfloat-abi=softfp $MOZ_ARM_VFP_FLAGS"
+      else
+        AC_MSG_ERROR([--enable-thumb2 is not supported for non-GNU toolchains])
+      fi
     ;;
-*)
-    fpu_flag="-mfpu=$MOZ_FPU"
+    *)
+      AC_MSG_ERROR([--enable-thumb2 is not supported for non-ARM CPU architectures])
     ;;
-esac
-
-case "$MOZ_FLOAT_ABI" in
-toolchain|"")
-    float_abi_flag=""
+  esac
+elif test "$MOZ_ARM_ARCH" = "armv7"; then
+  case "$target_cpu" in
+    arm*)
+      if test "$GNU_CC"; then
+        AC_DEFINE(MOZ_ARM_ARCH)
+        CFLAGS="$CFLAGS -march=armv7-a -marm -mfloat-abi=softfp $MOZ_ARM_VFP_FLAGS"
+        CXXFLAGS="$CXXFLAGS -march=armv7-a -marm -mfloat-abi=softfp $MOZ_ARM_VFP_FLAGS"
+        ASFLAGS="$ASFLAGS -march=armv7-a -marm -mfloat-abi=softfp $MOZ_ARM_VFP_FLAGS"
+      else
+        AC_MSG_ERROR([--with-cpu-arch=armv7 is not supported for non-GNU toolchains])
+      fi
     ;;
-*)
-    float_abi_flag="-mfloat-abi=$MOZ_FLOAT_ABI"
+    *)
+      AC_MSG_ERROR([--with-cpu-arch=armv7 is not supported for non-ARM CPU architectures])
     ;;
-esac
-
-case "$MOZ_SOFT_FLOAT" in
-yes)
-    soft_float_flag="-msoft-float"
-    ;;
-no)
-    soft_float_flag="-mno-soft-float"
-    ;;
-*) # toolchain
-    soft_float_flag=""
-    ;;
-esac
-
-dnl Use echo to avoid accumulating space characters
-all_flags=`echo $arch_flag $thumb_flag $thumb_interwork_flag $fpu_flag $float_abi_flag $soft_float_flag`
-if test -n "$all_flags"; then
-    _SAVE_CFLAGS="$CFLAGS"
-    CFLAGS="$all_flags"
-    AC_MSG_CHECKING(whether the chosen combination of compiler flags ($all_flags) works)
-    AC_TRY_COMPILE([],[return 0;],
-        AC_MSG_RESULT([yes]),
-        AC_MSG_ERROR([no]))
-
-    CFLAGS="$_SAVE_CFLAGS $all_flags"
-    CXXFLAGS="$CXXFLAGS $all_flags"
-    ASFLAGS="$ASFLAGS $all_flags"
-    if test -n "$thumb_flag"; then
-        LDFLAGS="$LDFLAGS $thumb_flag"
-    fi
+  esac
+else
+  case "$target_cpu" in
+    arm*)
+      if test "$GNU_CC"; then
+        CFLAGS="$CFLAGS -march=armv5te -mthumb-interwork -msoft-float"
+        CXXFLAGS="$CXXFLAGS -march=armv5te -mthumb-interwork -msoft-float"
+        ASFLAGS="$ASFLAGS -march=armv5te -mthumb-interwork -msoft-float"
+      fi
+      ;;
+  esac
 fi
 
 AC_SUBST(MOZ_THUMB2)
-
-if test "$CPU_ARCH" = "arm"; then
-  AC_MSG_CHECKING(for ARM SIMD support in compiler)
-  # We try to link so that this also fails when
-  # building with LTO.
-  AC_TRY_LINK([],
-                 [asm("uqadd8 r1, r1, r2");],
-                 result="yes", result="no")
-  AC_MSG_RESULT("$result")
-  if test "$result" = "yes"; then
-      AC_DEFINE(HAVE_ARM_SIMD)
-      HAVE_ARM_SIMD=1
-  fi
-
-  AC_MSG_CHECKING(for ARM NEON support in compiler)
-  # We try to link so that this also fails when
-  # building with LTO.
-  AC_TRY_LINK([],
-                 [asm(".fpu neon\n vadd.i8 d0, d0, d0");],
-                 result="yes", result="no")
-  AC_MSG_RESULT("$result")
-  if test "$result" = "yes"; then
-      AC_DEFINE(HAVE_ARM_NEON)
-      HAVE_ARM_NEON=1
-  fi
-fi # CPU_ARCH = arm
-
-AC_SUBST(HAVE_ARM_SIMD)
-AC_SUBST(HAVE_ARM_NEON)
+AC_SUBST(MOZ_ARM_ARCH)
 
 dnl ========================================================
 dnl = faststripe theme
@@ -8402,9 +8292,9 @@ MOZ_ARG_ENABLE_BOOL(shared-js,
 
 if test -n "$ENABLE_SHARED_JS"; then
   JS_SHARED_LIBRARY=1
-  MOZ_JS_LIBS="$MOZ_JS_SHARED_LIBS"
+  MOZ_JS_LIBS=$MOZ_JS_SHARED_LIBS
 else
-  MOZ_JS_LIBS="$MOZ_JS_STATIC_LIBS"
+  MOZ_JS_LIBS=$MOZ_JS_STATIC_LIBS
   AC_DEFINE(MOZ_STATIC_JS)
 fi
 AC_SUBST(JS_SHARED_LIBRARY)
@@ -9569,6 +9459,12 @@ unset CONFIG_FILES
 # No need to run subconfigures when building with LIBXUL_SDK_DIR
 if test "$COMPILE_ENVIRONMENT" -a -z "$LIBXUL_SDK_DIR"; then
 
+if test -n "$MOZ_THUMB2"; then
+  _SUBDIR_CONFIG_ARGS="$_SUBDIR_CONFIG_ARGS --enable-thumb2"
+fi
+if test -n "$MOZ_ARM_ARCH"; then
+  _SUBDIR_CONFIG_ARGS="$_SUBDIR_CONFIG_ARGS --with-cpu-arch=$MOZ_ARM_ARCH"
+fi
 if test -n "$_WRAP_MALLOC"; then
   _SUBDIR_CONFIG_ARGS="$_SUBDIR_CONFIG_ARGS --enable-wrap-malloc"
 fi

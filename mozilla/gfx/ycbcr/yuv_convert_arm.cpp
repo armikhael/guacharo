@@ -49,8 +49,6 @@ void __attribute((noinline)) yuv42x_to_rgb565_row_neon(uint16 *dst,
      */
     asm volatile (
 ".fpu neon\n"
-".arch armv7a\n"
-".object_arch armv4t\n"
 ".macro convert_macroblock size\n"
 /* load up to 16 source pixels */
 	".if \\size == 16\n"

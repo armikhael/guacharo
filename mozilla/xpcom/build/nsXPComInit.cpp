@@ -429,33 +429,34 @@ NS_InitXPCOM2(nsIServiceManager* *result,
     if (NS_FAILED(rv))
         return rv;
 
+    nsCOMPtr<nsIFile> xpcomLib;
+            
     PRBool value;
-
     if (binDirectory)
     {
         rv = binDirectory->IsDirectory(&value);
 
         if (NS_SUCCEEDED(rv) && value) {
             nsDirectoryService::gService->Set(NS_XPCOM_INIT_CURRENT_PROCESS_DIR, binDirectory);
+            binDirectory->Clone(getter_AddRefs(xpcomLib));
         }
     }
-
-    if (appFileLocationProvider) {
-        rv = nsDirectoryService::gService->RegisterProvider(appFileLocationProvider);
-        if (NS_FAILED(rv)) return rv;
+    else {
+        nsDirectoryService::gService->Get(NS_XPCOM_CURRENT_PROCESS_DIR, 
+                                          NS_GET_IID(nsIFile), 
+                                          getter_AddRefs(xpcomLib));
     }
-
-    nsCOMPtr<nsIFile> xpcomLib;
-
-    nsDirectoryService::gService->Get(NS_GRE_DIR,
-                                      NS_GET_IID(nsIFile),
-                                      getter_AddRefs(xpcomLib));
 
     if (xpcomLib) {
         xpcomLib->AppendNative(nsDependentCString(XPCOM_DLL));
         nsDirectoryService::gService->Set(NS_XPCOM_LIBRARY_FILE, xpcomLib);
     }
     
+    if (appFileLocationProvider) {
+        rv = nsDirectoryService::gService->RegisterProvider(appFileLocationProvider);
+        if (NS_FAILED(rv)) return rv;
+    }
+
 #ifdef MOZ_OMNIJAR
     NS_TIME_FUNCTION_MARK("Next: Omnijar init");
 
