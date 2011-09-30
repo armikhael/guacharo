@@ -1,11 +1,7 @@
 guacharo (5.0-3) stable; urgency=low
 
-  [ Christoph Goehre ]
   * Versión Inicial para Canaima GNU/Linux
-
-  [ Luis Alejandro Martínez Faneyth ]
   * [5796c0c] Corrigiendo Standards Version en debian/control
-  * [a9fef5d] Corrigiendo Standards Version en debian/control
   * [2843909] Removiendo configuración para git-buildpackage de upstream
 
  -- Luis Alejandro Martínez Faneyth <martinez.faneyth@gmail.com>  Fri, 30 Sep 2011 16:30:53 +0000
