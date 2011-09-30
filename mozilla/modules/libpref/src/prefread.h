@@ -62,8 +62,7 @@ typedef void (*PrefReader)(void       *closure,
                            const char *pref,
                            PrefValue   val,
                            PrefType    type,
-                           PRBool      defPref,
-                           PRBool      lockPref);
+                           PRBool      defPref);
 
 /* structure fields are private */
 typedef struct PrefParseState {
@@ -84,7 +83,6 @@ typedef struct PrefParseState {
     char       *vb;         /* value buffer (ptr into lb)    */
     PrefType    vtype;      /* PREF_STRING,INT,BOOL          */
     PRBool      fdefault;   /* PR_TRUE if (default) pref     */
-    PRBool      flock;      /* PR_TRUE if pref to be locked  */
 } PrefParseState;
 
 /**

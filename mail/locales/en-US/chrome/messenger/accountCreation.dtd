@@ -72,7 +72,7 @@
 <!ENTITY changeSettings.label            "Change Settings">
 <!ENTITY changeSettings.accesskey        "S">
 
-<!ENTITY contactYourProvider.description "&brandShortName; can allow you to get to your mail using the provided configurations. However, you should contact your administrator or email provider regarding these improper connections. See the Icedove FAQ for more information.">
+<!ENTITY contactYourProvider.description "&brandShortName; can allow you to get to your mail using the provided configurations. However, you should contact your administrator or email provider regarding these improper connections. See the Thunderbird FAQ for more information.">
 
 <!ENTITY insecureServer.tooltip.title    "Warning! This is an insecure server.">
 <!ENTITY insecureServer.tooltip.details  "Click circle for more details.">

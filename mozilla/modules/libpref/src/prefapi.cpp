@@ -998,10 +998,7 @@ void PREF_ReaderCallback(void       *closure,
                          const char *pref,
                          PrefValue   value,
                          PrefType    type,
-                         PRBool      isDefault,
-                         PRBool      isLocked)
+                         PRBool      isDefault)
 {
     pref_HashPref(pref, value, type, isDefault);
-    if (isLocked)
-        PREF_LockPref(pref, PR_TRUE);
 }

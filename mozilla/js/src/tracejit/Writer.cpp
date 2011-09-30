@@ -41,7 +41,7 @@
 #include "jstl.h"
 #include "jscompartment.h"
 #include "Writer.h"
-#include "nanojit/nanojit.h"
+#include "nanojit.h"
 
 namespace js {
 namespace tjit {

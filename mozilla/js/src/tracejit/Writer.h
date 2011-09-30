@@ -44,7 +44,7 @@
 #include "jsobj.h"
 #include "jsstr.h"
 #include "jstypedarray.h"
-#include "nanojit/nanojit.h"
+#include "nanojit.h"
 
 namespace js {
 namespace tjit {

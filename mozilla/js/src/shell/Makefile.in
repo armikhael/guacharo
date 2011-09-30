@@ -53,9 +53,6 @@ CPPSRCS		= \
 DEFINES         += -DEXPORT_JS_API
 
 LIBS      = $(NSPR_LIBS) $(EDITLINE_LIBS) $(DEPTH)/$(LIB_PREFIX)js_static.$(LIB_SUFFIX)
-ifdef MOZ_NATIVE_FFI
-EXTRA_LIBS += $(MOZ_FFI_LIBS)
-endif
 
 LOCAL_INCLUDES += -I$(topsrcdir) -I..
 
@@ -76,5 +73,3 @@ endif
 # People expect the js shell to wind up in the top-level JS dir.
 libs::
 	$(INSTALL) $(IFLAGS2) $(PROGRAM) $(DEPTH)
-
-GARBAGE += $(DEPTH)/$(PROGRAM)
