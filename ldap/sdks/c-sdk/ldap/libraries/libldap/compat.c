@@ -83,7 +83,7 @@ nsldapi_compat_ctime_r( const time_t *clock, char *buf, int buflen )
 }
 #endif /* HPUX10 && _REENTRANT && !HPUX11 */
 
-#if defined(LINUX) || defined(__GNU__) || defined(__GLIBC__) || defined(AIX) || defined(HPUX) || defined(_WINDOWS)
+#if defined(LINUX) || defined(AIX) || defined(HPUX) || defined(_WINDOWS)
 /* 
  * Copies src to the dstsize buffer at dst. The copy will never 
  * overflow the destination buffer and the buffer will always be null 

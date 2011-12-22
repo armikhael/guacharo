@@ -102,7 +102,7 @@ pref("app.update.url", "https://aus2.mozillamessaging.com/update/3/%PRODUCT%/%VE
 pref("app.update.url.manual", "http://www.getthunderbird.com");
 // A default value for the "More information about this update" link
 // supplied in the "An update is available" page of the update wizard. 
-pref("app.update.url.details", "http://www.mozillamessaging.com/%LOCALE%/thunderbird/releases/");
+pref("app.update.url.details", "http://www.mozillamessaging.com/%LOCALE%/%APP%/releases/");
 // User-settable override to app.update.url for testing purposes.
 //pref("app.update.url.override", "");
 
@@ -125,29 +125,35 @@ pref("app.update.idletime", 60);
 pref("app.update.showInstalledUI", false);
 
 // Release notes URL
-pref("app.releaseNotesURL", "http://live.mozillamessaging.com/thunderbird/releasenotes?locale=%LOCALE%&version=%VERSION%&os=%OS%&buildid=%APPBUILDID%");
+pref("app.releaseNotesURL", "http://live.mozillamessaging.com/%APP%/releasenotes?locale=%LOCALE%&version=%VERSION%&os=%OS%&buildid=%APPBUILDID%");
 
 // Base URL for web-based support pages.
-pref("app.support.baseURL", "http://support.live.mozillamessaging.com/%LOCALE%/thunderbird/%APPBUILDID%/");
+pref("app.support.baseURL", "http://support.live.mozillamessaging.com/%LOCALE%/%APP%/%APPBUILDID%/");
 
 // Controls enabling of the extension system logging (can reduce performance)
 pref("extensions.logging.enabled", false);
 
 pref("extensions.update.autoUpdateDefault", true);
 
+// Disable add-ons installed into the shared user and shared system areas by
+// default. This does not include the application directory. See the SCOPE
+// constants in AddonManager.jsm for values to use here
+pref("extensions.autoDisableScopes", 15);
+
 // Preferences for AMO integration
 pref("extensions.getAddons.cache.enabled", true);
 pref("extensions.getAddons.maxResults", 15);
-pref("extensions.getAddons.get.url", "https://services.addons.mozilla.org/%LOCALE%/thunderbird/api/%API_VERSION%/search/guid:%IDS%?src=thunderbird&appOS=%OS%&appVersion=%VERSION%&tMain=%TIME_MAIN%&tFirstPaint=%TIME_FIRST_PAINT%&tSessionRestored=%TIME_SESSION_RESTORED%");
-pref("extensions.getAddons.search.browseURL", "https://addons.mozilla.org/%LOCALE%/thunderbird/search?q=%TERMS%");
-pref("extensions.getAddons.search.url", "https://services.addons.mozilla.org/%LOCALE%/thunderbird/api/%API_VERSION%/search/%TERMS%/all/%MAX_RESULTS%/%OS%/%VERSION%?src=thunderbird");
-pref("extensions.webservice.discoverURL", "https://services.addons.mozilla.org/%LOCALE%/thunderbird/discovery/pane/%VERSION%/%OS%");
+pref("extensions.getAddons.get.url", "https://services.addons.mozilla.org/%LOCALE%/%APP%/api/%API_VERSION%/search/guid:%IDS%?src=thunderbird&appOS=%OS%&appVersion=%VERSION%&tMain=%TIME_MAIN%&tFirstPaint=%TIME_FIRST_PAINT%&tSessionRestored=%TIME_SESSION_RESTORED%");
+pref("extensions.getAddons.search.browseURL", "https://addons.mozilla.org/%LOCALE%/%APP%/search?q=%TERMS%");
+pref("extensions.getAddons.search.url", "https://services.addons.mozilla.org/%LOCALE%/%APP%/api/%API_VERSION%/search/%TERMS%/all/%MAX_RESULTS%/%OS%/%VERSION%?src=thunderbird");
+pref("extensions.webservice.discoverURL", "https://services.addons.mozilla.org/%LOCALE%/%APP%/discovery/pane/%VERSION%/%OS%");
 
 // Blocklist preferences
 pref("extensions.blocklist.enabled", true);
 pref("extensions.blocklist.interval", 86400);
 pref("extensions.blocklist.url", "https://addons.mozilla.org/blocklist/3/%APP_ID%/%APP_VERSION%/%PRODUCT%/%BUILD_ID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/%OS_VERSION%/%DISTRIBUTION%/%DISTRIBUTION_VERSION%/%PING_COUNT%/%TOTAL_PING_COUNT%/%DAYS_SINCE_LAST_PING%/");
-pref("extensions.blocklist.detailsURL", "https://www.mozilla.com/%LOCALE%/blocklist/");
+pref("extensions.blocklist.detailsURL", "https://addons.mozilla.org/%LOCALE%/%APP%/blocked/");
+pref("extensions.blocklist.itemURL", "https://addons.mozilla.org/%LOCALE%/%APP%/blocked/%blockID%");
 
 // Enables some extra Extension System Logging (can reduce performance) 
 pref("extensions.logging.enabled", false); 
@@ -165,7 +171,7 @@ pref("extensions.update.url", "https://versioncheck.addons.mozilla.org/update/Ve
 pref("extensions.update.interval", 86400);  // Check for updates to Extensions and 
                                             // Themes every day
 
-pref("extensions.getMoreThemesURL", "https://addons.mozilla.org/%LOCALE%/thunderbird/themes/");
+pref("extensions.getMoreThemesURL", "https://addons.mozilla.org/%LOCALE%/%APP%/themes/");
 pref("extensions.dss.enabled", false);          // Dynamic Skin Switching                                               
 pref("extensions.dss.switchPending", false);    // Non-dynamic switch pending after next
 
@@ -226,7 +232,7 @@ pref("mail.ui.show.migration.on.upgrade", true);
 pref("mail.showCondensedAddresses", true); // show the friendly display name for people I know
 
 // hidden pref for changing how we present attachments in the message pane
-pref("mailnews.attachments.display.largeView", false);
+pref("mailnews.attachments.display.view", 0);
 pref("mail.pane_config.dynamic",            0);
 pref("mailnews.reuse_thread_window2",     true);
 pref("editor.singleLine.pasteNewlines", 4);  // substitute commas for new lines in single line text boxes
@@ -352,7 +358,7 @@ pref("javascript.options.showInConsole",    true);
 
 pref("spellchecker.dictionary", "");
 // Dictionary download preference
-pref("spellchecker.dictionaries.download.url", "https://addons.mozilla.com/%LOCALE%/thunderbird/dictionaries/");
+pref("spellchecker.dictionaries.download.url", "https://addons.mozilla.org/%LOCALE%/%APP%/dictionaries/");
 
 // profile.force.migration can be used to bypass the migration wizard, forcing migration from a particular
 // mail application without any user intervention. Possible values are: 
@@ -489,7 +495,7 @@ pref("mailnews.database.global.indexer.enabled", true);
 pref("mailnews.database.global.logging.console", true);
 
 // page to load to find good header add-ons
-pref("mailnews.migration.header_addons_url","http://live.mozillamessaging.com/thunderbird/addons/search?q=header&locale=%LOCALE%&lver=%VERSION%&hver=%VERSION%&os=%OS%");
+pref("mailnews.migration.header_addons_url","http://live.mozillamessaging.com/%APP%/addons/search?q=header&locale=%LOCALE%&lver=%VERSION%&hver=%VERSION%&os=%OS%");
 
 // Serif fonts look dated.  Switching those language families to sans-serif
 // where we think it makes sense.  Worth investigating for other font families
@@ -678,8 +684,23 @@ pref("dom.ipc.plugins.enabled.i386.javaplugin2_npapi.plugin", true);
 pref("dom.ipc.plugins.enabled.i386.javaappletplugin.plugin", true);
 // x86_64 ipc preferences
 pref("dom.ipc.plugins.enabled.x86_64", true);
-#elifdef MOZ_IPC
-pref("dom.ipc.plugins.enabled", true);
 #else
-pref("dom.ipc.plugins.enabled", false);
+pref("dom.ipc.plugins.enabled", true);
+#endif
+
+// This pref governs whether we attempt to work around problems caused by
+// plugins using OS calls to manipulate the cursor while running out-of-
+// process.  These workarounds all involve intercepting (hooking) certain
+// OS calls in the plugin process, then arranging to make certain OS calls
+// in the browser process.  Eventually plugins will be required to use the
+// NPAPI to manipulate the cursor, and these workarounds will be removed.
+// See bug 621117.
+#ifdef XP_MACOSX
+pref("dom.ipc.plugins.nativeCursorSupport", true);
+#endif
+
+// Windows taskbar support
+#ifdef XP_WIN
+pref("mail.taskbar.lists.enabled", true);
+pref("mail.taskbar.lists.tasks.enabled", true);
 #endif

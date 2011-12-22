@@ -286,6 +286,9 @@ cal.itip = {
             // This case, they clicked on an old message that has already been
             // added/updated, we want to tell them that.
             data.label = _gs("imipBarAlreadyProcessedText");
+            // TODO this needs its own string, but we are in string freeze. (Details...)
+            data.button1.label = cal.calGetString("calendar", "Open");
+            data.button1.actionMethod = "X-SHOWDETAILS"; // not a real method, but helps us decide
         } else if (Components.isSuccessCode(rc)) {
 
             cal.LOG("iTIP options on: " + actionFunc.method);
@@ -420,9 +423,12 @@ cal.itip = {
      * @param aMethod       The method to check.
      * @param aItipItem     The itip item to set the target calendar on.
      * @param aWindow       The window to open the dialog on.
+     * @return              True, if a calendar was selected or no selection is
+     *                        needed.
      */
     promptCalendar: function promptCalendar(aMethod, aItipItem, aWindow) {
         let needsCalendar = false;
+        let targetCalendar = null;
         switch (aMethod) {
             // methods that don't require the calendar chooser:
             case "REFRESH":
@@ -439,7 +445,6 @@ cal.itip = {
         }
 
         if (needsCalendar) {
-            let targetCalendar = null;
             let calendars = cal.getCalendarManager().getCalendars({}).filter(cal.itip.isSchedulingCalendar);
 
             if (aItipItem.receivedMethod == "REQUEST") {
@@ -478,6 +483,8 @@ cal.itip = {
               aItipItem.targetCalendar = targetCalendar;
             }
         }
+
+        return (!needsCalendar || targetCalendar != null);
     },
 
     /**
@@ -984,6 +991,9 @@ ItipFindItemListener.prototype = {
         let operations = [];
 
         if (this.mFoundItems.length > 0) {
+            // Save the target calendar on the itip item
+            this.mItipItem.targetCalendar = this.mFoundItems[0].calendar;
+
             cal.LOG("iTIP on " + method + ": found " + this.mFoundItems.length + " items.");
             switch (method) {
                 // XXX todo: there's still a potential flaw, if multiple PUBLISH/REPLY/REQUEST on
@@ -1211,7 +1221,7 @@ ItipFindItemListener.prototype = {
             actionFunc.method = actionMethod;
         }
 
-        this.mOptionsFunc(this.mItipItem, rc, actionFunc);
+        this.mOptionsFunc(this.mItipItem, rc, actionFunc, this.mFoundItems);
     },
 
     onGetResult: function ItipFindItemListener_onGetResult(aCalendar,

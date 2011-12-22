@@ -89,10 +89,6 @@
                               xbl:inherits="flashing"/>
                   </xul:stack>
                 </xul:hbox>
-                <xul:image anonid="gradient"
-                           class="calendar-event-box-gradient"
-                           height="1px"
-                           mousethrough="always"/>
               </xul:stack>
             </xul:box>
           </xul:box>
@@ -327,7 +323,9 @@
     <handlers>
       <handler event="contextmenu" phase="capturing"><![CDATA[
        // If the middle/right button was used for click just select the item.
-        this.select(event);
+       if (!this.selected) {
+         this.select(event);
+       }
       ]]></handler>
       <handler event="click" button="0"><![CDATA[
         if (this.mEditing) {

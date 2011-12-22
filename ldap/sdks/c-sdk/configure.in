@@ -794,7 +794,6 @@ if test -n "$CROSS_COMPILE"; then
     OS_TEST="${target_cpu}"
     case "${target_os}" in
         linux*)       OS_ARCH=Linux ;;
-        kfreebsd*-gnu) OS_ARCH=GNU_kFreeBSD ;;
         solaris*)     OS_ARCH=SunOS OS_RELEASE=5 ;;
         mingw*)     OS_ARCH=WINNT ;;
         darwin*)    OS_ARCH=Darwin ;;
@@ -1520,7 +1519,7 @@ tools are selected during the Xcode/Developer Tools installation.])
 	esac
     ;;
 
-*-linux*|*-kfreebsd*-gnu|*-gnu*)
+*-linux*)
     if test -z "$USE_NSPR_THREADS"; then
         USE_PTHREADS=1
     fi
@@ -1530,12 +1529,8 @@ tools are selected during the Xcode/Developer Tools installation.])
     AC_DEFINE(_SVID_SOURCE)
     AC_DEFINE(_LARGEFILE64_SOURCE)
     AC_DEFINE(HAVE_FCNTL_FILE_LOCKING)
-    case "${target_os}" in
-     linux*)
-        AC_DEFINE(LINUX)
-        AC_DEFINE(linux)
-        ;;
-    esac
+    AC_DEFINE(LINUX)
+    AC_DEFINE(linux)
     LD='$(CC)'
     CFLAGS="$CFLAGS -ansi -Wall"
     CXXFLAGS="$CXXFLAGS -ansi -Wall"
@@ -2406,7 +2401,7 @@ if test -n "$USE_PTHREADS"; then
 	        _PTHREAD_LDFLAGS=
 	    fi
 	    ;;
-    *-linux*|*-kfreebsd*-gnu)
+    *-linux*)
         AC_DEFINE(_REENTRANT)
         ;;
     esac
@@ -2482,7 +2477,7 @@ case "$target" in
         fi
     fi
     ;;
-*-linux*|*-kfreebsd*-gnu)
+*-linux*)
     if test -n "$USE_NSPR_THREADS"; then
         AC_DEFINE(_PR_LOCAL_THREADS_ONLY)
     fi

@@ -258,11 +258,11 @@
  * Deprecated declarations.
  */
 #if (__GNUC__ > 3 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 1))
-# define NS_DEPRECATED __attribute__((deprecated))
+# define MOZ_DEPRECATED __attribute__((deprecated))
 #elif defined(_MSC_VER) && (_MSC_VER >= 1300)
-# define NS_DEPRECATED __declspec(deprecated)
+# define MOZ_DEPRECATED __declspec(deprecated)
 #else
-# define NS_DEPRECATED
+# define MOZ_DEPRECATED
 #endif
 
 /**
@@ -295,15 +295,7 @@
 #define XPCOM_API(type) IMPORT_XPCOM_API(type)
 #endif
 
-#ifdef MOZ_ENABLE_LIBXUL
 #define NS_COM
-#elif defined(_IMPL_NS_COM)
-#define NS_COM NS_EXPORT
-#elif defined(XPCOM_GLUE)
-#define NS_COM
-#else
-#define NS_COM NS_IMPORT
-#endif
 
 #ifdef MOZILLA_INTERNAL_API
 #  define NS_COM_GLUE NS_COM
@@ -416,28 +408,6 @@ typedef PRUint32 nsrefcnt;
   #define HAVE_CPP_NAMESPACE_STD
   #define HAVE_CPP_UNAMBIGUOUS_STD_NOTEQUAL
   #define HAVE_CPP_2BYTE_WCHAR_T
-#endif
-
-#ifdef __GNUC__
-/* char16_t is only available in gcc 4.4+ with experimental c++0x support
- * (-std=c++0x or -std=gnu++0x) */
-#if defined(HAVE_CPP_CHAR16_T) && (__GNUC__ < 4 || (__GNUC__ == 4 && __GNUC_MINOR__ < 4) || !defined(__GXX_EXPERIMENTAL_CXX0X__))
-#warning icedove SDK was configured with char16_t support, but now building without
-#undef HAVE_CPP_CHAR16_T
-#elif ! defined(HAVE_CPP_CHAR16_T) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 4)) && defined(__GXX_EXPERIMENTAL_CXX0X__)
-#warning icedove SDK was configured without char16_t support, but now building with
-#define HAVE_CPP_CHAR16_T
-#endif
-
-/* When gcc is not given -fshort-wchar, wchar_t is not 2-bytes wide */
-#if defined(HAVE_CPP_2BYTE_WCHAR_T) && (__SIZEOF_WCHAR_T__ != 2)
-#warning icedove SDK was configured with 2-byte wchar_t, but now building without
-#undef HAVE_CPP_2BYTE_WCHAR_T
-#elif ! defined(HAVE_CPP_2BYTE_WCHAR_T) && (__SIZEOF_WCHAR_T__ == 2)
-#warning icedove SDK was configured without 2-byte wchar_t, but now building with
-#define HAVE_CPP_2BYTE_WCHAR_T
-#endif
-
 #endif
 
 #ifndef __PRUNICHAR__

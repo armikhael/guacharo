@@ -118,6 +118,7 @@ struct nsMsgAttachmentData
   PRInt32 size;                  // The size of the attachment. May be 0.
   PRBool  isExternalAttachment;  // Flag for determining if the attachment is external
   PRBool  isDownloaded;          // Flag for determining if the attachment has already been downloaded
+  PRBool  hasFilename;           // Tells whether the name is provided by us or if it's a Part 1.2-like attachment
 };
 
 
@@ -133,8 +134,6 @@ typedef struct nsMsgAttachedFile
   nsCOMPtr <nsILocalFile>  tmp_file;    // The tmp file in which the (possibly converted) data now resides.
   
   char        *type;        // The type of the data in file_name (not necessarily the same as the type of orig_url.)
-
-  char        *fullContentType; // The full content type of the data in file_name including all charset information.
 
   char        *encoding;    // Likewise, the encoding of the tmp file. This will be set only if the original 
                             // document had an encoding already; we don't do base64 encoding and so forth until 
@@ -209,7 +208,7 @@ interface nsIMsgSend : nsISupports
                               [const] in nsMsgAttachmentData  attachments,
                               [const] in nsMsgAttachedFile    preloaded_attachments,
                               in voidPtr                      relatedPart,
-                              in nsIDOMWindowInternal         parentWindow,
+                              in nsIDOMWindow                 parentWindow,
                               in nsIMsgProgress               progress,
                               in nsIMsgSendListener           aListener,
                               in string                       password,

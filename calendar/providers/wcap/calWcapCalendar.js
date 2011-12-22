@@ -155,6 +155,9 @@ calWcapCalendar.prototype = {
 
     getProperty: function calWcapCalendar_getProperty(aName) {
         switch (aName) {
+            case "cache.supported":
+                return false; // TODO Sorry, but until we implement the new
+                              // calIChangeLog interfaces, we must disable the cache for wcap.
             case "timezones.provider":
                 return ((this.m_session && this.session.isLoggedIn) ? this.session : null);
             case "organizerId":
@@ -203,9 +206,9 @@ calWcapCalendar.prototype = {
                 if (this.isDefaultCalendar) {
                     // disabling/enabling the default calendar will enable/disable all calendars
                     // belonging to the same session:
-                    for each (var cal in this.session.getRegisteredCalendars()) {
-                        if (!cal.isDefaultCalendar) {
-                            cal.setProperty("disabled", aValue);
+                    for each (let calendar in this.session.getRegisteredCalendars()) {
+                        if (!calendar.isDefaultCalendar) {
+                            calendar.setProperty("disabled", aValue);
                         }
                     }
                 }
