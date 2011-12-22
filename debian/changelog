@@ -5,8 +5,9 @@ guacharo (8.0-2) stable; urgency=low
   * [e690ca3] Ejecutando script de conversión a Guacharo
   * [7fe9bab] Agregando arte gráfico para Canaima
   * [124359d] Agregando datos de Canaima
+  * [2724f14] Removiendo configuración para automática git-buildpackage
 
- -- Luis Alejandro Martínez Faneyth <huntingbears@canaima-popular.cnti.gob.ve>  Thu, 22 Dec 2011 09:28:34 -0430
+ -- Luis Alejandro Martínez Faneyth <martinez.faneyth@gmail.com>  Thu, 22 Dec 2011 10:01:43 -0430
 
 guacharo (8.0-1) experimental; urgency=low
 
