@@ -35,7 +35,7 @@
 #
 # ***** END LICENSE BLOCK *****
 
-# Branding Makefile for Icedove branding
+# Branding Makefile for Guacharo branding
 
 DEPTH = ../../..
 topsrcdir = ../../../

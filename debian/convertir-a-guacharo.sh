@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ACTUAL=$( pwd )
+ACTUAL="$( pwd )"
 
 LLAVE="Icedove_____________________Guacharo"
 
@@ -11,7 +11,7 @@ for REEMPLAZAR in ${OPCIONES}; do
 	ICEDOVE=${REEMPLAZAR%_____________________*}
 	GUACHARO=${REEMPLAZAR#${ICEDOVE}_____________________}
 
-	for ARCHIVO in $( find . -type d | grep -v ".git/" | grep -v "convertir-a-guacharo.sh" ); do
+	for ARCHIVO in $( find ${ACTUAL} -type d | grep -v ".git/" | grep -v "convertir-a-guacharo.sh" ); do
 		NUEVO=$( echo ${ARCHIVO} | sed "s/${ICEDOVE}/${GUACHARO}/g" )
 		if [ "${ARCHIVO}" != "${NUEVO}" ]; then
 			echo "Renombrando ${ARCHIVO} a ${NUEVO}"
@@ -19,7 +19,7 @@ for REEMPLAZAR in ${OPCIONES}; do
 		fi
 	done
 
-	for ARCHIVO in $( find . -type f | grep -v ".git/" | grep -v "convertir-a-guacharo.sh" ); do
+	for ARCHIVO in $( find ${ACTUAL} -type f | grep -v ".git/" | grep -v "convertir-a-guacharo.sh" ); do
 		NUEVO=$( echo ${ARCHIVO} | sed "s/${ICEDOVE}/${GUACHARO}/g" )
 		if [ "${ARCHIVO}" != "${NUEVO}" ]; then
 			echo "Renombrando ${ARCHIVO} a ${NUEVO}"
@@ -27,7 +27,7 @@ for REEMPLAZAR in ${OPCIONES}; do
 		fi
 	done
 
-	for ARCHIVO in $( grep -IHR "${ICEDOVE}" . | cut -d: -f1 | grep -v ".git/" | grep -v "convertir-a-guacharo.sh" ); do
+	for ARCHIVO in $( grep -IHR "${ICEDOVE}" ${ACTUAL} | cut -d: -f1 | grep -v ".git/" | grep -v "convertir-a-guacharo.sh" ); do
 		echo "Sustituyendo ${ICEDOVE} por ${GUACHARO} en ${ARCHIVO}"
 		sed -i "s/${ICEDOVE}/${GUACHARO}/g" ${ARCHIVO}
 	done

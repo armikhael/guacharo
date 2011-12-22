@@ -1,4 +1,4 @@
-icedove (8.0-1) experimental; urgency=low
+guacharo (8.0-1) experimental; urgency=low
 
   [ Guido Günther ]
   * [17a7a80] Add x-scheme-handler/mailto to. Thanks to Michael Biebl for the
@@ -23,7 +23,7 @@ icedove (8.0-1) experimental; urgency=low
 
  -- Christoph Goehre <chris@sigxcpu.org>  Sun, 20 Nov 2011 19:58:37 +0100
 
-icedove (8.0~b4-2) experimental; urgency=low
+guacharo (8.0~b4-2) experimental; urgency=low
 
   [ Guido Günther ]
   * [5d043ec] Install calendar extension
@@ -37,10 +37,10 @@ icedove (8.0~b4-2) experimental; urgency=low
 
  -- Christoph Goehre <chris@sigxcpu.org>  Tue, 08 Nov 2011 22:29:19 +0100
 
-icedove (8.0~b4-1) experimental; urgency=low
+guacharo (8.0~b4-1) experimental; urgency=low
 
   * [4e90977] New Upstream Version 8.0b4 (Closes: #591771, #638161)
-  * [955423a] replace duplicate .so files in icedove and icedove-dev with
+  * [955423a] replace duplicate .so files in guacharo and guacharo-dev with
     symlinks
   * [6ffb325] remove obsolete cdbs rule to extract tarball
   * [f98837b] build against libnotify4 (libnotify-dev >= 0.7)(Closes: #637194)
@@ -50,7 +50,7 @@ icedove (8.0~b4-1) experimental; urgency=low
     - debian-hacks/get-ride-of-default-debian-hardering-options.patch
     - fixes/packager-fails-when-MOZILLA_DIR-is-a-relative-path.patch
     modified patches:
-    - icedove/save-a-copy-of-a-attached-file-when-sending-from-OOo.patch
+    - guacharo/save-a-copy-of-a-attached-file-when-sending-from-OOo.patch
     obsolete patches (fixed upstream):
     - debian-hacks/bzXXX-ftbfs-static-with-system-hunspell.patch
     - fixes/Bug-626035-Modify-the-way-arm-compiler-flags-are-set.patch
@@ -77,7 +77,7 @@ icedove (8.0~b4-1) experimental; urgency=low
 
  -- Christoph Goehre <chris@sigxcpu.org>  Sat, 05 Nov 2011 20:31:29 +0100
 
-icedove (5.0-2) experimental; urgency=low
+guacharo (5.0-2) experimental; urgency=low
 
   * [7f92927] fix FTBFS on ia64: use gcc with -O2 instead of -Os
   * [b6b8dea] Disable methodjit on armel
@@ -90,7 +90,7 @@ icedove (5.0-2) experimental; urgency=low
 
  -- Christoph Goehre <chris@sigxcpu.org>  Sun, 07 Aug 2011 15:35:09 +0200
 
-icedove (5.0-1) experimental; urgency=low
+guacharo (5.0-1) experimental; urgency=low
 
   * New Upstream Version (Closes: #632037)
   * [98c5a8f] build against libffi and libvpx
@@ -104,13 +104,13 @@ icedove (5.0-1) experimental; urgency=low
   * [d65b463] change hardcoded list of non-Linux build depends into linux-any
     (Closes: #634301)
   * [ff3a8f3] remove file compare in build run
-  * [a21efa9] add branding for icedove 5.0
+  * [a21efa9] add branding for guacharo 5.0
   * [7023939] update porting/Fix-FTBFS-in-xpcom-base-on-armv4t.patch - fix
     building on armhf
 
  -- Christoph Goehre <chris@sigxcpu.org>  Wed, 03 Aug 2011 18:25:17 +0200
 
-icedove (3.1.11-1) unstable; urgency=high
+guacharo (3.1.11-1) unstable; urgency=high
 
   * New Upstream Version
     - MFSA 2011-19 aka CVE-2011-2364, CVE-2011-2365, CVE-2011-2374,
@@ -129,7 +129,7 @@ icedove (3.1.11-1) unstable; urgency=high
 
  -- Christoph Goehre <chris@sigxcpu.org>  Sun, 26 Jun 2011 10:35:31 +0200
 
-icedove (3.1.10-2) unstable; urgency=low
+guacharo (3.1.10-2) unstable; urgency=low
 
   * [de81b7f] remove obsolete build depends libxp-dev (Closes: #623668)
   * [633782d] change DEB_HOST_MULTIARCH back to DEB_HOST_GNU_TYPE and
@@ -137,7 +137,7 @@ icedove (3.1.10-2) unstable; urgency=low
 
  -- Christoph Goehre <chris@sigxcpu.org>  Mon, 06 Jun 2011 20:53:54 +0200
 
-icedove (3.1.10-1) unstable; urgency=high
+guacharo (3.1.10-1) unstable; urgency=high
 
   * New Upstream Version (Closes: #625207)
     - MFSA 2011-12 aka CVE-2011-0069, CVE-2011-0070, CVE-2011-0072,
@@ -166,7 +166,7 @@ icedove (3.1.10-1) unstable; urgency=high
 
  -- Christoph Goehre <chris@sigxcpu.org>  Tue, 10 May 2011 20:03:04 +0200
 
-icedove (3.1.9-2) unstable; urgency=low
+guacharo (3.1.9-2) unstable; urgency=low
 
   * Upload to unstable
   * [ace3b6f] rebuild patch queue from patch-queue branch
@@ -174,12 +174,12 @@ icedove (3.1.9-2) unstable; urgency=low
     - 0072-Add-support-for-libnotify-0.7.patch
   * [910f213] use DEP5 for copyright file
   * [3ae4c8b] set global section to 'mail'
-  * [42c9c89] icedove.1: icedove is derived from Thunderbird instead of
+  * [42c9c89] guacharo.1: guacharo is derived from Thunderbird instead of
     Mozilla suite
 
  -- Christoph Goehre <chris@sigxcpu.org>  Sat, 02 Apr 2011 09:43:04 +0200
 
-icedove (3.1.9-1) experimental; urgency=low
+guacharo (3.1.9-1) experimental; urgency=low
 
   * New Upstream Version
     - MFSA 2011-01 aka CVE-2011-0053, CVE-2011-0062: Miscellaneous memory
@@ -193,7 +193,7 @@ icedove (3.1.9-1) experimental; urgency=low
       (Closes: #505875)
     - 0070-News-article-is-empty-if-selected-during-download-fr.patch
       (Closes: #487494)
-    - 0071-restore-icedove-on-login-by-session-management.patch
+    - 0071-restore-guacharo-on-login-by-session-management.patch
       (Closes: #403458)
     modified patches:
     - 0003-no_dynamic_nss_softokn.patch
@@ -204,7 +204,7 @@ icedove (3.1.9-1) experimental; urgency=low
 
  -- Christoph Goehre <chris@sigxcpu.org>  Wed, 09 Mar 2011 20:21:59 +0100
 
-icedove (3.1.7-1) experimental; urgency=low
+guacharo (3.1.7-1) experimental; urgency=low
 
   * New Upstream Version (Closes: #606977)
     - MFSA 2010-74 aka CVE-2010-3776, CVE-2010-3777: Miscellaneous memory
@@ -222,7 +222,7 @@ icedove (3.1.7-1) experimental; urgency=low
 
  -- Christoph Goehre <chris@sigxcpu.org>  Mon, 13 Dec 2010 17:59:50 +0100
 
-icedove (3.1.6-1) experimental; urgency=low
+guacharo (3.1.6-1) experimental; urgency=low
 
   * New Upstream Version (Closes: #601334)
     - MFSA 2010-64 aka CVE-2010-3175, CVE-2010-3176: Miscellaneous memory
@@ -247,13 +247,13 @@ icedove (3.1.6-1) experimental; urgency=low
 
  -- Christoph Goehre <chris@sigxcpu.org>  Wed, 10 Nov 2010 07:11:17 +0100
 
-icedove (3.1.4-1) experimental; urgency=low
+guacharo (3.1.4-1) experimental; urgency=low
 
   * New Upstream Version
 
  -- Christoph Goehre <chris@sigxcpu.org>  Sat, 18 Sep 2010 18:25:37 +0200
 
-icedove (3.1.3-1) experimental; urgency=low
+guacharo (3.1.3-1) experimental; urgency=low
 
   * New Upstream Version
     - MFSA 2010-49 aka CVE-2010-3169: Miscellaneous memory safety hazards
@@ -293,7 +293,7 @@ icedove (3.1.3-1) experimental; urgency=low
 
  -- Christoph Goehre <chris@sigxcpu.org>  Tue, 14 Sep 2010 13:41:19 +0200
 
-icedove (3.1.2-2) experimental; urgency=low
+guacharo (3.1.2-2) experimental; urgency=low
 
   * [e1435dc] rebuild patch queue from patch-queue branch
     added patches:
@@ -304,7 +304,7 @@ icedove (3.1.2-2) experimental; urgency=low
 
  -- Christoph Goehre <chris@sigxcpu.org>  Sat, 21 Aug 2010 14:51:03 +0200
 
-icedove (3.1.2-1) experimental; urgency=low
+guacharo (3.1.2-1) experimental; urgency=low
 
   * New Upstream Version (Closes: #589666, #591899)
    - MFSA 2010-34 aka CVE-2010-1211, CVE-2010-1212: Miscellaneous memory
@@ -342,23 +342,23 @@ icedove (3.1.2-1) experimental; urgency=low
 
  -- Christoph Goehre <chris@sigxcpu.org>  Fri, 13 Aug 2010 12:18:21 +0200
 
-icedove (3.1-1) experimental; urgency=low
+guacharo (3.1-1) experimental; urgency=low
 
   * New Upstream Version
   * [124a316] add additional build depends libnotify-dev
-  * [5ed6a72] adjust branding for Icedove 3.1
-  * [bed8969] install further js files shipped with Icedove 3.1
-  * [02456e6] replace blue icedove icons with green version
-  * [036921f] regenerate patch queue for 3.1 Icedove release
+  * [5ed6a72] adjust branding for Guacharo 3.1
+  * [bed8969] install further js files shipped with Guacharo 3.1
+  * [02456e6] replace blue guacharo icons with green version
+  * [036921f] regenerate patch queue for 3.1 Guacharo release
   * [a7fa393] build with system ffi
-  * [d8650f7] ship icedove svg file for low resolution icons too
+  * [d8650f7] ship guacharo svg file for low resolution icons too
   * [7718c55] bump Standards Version to 3.9.0 and downgrade Conflicts to
     Breaks
   * [9621fc6] lintian: override ancient-libtool warning
 
  -- Christoph Goehre <chris@sigxcpu.org>  Sat, 17 Jul 2010 17:19:58 +0200
 
-icedove (3.0.5-1) unstable; urgency=low
+guacharo (3.0.5-1) unstable; urgency=low
 
   * New Upstream Version
     - MFSA 2010-25 aka CVE-2010-1121: Re-use of freed object due to scope
@@ -385,8 +385,8 @@ icedove (3.0.5-1) unstable; urgency=low
   * [3b98c84] avoid unneeded package depends by building with
     '-Wl,--as-needed'
   * [0067020] Build with -std=gnu++0x
-  * [72d4300] add pkg-config file for icedove (Closes: #577740)
-  * [e6af35d] enlarge package description with specification from icedove 2.0
+  * [72d4300] add pkg-config file for guacharo (Closes: #577740)
+  * [e6af35d] enlarge package description with specification from guacharo 2.0
     (Closes: #565887)
   * [ef0bc10] add support for new Debian arch: powerpcspe (Closes: #586100) -
     thanks to Sebastian Andrzej Siewior
@@ -400,36 +400,36 @@ icedove (3.0.5-1) unstable; urgency=low
 
  -- Christoph Goehre <chris@sigxcpu.org>  Sat, 19 Jun 2010 23:26:55 +0200
 
-icedove (3.0.4-3) unstable; urgency=low
+guacharo (3.0.4-3) unstable; urgency=low
 
-  * [4026b50] icedove-dev need depend on libnspr4-dev and libnss3-dev
+  * [4026b50] guacharo-dev need depend on libnspr4-dev and libnss3-dev
     (Closes: #455725)
   * [1fee936] don't run configure with --enable-optimize and --disable-
     optimize if DEB_BUILD_OPTIONS contains noopt
   * [02c0ea3] ship account autoconfig file for Riseup Networks (riseup.net)
     (Closes: #577616)
   * [e710d08] suggest libgssapi-krb5-2 for Kerberos login possibility
-  * [7609291] build a shared icedove binary. This avoid crashes because of
-    mixed functions from system and icedove itself (e.g. str2charray from
+  * [7609291] build a shared guacharo binary. This avoid crashes because of
+    mixed functions from system and guacharo itself (e.g. str2charray from
     libldap_r-2.4.so.2 and libldap60.so). (Closes: #578916)
   * [68f4b49] downgrade gnome stuff from Recommends to Suggests
     (Closes: #579714)
-  * [bcff10b] install mailViews.dat into usr/share/icedove/defaults/messenger
+  * [bcff10b] install mailViews.dat into usr/share/guacharo/defaults/messenger
 
  -- Christoph Goehre <chris@sigxcpu.org>  Fri, 14 May 2010 22:21:32 +0200
 
-icedove (3.0.4-2) unstable; urgency=low
+guacharo (3.0.4-2) unstable; urgency=low
 
-  * [57f0a8b] remove icedove-3.0 transitional package (Closes: #576741)
+  * [57f0a8b] remove guacharo-3.0 transitional package (Closes: #576741)
   * [8008231] remove wrong mime types in desktop file
-  * [a12edde] set StartupWMClass in desktop file to Icedove-bin
-  * [7512224] extend package description of icedove, icedove-dev and
-    icedove-dbg
+  * [a12edde] set StartupWMClass in desktop file to Guacharo-bin
+  * [7512224] extend package description of guacharo, guacharo-dev and
+    guacharo-dbg
   * [7e725b9] fix FTBFS on alpha by passing '-Wl,--no-relax' to gcc
   * [92d3515] Switch to dpkg-source 3.0 (quilt) format
   * [14d5894] rebuild patch queue from patch-queue branch
     added patches:
-    - 0046-add-missing-headers-for-icedove-dev-package.patch (Closes: #577021)
+    - 0046-add-missing-headers-for-guacharo-dev-package.patch (Closes: #577021)
     modified patches:
     - 0012-Support-building-on-GNU-kFreeBSD-and-GNU-Hurd.patch
     - 0020-Work-around-FTBFS-on-mips-by-disabling-TLS-support.patch
@@ -439,7 +439,7 @@ icedove (3.0.4-2) unstable; urgency=low
 
  -- Christoph Goehre <chris@sigxcpu.org>  Sun, 11 Apr 2010 12:44:26 +0200
 
-icedove (3.0.4-1) unstable; urgency=low
+guacharo (3.0.4-1) unstable; urgency=low
 
   [ Guido Günther ]
   * [01983a4] Add missing message/rfc822 mime type for eml files
@@ -457,7 +457,7 @@ icedove (3.0.4-1) unstable; urgency=low
       indication
     - MFSA 2010-24 aka CVE-2010-0182: XMLDocument::load() doesn't check
       nsIContentPolicy
-  * upload icedove 3 to unstable (Closes: #401848, #422886, #425497, #430644,
+  * upload guacharo 3 to unstable (Closes: #401848, #422886, #425497, #430644,
     #483550, #495522, #501113, #552617, #574188)
   * rebuild patch queue from patch-queue branch:
     added patches:
@@ -474,24 +474,24 @@ icedove (3.0.4-1) unstable; urgency=low
     - 0039-Don-t-show-the-SVG-output-option-in-the-print-dialog.patch
   * [a7f3529] Revert "disable prefetch service". This bug was already fixed in
     3.0.2 (CVE-2009-4629) and 'network.prefetch-next' has no effect in
-    icedove.
+    guacharo.
   * [fecc0b4] install versioned build depends instead of checking on build
     time
-  * [4806890] enable building of icedove-dev package
-  * [412b8ac] be more explicit on installing file into icedove package
+  * [4806890] enable building of guacharo-dev package
+  * [412b8ac] be more explicit on installing file into guacharo package
   * [23b1d4b] depends on newer version of libnspr4-dev and libnss3-dev
   * [809c723] lintian: idl files didn't need to be executable
-  * [ecd284e] lintian: add ${shlibs:Depends} to icedove-dev package
+  * [ecd284e] lintian: add ${shlibs:Depends} to guacharo-dev package
   * [da75ee2] replace/remove non-free searchplugin icons and doubtful
     origin file in mozilla folder (Closes: #567917)
-  * [eaf405e] update /usr/lib/icedove/dictionaries symlink to point to
+  * [eaf405e] update /usr/lib/guacharo/dictionaries symlink to point to
     /usr/share/hunspell
-  * [fe362ba] describe profile renaming on update to icedove 3.0
+  * [fe362ba] describe profile renaming on update to guacharo 3.0
     (Closes: #566329)
 
  -- Christoph Goehre <chris@sigxcpu.org>  Mon, 05 Apr 2010 21:11:42 +0200
 
-icedove (3.0.3-1) experimental; urgency=low
+guacharo (3.0.3-1) experimental; urgency=low
 
   * New Upstream Version fixes:
     - missing folders or empty folder pane after updating to version 3.0.2
@@ -503,7 +503,7 @@ icedove (3.0.3-1) experimental; urgency=low
 
  -- Christoph Goehre <chris@sigxcpu.org>  Sat, 06 Mar 2010 21:48:50 +0100
 
-icedove (3.0.2-1) experimental; urgency=low
+guacharo (3.0.2-1) experimental; urgency=low
 
   * New Upstream Version fixes:
     - MFSA 2010-01 aka CVE-2010-0159: Crashes with evidence of memory
@@ -511,8 +511,8 @@ icedove (3.0.2-1) experimental; urgency=low
     - MFSA 2010-03 aka CVE-2009-1571: Use-after-free crash in HTML parser
   * [1fd705f] install menu file (Closes: #569166)
   * [8df3f99] generate desktop files at build process
-  * [5b0bb84] add icedove branding logos
-  * [1ef1c10] copyright explanation of icedove artwork (Closes: #406849)
+  * [5b0bb84] add guacharo branding logos
+  * [1ef1c10] copyright explanation of guacharo artwork (Closes: #406849)
   * [6cdc0b0] remove forgotten firefox branding icons (Closes: #567917)
   * [cec6a38] swedish translation for desktop file (Closes: #420050)
   * [0256328] readd translation for desktop file
@@ -521,7 +521,7 @@ icedove (3.0.2-1) experimental; urgency=low
     - stability patched for mips, alpha, sparc, ppc and arm
     - really cleanup build directory on 'make clean/distclean'
     - allow intl.locale.matchOS to be modified in user profile
-  * [0098f90] write manpage for icedove (Closes: #425490, #487493)
+  * [0098f90] write manpage for guacharo (Closes: #425490, #487493)
   * [fbccfaa] no longer suggest libthai0 (Closes: #524436)
   * [26d3e39] change suggests from transitional package latex-xft-fonts
     to ttf-lyx (Closes: #539535)
@@ -533,12 +533,12 @@ icedove (3.0.2-1) experimental; urgency=low
 
  -- Christoph Goehre <chris@sigxcpu.org>  Sun, 28 Feb 2010 18:19:13 +0100
 
-icedove (3.0.1-2) experimental; urgency=low
+guacharo (3.0.1-2) experimental; urgency=low
 
   [ Guido Günther ]
   * [7ea7367] Explicitly pass build and host type to configure (Closes:
     #546011) - thanks to Sven Joachim <svenjoac@gmx.de> for the patch
-  * [7fca9e1] Add back icedove changelog of earlier versions
+  * [7fca9e1] Add back guacharo changelog of earlier versions
 
   [ Christoph Goehre ]
   * [72b78cc] Support both - and _ separators in dictionary names - patch from
@@ -548,12 +548,12 @@ icedove (3.0.1-2) experimental; urgency=low
 
  -- Christoph Goehre <christoph.goehre@gmx.de>  Tue, 02 Feb 2010 20:32:24 +0100
 
-icedove (3.0.1-1) experimental; urgency=low
+guacharo (3.0.1-1) experimental; urgency=low
 
   * New Upstream Version
   * [8a2f5dc] define default options for git-import-orig
   * [ac65b1b] refresh debian patches
-  * [851c5dc] rename binary packages to icedove (without version number)
+  * [851c5dc] rename binary packages to guacharo (without version number)
   * [6e12d1b] adjust cairo version to 1.8.8
   * [cd7cd6f] moving the old profile dir instead of copy
   * [c342380] replace theme directory always by link to /usr/share if we
@@ -563,14 +563,14 @@ icedove (3.0.1-1) experimental; urgency=low
 
  -- Christoph Goehre <chris@sigxcpu.org>  Thu, 21 Jan 2010 20:53:57 +0100
 
-icedove (3.0-2) experimental; urgency=low
+guacharo (3.0-2) experimental; urgency=low
 
-  * [f07e702] Add Replaces for icedove-gnome-support
+  * [f07e702] Add Replaces for guacharo-gnome-support
   * [72e66e7] Fix typo
 
  -- Guido Günther <agx@sigxcpu.org>  Fri, 08 Jan 2010 16:05:10 +0100
 
-icedove (3.0-1) experimental; urgency=low
+guacharo (3.0-1) experimental; urgency=low
 
   * Final upstream version without any source code changes against RC2
 
@@ -581,20 +581,20 @@ icedove (3.0-1) experimental; urgency=low
   [ Christoph Goehre ]
   * [524d1f5] don't hardcode $MOZ_APP_NAME in Makefile.in file
   * [0407ff3] mailclient bin called now $DEB_MOZ_APPLICATION
-  * [e6040b5] merge icedove-3.0-gnome-support into icedove-3.0 package
+  * [e6040b5] merge guacharo-3.0-gnome-support into guacharo-3.0 package
   * [07417e0] install default theme and components/*.js into
-    /usr/share/icedove-3.0
+    /usr/share/guacharo-3.0
   * [3d37478] add missed components files
   * [f09cfad] add another preferences directory for applications:
     preferences/syspref - thanks to Mike Hommey
-  * [d92e265] install debian config into /etc/icedove-3.0/pref and link
+  * [d92e265] install debian config into /etc/guacharo-3.0/pref and link
     into defaults/syspref
   * [18a886b] disable application update
   * [76ea38a] let lockPref() in .js files work - thanks to Mike Hommey
   * [e44133e] gnome-default-mail-client: check for MOZ_APP_NAME instead
     for hardcoded 'thunderbird'
   * [8573c8d] set DM-Upload-Allowed to yes
-  * [1c63920] install modules directory into /usr/share/icedove-3.0
+  * [1c63920] install modules directory into /usr/share/guacharo-3.0
   * [3a85ac6] add gbp.conf for easier package build with
     git-buildpackage
   * [7feb54a] add watch file
@@ -602,23 +602,23 @@ icedove (3.0-1) experimental; urgency=low
 
  -- Christoph Goehre <chris@sigxcpu.org>  Fri, 08 Jan 2010 10:42:09 +0100
 
-icedove (3.0~rc2-2) experimental; urgency=low
+guacharo (3.0~rc2-2) experimental; urgency=low
 
   [ Christoph Goehre ]
   * [5b7992b] rename source package to unversioned name
   * [cde3507] change Maintainer back to asac, add Uploaders Guido and me
-  * [978c58d] disable icedove-3.0-dev package build for now until it is fixed
+  * [978c58d] disable guacharo-3.0-dev package build for now until it is fixed
     upstream
   * Upstream is identical to 3.0 final
 
  -- Guido Günther <agx@sigxcpu.org>  Thu, 17 Dec 2009 18:36:58 +0100
 
-icedove-3.0 (3.0~rc2-1) experimental; urgency=low
+guacharo-3.0 (3.0~rc2-1) experimental; urgency=low
 
   [ Christoph Goehre ]
   * New Upstream Version (RC2)
     - fixes 494014, 516950, 531278, 531502 in Mozilla Bugzilla
-  * [fc3fa5c] Revert "mark icedove-3.0-dev as transitional package for
+  * [fc3fa5c] Revert "mark guacharo-3.0-dev as transitional package for
     xulrunner-dev"
 
   [ Guido Günther ]
@@ -628,7 +628,7 @@ icedove-3.0 (3.0~rc2-1) experimental; urgency=low
 
  -- Christoph Goehre <christoph.goehre@gmx.de>  Tue, 08 Dec 2009 18:46:28 +0100
 
-icedove-3.0 (3.0~rc1-1) experimental; urgency=low
+guacharo-3.0 (3.0~rc1-1) experimental; urgency=low
 
   * New Upstream Version (RC1)
   * [cce57db] ship extracted upstream tarball in orig file
@@ -639,7 +639,7 @@ icedove-3.0 (3.0~rc1-1) experimental; urgency=low
     /usr/lib
   * [c9ce50f] get right of system myspell
   * [5c96edf] remove version check for hunspell in debian/rules
-  * [13b57a3] mark icedove-3.0-dev as transitional package for
+  * [13b57a3] mark guacharo-3.0-dev as transitional package for
     xulrunner-dev
   * [8ecaec9] all packages need ${misc:Depends} as depends, if we use
     debhelper
@@ -651,76 +651,76 @@ icedove-3.0 (3.0~rc1-1) experimental; urgency=low
 
  -- Christoph Goehre <christoph.goehre@gmx.de>  Thu, 03 Dec 2009 10:16:46 +0100
 
-icedove-3.0 (3.0~b3~hg20090713r3057-1~gbp253e4ab) sid; urgency=low
+guacharo-3.0 (3.0~b3~hg20090713r3057-1~gbp253e4ab) sid; urgency=low
 
   * New snapshot.
 
  -- Guido Günther <agx@sigxcpu.org>  Tue, 14 Jul 2009 10:24:57 +0200
 
-icedove-3.0 (3.0~b3~hg20090713r3057-1~gbpefd0706) sid; urgency=low
+guacharo-3.0 (3.0~b3~hg20090713r3057-1~gbpefd0706) sid; urgency=low
 
   * New snapshot.
 
  -- Guido Günther <agx@sigxcpu.org>  Tue, 14 Jul 2009 10:24:50 +0200
 
-icedove-3.0 (3.0~b3~hg20090713r3057-1~gbpfeeee47) sid; urgency=low
+guacharo-3.0 (3.0~b3~hg20090713r3057-1~gbpfeeee47) sid; urgency=low
 
   * New snapshot.
 
  -- Guido Günther <agx@sigxcpu.org>  Tue, 14 Jul 2009 10:11:10 +0200
 
-icedove-3.0 (3.0~b3~hg20090505r2552-1~gbp595a0b7) sid; urgency=low
+guacharo-3.0 (3.0~b3~hg20090505r2552-1~gbp595a0b7) sid; urgency=low
 
   * New snapshot.
 
  -- Guido Günther <agx@sigxcpu.org>  Tue, 05 May 2009 18:03:25 +0200
 
-icedove-3.0 (3.0~b3~hg20090427r2499-1~gbpbeb7cd6) sid; urgency=low
+guacharo-3.0 (3.0~b3~hg20090427r2499-1~gbpbeb7cd6) sid; urgency=low
 
   * New snapshot.
 
  -- Guido Günther <agx@sigxcpu.org>  Mon, 27 Apr 2009 20:05:51 +0200
 
-icedove-3.0 (3.0~b3~hg20090427r2499-1~gbp80a8829) sid; urgency=low
+guacharo-3.0 (3.0~b3~hg20090427r2499-1~gbp80a8829) sid; urgency=low
 
   * New snapshot.
 
  -- Guido Günther <agx@sigxcpu.org>  Mon, 27 Apr 2009 19:56:09 +0200
 
-icedove-3.0 (3.0~b3~hg20090422r2448-1~gbpd4ee3b3) pkg-mozext; urgency=low
+guacharo-3.0 (3.0~b3~hg20090422r2448-1~gbpd4ee3b3) pkg-mozext; urgency=low
 
   * New snapshot.
 
  -- Guido Günther <agx@sigxcpu.org>  Wed, 22 Apr 2009 09:14:54 +0200
 
-icedove-3.0 (3.0~b3~hg20090421r2441-1~gbp66d9bed) pkg-mozext; urgency=low
+guacharo-3.0 (3.0~b3~hg20090421r2441-1~gbp66d9bed) pkg-mozext; urgency=low
 
   * New snapshot.
 
  -- Guido Günther <agx@sigxcpu.org>  Tue, 21 Apr 2009 19:35:09 +0200
 
-icedove-3.0 (3.0~b3~hg20090420r2424-1~gbp47b25b8) pkg-mozext; urgency=low
+guacharo-3.0 (3.0~b3~hg20090420r2424-1~gbp47b25b8) pkg-mozext; urgency=low
 
   * New snapshot.
 
  -- Guido Günther <agx@sigxcpu.org>  Mon, 20 Apr 2009 11:28:56 +0200
 
-icedove-3.0 (3.0~b3~hg20090418r2418+nobinonly-1~0~gbpa19783) pkg-mozext; urgency=low
+guacharo-3.0 (3.0~b3~hg20090418r2418+nobinonly-1~0~gbpa19783) pkg-mozext; urgency=low
 
   * Initial release
 
  -- Guido Günther <agx@sigxcpu.org>  Sun, 19 Apr 2009 13:44:33 +0200
 
-icedove (2.0.0.22-1.1) unstable; urgency=low
+guacharo (2.0.0.22-1.1) unstable; urgency=low
 
   * Non-maintainer upload.
-  * update /usr/lib/icedove/dictionaries symlink to point to
+  * update /usr/lib/guacharo/dictionaries symlink to point to
     /usr/share/hunspell (closes: #549876)
   * add $[shlibs:Depends} to iceape-dev 
 
  -- Rene Engelhard <rene@debian.org>  Mon, 09 Nov 2009 17:11:50 +0100
 
-icedove (2.0.0.22-1) unstable; urgency=low
+guacharo (2.0.0.22-1) unstable; urgency=low
 
   * New upstream security/stability update (v2.0.0.21/v2.0.0.22) (Closes: 535124)
     * MFSA 2009-33: Crash viewing multipart/alternative message with text/enhanced part
@@ -748,7 +748,7 @@ icedove (2.0.0.22-1) unstable; urgency=low
 
  -- Alexander Sack <asac@debian.org>  Wed, 01 Jul 2009 12:18:03 +0200
 
-icedove (2.0.0.19-1) unstable; urgency=medium
+guacharo (2.0.0.19-1) unstable; urgency=medium
 
   * New upstream security/stability update (v.2.0.0.18/2.0.0.19) Closes: 505563
     2.0.0.18:
@@ -790,7 +790,7 @@ icedove (2.0.0.19-1) unstable; urgency=medium
 
  -- Alexander Sack <asac@debian.org>  Sat, 03 Jan 2009 16:27:42 +0100
 
-icedove (2.0.0.17-1) unstable; urgency=low
+guacharo (2.0.0.17-1) unstable; urgency=low
 
   * New upstream security/stability update (v.2.0.0.17), Closes: #500721
     * MFSA 2008-37 aka CVE-2008-0016 - UTF-8 URL stack buffer overflow
@@ -816,14 +816,14 @@ icedove (2.0.0.17-1) unstable; urgency=low
     - Bumped standards version to 3.8.0
 
   [ Alexander Sack <asac@debian.org> ]
-  * Closes: #497491 - Icedove inappropriately sets file-/MIME-type
+  * Closes: #497491 - Guacharo inappropriately sets file-/MIME-type
     associations in .desktop database; we drop the Mime-Type= entry
-    from debian/icedove.desktop
-    - update debian/icedove.desktop
+    from debian/guacharo.desktop
+    - update debian/guacharo.desktop
 
  -- Michael Casadevall <sonicmctails@gmail.com>  Sat, 18 Oct 2008 09:07:20 -0400
 
-icedove (2.0.0.16-1) unstable; urgency=low
+guacharo (2.0.0.16-1) unstable; urgency=low
 
   * New upstream security/stability update (v2.0.0.16) fixes:
    * MFSA 2008-21 aka CVE-2008-2798 - Crashes with evidence of memory
@@ -846,7 +846,7 @@ icedove (2.0.0.16-1) unstable; urgency=low
 
   * Closes: #483938 - add .desktop file translations (contributed by Timo
     Jyrinki <timo.jyrinki@iki.fi>)
-    - update debian/icedove.desktop
+    - update debian/guacharo.desktop
 
   (cherry pick rev77 from lp:~mozillateam/thunderbird/thunderbird.dev branch)
   * drop patches applied upstream
@@ -865,7 +865,7 @@ icedove (2.0.0.16-1) unstable; urgency=low
 
  -- Alexander Sack <asac@canonical.com>  Thu, 24 Jul 2008 17:38:51 +0200
 
-icedove (2.0.0.14-1) unstable; urgency=medium
+guacharo (2.0.0.14-1) unstable; urgency=medium
 
   * Upstream stability/security release, fixes
     + MFSA 2008-15 aka CVE-2008-1236 - Crashes with evidence of memory corruption
@@ -875,11 +875,11 @@ icedove (2.0.0.14-1) unstable; urgency=medium
     + MFSA 2008-14 aka CVE-2008-1233, CVE-2008-1234, CVE-2008-1235 - JavaScript
       privilege escalation and arbitrary code execution
   * update debian/remove.nonfree script to pull branding from bzr branch hosted
-    at https://code.edge.launchpad.net/~mozillateam/thunderbird/icedove-branding-2.0.0.x
+    at https://code.edge.launchpad.net/~mozillateam/thunderbird/guacharo-branding-2.0.0.x
     - update debian/remove.nonfree
   * fix fallback https handler by adding pref("network.protocol-handler.app.https",
     "x-www-browser") to default system preference file. (Closes: #460954)
-    - update debian/icedove.js
+    - update debian/guacharo.js
   * drop patches applied upstream:
     - delete debian/patches/bz399589_fix_missing_symbol_with_new_nss.patch
     - update debian/patches/series
@@ -896,7 +896,7 @@ icedove (2.0.0.14-1) unstable; urgency=medium
 
  -- Alexander Sack <asac@debian.org>  Fri, 09 May 2008 17:57:55 +0200
 
-icedove (2.0.0.12-1) unstable; urgency=low
+guacharo (2.0.0.12-1) unstable; urgency=low
 
    * New Upstream stability/security release, fixes various advisories:
      + CVE-2008-0416 aka MFSA 2008-13  Multiple XSS vulnerabilities from
@@ -920,29 +920,29 @@ icedove (2.0.0.12-1) unstable; urgency=low
     - added debian/patches/bz399589_fix_missing_symbol_with_new_nss.patch
     - update debian/patches/series
   * add Vcs-Bzr: header to control pointing to the mozillateam packaging
-    branch https://code.launchpad.net/~mozillateam/thunderbird/icedove-2.0.0.x
+    branch https://code.launchpad.net/~mozillateam/thunderbird/guacharo-2.0.0.x
     - update debian/control
-  * introduce .autoreg feature and touch /usr/lib/icedove/.autoreg in
-    icedove-gnome-support.postinst and icedove-gnome-support.prerm iif that
+  * introduce .autoreg feature and touch /usr/lib/guacharo/.autoreg in
+    guacharo-gnome-support.postinst and guacharo-gnome-support.prerm iif that
     file exists.
     - update debian/rules
-    - added debian/icedove-gnome-support.postinst
-    - added debian/icedove-gnome-support.prerm
+    - added debian/guacharo-gnome-support.postinst
+    - added debian/guacharo-gnome-support.prerm
   * Adjust multiple patches because of changed upstream code base
     - update debian/patches/ubuntu-mail-app-xre-name
     - update debian/patches/autoconf2.13-rerun
 
  -- Alexander Sack <asac@debian.org>  Sat, 05 Apr 2008 23:05:11 +0200
 
-icedove (2.0.0.9-3) unstable; urgency=low
+guacharo (2.0.0.9-3) unstable; urgency=low
 
   * drop network.protocol-handler.external.http setting as it caused
     regressions (Closes: 459564)
-    - update debian/icedove.js
+    - update debian/guacharo.js
 
  -- Alexander Sack <asac@debian.org>  Wed, 09 Jan 2008 18:56:28 +0100
 
-icedove (2.0.0.9-2) unstable; urgency=low
+guacharo (2.0.0.9-2) unstable; urgency=low
 
   * pass host arch information to configure and trust the supplied architecture
     information. Thanks to Bastian Blank. (Closes: 445959)
@@ -950,20 +950,20 @@ icedove (2.0.0.9-2) unstable; urgency=low
     - add debian/patches/arch-detect
     - update debian/patches/autoconf2.13-rerun
     - update debian/patches/series
-  * use /usr/lib/icedove/icedove as gnome integration command used to update
+  * use /usr/lib/guacharo/guacharo as gnome integration command used to update
     gconf protocol handler. (Closes: 452919)
-    - add debian/patches/icedove_gnome_command
+    - add debian/patches/guacharo_gnome_command
     - update debian/patches/series
   * prefer gnome registry to lookup protocol handler if we are in a gnome
     session; in turn we enable x-www-browser as the http protocol by default
     (Closes: 452882)
     - add debian/patches/prefer_gnome_registry_in_gnome_session
     - update debian/patches/series
-    - update debian/icedove.js
+    - update debian/guacharo.js
 
  -- Alexander Sack <asac@debian.org>  Sun, 30 Dec 2007 20:21:26 +0100
 
-icedove (2.0.0.9-1) unstable; urgency=medium
+guacharo (2.0.0.9-1) unstable; urgency=medium
 
   * new upstream stability/security update (v2.0.0.9):
     - MFSA 2007-36 aka CVE-2007-4841: "URIs with invalid %-encoding mishandled
@@ -984,17 +984,17 @@ icedove (2.0.0.9-1) unstable; urgency=medium
   * add copyright file (Closes: 453365)
     - add debian/copyright
   * quote some if test ! ... lines to fix preinst errors (Closes: 427336)
-    - update debian/icedove.preinst
-  * update icedove menu section - use "Applications/Network/Communication"
+    - update debian/guacharo.preinst
+  * update guacharo menu section - use "Applications/Network/Communication"
     (Closes: 444903)
-    - update debian/icedove.menu
-  * don't try to install debian/tmp/usr/lib/icedove/defaults/isp as its not
+    - update debian/guacharo.menu
+  * don't try to install debian/tmp/usr/lib/guacharo/defaults/isp as its not
     shipped by make install anymore
-    - update debian/icedove.install
+    - update debian/guacharo.install
 
  -- Alexander Sack <asac@ubuntu.com>  Fri, 28 Dec 2007 16:05:05 +0100
 
-icedove (2.0.0.6-1) unstable; urgency=low
+guacharo (2.0.0.6-1) unstable; urgency=low
 
   * new upstream release 2.0.0.6-1 fixes various security issues
    (Closes: #444010):
@@ -1013,39 +1013,39 @@ icedove (2.0.0.6-1) unstable; urgency=low
 
  -- Alexander Sack <asac@debian.org>  Mon, 08 Oct 2007 12:09:42 +0000
 
-icedove (2.0.0.4.dfsg1-2) unstable; urgency=low
+guacharo (2.0.0.4.dfsg1-2) unstable; urgency=low
 
   * debian/patches/autoconf2.13-rerun: rerun to apply last commits
     configure.in patch addition to configure.
   * debian/patches/force-no-pragma-visibility-for-gcc-4.2_4.3,
     debian/patches/series: don't use pragma for visibility as visibility
     hints are not perfect yet in mozilla code base.
-  * debian/icedove.desktop: drop explicit .png extension from desktop icon name
-  * debian/icedove.desktop, debian/icedove.links, debian/icedove.menu: fix various
-    icon issues, by using /usr/share/icedove/icons/default.png instead of
-    mozicon128.png as source for standard icedove pixmaps link 
+  * debian/guacharo.desktop: drop explicit .png extension from desktop icon name
+  * debian/guacharo.desktop, debian/guacharo.links, debian/guacharo.menu: fix various
+    icon issues, by using /usr/share/guacharo/icons/default.png instead of
+    mozicon128.png as source for standard guacharo pixmaps link 
     (Closes: #427076, #437064, #437090).
   * debian/control, debian/rules: use gcc-4.2 and g++-4.2 on all archs; add gcc-4.2
     and g++-4.2 to build-depends in control file.
-  * debian/icedove.links: provide usr/share/icedove/chrome/icons/default/messengerWindow16.png
-    as a link to usr/share/icedove/icons/mozicon16.png (Closes: #427723).
-  * debian/icedove.install, debian/icedove.links: install isp directories
-    /usr/share/icedove/isp and /usr/share/icedove/defaults/isp and link them to
+  * debian/guacharo.links: provide usr/share/guacharo/chrome/icons/default/messengerWindow16.png
+    as a link to usr/share/guacharo/icons/mozicon16.png (Closes: #427723).
+  * debian/guacharo.install, debian/guacharo.links: install isp directories
+    /usr/share/guacharo/isp and /usr/share/guacharo/defaults/isp and link them to
     pkglibdir accordingly (Closes: #428421).
 
  -- Alexander Sack <asac@debian.org>  Mon, 27 Aug 2007 23:48:53 +0200
 
-icedove (2.0.0.4.dfsg1-1) unstable; urgency=low
+guacharo (2.0.0.4.dfsg1-1) unstable; urgency=low
 
   * debian/remove.nonfree: update list of non-free/binary-only file from
     latest iceape updates" debian/remove.nonfree; update orig
     tarball accordingly. (Closes: 400340)
-  * debian/control[.in]: icedove package now provides mail-reader,
+  * debian/control[.in]: guacharo package now provides mail-reader,
     imap-client, news-reader instead of www-browser (Closes: 425167)
 
  -- Alexander Sack <asac@ubuntu.com>  Tue, 19 Jun 2007 15:00:12 +0200
 
-icedove (2.0.0.4-1) unstable; urgency=low
+guacharo (2.0.0.4-1) unstable; urgency=low
 
   * stability/security upstream release 2.0.0.4
     - CVE-2007-2867 aka MFSA 2007-12 (l): Crashes with evidence of memory
@@ -1067,7 +1067,7 @@ icedove (2.0.0.4-1) unstable; urgency=low
 
  -- Alexander Sack <asac@debian.org>  Mon, 18 Jun 2007 16:50:34 +0200
 
-icedove (2.0.0.0-4) unstable; urgency=low
+guacharo (2.0.0.0-4) unstable; urgency=low
 
   * One that fix them all release - maybe.
   * fix symlinks for chrome/greprefs/defaults in .preinst
@@ -1076,24 +1076,24 @@ icedove (2.0.0.0-4) unstable; urgency=low
 
  -- Alexander Sack <asac@debian.org>  Fri, 1 Jun 2007 13:13:13 +0200
 
-icedove (2.0.0.0-3) unstable; urgency=low
+guacharo (2.0.0.0-3) unstable; urgency=low
 
   * fixing links in preinst (Closes: 424963, 425061, 425223)
     greprefs, chrome and defaults need to point to
-    /usr/share/icedove/*
+    /usr/share/guacharo/*
   * drop searchplugin link which even had a typo :)
-  * debian/icedove.menu: ship debian menu entry 
+  * debian/guacharo.menu: ship debian menu entry 
     (Closes: 425224)
 
  -- Alexander Sack <asac@debian.org>  Sat, 20 May 2007 16:48:00 +0200
 
-icedove (2.0.0.0-2) unstable; urgency=low
+guacharo (2.0.0.0-2) unstable; urgency=low
 
-  * adding icedove-dbg package
+  * adding guacharo-dbg package
 
  -- Alexander Sack <asac@debian.org>  Sat, 19 May 2007 17:33:00 +0200
 
-icedove (2.0.0.0-1) unstable; urgency=low
+guacharo (2.0.0.0-1) unstable; urgency=low
 
   * icedovising
   * add debian/remove.nonfree
@@ -1120,9 +1120,9 @@ thunderbird (1.99.rc1+2.0-1) feisty; urgency=low
 
  -- Alexander Sack <asac@ubuntu.com>  Wed, 18 Apr 2007 13:35:34 +0200
 
-icedove (1.5.0.10.dfsg1-3) unstable; urgency=low
+guacharo (1.5.0.10.dfsg1-3) unstable; urgency=low
 
-  * debian/icedove*.xpm updated to use correct icon
+  * debian/guacharo*.xpm updated to use correct icon
     (Closes: 413976, 416476)
   * debian/patches/25_gnome_helpers_with_params.dpatch:
     Make helper applications with parameters work (bz#273524);
@@ -1131,14 +1131,14 @@ icedove (1.5.0.10.dfsg1-3) unstable; urgency=low
 
  -- Alexander Sack <asac@debian.org>  Wed, 28 Mar 2007 21:55:08 +0200
 
-icedove (1.5.0.10.dfsg1-2) unstable; urgency=low
+guacharo (1.5.0.10.dfsg1-2) unstable; urgency=low
 
   * debian/tmpls-typeaheadfind/install.rdf: fix version depends of 
     typeaheadfind (Closes: 413770)
 
  -- Alexander Sack <asac@debian.org>  Wed, 7 Mar 2007 13:13:13 +0100
 
-icedove (1.5.0.10.dfsg1-1) unstable; urgency=low
+guacharo (1.5.0.10.dfsg1-1) unstable; urgency=low
 
   * new upstream release fixing security issues:
     - CVE-2007-0008, MFSA 2006-06: SSLv2 Client Integer Underflow
@@ -1147,7 +1147,7 @@ icedove (1.5.0.10.dfsg1-1) unstable; urgency=low
       Vulnerability
     - CVE-2007-0775, CVE-2007-0776, CVE-2007-0777, MFSA 2007-01:
       Crashes with evidence of memory corruption
-  * 91_credits_icedove.dpatch: dump new xml entities from
+  * 91_credits_guacharo.dpatch: dump new xml entities from
     credits dialog (Closes: 404984, 412423)
   * 50_kbsd_nspr.dpatch, 50_kbsd.dpatch: adapt kbsd patches to apply to
     latest upstream code-base
@@ -1186,7 +1186,7 @@ icedove (1.5.0.10.dfsg1-1) unstable; urgency=low
 
  -- Alexander Sack <asac@debian.org>  Fri, 23 Feb 2007 09:00:00 +0100
 
-icedove (1.5.0.10.dfsg1-1.1) unstable; urgency=low
+guacharo (1.5.0.10.dfsg1-1.1) unstable; urgency=low
 
   * Non-maintainer upload to fix pending l10n issues.
   * Debconf translations:
@@ -1198,7 +1198,7 @@ icedove (1.5.0.10.dfsg1-1.1) unstable; urgency=low
 
  -- Christian Perrier <bubulle@debian.org>  Tue,  6 Feb 2007 06:55:08 +0100
 
-icedove (1.5.0.9.dfsg1-1) unstable; urgency=high
+guacharo (1.5.0.9.dfsg1-1) unstable; urgency=high
 
   * new upstream version, fixes various security issues:
      - CVE-2006-6497 mfsa2006-68 layout engine
@@ -1212,7 +1212,7 @@ icedove (1.5.0.9.dfsg1-1) unstable; urgency=high
      - CVE-2006-6505 mfsa2006-74
      - CVE-2006-6506 mfsa2006-75
      - CVE-2006-6507 mfsa2006-76
-  * landing icedove artwork contributed by Ricardo Fernández 
+  * landing guacharo artwork contributed by Ricardo Fernández 
     <unicko2000@yahoo.es>; svgs are in debian/branding. xpms and some
     pngs are generated with rsvg-convert and convert -> adding 
     build-depends to librsvg2-bin, imagemagick
@@ -1220,11 +1220,11 @@ icedove (1.5.0.9.dfsg1-1) unstable; urgency=high
     <felipem@gigared.com> (Closes: 402928)
   * updateing pt_BR.po provided by André Luís Lopes 
     <andrelop@debian.org> (Closes: 403827)
-  * adapting credits dialog and Icedove Motto in 91_credits_icedove.dpatch
-  * fix bad link in icedove manpage (icedove.sgml) (Closes: 398344)
-  * rebranding install.rdf of default theme for icedove in
+  * adapting credits dialog and Guacharo Motto in 91_credits_guacharo.dpatch
+  * fix bad link in guacharo manpage (guacharo.sgml) (Closes: 398344)
+  * rebranding install.rdf of default theme for guacharo in
     91_rebranding_theme.dpatch (Closes: 393134)
-  * adapt README.Debian to new icedove directories and name
+  * adapt README.Debian to new guacharo directories and name
   * clean old/not-needed files from debian/ directory:
     theme.part.defaultclassic, mail-jar.mn, messenger_jar_includes.csv
   * disabling patch: 99_bz360409_deb400383, which is applied
@@ -1232,7 +1232,7 @@ icedove (1.5.0.9.dfsg1-1) unstable; urgency=high
 
  -- Alexander Sack <asac@debian.org>  Tue, 19 Dec 2006 12:00:00 +0100
 
-icedove (1.5.0.8.dfsg1-1) unstable; urgency=medium
+guacharo (1.5.0.8.dfsg1-1) unstable; urgency=medium
 
   * removing all currently known non-free and sourceless binaries
     from source package by running the script included for 
@@ -1247,7 +1247,7 @@ icedove (1.5.0.8.dfsg1-1) unstable; urgency=medium
 
  -- Alexander Sack <asac@debian.org>  Sun, 26 Nov 2006 19:00:00 +0100
 
-icedove (1.5.0.8-3) unstable; urgency=low
+guacharo (1.5.0.8-3) unstable; urgency=low
 
   * disable kbsd patches in 00list because they appear to break
     build on other platforms. In consequence, 399692 and 363865
@@ -1255,15 +1255,15 @@ icedove (1.5.0.8-3) unstable; urgency=low
 
  -- Alexander Sack <asac@debian.org>  Mon, 22 Nov 2006 15:10:00 +0100
 
-icedove (1.5.0.8-2) unstable; urgency=low
+guacharo (1.5.0.8-2) unstable; urgency=low
 
   * fix mozilla.in for real (for transitional thunderbird link
     (Closes: 393123, 398037)
   * apply basque debconf translation (eu.po) for real
     (Closes: 398468)
   * included nl.po provided by Nick Niktaris <niktaris@knoppel.org>
-    renaming as icedove first (Closes: 378360)
-  * include greek translation in icedove.desktop provided by
+    renaming as guacharo first (Closes: 378360)
+  * include greek translation in guacharo.desktop provided by
     Nick Niktaris <niktaris@knoppel.org> (Closes: 384359)
   * include updated de.po translation provided by
     Alwin Meschede <ameschede@gmx.de> (Closes: 399083)
@@ -1271,31 +1271,31 @@ icedove (1.5.0.8-2) unstable; urgency=low
     Petr Salinger <Petr.Salinger@seznam.cz> (Closes: 399692),
     which is claimed to provide a fix for ppc64 ftbfs too
     (Closes: 363865)
-  * remove debug echo from icedove.preinst (Closes: 399723)
+  * remove debug echo from guacharo.preinst (Closes: 399723)
 
  -- Alexander Sack <asac@debian.org>  Mon, 21 Nov 2006 19:35:00 +0100
 
-icedove (1.5.0.8-1) unstable; urgency=medium
+guacharo (1.5.0.8-1) unstable; urgency=medium
 
   * new upstream version fixes various security issues
   * added transition package: thunderbird-gnome-support
-    -> icedove-gnome-support as well as thunderbird-dbg
-    -> icedove-dbg (Closes: 393105)
+    -> guacharo-gnome-support as well as thunderbird-dbg
+    -> guacharo-dbg (Closes: 393105)
   * fix typo in postinst to fix browser integration scheme
     recognition as selected by debconf (Closes: 393765, 398427)
   * apply patch by  Ted Percival <ted@midg3t.net> to fix broken
     transitional thunderbird symlink (Closes: 393123, 398037)
   * apply patch by Andre Lehovich <andrel@yahoo.com> that fixes
-    icedove package description typos  (Closes: 398468)
+    guacharo package description typos  (Closes: 398468)
   * add basque debconf translation (eu.po) provided by Piarres 
     Beobide <pi@beobide.net> (Closes: 398719)
   * remove non-free rfc files from source tarball (Closes: 395095)
 
  -- Alexander Sack <asac@debian.org>  Wed, 15 Nov 2006 18:00:00 +0100
 
-icedove (1.5.0.7-3) unstable; urgency=medium
+guacharo (1.5.0.7-3) unstable; urgency=medium
 
-  * unbrand thunderbird mail -> Icedove Mail/News due
+  * unbrand thunderbird mail -> Guacharo Mail/News due
     to trademark issues (Closes: 354622)
 
  -- Alexander Sack <asac@debian.org>  Thu, 12 Oct 2006 13:00:00 +0100

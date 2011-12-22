@@ -39,7 +39,7 @@ DEPTH          = ../../../..
 topsrcdir      = ../../../..
 srcdir         = @srcdir@
 VPATH          = @srcdir@
-relativesrcdir = mail/branding/icedove/locales
+relativesrcdir = mail/branding/guacharo/locales
 
 include $(topsrcdir)/config/autoconf.mk
 

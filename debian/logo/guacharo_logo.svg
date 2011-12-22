@@ -15,9 +15,9 @@
    sodipodi:version="0.32"
    inkscape:version="0.44"
    version="1.0"
-   sodipodi:docname="icedove_logo.svg"
+   sodipodi:docname="guacharo_logo.svg"
    sodipodi:docbase="E:\Mis Documentos - unicko\Mis imágenes\imagenes SVG\Ice images"
-   inkscape:export-filename="E:\Mis Documentos - unicko\Mis imágenes\imagenes SVG\Ice images\icedove_logo.png"
+   inkscape:export-filename="E:\Mis Documentos - unicko\Mis imágenes\imagenes SVG\Ice images\guacharo_logo.png"
    inkscape:export-xdpi="90"
    inkscape:export-ydpi="90">
   <defs
@@ -1755,7 +1755,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title>Icedove Logo</dc:title>
+        <dc:title>Guacharo Logo</dc:title>
         <dc:creator>
           <cc:Agent>
             <dc:title>Ricardo Fernández Fuentes</dc:title>
@@ -1766,12 +1766,12 @@
             <dc:title>Ricardo Fernández Fuentes</dc:title>
           </cc:Agent>
         </dc:rights>
-        <dc:description>icedove logo</dc:description>
+        <dc:description>guacharo logo</dc:description>
         <cc:license
            rdf:resource="http://www.mozilla.org/MPL/" />
         <dc:subject>
           <rdf:Bag>
-            <rdf:li>icedove</rdf:li>
+            <rdf:li>guacharo</rdf:li>
             <rdf:li>logo</rdf:li>
             <rdf:li>logotipo</rdf:li>
           </rdf:Bag>

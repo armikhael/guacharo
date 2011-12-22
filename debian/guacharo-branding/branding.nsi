@@ -36,17 +36,17 @@
 
 # NSIS defines for nightly builds.
 # The release build branding.nsi is located in other-license/branding/thunderbird/
-!define BrandShortName        "Icedove"
+!define BrandShortName        "Guacharo"
 # BrandFullNameInternal is used for some registry and file system values
 # instead of BrandFullName and typically should not be modified.
-!define BrandFullNameInternal "Icedove Mail/News"
+!define BrandFullNameInternal "Guacharo Mail/News"
 !define CompanyName           "debian.org"
 !define URLInfoAbout          "http://www.mozilla.org/"
 !define URLUpdateInfo         "http://www.mozilla.org/products/thunderbird/"
 !define SurveyURL             "https://survey.mozilla.com/1/Mozilla%20Thunderbird/${AppVersion}/${AB_CD}/exit.html"
 
 # Everything below this line may be modified for Alpha / Beta releases.
-!define BrandFullName         "Icedove"
+!define BrandFullName         "Guacharo"
 
 # Add !define NO_INSTDIR_FROM_REG to prevent finding a non-default installation
 # directory in the registry and using that as the default. This prevents
