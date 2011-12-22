@@ -1,3 +1,13 @@
+guacharo (8.0-2) stable; urgency=low
+
+  * [ad4fa21] Importando código de Icedove 8.0
+  * [03b9e63] Agregando script de conversión a Guácharo
+  * [e690ca3] Ejecutando script de conversión a Guacharo
+  * [7fe9bab] Agregando arte gráfico para Canaima
+  * [124359d] Agregando datos de Canaima
+
+ -- Luis Alejandro Martínez Faneyth <huntingbears@canaima-popular.cnti.gob.ve>  Thu, 22 Dec 2011 09:28:34 -0430
+
 guacharo (8.0-1) experimental; urgency=low
 
   [ Guido Günther ]
