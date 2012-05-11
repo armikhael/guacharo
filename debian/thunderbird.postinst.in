@@ -15,6 +15,7 @@ symlink_dir() {
 }
 
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] ; then
+    update-alternatives --install /usr/bin/sensible-ooomua sensible-ooomua /usr/bin/guacharo 70
     touch $LIBDIR/.autoreg
 fi
 
