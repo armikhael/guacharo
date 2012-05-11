@@ -1,3 +1,9 @@
+guacharo (8.0-4) stable; urgency=low
+
+  * [6f865e7] Guácharo ahora provee sensible-ooomua
+
+ -- Luis Alejandro Martínez Faneyth <martinez.faneyth@gmail.com>  Fri, 11 May 2012 18:00:07 +0000
+
 guacharo (8.0-3) stable; urgency=low
 
   * [49c0c7e] Cambiando dependencia de libnotify-dev 0.7->0.5 para poder
