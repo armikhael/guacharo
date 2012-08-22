@@ -19,3 +19,4 @@ pref("mail.shell.checkDefaultMail", false);
 pref("network.protocol-handler.app.http", "x-www-browser");
 pref("network.protocol-handler.app.https", "x-www-browser");
 
+pref("extensions.autoDisableScopes", 10);

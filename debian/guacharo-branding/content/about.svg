@@ -11,12 +11,12 @@
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    sodipodi:docname="about.svg"
-   height="236"
-   width="300"
+   height="230"
+   width="240"
    inkscape:version="0.47 r22583"
    version="1.1"
    id="svg2"
-   inkscape:export-filename="/home/dev/guacharo-3.1.7+2/debian/guacharo-branding/content/about.png"
+   inkscape:export-filename="/home/canaima/desarrollo/guacharo/debian/guacharo-branding/content/about.png"
    inkscape:export-xdpi="90"
    inkscape:export-ydpi="90">
   <metadata
@@ -1978,8 +1978,8 @@
      guidetolerance="10"
      inkscape:pageopacity="0"
      inkscape:pageshadow="2"
-     inkscape:window-width="1440"
-     inkscape:window-height="844"
+     inkscape:window-width="1366"
+     inkscape:window-height="712"
      id="namedview4"
      showgrid="false"
      inkscape:zoom="1.0365043"
@@ -1992,7 +1992,7 @@
   <g
      id="g9663"
      clip-path="none"
-     transform="matrix(2.7017199,0,0,2.7017199,38.243241,0.79511)">
+     transform="matrix(2.7017199,0,0,2.7017199,16.243241,-5.20489)">
     <path
        transform="matrix(0.288708,0,0,0.42754777,192.82645,-228.69449)"
        id="path28123"
