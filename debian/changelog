@@ -1,3 +1,9 @@
+guacharo (8.0-6) stable; urgency=low
+
+  * [81aae33] Agregando traducción del enlace de menú.
+
+ -- Luis Alejandro Martínez Faneyth <luis@huntingbears.com.ve>  Tue, 30 Oct 2012 15:29:02 -0430
+
 guacharo (8.0-5) stable; urgency=low
 
   * [de06c8a] Agragando opción que permite la instalación automática de
