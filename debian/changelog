@@ -39,8 +39,9 @@ guacharo (8.0-6) stable; urgency=low
     nsMIMEInfoUnix.cpp nscore.h nsID.h nsStringAPI.h Makefile.in
     xptcinvoke_linux_s390.cpp xptcinvoke_linux_sh.cpp
     xptcstubs_linux_sh.cpp nsLiteralString.h Makefile.in
+  * [d8a10b9] Removiendo parches aplicados.
 
- -- Luis Alejandro Martínez Faneyth <luis@huntingbears.com.ve>  Thu, 01 Nov 2012 12:22:42 +0000
+ -- Luis Alejandro Martínez Faneyth <luis@huntingbears.com.ve>  Thu, 01 Nov 2012 12:35:29 +0000
 
 guacharo (8.0-5) stable; urgency=low
 
