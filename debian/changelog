@@ -1,8 +1,46 @@
 guacharo (8.0-6) stable; urgency=low
 
   * [81aae33] Agregando traducción del enlace de menú.
+  * [097c923] [ canaima-desarrollador ] Los siguientes archivos han sido
+    modificados/añadidos: .quilt_patches .quilt_series .version applied-
+    patches nsXREDirProvider.cpp Makefile.in nscore.h nsStringAPI.h
+    nsLiteralString.h mozStorageService.cpp nsPluginHost.cpp Writer.cpp
+    Writer.h rules.mk rules.mk configure.in Makefile.in config.mk
+    rules.mk config.mk rules.mk configure.in Logging.h configure.in
+    prefapi.cpp prefapi.h prefread.cpp prefread.h Makefile.in Platform.h
+    nsMIMEInfoUnix.cpp Makefile.in Makefile.in Makefile.in packager.mk
+    all-thunderbird.js accountCreation.dtd nsIMsgSend.idl mimedrft.cpp
+    Makefile.in component_versions.mk MsgComposeCommands.js
+    autoconf.mk.in application.ini confvars.sh mozilla.in install.rdf
+    timezones.properties lightning.dtd lightning.properties Makefile.in
+    Makefile.in build_config.h ipc_message_utils.h Makefile.in
+    xptcinvoke_linux_sh.cpp xptcstubs_linux_sh.cpp njconfig.cpp
+    debug_util_posix.cc prcpucfg.h build_config.h
+    platform_thread_posix.cc prcpucfg.h build_config.h jemalloc.c
+    jsgcinlines.h jsnum.cpp jsstr.cpp jstracer.cpp jstracer.h Writer.cpp
+    String-inl.h String.h BumpPointerAllocator.h ARMAssembler.h
+    xptcinvoke_linux_s390.cpp Makefile.in NativeARM.cpp nsID.h
+    configure.in nsinstall.c configure.in portable.h Makefile.client
+    Makefile.in compat.c ldappr-error.c all.js configure.in Makefile.in
+    install.rdf timezones.properties lightning.dtd lightning.properties
+    Makefile.in autoconf.mk.in configure.in component_versions.mk
+    nsinstall.c configure.in portable.h Makefile.client Makefile.in
+    compat.c ldappr-error.c Makefile.in application.ini all-
+    thunderbird.js MsgComposeCommands.js confvars.sh accountCreation.dtd
+    nsIMsgSend.idl mimedrft.cpp mozilla.in config.mk rules.mk
+    configure.in nsPluginHost.cpp Logging.h debug_util_posix.cc
+    platform_thread_posix.cc prcpucfg.h build_config.h
+    ipc_message_utils.h Makefile.in ARMAssembler.h Platform.h config.mk
+    rules.mk configure.in jsgcinlines.h jsnum.cpp jsstr.cpp jstracer.cpp
+    jstracer.h NativeARM.cpp njconfig.cpp Makefile.in Writer.cpp
+    Writer.h String-inl.h String.h BumpPointerAllocator.h jemalloc.c
+    all.js prefapi.cpp prefapi.h prefread.cpp prefread.h
+    mozStorageService.cpp Makefile.in packager.mk nsXREDirProvider.cpp
+    nsMIMEInfoUnix.cpp nscore.h nsID.h nsStringAPI.h Makefile.in
+    xptcinvoke_linux_s390.cpp xptcinvoke_linux_sh.cpp
+    xptcstubs_linux_sh.cpp nsLiteralString.h Makefile.in
 
- -- Luis Alejandro Martínez Faneyth <luis@huntingbears.com.ve>  Tue, 30 Oct 2012 15:29:02 -0430
+ -- Luis Alejandro Martínez Faneyth <luis@huntingbears.com.ve>  Thu, 01 Nov 2012 12:22:42 +0000
 
 guacharo (8.0-5) stable; urgency=low
 
