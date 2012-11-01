@@ -196,9 +196,11 @@ namespace JSC {
             MUL = 0x00000090,
             MULL = 0x00c00090,
             DTR = 0x05000000,
+#if WTF_ARM_ARCH_VERSION >= 5
             LDRH = 0x00100090,
             STRH = 0x00000090,
             DTRH = 0x00000090,
+#endif
             STMDB = 0x09200000,
             LDMIA = 0x08b00000,
             B = 0x0a000000,
@@ -573,6 +575,8 @@ namespace JSC {
                          (posOffset ? DT_UP : 0), rd, rb, offset);
             } else {
                 /* All 16 bit ops and 8 bit unsigned use the newer encoding.*/
+                /*these instructions don't exist before ARMv4*/
+                ASSERT(WTF_ARM_ARCH_VERSION >= 4);
                 emitInst(static_cast<ARMWord>(cc) | DTRH | HDT_IMM | DT_PRE |
                          (isLoad ? DT_LOAD : 0) |
                          (size == 16 ? HDT_UH : 0) |
@@ -611,6 +615,7 @@ namespace JSC {
                          OP2_OFSREG, rd, rb, rm);
             } else {
                 /* All 16 bit ops and 8 bit unsigned use the newer encoding.*/
+                ASSERT(WTF_ARM_ARCH_VERSION >= 4);
                 emitInst(static_cast<ARMWord>(cc) | DTRH | DT_PRE |
                          (isLoad ? DT_LOAD : 0) |
                          (size == 16 ? HDT_UH : 0) |
@@ -710,6 +715,7 @@ namespace JSC {
         // Data transfers like this:
         //  LDRSB rd, [rb, #-offset]
         //  STRSB rd, [rb, #-offset]
+        // TODO: this instruction does not exist on arm v4 and earlier
         void dtrsb_d(bool isLoad, int rd, int rb, ARMWord offset, Condition cc = AL)
         {
             ASSERT(isLoad); /*can only do signed byte loads, not stores*/

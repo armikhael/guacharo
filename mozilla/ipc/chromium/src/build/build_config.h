@@ -17,7 +17,7 @@
 // A set of macros to use for platform detection.
 #if defined(__APPLE__)
 #define OS_MACOSX 1
-#elif defined(__linux__) || defined(ANDROID) || defined(__GLIBC__) || defined(__GNU__)
+#elif defined(__linux__) || defined(ANDROID)
 #define OS_LINUX 1
 #elif defined(_WIN32)
 #define OS_WIN 1
@@ -59,21 +59,6 @@
 #define WCHAR_T_IS_UNSIGNED 1
 #elif defined(__ppc__) || defined(__powerpc__)
 #define ARCH_CPU_PPC 1
-#define ARCH_CPU_32_BITS 1
-#elif defined(__mips__)
-#define ARCH_CPU_MIPS 1
-#define ARCH_CPU_32_BITS 1
-#elif defined(__hppa__)
-#define ARCH_CPU_HPPA 1
-#define ARCH_CPU_32_BITS 1
-#elif defined(__ia64__)
-#define ARCH_CPU_IA64 1
-#define ARCH_CPU_64_BITS 1
-#elif defined(__s390__)
-#define ARCH_CPU_S390 1
-#define ARCH_CPU_32_BITS 1
-#elif defined(__sparc__)
-#define ARCH_CPU_SPARC 1
 #define ARCH_CPU_32_BITS 1
 #else
 #error Please add support for your architecture in build/build_config.h

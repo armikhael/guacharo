@@ -46,7 +46,7 @@
   -->
 
 <!-- Tools menu -->
-<!ENTITY lightning.taskLabel "Iceowl">
+<!ENTITY lightning.taskLabel "Lightning">
 
 <!-- New menu popup in File menu -->
 <!ENTITY lightning.menupopup.new.event.label    "Event…">

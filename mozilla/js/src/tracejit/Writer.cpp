@@ -43,7 +43,7 @@
 #include "jscompartment.h"
 #include "jsiter.h"
 #include "Writer.h"
-#include "nanojit/nanojit.h"
+#include "nanojit.h"
 
 #include "vm/ArgumentsObject.h"
 
@@ -250,9 +250,7 @@ couldBeObjectOrString(LIns *ins)
         // ins = andq ins_oprnd1, ins_oprnd2
         ret = true;
 #endif
-    }
-#ifdef JS_HAS_STATIC_STRINGS
-    else if (ins->isop(LIR_addp) &&
+    } else if (ins->isop(LIR_addp) &&
                ((ins->oprnd1()->isImmP() &&
                  (void *)ins->oprnd1()->immP() == JSAtom::unitStaticTable) ||
                 (ins->oprnd2()->isImmP() &&
@@ -264,7 +262,6 @@ couldBeObjectOrString(LIns *ins)
         // ins = addp JSString::unitStringTable, ...
         ret = true;
     }
-#endif
 
     return ret;
 }

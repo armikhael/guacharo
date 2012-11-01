@@ -410,28 +410,6 @@ typedef PRUint32 nsrefcnt;
   #define HAVE_CPP_2BYTE_WCHAR_T
 #endif
 
-#ifdef __GNUC__
-/* char16_t is only available in gcc 4.4+ with experimental c++0x support
- * (-std=c++0x or -std=gnu++0x) */
-#if defined(HAVE_CPP_CHAR16_T) && (__GNUC__ < 4 || (__GNUC__ == 4 && __GNUC_MINOR__ < 4) || !defined(__GXX_EXPERIMENTAL_CXX0X__))
-#warning guacharo SDK was configured with char16_t support, but now building without
-#undef HAVE_CPP_CHAR16_T
-#elif ! defined(HAVE_CPP_CHAR16_T) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 4)) && defined(__GXX_EXPERIMENTAL_CXX0X__)
-#warning guacharo SDK was configured without char16_t support, but now building with
-#define HAVE_CPP_CHAR16_T
-#endif
-
-/* When gcc is not given -fshort-wchar, wchar_t is not 2-bytes wide */
-#if defined(HAVE_CPP_2BYTE_WCHAR_T) && (__SIZEOF_WCHAR_T__ != 2)
-#warning guacharo SDK was configured with 2-byte wchar_t, but now building without
-#undef HAVE_CPP_2BYTE_WCHAR_T
-#elif ! defined(HAVE_CPP_2BYTE_WCHAR_T) && (__SIZEOF_WCHAR_T__ == 2)
-#warning guacharo SDK was configured without 2-byte wchar_t, but now building with
-#define HAVE_CPP_2BYTE_WCHAR_T
-#endif
-
-#endif
-
 #ifndef __PRUNICHAR__
 #define __PRUNICHAR__
   /* For now, don't use wchar_t on Unix because it breaks the Netscape

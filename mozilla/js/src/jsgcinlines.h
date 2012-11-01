@@ -52,7 +52,6 @@
 inline bool
 JSAtom::isUnitString(const void *ptr)
 {
-#ifdef JS_HAS_STATIC_STRINGS
     jsuword delta = reinterpret_cast<jsuword>(ptr) -
                     reinterpret_cast<jsuword>(unitStaticTable);
     if (delta >= UNIT_STATIC_LIMIT * sizeof(JSString))
@@ -61,15 +60,11 @@ JSAtom::isUnitString(const void *ptr)
     /* If ptr points inside the static array, it must be well-aligned. */
     JS_ASSERT(delta % sizeof(JSString) == 0);
     return true;
-#else
-    return false;
-#endif
 }
 
 inline bool
 JSAtom::isLength2String(const void *ptr)
 {
-#ifdef JS_HAS_STATIC_STRINGS
     jsuword delta = reinterpret_cast<jsuword>(ptr) -
                     reinterpret_cast<jsuword>(length2StaticTable);
     if (delta >= NUM_SMALL_CHARS * NUM_SMALL_CHARS * sizeof(JSString))
@@ -78,15 +73,11 @@ JSAtom::isLength2String(const void *ptr)
     /* If ptr points inside the static array, it must be well-aligned. */
     JS_ASSERT(delta % sizeof(JSString) == 0);
     return true;
-#else
-    return false;
-#endif
 }
 
 inline bool
 JSAtom::isHundredString(const void *ptr)
 {
-#ifdef JS_HAS_STATIC_STRINGS
     jsuword delta = reinterpret_cast<jsuword>(ptr) -
                     reinterpret_cast<jsuword>(hundredStaticTable);
     if (delta >= NUM_HUNDRED_STATICS * sizeof(JSString))
@@ -95,9 +86,6 @@ JSAtom::isHundredString(const void *ptr)
     /* If ptr points inside the static array, it must be well-aligned. */
     JS_ASSERT(delta % sizeof(JSString) == 0);
     return true;
-#else
-    return false;
-#endif
 }
 
 inline bool

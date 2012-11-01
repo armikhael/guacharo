@@ -13,9 +13,7 @@
 #include <unistd.h>
 #ifndef ANDROID
 #include <execinfo.h>
-#ifndef __GNU__
 #include <sys/sysctl.h>
-#endif
 #endif
 
 #include "base/basictypes.h"
