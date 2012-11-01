@@ -59,14 +59,14 @@ MOZ_PKG_SPECIAL = @MOZ_PKG_SPECIAL@
 prefix		= @prefix@
 exec_prefix	= @exec_prefix@
 bindir		= @bindir@
-includedir	= @includedir@/$(MOZ_APP_NAME)-$(MOZ_APP_VERSION)
+includedir	= @includedir@/guacharo
 libdir		= @libdir@
 datadir		= @datadir@
 mandir		= @mandir@
-idldir		= $(datadir)/idl/$(MOZ_APP_NAME)-$(MOZ_APP_VERSION)
+idldir		= $(datadir)/idl/guacharo
 
-installdir	= $(libdir)/$(MOZ_APP_NAME)-$(MOZ_APP_VERSION)
-sdkdir		= $(libdir)/$(MOZ_APP_NAME)-devel-$(MOZ_APP_VERSION)
+installdir	= $(libdir)/guacharo
+sdkdir		= $(libdir)/guacharo-devel
 
 MOZDEPTH	= $(DEPTH)/mozilla
 DIST		= $(MOZDEPTH)/dist

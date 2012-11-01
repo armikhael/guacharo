@@ -42,7 +42,7 @@
 
 #include "jsstr.h"
 #include "jstypedarray.h"
-#include "nanojit.h"
+#include "nanojit/nanojit.h"
 
 namespace js {
 namespace tjit {

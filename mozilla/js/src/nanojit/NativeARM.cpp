@@ -134,6 +134,7 @@ Assembler::CountLeadingZeroes(uint32_t data)
         // with clz, and clz to be used when appropriate at runtime.
             "   .arch armv5t\n"
 #endif
+            "   .object_arch armv4t\n"
             "   clz     %0, %1  \n"
             :   "=r"    (leading_zeroes)
             :   "r"     (data)

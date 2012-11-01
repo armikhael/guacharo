@@ -26,7 +26,7 @@
     </em:targetApplication>
 
     <em:id>@XPI_EM_ID@</em:id>
-    <em:name>Lightning</em:name>
+    <em:name>Iceowl</em:name>
     <em:version>@LIGHTNING_VERSION@</em:version> <!-- BuildID=@GRE_BUILDID@ -->
     <em:description>An integrated calendar for Thunderbird</em:description>
 #ifdef LIGHTNING_PRERELEASE_VERSION

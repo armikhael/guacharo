@@ -91,6 +91,7 @@ literal_string( const nsACString::char_type* aPtr, PRUint32 aLength )
   #define NS_NAMED_MULTILINE_LITERAL_STRING(n,s)  const nsDependentString n(reinterpret_cast<const nsAString::char_type*>(s), PRUint32((sizeof(s)/2)-1))
   typedef nsDependentString nsLiteralString;
 #else
+  #warning Using conversions for literal strings. Please consider using 2-bytes wchar_t or char16_t instead
   #define NS_LL(s)                                s
   #define NS_MULTILINE_LITERAL_STRING(s)          NS_ConvertASCIItoUTF16(s, PRUint32(sizeof(s)-1))
   #define NS_MULTILINE_LITERAL_STRING_INIT(n,s)   n(s, PRUint32(sizeof(s)-1))

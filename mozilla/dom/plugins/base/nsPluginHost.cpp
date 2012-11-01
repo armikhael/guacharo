@@ -392,6 +392,10 @@ nsPluginHost::nsPluginHost()
     }
   }
 
+  const char *env = PR_GetEnv("MOZILLA_DISABLE_PLUGINS");
+  if (env && env[0])
+    mPluginsDisabled = PR_TRUE;
+
   nsCOMPtr<nsIObserverService> obsService =
     mozilla::services::GetObserverService();
   if (obsService) {

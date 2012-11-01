@@ -62,12 +62,26 @@ ifdef SDK_HEADERS
 EXPORTS += $(SDK_HEADERS)
 endif
 
+ifneq (,$(findstring sample,$(MODULE))$(findstring test,$(MODULE))$(findstring Test,$(MODULE)))
+INCLUDE_DIR := $(DIST)/include/testing
+IDL_DIR := $(DIST)/tests/idl
+LOCAL_INCLUDES += -I$(XPIDL_GEN_DIR) -I$(INCLUDE_DIR)
+override MOZ_JAVAXPCOM :=
+XPIDL_FLAGS += -I$(DIST)/idl
+else
+INCLUDE_DIR := $(DIST)/include
+endif
+
 REPORT_BUILD = @echo $(notdir $<)
 
 ifeq ($(OS_ARCH),OS2)
 EXEC			=
 else
 EXEC			= exec
+endif
+
+ifneq (,$(SIMPLE_PROGRAMS)$(PROGRAM))
+LIBS += $(MOZ_JEMALLOC_LIBS)
 endif
 
 # Don't copy xulrunner files at install time, when using system xulrunner
@@ -1584,7 +1598,7 @@ ifndef NO_DIST_INSTALL
 export:: $(XPIDLSRCS) $(IDL_DIR)
 	$(INSTALL) $(IFLAGS1) $^
 
-export:: $(patsubst %.idl,$(XPIDL_GEN_DIR)/%.h, $(XPIDLSRCS)) $(DIST)/include
+export:: $(patsubst %.idl,$(XPIDL_GEN_DIR)/%.h, $(XPIDLSRCS)) $(INCLUDE_DIR)
 	$(INSTALL) $(IFLAGS1) $^ 
 endif # NO_DIST_INSTALL
 

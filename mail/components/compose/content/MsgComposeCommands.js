@@ -2940,6 +2940,36 @@ function AddUrlAttachment(attachment)
   if (attachment.size != -1)
     gAttachmentsSize += attachment.size;
 
+  // Take snapshot of attachment if it is a file.
+  var isFile = /^file:/i;
+  if (isFile.test(attachment.url))
+  {
+    var ios = Components.classes["@mozilla.org/network/io-service;1"].
+        getService(Components.interfaces.nsIIOService);
+
+    var origFile = ios.newURI(attachment.url, null, null).
+        QueryInterface(Components.interfaces.nsIFileURL).file;
+
+    var tmpDir = Components.classes["@mozilla.org/file/directory_service;1"].
+        getService(Components.interfaces.nsIProperties).
+        get("TmpD", Components.interfaces.nsIFile);
+
+    var tmpFile = tmpDir.clone();
+    tmpFile.append(origFile.leafName);
+    tmpFile.createUnique(Components.interfaces.nsIFile.NORMAL_FILE_TYPE, 0600);
+    tmpFile.remove(false);
+
+    // This will never overwrite existing files, so should be safe.
+    // There is a race condition here, however, and the copy might fail.
+    origFile.copyTo(tmpDir, tmpFile.leafName);
+
+    // Mangle the attachment.
+    var tmpURL = ios.newFileURI(tmpFile);
+    attachment.url = tmpURL.spec;
+    attachment.temporary = true;
+  }
+
+  item.attachment = attachment; // Full attachment object stored here.
   try {
     item.setAttribute("tooltiptext", decodeURI(attachment.url));
   }

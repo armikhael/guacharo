@@ -506,6 +506,7 @@ mime_free_attachments ( nsMsgAttachedFile *attachments, int count )
     cur->orig_url=nsnull;
 
     PR_FREEIF ( cur->type );
+    PR_FREEIF ( cur->fullContentType );
     PR_FREEIF ( cur->encoding );
     PR_FREEIF ( cur->description );
     PR_FREEIF ( cur->x_mac_type );
@@ -1478,7 +1479,7 @@ mime_parse_stream_complete (nsMIMESession *stream)
           char *mimeCharset = nsnull;
           // Get a charset from the header if no override is set.
           if (!charsetOverride)
-            mimeCharset = MimeHeaders_get_parameter (mdd->messageBody->type, "charset", nsnull, nsnull);
+            mimeCharset = MimeHeaders_get_parameter (mdd->messageBody->fullContentType, "charset", nsnull, nsnull);
           // If no charset is specified in the header then use the default.
           char *bodyCharset = mimeCharset ? mimeCharset : mdd->mailcharset;
           if (bodyCharset)
@@ -1798,6 +1799,11 @@ mime_decompose_file_init_fn ( void *stream_closure, MimeHeaders *headers )
       if (ct)
         NS_MsgSACopy(&(mdd->curAttachment->type), ct);
       PR_FREEIF(ct);
+
+      ct = MimeHeaders_get(headers, HEADER_CONTENT_TYPE, PR_FALSE, PR_FALSE);
+      if (ct)
+        NS_MsgSACopy(&(mdd->curAttachment->fullContentType), ct);
+      PR_FREEIF(ct);
     }
     return 0;
   }
@@ -1878,6 +1884,7 @@ mime_decompose_file_init_fn ( void *stream_closure, MimeHeaders *headers )
 
   mdd->curAttachment = newAttachment;
   newAttachment->type =  MimeHeaders_get ( headers, HEADER_CONTENT_TYPE, PR_FALSE, PR_FALSE );
+  newAttachment->fullContentType =  MimeHeaders_get ( headers, HEADER_CONTENT_TYPE, PR_FALSE, PR_FALSE );
 
   //
   // This is to handle the degenerated Apple Double attachment.
@@ -1890,8 +1897,10 @@ mime_decompose_file_init_fn ( void *stream_closure, MimeHeaders *headers )
     boundary = MimeHeaders_get_parameter(parm_value, "boundary", NULL, NULL);
     if (boundary)
       tmp_value = PR_smprintf("; boundary=\"%s\"", boundary);
-    if (tmp_value)
+    if (tmp_value) {
       NS_MsgSACat(&(newAttachment->type), tmp_value);
+      NS_MsgSACat(&(newAttachment->fullContentType), tmp_value);
+    }
     newAttachment->x_mac_type = MimeHeaders_get_parameter(parm_value, "x-mac-type", NULL, NULL);
     newAttachment->x_mac_creator = MimeHeaders_get_parameter(parm_value, "x-mac-creator", NULL, NULL);
     PR_FREEIF(parm_value);

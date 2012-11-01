@@ -130,7 +130,7 @@ GCONF_VERSION=1.2.1
 GIO_VERSION=2.18
 STARTUP_NOTIFICATION_VERSION=0.8
 DBUS_VERSION=0.60
-SQLITE_VERSION=3.7.5
+SQLITE_VERSION=3.7.1
 LIBNOTIFY_VERSION=0.4
 
 MSMANIFEST_TOOL=
@@ -4541,7 +4541,7 @@ else
     AC_CHECK_LIB(jpeg, jpeg_destroy_compress, [SYSTEM_JPEG=1 JPEG_LIBS="-ljpeg $JPEG_LIBS"], SYSTEM_JPEG=, $JPEG_LIBS)
 fi
 
-if test "$SYSTEM_JPEG" = 1; then
+if test "$SYSTEM_JPEG" = 0; then
     LIBS="$JPEG_LIBS $LIBS"
     AC_TRY_COMPILE([ #include <stdio.h>
                      #include <sys/types.h>
@@ -4581,7 +4581,7 @@ else
     AC_CHECK_LIB(z, gzread, [SYSTEM_ZLIB=1 ZLIB_LIBS="-lz $ZLIB_LIBS"], 
 	[SYSTEM_ZLIB= ZLIB_CFLAGS= ZLIB_LIBS=], $ZLIB_LIBS)
 fi
-if test "$SYSTEM_ZLIB" = 1; then
+if test "$SYSTEM_ZLIB" = 0; then
     LIBS="$ZLIB_LIBS $LIBS"
     AC_TRY_COMPILE([ #include <stdio.h>
                      #include <string.h>
@@ -4618,8 +4618,10 @@ fi
 if test -z "$BZ2_DIR" -o "$BZ2_DIR" = no; then
     SYSTEM_BZ2=
 else
-    AC_CHECK_LIB(bz2, BZ2_bzread, [SYSTEM_BZ2=1 BZ2_LIBS="-lbz2"],
-	[SYSTEM_BZ2= BZ2_CFLAGS= BZ2_LIBS=])
+    AC_CHECK_LIB(bz2, BZ2_bzread, [SYSTEM_BZ2=1 BZ2_LIBS="-lbz2"], [
+        echo "You have run configure with --with-system-bz2, but there is no libbz2 around."
+        exit 1
+        ], $BZ2_LIBS)
 fi
 CFLAGS=$_SAVE_CFLAGS
 LDFLAGS=$_SAVE_LDFLAGS
@@ -4657,7 +4659,7 @@ else
                  AC_MSG_ERROR([--with-system-png won't work because the system's libpng doesn't have APNG support]),
                  $_SAVE_PNG_LIBS)
 fi
-if test "$SYSTEM_PNG" = 1; then
+if test "$SYSTEM_PNG" = 0; then
     LIBS="$PNG_LIBS $LIBS"
     AC_TRY_COMPILE([ #include <stdio.h>
                      #include <sys/types.h>
