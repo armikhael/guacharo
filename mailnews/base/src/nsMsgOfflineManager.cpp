@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * The offline manager service - manages going online and offline, and synchronization
@@ -55,6 +23,7 @@
 #include "nsINntpService.h"
 #include "nsIMsgStatusFeedback.h"
 #include "nsServiceManagerUtils.h"
+#include "mozilla/Services.h"
 
 static NS_DEFINE_CID(kMsgSendLaterCID, NS_MSGSENDLATER_CID); 
 
@@ -66,12 +35,12 @@ NS_IMPL_THREADSAFE_ISUPPORTS5(nsMsgOfflineManager,
                               nsIUrlListener)
 
 nsMsgOfflineManager::nsMsgOfflineManager() :
-  m_inProgress (PR_FALSE),
-  m_sendUnsentMessages(PR_FALSE),
-  m_downloadNews(PR_FALSE),
-  m_downloadMail(PR_FALSE),
-  m_playbackOfflineImapOps(PR_FALSE),
-  m_goOfflineWhenDone(PR_FALSE),
+  m_inProgress (false),
+  m_sendUnsentMessages(false),
+  m_downloadNews(false),
+  m_downloadMail(false),
+  m_playbackOfflineImapOps(false),
+  m_goOfflineWhenDone(false),
   m_curState(eNoState),
   m_curOperation(eNoOp)
 {
@@ -95,19 +64,19 @@ NS_IMETHODIMP nsMsgOfflineManager::SetWindow(nsIMsgWindow * aWindow)
   if (m_window)
     m_window->GetStatusFeedback(getter_AddRefs(m_statusFeedback));
   else
-    m_statusFeedback = nsnull;
+    m_statusFeedback = nullptr;
   return NS_OK;
 }
 
 /* attribute boolean inProgress; */
-NS_IMETHODIMP nsMsgOfflineManager::GetInProgress(PRBool *aInProgress)
+NS_IMETHODIMP nsMsgOfflineManager::GetInProgress(bool *aInProgress)
 {
   NS_ENSURE_ARG(aInProgress);
   *aInProgress = m_inProgress;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgOfflineManager::SetInProgress(PRBool aInProgress)
+NS_IMETHODIMP nsMsgOfflineManager::SetInProgress(bool aInProgress)
 {
   m_inProgress = aInProgress;
   return NS_OK;
@@ -115,7 +84,7 @@ NS_IMETHODIMP nsMsgOfflineManager::SetInProgress(PRBool aInProgress)
 
 nsresult nsMsgOfflineManager::StopRunning(nsresult exitStatus)
 {
-  m_inProgress = PR_FALSE;
+  m_inProgress = false;
   return exitStatus;
 }
 
@@ -154,7 +123,7 @@ nsresult nsMsgOfflineManager::AdvanceToNextState(nsresult exitStatus)
       m_curState = eDone;
       return StopRunning(exitStatus);
       default:
-        NS_ASSERTION(PR_FALSE, "unhandled current state when going online");
+        NS_ASSERTION(false, "unhandled current state when going online");
     }
   }
   else if (m_curOperation == eDownloadingForOffline)
@@ -171,7 +140,7 @@ nsresult nsMsgOfflineManager::AdvanceToNextState(nsresult exitStatus)
       case eSendingUnsent:
         if (m_goOfflineWhenDone)
         {
-          SetOnlineState(PR_FALSE);
+          SetOnlineState(false);
         }
         break;
       case eDownloadingNews:
@@ -189,7 +158,7 @@ nsresult nsMsgOfflineManager::AdvanceToNextState(nsresult exitStatus)
           AdvanceToNextState(NS_OK);
         break;
       default:
-        NS_ASSERTION(PR_FALSE, "unhandled current state when downloading for offline");
+        NS_ASSERTION(false, "unhandled current state when downloading for offline");
     }
 
   }
@@ -225,9 +194,9 @@ nsresult nsMsgOfflineManager::SendUnsentMessages()
     NS_ENSURE_SUCCESS(rv, rv);
   }
   nsCOMPtr <nsIMsgIdentity> identityToUse;
-  PRUint32 numIndentities;
+  uint32_t numIndentities;
   identities->Count(&numIndentities);
-  for (PRUint32 i = 0; i < numIndentities; i++)
+  for (uint32_t i = 0; i < numIndentities; i++)
   {
     // convert supports->Identity
     nsCOMPtr<nsISupports> thisSupports;
@@ -242,8 +211,8 @@ nsresult nsMsgOfflineManager::SendUnsentMessages()
       pMsgSendLater->GetUnsentMessagesFolder(thisIdentity, getter_AddRefs(outboxFolder));
       if (outboxFolder)
       {
-        PRInt32 numMessages;
-        outboxFolder->GetTotalMessages(PR_FALSE, &numMessages);
+        int32_t numMessages;
+        outboxFolder->GetTotalMessages(false, &numMessages);
         if (numMessages > 0)
         {
           identityToUse = thisIdentity;
@@ -275,26 +244,22 @@ nsresult nsMsgOfflineManager::SendUnsentMessages()
 
 nsresult nsMsgOfflineManager::ShowStatus(const char *statusMsgName)
 {
-  nsresult res = NS_OK;
   if (!mStringBundle)
   {
-    static const char propertyURL[] = MESSENGER_STRING_URL;
-
     nsCOMPtr<nsIStringBundleService> sBundleService = 
-             do_GetService(NS_STRINGBUNDLE_CONTRACTID, &res);
-    if (NS_SUCCEEDED(res) && (nsnull != sBundleService)) 
-    {
-      res = sBundleService->CreateBundle(propertyURL, getter_AddRefs(mStringBundle));
-    }
+      mozilla::services::GetStringBundleService();
+    NS_ENSURE_TRUE(sBundleService, NS_ERROR_UNEXPECTED);
+    sBundleService->CreateBundle(MESSENGER_STRING_URL, getter_AddRefs(mStringBundle));
+    return NS_OK;
   }
-  if (mStringBundle)
-  {
-    nsString statusString;
-    res = mStringBundle->GetStringFromName(NS_ConvertASCIItoUTF16(statusMsgName).get(), getter_Copies(statusString));
 
-    if (NS_SUCCEEDED(res) && m_statusFeedback)
-      m_statusFeedback->ShowStatusString(statusString);
-  }
+  nsString statusString;
+  nsresult res = mStringBundle->GetStringFromName(NS_ConvertASCIItoUTF16(statusMsgName).get(),
+						  getter_Copies(statusString));
+
+  if (NS_SUCCEEDED(res) && m_statusFeedback)
+    m_statusFeedback->ShowStatusString(statusString);
+
   return res;
 }
 
@@ -322,14 +287,14 @@ nsresult nsMsgOfflineManager::DownloadMail()
 }
 
 /* void goOnline (in boolean sendUnsentMessages, in boolean playbackOfflineImapOperations, in nsIMsgWindow aMsgWindow); */
-NS_IMETHODIMP nsMsgOfflineManager::GoOnline(PRBool sendUnsentMessages, PRBool playbackOfflineImapOperations, nsIMsgWindow *aMsgWindow)
+NS_IMETHODIMP nsMsgOfflineManager::GoOnline(bool sendUnsentMessages, bool playbackOfflineImapOperations, nsIMsgWindow *aMsgWindow)
 {
   m_sendUnsentMessages = sendUnsentMessages;
   m_playbackOfflineImapOps = playbackOfflineImapOperations;
   m_curOperation = eGoingOnline;
   m_curState = eNoState;
   SetWindow(aMsgWindow);
-  SetOnlineState(PR_TRUE);
+  SetOnlineState(true);
   if (!m_sendUnsentMessages && !playbackOfflineImapOperations)
     return NS_OK;
   else
@@ -338,7 +303,7 @@ NS_IMETHODIMP nsMsgOfflineManager::GoOnline(PRBool sendUnsentMessages, PRBool pl
 }
 
 /* void synchronizeForOffline (in boolean downloadNews, in boolean downloadMail, in boolean sendUnsentMessages, in boolean goOfflineWhenDone, in nsIMsgWindow aMsgWindow); */
-NS_IMETHODIMP nsMsgOfflineManager::SynchronizeForOffline(PRBool downloadNews, PRBool downloadMail, PRBool sendUnsentMessages, PRBool goOfflineWhenDone, nsIMsgWindow *aMsgWindow)
+NS_IMETHODIMP nsMsgOfflineManager::SynchronizeForOffline(bool downloadNews, bool downloadMail, bool sendUnsentMessages, bool goOfflineWhenDone, nsIMsgWindow *aMsgWindow)
 {
   m_curOperation = eDownloadingForOffline;
   m_downloadNews = downloadNews;
@@ -350,22 +315,19 @@ NS_IMETHODIMP nsMsgOfflineManager::SynchronizeForOffline(PRBool downloadNews, PR
   if (!downloadNews && !downloadMail && !sendUnsentMessages)
   {
     if (goOfflineWhenDone)
-      return SetOnlineState(PR_FALSE);
+      return SetOnlineState(false);
   }
   else
     return AdvanceToNextState(NS_OK);
   return NS_OK;
 }
 
-nsresult nsMsgOfflineManager::SetOnlineState(PRBool online)
+nsresult nsMsgOfflineManager::SetOnlineState(bool online)
 {
-  nsresult rv;
-  nsCOMPtr<nsIIOService> netService(do_GetService(NS_IOSERVICE_CONTRACTID, &rv));
-  if (NS_SUCCEEDED(rv) && netService)
-  {
-    rv = netService->SetOffline(!online);
-  }
-  return rv;
+  nsCOMPtr<nsIIOService> netService =
+    mozilla::services::GetIOService();
+  NS_ENSURE_TRUE(netService, NS_ERROR_UNEXPECTED);
+  return netService->SetOffline(!online);
 }
 
   // nsIUrlListener methods
@@ -379,7 +341,7 @@ nsMsgOfflineManager::OnStartRunningUrl(nsIURI * aUrl)
 NS_IMETHODIMP
 nsMsgOfflineManager::OnStopRunningUrl(nsIURI * aUrl, nsresult aExitCode)
 {
-  mOfflineImapSync = nsnull;
+  mOfflineImapSync = nullptr;
 
   AdvanceToNextState(aExitCode);
   return NS_OK;
@@ -392,14 +354,14 @@ NS_IMETHODIMP nsMsgOfflineManager::Observe(nsISupports *aSubject, const char *aT
 
 // nsIMsgSendLaterListener implementation 
 NS_IMETHODIMP
-nsMsgOfflineManager::OnStartSending(PRUint32 aTotalMessageCount)
+nsMsgOfflineManager::OnStartSending(uint32_t aTotalMessageCount)
 {
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsMsgOfflineManager::OnMessageStartSending(PRUint32 aCurrentMessage,
-                                           PRUint32 aTotalMessageCount,
+nsMsgOfflineManager::OnMessageStartSending(uint32_t aCurrentMessage,
+                                           uint32_t aTotalMessageCount,
                                            nsIMsgDBHdr *aMessageHeader,
                                            nsIMsgIdentity *aIdentity)
 {
@@ -407,10 +369,10 @@ nsMsgOfflineManager::OnMessageStartSending(PRUint32 aCurrentMessage,
 }
 
 NS_IMETHODIMP
-nsMsgOfflineManager::OnMessageSendProgress(PRUint32 aCurrentMessage,
-                                           PRUint32 aTotalMessageCount,
-                                           PRUint32 aMessageSendPercent,
-                                           PRUint32 aMessageCopyPercent)
+nsMsgOfflineManager::OnMessageSendProgress(uint32_t aCurrentMessage,
+                                           uint32_t aTotalMessageCount,
+                                           uint32_t aMessageSendPercent,
+                                           uint32_t aMessageCopyPercent)
 {
   if (m_statusFeedback && aTotalMessageCount)
     return m_statusFeedback->ShowProgress((100 * aCurrentMessage) /
@@ -420,7 +382,7 @@ nsMsgOfflineManager::OnMessageSendProgress(PRUint32 aCurrentMessage,
 }
 
 NS_IMETHODIMP
-nsMsgOfflineManager::OnMessageSendError(PRUint32 aCurrentMessage,
+nsMsgOfflineManager::OnMessageSendError(uint32_t aCurrentMessage,
                                         nsIMsgDBHdr *aMessageHeader,
                                         nsresult aStatus,
                                         const PRUnichar *aMsg)
@@ -430,8 +392,8 @@ nsMsgOfflineManager::OnMessageSendError(PRUint32 aCurrentMessage,
 
 NS_IMETHODIMP
 nsMsgOfflineManager::OnStopSending(nsresult aStatus,
-                                   const PRUnichar *aMsg, PRUint32 aTotalTried, 
-                                   PRUint32 aSuccessful)
+                                   const PRUnichar *aMsg, uint32_t aTotalTried, 
+                                   uint32_t aSuccessful)
 {
 #ifdef NS_DEBUG
   if (NS_SUCCEEDED(aStatus))

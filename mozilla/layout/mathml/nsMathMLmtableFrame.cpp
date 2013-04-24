@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla MathML Project.
- *
- * The Initial Developer of the Original Code is
- * The University Of Queensland.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Roger B. Sidje <rbs@maths.uq.edu.au>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsCOMPtr.h"
 #include "nsFrame.h"
@@ -81,7 +48,7 @@ SplitString(nsString&             aString, // [IN/OUT]
     }
     end = start;
 
-    while ((kNullCh != *end) && (PR_FALSE == nsCRT::IsAsciiSpace(*end))) { // look for space or end
+    while ((kNullCh != *end) && (false == nsCRT::IsAsciiSpace(*end))) { // look for space or end
       end++;
     }
     *end = kNullCh; // end string here
@@ -140,7 +107,7 @@ static PRUnichar*
 GetValueAt(nsIFrame*                      aTableOrRowFrame,
            const FramePropertyDescriptor* aProperty,
            nsIAtom*                       aAttribute,
-           PRInt32                        aRowOrColIndex)
+           int32_t                        aRowOrColIndex)
 {
   FrameProperties props = aTableOrRowFrame->Properties();
   nsValueList* valueList = static_cast<nsValueList*>(props.Get(aProperty));
@@ -152,24 +119,24 @@ GetValueAt(nsIFrame*                      aTableOrRowFrame,
       valueList = new nsValueList(values);
     if (!valueList || !valueList->mArray.Length()) {
       delete valueList; // ok either way, delete is null safe
-      return nsnull;
+      return nullptr;
     }
     props.Set(aProperty, valueList);
   }
-  PRInt32 count = valueList->mArray.Length();
+  int32_t count = valueList->mArray.Length();
   return (aRowOrColIndex < count)
          ? valueList->mArray[aRowOrColIndex]
          : valueList->mArray[count-1];
 }
 
-#ifdef NS_DEBUG
-static PRBool
-IsTable(PRUint8 aDisplay)
+#ifdef DEBUG
+static bool
+IsTable(uint8_t aDisplay)
 {
   if ((aDisplay == NS_STYLE_DISPLAY_TABLE) ||
       (aDisplay == NS_STYLE_DISPLAY_INLINE_TABLE))
-    return PR_TRUE;
-  return PR_FALSE;
+    return true;
+  return false;
 }
 
 #define DEBUG_VERIFY_THAT_FRAME_IS(_frame, _expected) \
@@ -189,7 +156,7 @@ MapRowAttributesIntoCSS(nsIFrame* aTableFrame,
 {
   DEBUG_VERIFY_THAT_FRAME_IS_TABLE(aTableFrame);
   DEBUG_VERIFY_THAT_FRAME_IS(aRowFrame, TABLE_ROW);
-  PRInt32 rowIndex = ((nsTableRowFrame*)aRowFrame)->GetRowIndex();
+  int32_t rowIndex = ((nsTableRowFrame*)aRowFrame)->GetRowIndex();
   nsIContent* rowContent = aRowFrame->GetContent();
   PRUnichar* attr;
 
@@ -202,7 +169,7 @@ MapRowAttributesIntoCSS(nsIFrame* aTableFrame,
     if (attr) {
       // set our special _moz attribute on the row without notifying a reflow
       rowContent->SetAttr(kNameSpaceID_None, nsGkAtoms::_moz_math_rowalign_,
-                          nsDependentString(attr), PR_FALSE);
+                          nsDependentString(attr), false);
     }
   }
 
@@ -218,7 +185,7 @@ MapRowAttributesIntoCSS(nsIFrame* aTableFrame,
     if (attr) {
       // set our special _moz attribute on the row without notifying a reflow
       rowContent->SetAttr(kNameSpaceID_None, nsGkAtoms::_moz_math_rowline_,
-                          nsDependentString(attr), PR_FALSE);
+                          nsDependentString(attr), false);
     }
   }
 }
@@ -233,7 +200,7 @@ MapColAttributesIntoCSS(nsIFrame* aTableFrame,
   DEBUG_VERIFY_THAT_FRAME_IS_TABLE(aTableFrame);
   DEBUG_VERIFY_THAT_FRAME_IS(aRowFrame, TABLE_ROW);
   DEBUG_VERIFY_THAT_FRAME_IS(aCellFrame, TABLE_CELL);
-  PRInt32 rowIndex, colIndex;
+  int32_t rowIndex, colIndex;
   ((nsTableCellFrame*)aCellFrame)->GetCellIndexes(rowIndex, colIndex);
   nsIContent* cellContent = aCellFrame->GetContent();
   PRUnichar* attr;
@@ -253,7 +220,7 @@ MapColAttributesIntoCSS(nsIFrame* aTableFrame,
     if (attr) {
       // set our special _moz attribute without notifying a reflow
       cellContent->SetAttr(kNameSpaceID_None, nsGkAtoms::_moz_math_columnalign_,
-                           nsDependentString(attr), PR_FALSE);
+                           nsDependentString(attr), false);
     }
   }
 
@@ -270,7 +237,7 @@ MapColAttributesIntoCSS(nsIFrame* aTableFrame,
     if (attr) {
       // set our special _moz attribute without notifying a reflow
       cellContent->SetAttr(kNameSpaceID_None, nsGkAtoms::_moz_math_columnline_,
-                           nsDependentString(attr), PR_FALSE);
+                           nsDependentString(attr), false);
     }
   }
 }
@@ -281,16 +248,16 @@ static void
 MapAllAttributesIntoCSS(nsIFrame* aTableFrame)
 {
   // mtable is simple and only has one (pseudo) row-group
-  nsIFrame* rgFrame = aTableFrame->GetFirstChild(nsnull);
+  nsIFrame* rgFrame = aTableFrame->GetFirstPrincipalChild();
   if (!rgFrame || rgFrame->GetType() != nsGkAtoms::tableRowGroupFrame)
     return;
 
-  nsIFrame* rowFrame = rgFrame->GetFirstChild(nsnull);
+  nsIFrame* rowFrame = rgFrame->GetFirstPrincipalChild();
   for ( ; rowFrame; rowFrame = rowFrame->GetNextSibling()) {
     DEBUG_VERIFY_THAT_FRAME_IS(rowFrame, TABLE_ROW);
     if (rowFrame->GetType() == nsGkAtoms::tableRowFrame) {
       MapRowAttributesIntoCSS(aTableFrame, rowFrame);
-      nsIFrame* cellFrame = rowFrame->GetFirstChild(nsnull);
+      nsIFrame* cellFrame = rowFrame->GetFirstPrincipalChild();
       for ( ; cellFrame; cellFrame = cellFrame->GetNextSibling()) {
         DEBUG_VERIFY_THAT_FRAME_IS(cellFrame, TABLE_CELL);
         if (IS_TABLE_CELL(cellFrame->GetType())) {
@@ -302,10 +269,15 @@ MapAllAttributesIntoCSS(nsIFrame* aTableFrame)
 }
 
 // the align attribute of mtable can have a row number which indicates
-// from where to anchor the table, e.g., top5 means anchor the table at
-// the top of the 5th row, axis-1 means anchor the table on the axis of
-// the last row (could have been nicer if the REC used the '#' separator,
-// e.g., top#5, or axis#-1)
+// from where to anchor the table, e.g., top 5 means anchor the table at
+// the top of the 5th row, axis -1 means anchor the table on the axis of
+// the last row
+
+// The REC says that the syntax is 
+// '\s*(top|bottom|center|baseline|axis)(\s+-?[0-9]+)?\s*' 
+// the parsing could have been simpler with that syntax
+// but for backward compatibility we make optional 
+// the whitespaces between the alignment name and the row number
 
 enum eAlign {
   eAlign_top,
@@ -316,12 +288,17 @@ enum eAlign {
 };
 
 static void
-ParseAlignAttribute(nsString& aValue, eAlign& aAlign, PRInt32& aRowIndex)
+ParseAlignAttribute(nsString& aValue, eAlign& aAlign, int32_t& aRowIndex)
 {
   // by default, the table is centered about the axis
   aRowIndex = 0;
   aAlign = eAlign_axis;
-  PRInt32 len = 0;
+  int32_t len = 0;
+
+  // we only have to remove the leading spaces because 
+  // ToInteger ignores the whitespaces around the number
+  aValue.CompressWhitespace(true, false);
+
   if (0 == aValue.Find("top")) {
     len = 3; // 3 is the length of 'top'
     aAlign = eAlign_top;
@@ -343,10 +320,10 @@ ParseAlignAttribute(nsString& aValue, eAlign& aAlign, PRInt32& aRowIndex)
     aAlign = eAlign_axis;
   }
   if (len) {
-    PRInt32 error;
+    nsresult error;
     aValue.Cut(0, len); // aValue is not a const here
     aRowIndex = aValue.ToInteger(&error);
-    if (error)
+    if (NS_FAILED(error))
       aRowIndex = 0;
   }
 }
@@ -406,8 +383,8 @@ nsMathMLmtableOuterFrame::InheritAutomaticData(nsIFrame* aParent)
 // Since UpdatePresentation() and UpdatePresentationDataFromChildAt() can be called
 // by a parent, ensure that the displaystyle attribute of mtable takes precedence
 NS_IMETHODIMP
-nsMathMLmtableOuterFrame::UpdatePresentationData(PRUint32 aFlagsValues,
-                                                 PRUint32 aWhichFlags)
+nsMathMLmtableOuterFrame::UpdatePresentationData(uint32_t aFlagsValues,
+                                                 uint32_t aWhichFlags)
 {
   if (NS_MATHML_HAS_EXPLICIT_DISPLAYSTYLE(mPresentationData.flags)) {
     // our current state takes precedence, disallow updating the displastyle
@@ -419,10 +396,10 @@ nsMathMLmtableOuterFrame::UpdatePresentationData(PRUint32 aFlagsValues,
 }
 
 NS_IMETHODIMP
-nsMathMLmtableOuterFrame::UpdatePresentationDataFromChildAt(PRInt32  aFirstIndex,
-                                                            PRInt32  aLastIndex,
-                                                            PRUint32 aFlagsValues,
-                                                            PRUint32 aWhichFlags)
+nsMathMLmtableOuterFrame::UpdatePresentationDataFromChildAt(int32_t  aFirstIndex,
+                                                            int32_t  aLastIndex,
+                                                            uint32_t aFlagsValues,
+                                                            uint32_t aWhichFlags)
 {
   if (NS_MATHML_HAS_EXPLICIT_DISPLAYSTYLE(mPresentationData.flags)) {
     // our current state takes precedence, disallow updating the displastyle
@@ -437,9 +414,9 @@ nsMathMLmtableOuterFrame::UpdatePresentationDataFromChildAt(PRInt32  aFirstIndex
 }
 
 NS_IMETHODIMP
-nsMathMLmtableOuterFrame::AttributeChanged(PRInt32  aNameSpaceID,
+nsMathMLmtableOuterFrame::AttributeChanged(int32_t  aNameSpaceID,
                                            nsIAtom* aAttribute,
-                                           PRInt32  aModType)
+                                           int32_t  aModType)
 {
   // Attributes specific to <mtable>:
   // frame         : in mathml.css
@@ -458,9 +435,9 @@ nsMathMLmtableOuterFrame::AttributeChanged(PRInt32  aNameSpaceID,
 
   // mtable is simple and only has one (pseudo) row-group inside our inner-table
   nsIFrame* tableFrame = mFrames.FirstChild();
-  if (!tableFrame || tableFrame->GetType() != nsGkAtoms::tableFrame)
-    return NS_OK;
-  nsIFrame* rgFrame = tableFrame->GetFirstChild(nsnull);
+  NS_ASSERTION(tableFrame && tableFrame->GetType() == nsGkAtoms::tableFrame,
+               "should always have an inner table frame");
+  nsIFrame* rgFrame = tableFrame->GetFirstPrincipalChild();
   if (!rgFrame || rgFrame->GetType() != nsGkAtoms::tableRowGroupFrame)
     return NS_OK;
 
@@ -484,8 +461,8 @@ nsMathMLmtableOuterFrame::AttributeChanged(PRInt32  aNameSpaceID,
   }
 
   // ...and the other attributes affect rows or columns in one way or another
-  nsIAtom* MOZrowAtom = nsnull;
-  nsIAtom* MOZcolAtom = nsnull;
+  nsIAtom* MOZrowAtom = nullptr;
+  nsIAtom* MOZcolAtom = nullptr;
   if (aAttribute == nsGkAtoms::rowalign_)
     MOZrowAtom = nsGkAtoms::_moz_math_rowalign_;
   else if (aAttribute == nsGkAtoms::rowlines_)
@@ -504,17 +481,17 @@ nsMathMLmtableOuterFrame::AttributeChanged(PRInt32  aNameSpaceID,
     Delete(tableFrame, AttributeToProperty(aAttribute));
 
   // unset any _moz attribute that we may have set earlier, and re-sync
-  nsIFrame* rowFrame = rgFrame->GetFirstChild(nsnull);
+  nsIFrame* rowFrame = rgFrame->GetFirstPrincipalChild();
   for ( ; rowFrame; rowFrame = rowFrame->GetNextSibling()) {
     if (rowFrame->GetType() == nsGkAtoms::tableRowFrame) {
       if (MOZrowAtom) { // let rows do the work
-        rowFrame->GetContent()->UnsetAttr(kNameSpaceID_None, MOZrowAtom, PR_FALSE);
+        rowFrame->GetContent()->UnsetAttr(kNameSpaceID_None, MOZrowAtom, false);
         MapRowAttributesIntoCSS(tableFrame, rowFrame);    
       } else { // let cells do the work
-        nsIFrame* cellFrame = rowFrame->GetFirstChild(nsnull);
+        nsIFrame* cellFrame = rowFrame->GetFirstPrincipalChild();
         for ( ; cellFrame; cellFrame = cellFrame->GetNextSibling()) {
           if (IS_TABLE_CELL(cellFrame->GetType())) {
-            cellFrame->GetContent()->UnsetAttr(kNameSpaceID_None, MOZcolAtom, PR_FALSE);
+            cellFrame->GetContent()->UnsetAttr(kNameSpaceID_None, MOZcolAtom, false);
             MapColAttributesIntoCSS(tableFrame, rowFrame, cellFrame);
           }
         }
@@ -532,9 +509,9 @@ nsMathMLmtableOuterFrame::AttributeChanged(PRInt32  aNameSpaceID,
 
 nsIFrame*
 nsMathMLmtableOuterFrame::GetRowFrameAt(nsPresContext* aPresContext,
-                                        PRInt32         aRowIndex)
+                                        int32_t         aRowIndex)
 {
-  PRInt32 rowCount, colCount;
+  int32_t rowCount, colCount;
   GetTableSize(rowCount, colCount);
 
   // Negative indices mean to find upwards from the end.
@@ -548,25 +525,25 @@ nsMathMLmtableOuterFrame::GetRowFrameAt(nsPresContext* aPresContext,
   // if our inner table says that the index is valid, find the row now
   if (0 <= aRowIndex && aRowIndex <= rowCount) {
     nsIFrame* tableFrame = mFrames.FirstChild();
-    if (!tableFrame || tableFrame->GetType() != nsGkAtoms::tableFrame)
-      return nsnull;
-    nsIFrame* rgFrame = tableFrame->GetFirstChild(nsnull);
+    NS_ASSERTION(tableFrame && tableFrame->GetType() == nsGkAtoms::tableFrame,
+                 "should always have an inner table frame");
+    nsIFrame* rgFrame = tableFrame->GetFirstPrincipalChild();
     if (!rgFrame || rgFrame->GetType() != nsGkAtoms::tableRowGroupFrame)
-      return nsnull;
+      return nullptr;
     nsTableIterator rowIter(*rgFrame);
     nsIFrame* rowFrame = rowIter.First();
     for ( ; rowFrame; rowFrame = rowIter.Next()) {
       if (aRowIndex == 0) {
         DEBUG_VERIFY_THAT_FRAME_IS(rowFrame, TABLE_ROW);
         if (rowFrame->GetType() != nsGkAtoms::tableRowFrame)
-          return nsnull;
+          return nullptr;
 
         return rowFrame;
       }
       --aRowIndex;
     }
   }
-  return nsnull;
+  return nullptr;
 }
 
 NS_IMETHODIMP
@@ -586,9 +563,9 @@ nsMathMLmtableOuterFrame::Reflow(nsPresContext*          aPresContext,
 
   // see if the user has set the align attribute on the <mtable>
   // XXX should we also check <mstyle> ?
-  PRInt32 rowIndex = 0;
+  int32_t rowIndex = 0;
   eAlign tableAlign = eAlign_axis;
-  GetAttribute(mContent, nsnull, nsGkAtoms::align, value);
+  GetAttribute(mContent, nullptr, nsGkAtoms::align, value);
   if (!value.IsEmpty()) {
     ParseAlignAttribute(value, tableAlign, rowIndex);
   }
@@ -599,7 +576,7 @@ nsMathMLmtableOuterFrame::Reflow(nsPresContext*          aPresContext,
   // doing so allows us to have a single code path for all cases).
   nscoord dy = 0;
   nscoord height = aDesiredSize.height;
-  nsIFrame* rowFrame = nsnull;
+  nsIFrame* rowFrame = nullptr;
   if (rowIndex) {
     rowFrame = GetRowFrameAt(aPresContext, rowIndex);
     if (rowFrame) {
@@ -689,10 +666,10 @@ nsMathMLmtableFrame::~nsMathMLmtableFrame()
 }
 
 NS_IMETHODIMP
-nsMathMLmtableFrame::SetInitialChildList(nsIAtom*  aListName,
+nsMathMLmtableFrame::SetInitialChildList(ChildListID  aListID,
                                          nsFrameList& aChildList)
 {
-  nsresult rv = nsTableFrame::SetInitialChildList(aListName, aChildList);
+  nsresult rv = nsTableFrame::SetInitialChildList(aListID, aChildList);
   if (NS_FAILED(rv)) return rv;
   MapAllAttributesIntoCSS(this);
   return rv;
@@ -726,9 +703,9 @@ nsMathMLmtrFrame::~nsMathMLmtrFrame()
 }
 
 NS_IMETHODIMP
-nsMathMLmtrFrame::AttributeChanged(PRInt32  aNameSpaceID,
+nsMathMLmtrFrame::AttributeChanged(int32_t  aNameSpaceID,
                                    nsIAtom* aAttribute,
-                                   PRInt32  aModType)
+                                   int32_t  aModType)
 {
   // Attributes specific to <mtr>:
   // groupalign  : Not yet supported.
@@ -739,7 +716,7 @@ nsMathMLmtrFrame::AttributeChanged(PRInt32  aNameSpaceID,
   if (aAttribute == nsGkAtoms::rowalign_) {
     // unset any _moz attribute that we may have set earlier, and re-sync
     mContent->UnsetAttr(kNameSpaceID_None, nsGkAtoms::_moz_math_rowalign_,
-                        PR_FALSE);
+                        false);
     MapRowAttributesIntoCSS(nsTableFrame::GetTableFrame(this), this);
     // That's all - see comment above.
     return NS_OK;
@@ -755,12 +732,12 @@ nsMathMLmtrFrame::AttributeChanged(PRInt32  aNameSpaceID,
   // Clear any internal _moz attribute that we may have set earlier
   // in our cells and re-sync their columnalign attribute
   nsTableFrame* tableFrame = nsTableFrame::GetTableFrame(this);
-  nsIFrame* cellFrame = GetFirstChild(nsnull);
+  nsIFrame* cellFrame = GetFirstPrincipalChild();
   for ( ; cellFrame; cellFrame = cellFrame->GetNextSibling()) {
     if (IS_TABLE_CELL(cellFrame->GetType())) {
       cellFrame->GetContent()->
         UnsetAttr(kNameSpaceID_None, nsGkAtoms::_moz_math_columnalign_,
-                  PR_FALSE);
+                  false);
       MapColAttributesIntoCSS(tableFrame, this, cellFrame);
     }
   }
@@ -788,19 +765,19 @@ nsMathMLmtdFrame::~nsMathMLmtdFrame()
 {
 }
 
-PRInt32
+int32_t
 nsMathMLmtdFrame::GetRowSpan()
 {
-  PRInt32 rowspan = 1;
+  int32_t rowspan = 1;
 
   // Don't look at the content's rowspan if we're not an mtd or a pseudo cell.
   if ((mContent->Tag() == nsGkAtoms::mtd_) && !GetStyleContext()->GetPseudo()) {
     nsAutoString value;
     mContent->GetAttr(kNameSpaceID_None, nsGkAtoms::rowspan, value);
     if (!value.IsEmpty()) {
-      PRInt32 error;
+      nsresult error;
       rowspan = value.ToInteger(&error);
-      if (error || rowspan < 0)
+      if (NS_FAILED(error) || rowspan < 0)
         rowspan = 1;
       rowspan = NS_MIN(rowspan, MAX_ROWSPAN);
     }
@@ -808,19 +785,19 @@ nsMathMLmtdFrame::GetRowSpan()
   return rowspan;
 }
 
-PRInt32
+int32_t
 nsMathMLmtdFrame::GetColSpan()
 {
-  PRInt32 colspan = 1;
+  int32_t colspan = 1;
 
   // Don't look at the content's colspan if we're not an mtd or a pseudo cell.
   if ((mContent->Tag() == nsGkAtoms::mtd_) && !GetStyleContext()->GetPseudo()) {
     nsAutoString value;
     mContent->GetAttr(kNameSpaceID_None, nsGkAtoms::columnspan_, value);
     if (!value.IsEmpty()) {
-      PRInt32 error;
+      nsresult error;
       colspan = value.ToInteger(&error);
-      if (error || colspan < 0 || colspan > MAX_COLSPAN)
+      if (NS_FAILED(error) || colspan < 0 || colspan > MAX_COLSPAN)
         colspan = 1;
     }
   }
@@ -828,9 +805,9 @@ nsMathMLmtdFrame::GetColSpan()
 }
 
 NS_IMETHODIMP
-nsMathMLmtdFrame::AttributeChanged(PRInt32  aNameSpaceID,
+nsMathMLmtdFrame::AttributeChanged(int32_t  aNameSpaceID,
                                    nsIAtom* aAttribute,
-                                   PRInt32  aModType)
+                                   int32_t  aModType)
 {
   // Attributes specific to <mtd>:
   // groupalign  : Not yet supported
@@ -842,7 +819,7 @@ nsMathMLmtdFrame::AttributeChanged(PRInt32  aNameSpaceID,
   if (aAttribute == nsGkAtoms::columnalign_) {
     // unset any _moz attribute that we may have set earlier, and re-sync
     mContent->UnsetAttr(kNameSpaceID_None, nsGkAtoms::_moz_math_columnalign_,
-                        PR_FALSE);
+                        false);
     MapColAttributesIntoCSS(nsTableFrame::GetTableFrame(this), mParent, this);
     return NS_OK;
   }

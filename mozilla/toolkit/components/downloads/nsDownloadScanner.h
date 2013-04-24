@@ -1,6 +1,9 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 /* vim: se cin sw=2 ts=2 et : */
-#if MOZ_WINSDK_TARGETVER >= MOZ_NTDDI_LONGHORN
 
 #ifndef nsDownloadScanner_h_
 #define nsDownloadScanner_h_
@@ -11,12 +14,8 @@
 #define INITGUID
 #include <windows.h>
 #define AVVENDOR
+#include <objidl.h>
 #include <msoav.h>
-// To cope with both msvs8 header and sdk6 header
-#ifdef _WIN32_IE_IE60SP2
-#undef _WIN32_IE
-#define _WIN32_IE _WIN32_IE_IE60SP2
-#endif
 #include <shlobj.h>
 
 #include "nsAutoPtr.h"
@@ -57,10 +56,10 @@ public:
   AVCheckPolicyState CheckPolicy(nsIURI *aSource, nsIURI *aTarget);
 
 private:
-  PRBool mAESExists;
+  bool mAESExists;
   nsTArray<CLSID> mScanCLSID;
-  PRBool IsAESAvailable();
-  PRBool EnumerateOAVProviders();
+  bool IsAESAvailable();
+  bool EnumerateOAVProviders();
 
   nsAutoPtr<nsDownloadScannerWatchdog> mWatchdog;
 
@@ -83,7 +82,7 @@ private:
 
     // Called on a secondary thread to notify the scan that it has timed out
     // this is used only by the watchdog thread
-    PRBool NotifyTimeout();
+    bool NotifyTimeout();
 
   private:
     nsDownloadScanner *mDLScanner;
@@ -97,8 +96,8 @@ private:
     nsString mName;
     nsString mOrigin;
     // Also true if it is an ftp download
-    PRBool mIsHttpDownload;
-    PRBool mSkipSource;
+    bool mIsHttpDownload;
+    bool mSkipSource;
 
     /* @summary Sets the Scan's state to newState if the current state is
                 expectedState
@@ -106,13 +105,13 @@ private:
      * @param expectedState The state that the caller expects the scan to be in
      * @return If the old state matched expectedState
      */
-    PRBool CheckAndSetState(AVScanState newState, AVScanState expectedState);
+    bool CheckAndSetState(AVScanState newState, AVScanState expectedState);
 
     NS_IMETHOD Run();
 
     void DoScan();
-    PRBool DoScanAES();
-    PRBool DoScanOAV();
+    bool DoScanAES();
+    bool DoScanOAV();
 
     friend unsigned int __stdcall nsDownloadScanner::ScannerThreadFunction(void *);
   };
@@ -121,4 +120,3 @@ private:
 };
 #endif
 
-#endif // MOZ_WINSDK_TARGETVER >= MOZ_NTDDI_LONGHORN

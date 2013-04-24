@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 #include "nsStopwatch.h"
 
 #include <stdio.h>
@@ -26,15 +30,15 @@
 
 NS_IMPL_ISUPPORTS1(nsStopwatch, nsIStopwatch)
 
-#ifdef WINCE
-#error "WINCE apparently does not provide the clock support we require."
-#elif defined(XP_UNIX) || defined(XP_OS2)
+#if defined(XP_UNIX) || defined(XP_OS2)
 /** the number of ticks per second */
 static double gTicks = 0;
 #define MICRO_SECONDS_TO_SECONDS_MULT static_cast<double>(1.0e-6)
 #elif defined(WIN32)
 #ifdef DEBUG
+#ifdef MOZILLA_INTERNAL_API
 #include "nsPrintfCString.h"
+#endif
 #endif
 // 1 tick per 100ns = 10 per us = 10 * 1,000 per ms = 10 * 1,000 * 1,000 per sec.
 #define WIN32_TICK_RESOLUTION static_cast<double>(1.0e-7)
@@ -137,7 +141,6 @@ double nsStopwatch::GetCPUTime()
   times(&cpt);
   return (double)(cpt.tms_utime+cpt.tms_stime) / gTicks;
 #elif defined(WIN32)
-
   FILETIME    ftCreate,       // when the process was created
               ftExit;         // when the process exited
 
@@ -156,8 +159,15 @@ double nsStopwatch::GetCPUTime()
     GetProcessTimes(hProcess, &ftCreate, &ftExit,
                               &ftKernel.ftFileTime, &ftUser.ftFileTime);
 #ifdef DEBUG
+#ifdef MOZILLA_INTERNAL_API
   if (!ret)
     NS_ERROR(nsPrintfCString("GetProcessTimes() failed, error=0x%lx.", GetLastError()).get());
+#else
+  if (!ret) {
+    // nsPrintfCString() is unavailable to report GetLastError().
+    NS_ERROR("GetProcessTimes() failed.");
+  }
+#endif
 #endif
 
   /*

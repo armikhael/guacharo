@@ -1,4 +1,8 @@
 #filter substitution
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 
 @AB_CD@.jar:
 % locale branding @AB_CD@ %locale/@AB_CD@/branding/
@@ -36,12 +40,16 @@
   locale/@AB_CD@/communicator/quitDialog.properties                         (%chrome/common/quitDialog.properties)
   locale/@AB_CD@/communicator/shellservice.properties                       (%chrome/common/shellservice.properties)
   locale/@AB_CD@/communicator/sanitize.dtd                                  (%chrome/common/sanitize.dtd)
+  locale/@AB_CD@/communicator/setDesktopBackground.dtd                      (%chrome/common/setDesktopBackground.dtd)
   locale/@AB_CD@/communicator/tasksOverlay.dtd                              (%chrome/common/tasksOverlay.dtd)
   locale/@AB_CD@/communicator/typeaheadfind.properties                      (%chrome/common/typeaheadfind.properties)
   locale/@AB_CD@/communicator/utilityOverlay.dtd                            (%chrome/common/utilityOverlay.dtd)
   locale/@AB_CD@/communicator/utilityOverlay.properties                     (%chrome/common/utilityOverlay.properties)
+  locale/@AB_CD@/communicator/viewApplyThemeOverlay.dtd                     (%chrome/common/viewApplyThemeOverlay.dtd)
+  locale/@AB_CD@/communicator/viewApplyThemeOverlay.properties              (%chrome/common/viewApplyThemeOverlay.properties)
   locale/@AB_CD@/communicator/viewZoomOverlay.dtd                           (%chrome/common/viewZoomOverlay.dtd)
   locale/@AB_CD@/communicator/viewZoomOverlay.properties                    (%chrome/common/viewZoomOverlay.properties)
+  locale/@AB_CD@/communicator/about.dtd                                     (%chrome/common/about.dtd)
   locale/@AB_CD@/communicator/aboutSessionRestore.dtd                       (%chrome/common/aboutSessionRestore.dtd)
   locale/@AB_CD@/communicator/aboutSyncTabs.dtd                             (%chrome/common/aboutSyncTabs.dtd)
   locale/@AB_CD@/communicator/bookmarks/bm-props.properties                 (%chrome/common/bookmarks/bm-props.properties)
@@ -169,6 +177,7 @@
   locale/@AB_CD@/communicator/pref/pref-locationbar.dtd                     (%chrome/common/pref/pref-locationbar.dtd)
   locale/@AB_CD@/communicator/pref/pref-mousewheel.dtd                      (%chrome/common/pref/pref-mousewheel.dtd)
   locale/@AB_CD@/communicator/pref/pref-navigator.dtd                       (%chrome/common/pref/pref-navigator.dtd)
+  locale/@AB_CD@/communicator/pref/pref-offlineapps.dtd                     (%chrome/common/pref/pref-offlineapps.dtd)
   locale/@AB_CD@/communicator/pref/pref-passwords.dtd                       (%chrome/common/pref/pref-passwords.dtd)
   locale/@AB_CD@/communicator/pref/pref-policies.dtd                        (%chrome/common/pref/pref-policies.dtd)
   locale/@AB_CD@/communicator/pref/pref-popups.dtd                          (%chrome/common/pref/pref-popups.dtd)
@@ -178,6 +187,7 @@
   locale/@AB_CD@/communicator/pref/pref-search.dtd                          (%chrome/common/pref/pref-search.dtd)
   locale/@AB_CD@/communicator/pref/pref-security.dtd                        (%chrome/common/pref/pref-security.dtd)
   locale/@AB_CD@/communicator/pref/pref-smartupdate.dtd                     (%chrome/common/pref/pref-smartupdate.dtd)
+  locale/@AB_CD@/communicator/pref/pref-spelling.dtd                        (%chrome/common/pref/pref-spelling.dtd)
   locale/@AB_CD@/communicator/pref/pref-sync.dtd                            (%chrome/common/pref/pref-sync.dtd)
   locale/@AB_CD@/communicator/pref/pref-tabs.dtd                            (%chrome/common/pref/pref-tabs.dtd)
   locale/@AB_CD@/communicator-platform/mac/pref/platformPrefOverlay.dtd     (%chrome/common/pref/mac/platformPrefOverlay.dtd)
@@ -210,8 +220,6 @@
   locale/@AB_CD@/messenger/AccountWizard.dtd                                (%chrome/mailnews/pref/AccountWizard.dtd)
   locale/@AB_CD@/messenger/addressbook/abAddressBookNameDialog.dtd          (%chrome/mailnews/addressbook/abAddressBookNameDialog.dtd)
   locale/@AB_CD@/messenger/addressbook/abCardOverlay.dtd                    (%chrome/mailnews/addressbook/abCardOverlay.dtd)
-  locale/@AB_CD@/messenger/addressbook/abCardViewOverlay.dtd                (%chrome/mailnews/addressbook/abCardViewOverlay.dtd)
-  locale/@AB_CD@/messenger/addressbook/abDirTreeOverlay.dtd                 (%chrome/mailnews/addressbook/abDirTreeOverlay.dtd)
   locale/@AB_CD@/messenger/addressbook/abMailListDialog.dtd                 (%chrome/mailnews/addressbook/abMailListDialog.dtd)
   locale/@AB_CD@/messenger/addressbook/abMainWindow.dtd                     (%chrome/mailnews/addressbook/abMainWindow.dtd)
   locale/@AB_CD@/messenger/addressbook/abNewCardDialog.dtd                  (%chrome/mailnews/addressbook/abNewCardDialog.dtd)
@@ -238,7 +246,6 @@
   locale/@AB_CD@/messenger/am-server-top.dtd                                (%chrome/mailnews/pref/am-server-top.dtd)
   locale/@AB_CD@/messenger/am-archiveoptions.dtd                            (%chrome/mailnews/pref/am-archiveoptions.dtd)
   locale/@AB_CD@/messenger/appleMailImportMsgs.properties                   (%chrome/mailnews/appleMailImportMsgs.properties)
-  locale/@AB_CD@/messenger/comm4xMailImportMsgs.properties                  (%chrome/mailnews/comm4xMailImportMsgs.properties)
   locale/@AB_CD@/messenger/custom.properties                                (%chrome/mailnews/custom.properties)
   locale/@AB_CD@/messenger/CustomHeaders.dtd                                (%chrome/mailnews/CustomHeaders.dtd)
   locale/@AB_CD@/messenger/eudoraImportMsgs.properties                      (%chrome/mailnews/eudoraImportMsgs.properties)
@@ -257,6 +264,7 @@
   locale/@AB_CD@/messenger/junkLog.dtd                                      (%chrome/mailnews/junkLog.dtd)
   locale/@AB_CD@/messenger/junkMailInfo.dtd                                 (%chrome/mailnews/junkMailInfo.dtd)
   locale/@AB_CD@/messenger/mailEditorOverlay.dtd                            (%chrome/mailnews/mailEditorOverlay.dtd)
+  locale/@AB_CD@/messenger/mailKeysOverlay.dtd                              (%chrome/mailnews/mailKeysOverlay.dtd)
   locale/@AB_CD@/messenger/mailOverlay.dtd                                  (%chrome/mailnews/mailOverlay.dtd)
   locale/@AB_CD@/messenger/mailPrefsOverlay.dtd                             (%chrome/mailnews/pref/mailPrefsOverlay.dtd)
   locale/@AB_CD@/messenger/mailTasksOverlay.dtd                             (%chrome/mailnews/mailTasksOverlay.dtd)
@@ -308,6 +316,7 @@
   locale/@AB_CD@/messenger/search-operators.properties                      (%chrome/mailnews/search-operators.properties)
   locale/@AB_CD@/messenger/shutdownWindow.properties                        (%chrome/mailnews/shutdownWindow.properties)
   locale/@AB_CD@/messenger/smime.properties                                 (%chrome/mailnews/smime.properties)
+  locale/@AB_CD@/messenger/pgpmime.properties                               (%chrome/mailnews/pgpmime.properties)
   locale/@AB_CD@/messenger/smtpEditOverlay.dtd                              (%chrome/mailnews/pref/smtpEditOverlay.dtd)
   locale/@AB_CD@/messenger/start.dtd                                        (%chrome/mailnews/start.dtd)
   locale/@AB_CD@/messenger/subscribe.dtd                                    (%chrome/mailnews/subscribe.dtd)
@@ -336,8 +345,6 @@
 #endif
   locale/@AB_CD@/messenger-newsblog/newsblog.properties                     (%chrome/mailnews/newsblog/newsblog.properties)
   locale/@AB_CD@/messenger-newsblog/feed-subscriptions.dtd                  (%chrome/mailnews/newsblog/feed-subscriptions.dtd)
-  locale/@AB_CD@/messenger-newsblog/feed-properties.dtd                     (%chrome/mailnews/newsblog/feed-properties.dtd)
-  locale/@AB_CD@/messenger-newsblog/am-newsblog.properties                  (%chrome/mailnews/newsblog/am-newsblog.properties)
   locale/@AB_CD@/messenger-newsblog/am-newsblog.dtd                         (%chrome/mailnews/newsblog/am-newsblog.dtd)
   locale/@AB_CD@/mozldap/ldap.properties                                    (%chrome/mozldap/ldap.properties)
   locale/@AB_CD@/navigator/linkToolbar.dtd                                  (%chrome/browser/linkToolbar.dtd)

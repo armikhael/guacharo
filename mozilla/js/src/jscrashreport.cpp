@@ -1,42 +1,9 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * vim: set ts=4 sw=4 et tw=99:
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla SpiderMonkey JavaScript 1.9 code, released
- * May 28, 2008.
- *
- * The Initial Developer of the Original Code is
- *   Mozilla Foundation
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "jsapi.h"
 #include "jscntxt.h"
@@ -55,7 +22,7 @@ const static int stack_snapshot_max_size = 32768;
 #include <windows.h>
 
 static bool
-GetStack(uint64 *stack, uint64 *stack_len, CrashRegisters *regs, char *buffer, size_t size)
+GetStack(uint64_t *stack, uint64_t *stack_len, CrashRegisters *regs, char *buffer, size_t size)
 {
     /* Try to figure out how big the stack is. */
     char dummy;
@@ -66,11 +33,11 @@ GetStack(uint64 *stack, uint64 *stack_len, CrashRegisters *regs, char *buffer, s
         return false;
 
     /* 256 is a fudge factor to account for the rest of GetStack's frame. */
-    uint64 p = uint64(&dummy) - 256;
-    uint64 len = stack_snapshot_max_size;
+    uint64_t p = uint64_t(&dummy) - 256;
+    uint64_t len = stack_snapshot_max_size;
 
-    if (p + len > uint64(info.BaseAddress) + info.RegionSize)
-        len = uint64(info.BaseAddress) + info.RegionSize - p;
+    if (p + len > uint64_t(info.BaseAddress) + info.RegionSize)
+        len = uint64_t(info.BaseAddress) + info.RegionSize - p;
 
     if (len > size)
         len = size;
@@ -81,7 +48,7 @@ GetStack(uint64 *stack, uint64 *stack_len, CrashRegisters *regs, char *buffer, s
     /* Get the register state. */
 #if defined(_MSC_VER) && JS_BITS_PER_WORD == 32
     /* ASM version for win2k that doesn't support RtlCaptureContext */
-    uint32 vip, vsp, vbp;
+    uint32_t vip, vsp, vbp;
     __asm {
     Label:
         mov [vbp], ebp;
@@ -106,7 +73,7 @@ GetStack(uint64 *stack, uint64 *stack_len, CrashRegisters *regs, char *buffer, s
 #endif
 #endif
 
-    memcpy(buffer, (void *)p, len);
+    js_memcpy(buffer, (void *)p, len);
 
     return true;
 }
@@ -118,13 +85,13 @@ GetStack(uint64 *stack, uint64 *stack_len, CrashRegisters *regs, char *buffer, s
 #include <sys/mman.h>
 
 static bool
-GetStack(uint64 *stack, uint64 *stack_len, CrashRegisters *regs, char *buffer, size_t size)
+GetStack(uint64_t *stack, uint64_t *stack_len, CrashRegisters *regs, char *buffer, size_t size)
 {
     /* 256 is a fudge factor to account for the rest of GetStack's frame. */
     char dummy;
-    uint64 p = uint64(&dummy) - 256;
-    uint64 pgsz = getpagesize();
-    uint64 len = stack_snapshot_max_size;
+    uint64_t p = uint64_t(&dummy) - 256;
+    uint64_t pgsz = getpagesize();
+    uint64_t len = stack_snapshot_max_size;
     p &= ~(pgsz - 1);
 
     /* Try to figure out how big the stack is. */
@@ -148,16 +115,16 @@ GetStack(uint64 *stack, uint64 *stack_len, CrashRegisters *regs, char *buffer, s
 	return false;
 
 #if JS_BITS_PER_WORD == 64
-    regs->sp = (uint64)context.uc_mcontext.gregs[REG_RSP];
-    regs->bp = (uint64)context.uc_mcontext.gregs[REG_RBP];
-    regs->ip = (uint64)context.uc_mcontext.gregs[REG_RIP];
+    regs->sp = (uint64_t)context.uc_mcontext.gregs[REG_RSP];
+    regs->bp = (uint64_t)context.uc_mcontext.gregs[REG_RBP];
+    regs->ip = (uint64_t)context.uc_mcontext.gregs[REG_RIP];
 #elif JS_BITS_PER_WORD == 32
-    regs->sp = (uint64)context.uc_mcontext.gregs[REG_ESP];
-    regs->bp = (uint64)context.uc_mcontext.gregs[REG_EBP];
-    regs->ip = (uint64)context.uc_mcontext.gregs[REG_EIP];
+    regs->sp = (uint64_t)context.uc_mcontext.gregs[REG_ESP];
+    regs->bp = (uint64_t)context.uc_mcontext.gregs[REG_EBP];
+    regs->ip = (uint64_t)context.uc_mcontext.gregs[REG_EIP];
 #endif
 
-    memcpy(buffer, (void *)p, len);
+    js_memcpy(buffer, (void *)p, len);
 
     return true;
 }
@@ -165,7 +132,7 @@ GetStack(uint64 *stack, uint64 *stack_len, CrashRegisters *regs, char *buffer, s
 #else
 
 static bool
-GetStack(uint64 *stack, uint64 *stack_len, CrashRegisters *regs, char *buffer, size_t size)
+GetStack(uint64_t *stack, uint64_t *stack_len, CrashRegisters *regs, char *buffer, size_t size)
 {
     return false;
 }
@@ -175,12 +142,12 @@ GetStack(uint64 *stack, uint64 *stack_len, CrashRegisters *regs, char *buffer, s
 class Stack : private CrashStack
 {
 public:
-    Stack(uint64 id);
+    Stack(uint64_t id);
 
     bool snapshot();
 };
 
-Stack::Stack(uint64 id)
+Stack::Stack(uint64_t id)
   : CrashStack(id)
 {
 }
@@ -195,30 +162,30 @@ Stack::snapshot()
 class Ring : private CrashRing
 {
 public:
-    Ring(uint64 id);
+    Ring(uint64_t id);
 
-    void push(uint64 tag, void *data, size_t size);
+    void push(uint64_t tag, void *data, size_t size);
 
 private:
     size_t bufferSize() { return crash_buffer_size; }
     void copyBytes(void *data, size_t size);
 };
 
-Ring::Ring(uint64 id)
+Ring::Ring(uint64_t id)
   : CrashRing(id)
 {
 }
 
 void
-Ring::push(uint64 tag, void *data, size_t size)
+Ring::push(uint64_t tag, void *data, size_t size)
 {
-    uint64 t = time(NULL);
+    uint64_t t = time(NULL);
 
-    copyBytes(&tag, sizeof(uint64));
-    copyBytes(&t, sizeof(uint64));
+    copyBytes(&tag, sizeof(uint64_t));
+    copyBytes(&t, sizeof(uint64_t));
     copyBytes(data, size);
-    uint64 mysize = size;
-    copyBytes(&mysize, sizeof(uint64));
+    uint64_t mysize = size;
+    copyBytes(&mysize, sizeof(uint64_t));
 }
 
 void
@@ -230,11 +197,11 @@ Ring::copyBytes(void *data, size_t size)
     if (offset + size > bufferSize()) {
         size_t first = bufferSize() - offset;
         size_t second = size - first;
-        memcpy(&buffer[offset], data, first);
-        memcpy(buffer, (char *)data + first, second);
+        js_memcpy(&buffer[offset], data, first);
+        js_memcpy(buffer, (char *)data + first, second);
         offset = second;
     } else {
-        memcpy(&buffer[offset], data, size);
+        js_memcpy(&buffer[offset], data, size);
         offset += size;
     }
 }
@@ -260,7 +227,7 @@ SnapshotErrorStack()
 }
 
 void
-SaveCrashData(uint64 tag, void *ptr, size_t size)
+SaveCrashData(uint64_t tag, void *ptr, size_t size)
 {
     if (gInitialized)
         gRingBuffer.push(tag, ptr, size);

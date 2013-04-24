@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 20; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is simple MIME converter stubs.
- *
- * The Initial Developer of the Original Code is
- * Oracle Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "mimecth.h"
 #include "mimeobj.h"
@@ -84,7 +52,7 @@ BeginGather(MimeObject *obj)
 }
 
 static int
-GatherLine(const char *line, PRInt32 length, MimeObject *obj)
+GatherLine(const char *line, int32_t length, MimeObject *obj)
 {
     MimeSimpleStub *ssobj = (MimeSimpleStub *)obj;
 
@@ -93,37 +61,37 @@ GatherLine(const char *line, PRInt32 length, MimeObject *obj)
         !obj->options->output_fn) {
         return 0;
     }
-    
+
     if (!obj->options->write_html_p)
-        return MimeObject_write(obj, line, length, PR_TRUE);
+        return MimeObject_write(obj, line, length, true);
 
     ssobj->buffer->Append(line);
     return 0;
 }
 
 static int
-EndGather(MimeObject *obj, PRBool abort_p)
+EndGather(MimeObject *obj, bool abort_p)
 {
     MimeSimpleStub *ssobj = (MimeSimpleStub *)obj;
 
     if (obj->closed_p)
         return 0;
-    
+
     int status = ((MimeObjectClass *)MIME_GetmimeInlineTextClass())->parse_eof(obj, abort_p);
     if (status < 0)
         return status;
 
     if (ssobj->buffer->IsEmpty())
         return 0;
-    
-     mime_stream_data  *msd = (mime_stream_data *) (obj->options->stream_closure);
-     nsIChannel *channel = msd->channel;  // note the lack of ref counting...
-     if (channel)
-     {
-       nsCOMPtr<nsIURI> uri;
-       channel->GetURI(getter_AddRefs(uri));
-       ssobj->innerScriptable->SetUri(uri);
-     }
+
+    mime_stream_data  *msd = (mime_stream_data *) (obj->options->stream_closure);
+    nsIChannel *channel = msd->channel;  // note the lack of ref counting...
+    if (channel)
+    {
+        nsCOMPtr<nsIURI> uri;
+        channel->GetURI(getter_AddRefs(uri));
+        ssobj->innerScriptable->SetUri(uri);
+    }
     nsCString asHTML;
     nsresult rv = ssobj->innerScriptable->ConvertToHTML(nsDependentCString(obj->content_type),
                                                         *ssobj->buffer,
@@ -135,7 +103,7 @@ EndGather(MimeObject *obj, PRBool abort_p)
 
     // MimeObject_write wants a non-const string for some reason, but it doesn't mutate it
     status = MimeObject_write(obj, asHTML.get(),
-                              asHTML.Length(), PR_TRUE);
+                              asHTML.Length(), true);
     if (status < 0)
         return status;
     return 0;
@@ -144,33 +112,34 @@ EndGather(MimeObject *obj, PRBool abort_p)
 static int
 Initialize(MimeObject *obj)
 {
-  MimeSimpleStub *ssobj = (MimeSimpleStub *)obj;
+    MimeSimpleStub *ssobj = (MimeSimpleStub *)obj;
 
-  nsresult rv;
-  nsCOMPtr<nsICategoryManager> catman =
-    do_GetService(NS_CATEGORYMANAGER_CONTRACTID, &rv);
-  if (NS_FAILED(rv))
-    return -1;
+    nsresult rv;
+    nsCOMPtr<nsICategoryManager> catman =
+        do_GetService(NS_CATEGORYMANAGER_CONTRACTID, &rv);
+    if (NS_FAILED(rv))
+        return -1;
 
-  nsCString value;
-  rv = catman->GetCategoryEntry(NS_SIMPLEMIMECONVERTERS_CATEGORY,
-                                obj->content_type, getter_Copies(value));
-  if (NS_FAILED(rv) || value.IsEmpty())
-    return -1;
+    nsCString value;
+    rv = catman->GetCategoryEntry(NS_SIMPLEMIMECONVERTERS_CATEGORY,
+                                  obj->content_type, getter_Copies(value));
+    if (NS_FAILED(rv) || value.IsEmpty())
+        return -1;
 
-  ssobj->innerScriptable = do_CreateInstance(value.get(), &rv);
-  if (NS_FAILED(rv) || !ssobj->innerScriptable)
-    return -1;
-  ssobj->buffer = new nsCString();
-  ((MimeObjectClass *)XPCOM_GetmimeLeafClass())->initialize(obj);
-  return 0;
+    ssobj->innerScriptable = do_CreateInstance(value.get(), &rv);
+    if (NS_FAILED(rv) || !ssobj->innerScriptable)
+        return -1;
+    ssobj->buffer = new nsCString();
+    ((MimeObjectClass *)XPCOM_GetmimeLeafClass())->initialize(obj);
+
+    return 0;
 }
 
 static void
 Finalize(MimeObject *obj)
 {
     MimeSimpleStub *ssobj = (MimeSimpleStub *)obj;
-    ssobj->innerScriptable = nsnull;
+    ssobj->innerScriptable = nullptr;
     delete ssobj->buffer;
 }
 
@@ -213,12 +182,13 @@ nsSimpleMimeConverterStub::CreateContentTypeHandlerClass(const char *contentType
                                                      contentTypeHandlerInitStruct *initStruct,
                                                          MimeObjectClass **objClass)
 {
+    NS_ENSURE_ARG_POINTER(objClass);
+
     *objClass = (MimeObjectClass *)&mimeSimpleStubClass;
     (*objClass)->superclass = (MimeObjectClass *)XPCOM_GetmimeInlineTextClass();
-    if (!(*objClass)->superclass)
-        return NS_ERROR_UNEXPECTED;;
+    NS_ENSURE_TRUE((*objClass)->superclass, NS_ERROR_UNEXPECTED);
 
-    initStruct->force_inline_display = PR_TRUE;
+    initStruct->force_inline_display = true;
     return NS_OK;;
 }
 
@@ -227,7 +197,7 @@ MIME_NewSimpleMimeConverterStub(const char *aContentType,
                                 nsIMimeContentTypeHandler **aResult)
 {
     nsRefPtr<nsSimpleMimeConverterStub> inst = new nsSimpleMimeConverterStub(aContentType);
-    if (!inst)
-        return NS_ERROR_OUT_OF_MEMORY;
+    NS_ENSURE_TRUE(inst, NS_ERROR_OUT_OF_MEMORY);
+
     return CallQueryInterface(inst.get(), aResult);
 }

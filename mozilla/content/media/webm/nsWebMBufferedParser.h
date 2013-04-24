@@ -1,40 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim:set ts=2 sw=2 sts=2 et cindent: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla code.
- *
- * The Initial Developer of the Original Code is the Mozilla Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Matthew Gregan <kinetik@flim.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #if !defined(nsWebMBufferedParser_h_)
 #define nsWebMBufferedParser_h_
 
@@ -50,20 +18,20 @@ using mozilla::ReentrantMonitor;
 // scale before use.
 struct nsWebMTimeDataOffset
 {
-  nsWebMTimeDataOffset(PRInt64 aOffset, PRUint64 aTimecode)
+  nsWebMTimeDataOffset(int64_t aOffset, uint64_t aTimecode)
     : mOffset(aOffset), mTimecode(aTimecode)
   {}
 
-  bool operator==(PRInt64 aOffset) const {
+  bool operator==(int64_t aOffset) const {
     return mOffset == aOffset;
   }
 
-  bool operator<(PRInt64 aOffset) const {
+  bool operator<(int64_t aOffset) const {
     return mOffset < aOffset;
   }
 
-  PRInt64 mOffset;
-  PRUint64 mTimecode;
+  int64_t mOffset;
+  uint64_t mTimecode;
 };
 
 // A simple WebM parser that produces data offset to timecode pairs as it
@@ -74,33 +42,33 @@ struct nsWebMTimeDataOffset
 // within the stream.
 struct nsWebMBufferedParser
 {
-  nsWebMBufferedParser(PRInt64 aOffset)
+  nsWebMBufferedParser(int64_t aOffset)
     : mStartOffset(aOffset), mCurrentOffset(aOffset), mState(CLUSTER_SYNC), mClusterIDPos(0)
   {}
 
   // Steps the parser through aLength bytes of data.  Always consumes
   // aLength bytes.  Updates mCurrentOffset before returning.  Acquires
   // aReentrantMonitor before using aMapping.
-  void Append(const unsigned char* aBuffer, PRUint32 aLength,
+  void Append(const unsigned char* aBuffer, uint32_t aLength,
               nsTArray<nsWebMTimeDataOffset>& aMapping,
               ReentrantMonitor& aReentrantMonitor);
 
-  bool operator==(PRInt64 aOffset) const {
+  bool operator==(int64_t aOffset) const {
     return mCurrentOffset == aOffset;
   }
 
-  bool operator<(PRInt64 aOffset) const {
+  bool operator<(int64_t aOffset) const {
     return mCurrentOffset < aOffset;
   }
 
   // The offset at which this parser started parsing.  Used to merge
   // adjacent parsers, in which case the later parser adopts the earlier
   // parser's mStartOffset.
-  PRInt64 mStartOffset;
+  int64_t mStartOffset;
 
   // Current offset with the stream.  Updated in chunks as Append() consumes
   // data.
-  PRInt64 mCurrentOffset;
+  int64_t mCurrentOffset;
 
 private:
   enum State {
@@ -174,41 +142,41 @@ private:
 
   // Match position within CLUSTER_ID.  Used to find sync within arbitrary
   // data.
-  PRUint32 mClusterIDPos;
+  uint32_t mClusterIDPos;
 
   // Variable length integer read from data.
-  PRUint64 mVInt;
+  uint64_t mVInt;
 
   // Encoding length of mVInt.  This is the total number of bytes used to
   // encoding mVInt's value.
-  PRUint32 mVIntLength;
+  uint32_t mVIntLength;
 
   // Number of bytes of mVInt left to read.  mVInt is complete once this
   // reaches 0.
-  PRUint32 mVIntLeft;
+  uint32_t mVIntLeft;
 
   // Size of the block currently being parsed.  Any unused data within the
   // block is skipped once the block timecode has been parsed.
-  PRUint64 mBlockSize;
+  uint64_t mBlockSize;
 
   // Cluster-level timecode.
-  PRUint64 mClusterTimecode;
+  uint64_t mClusterTimecode;
 
   // Start offset of the block currently being parsed.  Used as the byte
   // offset for the offset-to-time mapping once the block timecode has been
   // parsed.
-  PRInt64 mBlockOffset;
+  int64_t mBlockOffset;
 
   // Block-level timecode.  This is summed with mClusterTimecode to produce
   // an absolute timecode for the offset-to-time mapping.
-  PRInt16 mBlockTimecode;
+  int16_t mBlockTimecode;
 
   // Number of bytes of mBlockTimecode left to read.
-  PRUint32 mBlockTimecodeLength;
+  uint32_t mBlockTimecodeLength;
 
   // Count of bytes left to skip before resuming parse at mNextState.
   // Mostly used to skip block payload data after reading a block timecode.
-  PRUint32 mSkipBytes;
+  uint32_t mSkipBytes;
 };
 
 class nsWebMBufferedState
@@ -224,11 +192,9 @@ public:
     MOZ_COUNT_DTOR(nsWebMBufferedState);
   }
 
-  void NotifyDataArrived(const char* aBuffer, PRUint32 aLength, PRUint32 aOffset);
-  void CalculateBufferedForRange(nsTimeRanges* aBuffered,
-                                 PRInt64 aStartOffset, PRInt64 aEndOffset,
-                                 PRUint64 aTimecodeScale,
-                                 PRInt64 aStartTimeOffsetNS);
+  void NotifyDataArrived(const char* aBuffer, uint32_t aLength, int64_t aOffset);
+  bool CalculateBufferedForRange(int64_t aStartOffset, int64_t aEndOffset,
+                                 uint64_t* aStartTime, uint64_t* aEndTime);
 
 private:
   // Synchronizes access to the mTimeMapping array.

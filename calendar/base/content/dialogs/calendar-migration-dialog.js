@@ -1,47 +1,12 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Calendar migration code
- *
- * The Initial Developer of the Original Code is
- *   Joey Minta <jminta@gmail.com>
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Matthew Willis <mattwillis@gmail.com>
- *   Clint Talbert <cmtalbert@myfastmail.com>
- *   Stefan Sitter <ssitter@gmail.com>
- *   Philipp Kewisch <mozilla@kewis.ch>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 const SUNBIRD_UID = "{718e30fb-e89b-41dd-9da7-e25a45638b28}";
 const FIREFOX_UID = "{ec8030f7-c20a-464f-9b0e-13a3a9e97384}";
 
 Components.utils.import("resource://calendar/modules/calUtils.jsm");
+Components.utils.import("resource:///modules/Services.jsm");
 
 //
 // The front-end wizard bits.
@@ -73,7 +38,7 @@ var gMigrateWizard = {
                                                           1);
         }
 
-        LOG("migrators: " + window.arguments.length);
+        migLOG("migrators: " + window.arguments.length);
         for each (var migrator in window.arguments[0]) {
             var listItem = document.createElement("listitem");
             listItem.setAttribute("type", "checkbox");
@@ -95,9 +60,7 @@ var gMigrateWizard = {
         // Get all the checked migrators into an array
         var listbox = document.getElementById("datasource-list");
         for (var i = listbox.childNodes.length-1; i >= 0; i--) {
-            LOG("Checking child node: " + listbox.childNodes[i]);
             if (listbox.childNodes[i].getAttribute("checked")) {
-                LOG("Adding migrator");
                 migrators.push(listbox.childNodes[i].migrator);
             }
         }
@@ -130,7 +93,7 @@ var gMigrateWizard = {
 
                 // Increment i to point to the next migrator
                 i++;
-                LOG("starting migrator: " + mig.title);
+                migLOG("starting migrator: " + mig.title);
                 label.value = props.formatStringFromName("migratingApp",
                                                          [mig.title],
                                                          1);
@@ -140,12 +103,12 @@ var gMigrateWizard = {
                 try {
                     mig.migrate.apply(mig, mig.args);
                 } catch (e) {
-                    LOG("Failed to migrate: " + mig.title);
-                    LOG(e);
+                    migLOG("Failed to migrate: " + mig.title);
+                    migLOG(e);
                     getNextMigrator();
                 }
             } else {
-                LOG("migration done");
+                migLOG("migration done");
                 wizard.canAdvance = true;
                 label.value = props.GetStringFromName("finished");
                 meter.value = 100;
@@ -181,7 +144,7 @@ var gMigrateWizard = {
 function dataMigrator(aTitle, aMigrateFunction, aArguments) {
     this.title = aTitle;
     this.migrate = aMigrateFunction;
-    this.args = aArguments;
+    this.args = aArguments || [];
 }
 
 var gDataMigrator = {
@@ -214,7 +177,7 @@ var gDataMigrator = {
         if (appInfo.ID == FIREFOX_UID) {
             this.mIsInFirefox = true;
             // We can't handle Firefox Lightning yet
-            LOG("Holy cow, you're Firefox-Lightning! sorry, can't help.");
+            migLOG("Holy cow, you're Firefox-Lightning! sorry, can't help.");
             return;
         }
 
@@ -222,10 +185,12 @@ var gDataMigrator = {
                          .getService(Components.interfaces.nsIXULRuntime);
         this.mPlatform = xulRuntime.OS.toLowerCase();
 
-        LOG("mPlatform is: " + this.mPlatform);
+        migLOG("mPlatform is: " + this.mPlatform);
 
         var DMs = [];
-        var migrators = [this.checkOldCal, this.checkEvolution,
+        var migrators = [this.checkOldCal,
+                         this.checkEvolution,
+                         this.checkWindowsMail,
                          this.checkIcal];
         // XXX also define a category and an interface here for pluggability
         for each (var migrator in migrators) {
@@ -239,7 +204,7 @@ var gDataMigrator = {
             // No migration available
             return;
         }
-        LOG("DMs: " + DMs.length);
+        migLOG("DMs: " + DMs.length);
 
         var url = "chrome://calendar/content/calendar-migration-dialog.xul";
 #ifdef XP_MACOSX
@@ -262,7 +227,7 @@ var gDataMigrator = {
      * it offers to move that data into our new storage format.
      */
     checkOldCal: function gdm_calold() {
-        LOG("Checking for the old calendar extension/app");
+        migLOG("Checking for the old calendar extension/app");
 
         // This is the function that the migration wizard will call to actually
         // migrate the data.  It's defined here because we may use it multiple
@@ -284,7 +249,7 @@ var gDataMigrator = {
             req.open('GET', "file://" + dataSource.path, true);
             req.onreadystatechange = function calext_onreadychange() {
                 if (req.readyState == 4) {
-                    LOG(req.responseText);
+                    migLOG(req.responseText);
                     parseAndMigrate(req.responseXML, aCallback)
                 }
             };
@@ -308,13 +273,13 @@ var gDataMigrator = {
 
             const RDFNS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
             var nodes = aDoc.getElementsByTagNameNS(RDFNS, "Description");
-            LOG("nodes: " + nodes.length);
+            migLOG("nodes: " + nodes.length);
             for (var i = 0; i < nodes.length; i++) {
-                LOG("Beginning calendar node");
+                migLOG("Beginning calendar node");
                 var calendar;
                 var node = nodes[i];
                 if (getRDFAttr(node, "remote") == "false") {
-                    LOG("not remote");
+                    migLOG("not remote");
                     var localFile = Components.classes["@mozilla.org/file/local;1"]
                                     .createInstance(Components.interfaces.nsILocalFile);
                     localFile.initWithPath(getRDFAttr(node, "path"));
@@ -340,7 +305,7 @@ var gDataMigrator = {
         var profileDir = this.dirService.get("ProfD", Components.interfaces.nsILocalFile);
         profileDir.append("Calendar");
         if (profileDir.exists()) {
-            LOG("Found old extension directory in current app");
+            migLOG("Found old extension directory in current app");
             var title;
             if (!cal.isSunbird()) {
                 title = "Mozilla Calendar Extension";
@@ -381,7 +346,7 @@ var gDataMigrator = {
                 } else {
                     profile.append("Calendar");
                     if (profile.exists()) {
-                        LOG("Found old extension directory at" + profile.path);
+                        migLOG("Found old extension directory at" + profile.path);
                         var title = "Mozilla Calendar";
                         migrators.push(new dataMigrator(title, extMigrator, [profile]));
                     }
@@ -397,7 +362,7 @@ var gDataMigrator = {
      * the user has created in it.
      */
     checkIcal: function gdm_ical() {
-        LOG("Checking for ical data");
+        migLOG("Checking for ical data");
 
         function icalMigrate(aDataDir, aCallback) {
             aDataDir.append("Sources");
@@ -460,7 +425,7 @@ var gDataMigrator = {
                 calManager.registerCalendar(calendar);
                 getCompositeCalendar().addCalendar(calendar);
             }
-            LOG("icalMig making callback");
+            migLOG("icalMig making callback");
             aCallback();
         }
         var profileDir = this.dirService.get("ProfD", Components.interfaces.nsILocalFile);
@@ -503,7 +468,7 @@ var gDataMigrator = {
         function evoMigrate(aDataDir, aCallback) {
             var i = 1;
             function evoDataMigrate(dataStore) {
-                LOG("Migrating evolution data file in " + dataStore.path);
+                migLOG("Migrating evolution data file in " + dataStore.path);
                 if (dataStore.exists()) {
                     var calendar = gDataMigrator.importICSToStorage(dataStore);
                     calendar.name = "Evolution " + (i++);
@@ -532,6 +497,75 @@ var gDataMigrator = {
         return (evoDir.exists() ? [new dataMigrator("Evolution", evoMigrate, [evoDir])] : []);
     },
 
+    checkWindowsMail: function gdm_windowsMail() {
+        let maildir = this.dirService.get("LocalAppData",
+                                          Components.interfaces.nsILocalFile);
+        if (!maildir || !maildir.exists()) {
+            // We are probably not on windows
+            return [];
+        }
+        maildir.append("Microsoft");
+        maildir.append("Windows Calendar");
+        maildir.append("Calendars");
+
+        let settingsxml = maildir.clone();
+        settingsxml.append("Settings.xml");
+        if (!settingsxml || !settingsxml.exists()) {
+            // No Settings.xml, maybe Windows Calendar was never started?
+            return [];
+        }
+        let settingsXmlUri = Services.io.newFileURI(settingsxml);
+
+        let req = new XMLHttpRequest();
+        req.open("GET", settingsXmlUri.spec, false);
+        req.send(null);
+        if (req.status == 0) {
+            // The file was found, it seems we are on windows vista.
+            let doc = req.responseXML;
+            let root = doc.documentElement;
+
+            // Get all calendar property tags and return the migrator.
+            let calendars = doc.getElementsByTagName("VCalendar");
+            function doMigrate(aCallback) {
+                for each (let node in Array.slice(calendars)) {
+                    let name = node.getElementsByTagName("Name")[0].textContent;
+                    let color = node.getElementsByTagName("Color")[0].textContent;
+                    let enabled = node.getElementsByTagName("Enabled")[0].textContent == "True";
+
+                    // The name is quoted, and the color also contains an alpha
+                    // value. Lets just ignore the alpha value and take the
+                    // color part.
+                    name = name.replace(/(^'|'$)/g, "");
+                    color = color.replace(/0x[0-9a-fA-F]{2}([0-9a-fA-F]{4})/, "#$1");
+
+                    let calfile = maildir.clone();
+                    calfile.append(name + ".ics");
+
+                    if (calfile.exists()) {
+                        let storage = gDataMigrator.importICSToStorage(calfile)
+
+                        storage.name = name;
+
+                        if (color) {
+                            storage.setProperty("color", color);
+                        }
+                        let calManager = cal.getCalendarManager();
+                        calManager.registerCalendar(storage);
+
+                        if (enabled) {
+                            getCompositeCalendar().addCalendar(storage);
+                        }
+                    }
+                }
+                aCallback();
+            }
+            if (calendars.length > 0) {
+                return [new dataMigrator("Windows Calendar", doMigrate)];
+            }
+        }
+        return [];
+    },
+
     /**
      * Creates and registers a storage calendar and imports the given ics file into it.
      *
@@ -546,6 +580,8 @@ var gDataMigrator = {
         let inputStream = Components.classes["@mozilla.org/network/file-input-stream;1"]
                                     .createInstance(Components.interfaces.nsIFileInputStream);
         let items = [];
+
+        calendar.id = cal.getUUID();
 
         try {
             inputStream.init(icsFile, MODE_RDONLY, parseInt("0444", 8), {});
@@ -563,7 +599,7 @@ var gDataMigrator = {
         }
 
         // Defined in import-export.js
-        putItemsIntoCal(calendar, items);
+        putItemsIntoCal(calendar, items, icsFile.leafName);
 
         return calendar;
     },
@@ -600,7 +636,7 @@ var gDataMigrator = {
     getThunderbirdProfile: function gdm_getTB() {
         var localFile;
         var profileRoot = this.dirService.get("DefProfRt", Components.interfaces.nsILocalFile);
-        LOG("profileRoot = " + profileRoot.path);
+        migLOG("profileRoot = " + profileRoot.path);
         if (!cal.isSunbird()) {
             localFile = profileRoot;
         } else {
@@ -617,7 +653,7 @@ var gDataMigrator = {
                     localFile.append(".thunderbird");
             }
         }
-        LOG("searching for Thunderbird in " + localFile.path);
+        migLOG("searching for Thunderbird in " + localFile.path);
         return localFile.exists() ? localFile : null;
     },
 
@@ -635,7 +671,7 @@ var gDataMigrator = {
     getNormalProfile: function gdm_getNorm(aAppName) {
         var localFile;
         var profileRoot = this.dirService.get("DefProfRt", Components.interfaces.nsILocalFile);
-        LOG("profileRoot = " + profileRoot.path);
+        migLOG("profileRoot = " + profileRoot.path);
 
         if (!cal.isSunbird()) {  // We're in Thunderbird
             switch (this.mPlatform) {
@@ -673,7 +709,7 @@ var gDataMigrator = {
                     break;
             }
         }
-        LOG("searching for " + aAppName + " in " + localFile.path);
+        migLOG("searching for " + aAppName + " in " + localFile.path);
         return localFile.exists() ? localFile : null;
     }
 };
@@ -682,11 +718,11 @@ var gDataMigrator = {
  * logs to system and error console, depending on the calendar.migration.log
  * preference.
  *
- * XXX Consolidate with calUtils' LOG().
+ * XXX Use log4moz instead.
  *
  * @param aString   The string to log
  */
-function LOG(aString) {
+function migLOG(aString) {
     if (!getPrefSafe("calendar.migration.log", false)) {
         return;
     }

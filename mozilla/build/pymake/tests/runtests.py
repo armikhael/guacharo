@@ -54,7 +54,7 @@ for a in args:
     if os.path.isfile(a):
         makefiles.append(a)
     elif os.path.isdir(a):
-        makefiles.extend(glob.glob(os.path.join(a, '*.mk')))
+        makefiles.extend(sorted(glob.glob(os.path.join(a, '*.mk'))))
 
 def runTest(makefile, make, logfile, options):
     """
@@ -147,7 +147,7 @@ for makefile in makefiles:
             for k, v in data.iteritems():
                 d['env'][k] = v
         elif key == 'grep-for':
-            grepfor = data
+            d['grepfor'] = data
         elif key == 'fail':
             d['pass'] = False
         elif key == 'skip':

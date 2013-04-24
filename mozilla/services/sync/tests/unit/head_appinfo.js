@@ -1,7 +1,11 @@
-var gProfD;
+/* Any copyright is dedicated to the Public Domain.
+   http://creativecommons.org/publicdomain/zero/1.0/ */
 
-do_load_httpd_js();
-gProfD = do_get_profile();
+const {classes: Cc, interfaces: Ci, results: Cr, utils: Cu} = Components;
+
+let gSyncProfile;
+
+gSyncProfile = do_get_profile();
 
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 
@@ -17,7 +21,7 @@ else
 let XULAppInfo = {
   vendor: "Mozilla",
   name: "XPCShell",
-  ID: "{3e3ba16c-1675-4e88-b9c8-afef81b3d2ef}",
+  ID: "xpcshell@tests.mozilla.org",
   version: "1",
   appBuildID: "20100621",
   platformVersion: "",
@@ -26,7 +30,8 @@ let XULAppInfo = {
   logConsoleErrors: true,
   OS: OS,
   XPCOMABI: "noarch-spidermonkey",
-  QueryInterface: XPCOMUtils.generateQI([Ci.nsIXULAppInfo, Ci.nsIXULRuntime])
+  QueryInterface: XPCOMUtils.generateQI([Ci.nsIXULAppInfo, Ci.nsIXULRuntime]),
+  invalidateCachesOnRestart: function invalidateCachesOnRestart() { }
 };
 
 let XULAppInfoFactory = {
@@ -48,10 +53,10 @@ function addResourceAlias() {
   Cu.import("resource://gre/modules/Services.jsm");
   const resProt = Services.io.getProtocolHandler("resource")
                           .QueryInterface(Ci.nsIResProtocolHandler);
-  let uri;
-  uri = Services.io.newURI("resource:///modules/services-sync/", null, null);
-  resProt.setSubstitution("services-sync", uri);
-  uri = Services.io.newURI("resource:///modules/services-crypto/", null, null);
-  resProt.setSubstitution("services-crypto", uri);
+  for each (let s in ["common", "sync", "crypto"]) {
+    let uri = Services.io.newURI("resource:///modules/services-" + s + "/", null,
+                                 null);
+    resProt.setSubstitution("services-" + s, uri);
+  }
 }
 addResourceAlias();

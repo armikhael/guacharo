@@ -1,38 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla.
- *
- * The Initial Developer of the Original Code is Mozilla Foundation
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsIDOMHTMLMenuItemElement.h"
 #include "nsGenericHTMLElement.h"
@@ -43,6 +12,8 @@ class nsHTMLMenuItemElement : public nsGenericHTMLElement,
                               public nsIDOMHTMLMenuItemElement
 {
 public:
+  using nsGenericElement::GetText;
+
   nsHTMLMenuItemElement(already_AddRefed<nsINodeInfo> aNodeInfo,
                         mozilla::dom::FromParser aFromParser);
   virtual ~nsHTMLMenuItemElement();
@@ -53,7 +24,7 @@ public:
     if (aContent && aContent->IsHTML(nsGkAtoms::menuitem)) {
       return static_cast<nsHTMLMenuItemElement*>(aContent);
     }
-    return nsnull;
+    return nullptr;
   }
 
   // nsISupports
@@ -79,9 +50,9 @@ public:
 
   virtual nsresult BindToTree(nsIDocument* aDocument, nsIContent* aParent,
                               nsIContent* aBindingParent,
-                              PRBool aCompileEventHandlers);
+                              bool aCompileEventHandlers);
 
-  virtual PRBool ParseAttribute(PRInt32 aNamespaceID,
+  virtual bool ParseAttribute(int32_t aNamespaceID,
                                 nsIAtom* aAttribute,
                                 const nsAString& aValue,
                                 nsAttrValue& aResult);
@@ -92,19 +63,21 @@ public:
 
   virtual nsXPCClassInfo* GetClassInfo();
 
-  PRUint8 GetType() const { return mType; }
+  virtual nsIDOMNode* AsDOMNode() { return this; }
+
+  uint8_t GetType() const { return mType; }
 
   /**
    * Syntax sugar to make it easier to check for checked and checked dirty
    */
-  PRBool IsChecked() const { return mChecked; }
-  PRBool IsCheckedDirty() const { return mCheckedDirty; }
+  bool IsChecked() const { return mChecked; }
+  bool IsCheckedDirty() const { return mCheckedDirty; }
 
   void GetText(nsAString& aText);
 
 protected:
-  virtual nsresult AfterSetAttr(PRInt32 aNamespaceID, nsIAtom* aName,
-                                const nsAString* aValue, PRBool aNotify);
+  virtual nsresult AfterSetAttr(int32_t aNamespaceID, nsIAtom* aName,
+                                const nsAttrValue* aValue, bool aNotify);
 
   void WalkRadioGroup(Visitor* aVisitor);
 
@@ -121,7 +94,7 @@ protected:
   void SetCheckedDirty() { mCheckedDirty = true; }
 
 private:
-  PRUint8 mType : 2;
+  uint8_t mType : 2;
   bool mParserCreating : 1;
   bool mShouldInitChecked : 1;
   bool mCheckedDirty : 1;

@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Mike McCabe <mccabe@netscape.com>
- *   John Bandhauer <jband@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* Implementation of xptiInterfaceInfoManager. */
 
@@ -46,6 +12,8 @@
 #include "nsArrayEnumerator.h"
 #include "mozilla/FunctionTimer.h"
 #include "nsDirectoryService.h"
+#include "mozilla/FileUtils.h"
+#include "nsIMemoryReporter.h"
 
 using namespace mozilla;
 
@@ -53,10 +21,45 @@ NS_IMPL_THREADSAFE_ISUPPORTS2(xptiInterfaceInfoManager,
                               nsIInterfaceInfoManager,
                               nsIInterfaceInfoSuperManager)
 
-static xptiInterfaceInfoManager* gInterfaceInfoManager = nsnull;
+static xptiInterfaceInfoManager* gInterfaceInfoManager = nullptr;
 #ifdef DEBUG
 static int gCallCount = 0;
 #endif
+
+
+NS_MEMORY_REPORTER_MALLOC_SIZEOF_FUN(XPTMallocSizeOf, "xpti-working-set")
+
+size_t
+xptiInterfaceInfoManager::SizeOfIncludingThis(nsMallocSizeOfFun aMallocSizeOf)
+{
+    size_t n = aMallocSizeOf(this);
+    ReentrantMonitorAutoEnter monitor(mWorkingSet.mTableReentrantMonitor);
+    // The entries themselves are allocated out of an arena accounted
+    // for elsewhere, so don't measure them
+    n += mWorkingSet.mIIDTable.SizeOfExcludingThis(NULL, XPTMallocSizeOf);
+    n += mWorkingSet.mNameTable.SizeOfExcludingThis(NULL, XPTMallocSizeOf);
+    return n;
+}
+
+// static
+int64_t
+xptiInterfaceInfoManager::GetXPTIWorkingSetSize()
+{
+    size_t n = XPT_SizeOfArena(gXPTIStructArena, XPTMallocSizeOf);
+
+    if (gInterfaceInfoManager) {
+        n += gInterfaceInfoManager->SizeOfIncludingThis(XPTMallocSizeOf);
+    }
+
+    return n;
+}
+
+NS_MEMORY_REPORTER_IMPLEMENT(xptiWorkingSet,
+                             "explicit/xpti-working-set",
+                             KIND_HEAP,
+                             UNITS_BYTES,
+                             xptiInterfaceInfoManager::GetXPTIWorkingSetSize,
+                             "Memory used by the XPCOM typelib system.")
 
 // static
 xptiInterfaceInfoManager*
@@ -83,6 +86,7 @@ xptiInterfaceInfoManager::xptiInterfaceInfoManager()
         mAdditionalManagersLock(
             "xptiInterfaceInfoManager.mAdditionalManagersLock")
 {
+    NS_RegisterMemoryReporter(new NS_MEMORY_REPORTER_NAME(xptiWorkingSet));
 }
 
 xptiInterfaceInfoManager::~xptiInterfaceInfoManager()
@@ -90,137 +94,31 @@ xptiInterfaceInfoManager::~xptiInterfaceInfoManager()
     // We only do this on shutdown of the service.
     mWorkingSet.InvalidateInterfaceInfos();
 
-    gInterfaceInfoManager = nsnull;
+    gInterfaceInfoManager = nullptr;
 #ifdef DEBUG
     gCallCount = 0;
 #endif
 }
 
-namespace {
-
-struct AutoCloseFD
-{
-    AutoCloseFD()
-        : mFD(NULL)
-    { }
-    ~AutoCloseFD() {
-        if (mFD)
-            PR_Close(mFD);
-    }
-    operator PRFileDesc*() {
-        return mFD;
-    }
-
-    PRFileDesc** operator&() {
-        NS_ASSERTION(!mFD, "Re-opening a file");
-        return &mFD;
-    }
-
-    PRFileDesc* mFD;
-};
-
-} // anonymous namespace
-
-XPTHeader* 
-xptiInterfaceInfoManager::ReadXPTFile(nsILocalFile* aFile)
-{
-    AutoCloseFD fd;
-    if (NS_FAILED(aFile->OpenNSPRFileDesc(PR_RDONLY, 0444, &fd)) || !fd)
-        return NULL;
-
-    PRFileInfo64 fileInfo;
-    if (PR_SUCCESS != PR_GetOpenFileInfo64(fd, &fileInfo))
-        return NULL;
-
-    if (fileInfo.size > PRInt64(PR_INT32_MAX))
-        return NULL;
-
-    nsAutoArrayPtr<char> whole(new char[PRInt32(fileInfo.size)]);
-    if (!whole)
-        return nsnull;
-
-    for (PRInt32 totalRead = 0; totalRead < fileInfo.size; ) {
-        PRInt32 read = PR_Read(fd, whole + totalRead, PRInt32(fileInfo.size));
-        if (read < 0)
-            return NULL;
-        totalRead += read;
-    }
-
-    XPTState* state = XPT_NewXDRState(XPT_DECODE, whole,
-                                      PRInt32(fileInfo.size));
-
-    XPTCursor cursor;
-    if (!XPT_MakeCursor(state, XPT_HEADER, 0, &cursor)) {
-        XPT_DestroyXDRState(state);
-        return NULL;
-    }
-    
-    XPTHeader *header = nsnull;
-    if (!XPT_DoHeader(gXPTIStructArena, &cursor, &header)) {
-        XPT_DestroyXDRState(state);
-        return NULL;
-    }
-
-    XPT_DestroyXDRState(state);
-
-    return header;
-}
-
-XPTHeader*
-xptiInterfaceInfoManager::ReadXPTFileFromInputStream(nsIInputStream *stream)
-{
-    PRUint32 flen;
-    stream->Available(&flen);
-    
-    nsAutoArrayPtr<char> whole(new char[flen]);
-    if (!whole)
-        return nsnull;
-
-    for (PRUint32 totalRead = 0; totalRead < flen; ) {
-        PRUint32 avail;
-        PRUint32 read;
-
-        if (NS_FAILED(stream->Available(&avail)))
-            return NULL;
-
-        if (avail > flen)
-            return NULL;
-
-        if (NS_FAILED(stream->Read(whole+totalRead, avail, &read)))
-            return NULL;
-
-        totalRead += read;
-    }
-    
-    XPTState *state = XPT_NewXDRState(XPT_DECODE, whole, flen);
-    if (!state)
-        return NULL;
-    
-    XPTCursor cursor;
-    if (!XPT_MakeCursor(state, XPT_HEADER, 0, &cursor)) {
-        XPT_DestroyXDRState(state);
-        return NULL;
-    }
-    
-    XPTHeader *header = nsnull;
-    if (!XPT_DoHeader(gXPTIStructArena, &cursor, &header)) {
-        XPT_DestroyXDRState(state);
-        return NULL;
-    }
-
-    XPT_DestroyXDRState(state);
-
-    return header;
-}
-
 void
-xptiInterfaceInfoManager::RegisterFile(nsILocalFile* aFile)
+xptiInterfaceInfoManager::RegisterBuffer(char *buf, uint32_t length)
 {
-    XPTHeader* header = ReadXPTFile(aFile);
-    if (!header)
+    XPTState *state = XPT_NewXDRState(XPT_DECODE, buf, length);
+    if (!state)
         return;
 
-    RegisterXPTHeader(header);
+    XPTCursor cursor;
+    if (!XPT_MakeCursor(state, XPT_HEADER, 0, &cursor)) {
+        XPT_DestroyXDRState(state);
+        return;
+    }
+
+    XPTHeader *header = nullptr;
+    if (XPT_DoHeader(gXPTIStructArena, &cursor, &header)) {
+        RegisterXPTHeader(header);
+    }
+
+    XPT_DestroyXDRState(state);
 }
 
 void
@@ -234,21 +132,13 @@ xptiInterfaceInfoManager::RegisterXPTHeader(XPTHeader* aHeader)
     xptiTypelibGuts* typelib = xptiTypelibGuts::Create(aHeader);
 
     ReentrantMonitorAutoEnter monitor(mWorkingSet.mTableReentrantMonitor);
-    for(PRUint16 k = 0; k < aHeader->num_interfaces; k++)
+    for(uint16_t k = 0; k < aHeader->num_interfaces; k++)
         VerifyAndAddEntryIfNew(aHeader->interface_directory + k, k, typelib);
 }
 
 void
-xptiInterfaceInfoManager::RegisterInputStream(nsIInputStream* aStream)
-{
-    XPTHeader* header = ReadXPTFileFromInputStream(aStream);
-    if (header)
-        RegisterXPTHeader(header);
-}
-
-void
 xptiInterfaceInfoManager::VerifyAndAddEntryIfNew(XPTInterfaceDirectoryEntry* iface,
-                                                 PRUint16 idx,
+                                                 uint16_t idx,
                                                  xptiTypelibGuts* typelib)
 {
     if (!iface->interface_descriptor)
@@ -301,7 +191,7 @@ EntryToInfo(xptiInterfaceEntry* entry, nsIInterfaceInfo **_retval)
     nsresult rv;
 
     if (!entry) {
-        *_retval = nsnull;
+        *_retval = nullptr;
         return NS_ERROR_FAILURE;    
     }
 
@@ -352,7 +242,7 @@ NS_IMETHODIMP xptiInterfaceInfoManager::GetIIDForName(const char *name, nsIID * 
     ReentrantMonitorAutoEnter monitor(mWorkingSet.mTableReentrantMonitor);
     xptiInterfaceEntry* entry = mWorkingSet.mNameTable.Get(name);
     if (!entry) {
-        *_retval = nsnull;
+        *_retval = nullptr;
         return NS_ERROR_FAILURE;    
     }
 
@@ -368,7 +258,7 @@ NS_IMETHODIMP xptiInterfaceInfoManager::GetNameForIID(const nsIID * iid, char **
     ReentrantMonitorAutoEnter monitor(mWorkingSet.mTableReentrantMonitor);
     xptiInterfaceEntry* entry = mWorkingSet.mIIDTable.Get(*iid);
     if (!entry) {
-        *_retval = nsnull;
+        *_retval = nullptr;
         return NS_ERROR_FAILURE;    
     }
 
@@ -409,7 +299,7 @@ struct ArrayAndPrefix
 {
     nsISupportsArray* array;
     const char*       prefix;
-    PRUint32          length;
+    uint32_t          length;
 };
 
 static PLDHashOperator
@@ -484,8 +374,8 @@ NS_IMETHODIMP xptiInterfaceInfoManager::RemoveAdditionalManager(nsIInterfaceInfo
     return NS_OK;
 }
 
-/* PRBool hasAdditionalManagers (); */
-NS_IMETHODIMP xptiInterfaceInfoManager::HasAdditionalManagers(PRBool *_retval)
+/* bool hasAdditionalManagers (); */
+NS_IMETHODIMP xptiInterfaceInfoManager::HasAdditionalManagers(bool *_retval)
 {
     *_retval = mAdditionalManagers.Count() > 0;
     return NS_OK;
@@ -498,7 +388,7 @@ NS_IMETHODIMP xptiInterfaceInfoManager::EnumerateAdditionalManagers(nsISimpleEnu
 
     nsCOMArray<nsISupports> managerArray(mAdditionalManagers);
     /* Resolve all the weak references in the array. */
-    for(PRInt32 i = managerArray.Count(); i--; ) {
+    for(int32_t i = managerArray.Count(); i--; ) {
         nsISupports *raw = managerArray.ObjectAt(i);
         if (!raw)
             return NS_ERROR_FAILURE;

@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsCopyMessageStreamListener.h"
 #include "nsIMsgMailNewsUrl.h"
@@ -120,7 +87,7 @@ NS_IMETHODIMP nsCopyMessageStreamListener::EndMessage(nsMsgKey key)
 }
 
 
-NS_IMETHODIMP nsCopyMessageStreamListener::OnDataAvailable(nsIRequest * /* request */, nsISupports *ctxt, nsIInputStream *aIStream, PRUint32 sourceOffset, PRUint32 aLength)
+NS_IMETHODIMP nsCopyMessageStreamListener::OnDataAvailable(nsIRequest * /* request */, nsISupports *ctxt, nsIInputStream *aIStream, uint32_t sourceOffset, uint32_t aLength)
 {
 	nsresult rv;
 	rv = mDestination->CopyData(aIStream, aLength);
@@ -146,43 +113,36 @@ NS_IMETHODIMP nsCopyMessageStreamListener::OnStartRequest(nsIRequest * request, 
 
 NS_IMETHODIMP nsCopyMessageStreamListener::EndCopy(nsISupports *url, nsresult aStatus)
 {
-	nsresult rv = NS_OK;
-	nsCOMPtr<nsIURI> uri = do_QueryInterface(url, &rv);
+  nsresult rv;
+  nsCOMPtr<nsIURI> uri = do_QueryInterface(url, &rv);
 
-	if (NS_FAILED(rv)) return rv;
-	PRBool copySucceeded = (aStatus == NS_BINDING_SUCCEEDED);
-	rv = mDestination->EndCopy(copySucceeded);
-	//If this is a move and we finished the copy, delete the old message.
-	if(NS_SUCCEEDED(rv))
-	{
-		PRBool moveMessage = PR_FALSE;
+  NS_ENSURE_SUCCESS(rv, rv);
+  bool copySucceeded = (aStatus == NS_BINDING_SUCCEEDED);
+  rv = mDestination->EndCopy(copySucceeded);
+  //If this is a move and we finished the copy, delete the old message.
+  bool moveMessage = false;
 
-		nsCOMPtr<nsIMsgMailNewsUrl> mailURL(do_QueryInterface(uri));
-		if(mailURL)
-			rv = mailURL->IsUrlType(nsIMsgMailNewsUrl::eMove, &moveMessage);
+  nsCOMPtr<nsIMsgMailNewsUrl> mailURL(do_QueryInterface(uri));
+  if (mailURL)
+    rv = mailURL->IsUrlType(nsIMsgMailNewsUrl::eMove, &moveMessage);
 
-		if(NS_FAILED(rv))
-			moveMessage = PR_FALSE;
+  if (NS_FAILED(rv))
+    moveMessage = false;
 
-		// OK, this is wrong if we're moving to an imap folder, for example. This really says that
-		// we were able to pull the message from the source, NOT that we were able to
-		// put it in the destination!
-		if(moveMessage)
-		{
-			// don't do this if we're moving to an imap folder - that's handled elsewhere.
-			nsCOMPtr <nsIMsgImapMailFolder> destImap = do_QueryInterface(mDestination);
-			if (!destImap)
-			{
-        // if the destination is a local folder, it will handle the delete from the source in EndMove
-//				rv = DeleteMessage(uri, mSrcFolder);
-//				if(NS_SUCCEEDED(rv))
-					rv = mDestination->EndMove(copySucceeded);
-			}
-		}
-	}
-	//Even if the above actions failed we probably still want to return NS_OK.  There should probably
-	//be some error dialog if either the copy or delete failed.
-	return NS_OK;
+  // OK, this is wrong if we're moving to an imap folder, for example. This really says that
+  // we were able to pull the message from the source, NOT that we were able to
+  // put it in the destination!
+  if (moveMessage)
+  {
+    // don't do this if we're moving to an imap folder - that's handled elsewhere.
+    nsCOMPtr<nsIMsgImapMailFolder> destImap = do_QueryInterface(mDestination);
+      // if the destination is a local folder, it will handle the delete from the source in EndMove
+    if (!destImap)
+      rv = mDestination->EndMove(copySucceeded);
+  }
+  // Even if the above actions failed we probably still want to return NS_OK.
+  // There should probably be some error dialog if either the copy or delete failed.
+  return NS_OK;
 }
 
 NS_IMETHODIMP nsCopyMessageStreamListener::OnStopRequest(nsIRequest* request, nsISupports *ctxt, nsresult aStatus)

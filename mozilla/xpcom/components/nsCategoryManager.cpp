@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Scott Collins <scc@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #define PL_ARENA_CONST_ALIGN_MASK 7
 
@@ -59,7 +26,6 @@
 #include "nsCRT.h"
 #include "nsQuickSort.h"
 #include "nsEnumeratorUtils.h"
-#include "nsIProxyObjectManager.h"
 #include "nsThreadUtils.h"
 #include "mozilla/Services.h"
 
@@ -104,7 +70,7 @@ protected:
   static int SortCallback(const void *, const void *, void *);
 
   BaseStringEnumerator()
-    : mArray(nsnull),
+    : mArray(nullptr),
       mCount(0),
       mSimpleCurItem(0),
       mStringCurItem(0) { }
@@ -121,15 +87,15 @@ protected:
   void Sort();
 
   const char** mArray;
-  PRUint32 mCount;
-  PRUint32 mSimpleCurItem;
-  PRUint32 mStringCurItem;
+  uint32_t mCount;
+  uint32_t mSimpleCurItem;
+  uint32_t mStringCurItem;
 };
 
 NS_IMPL_ISUPPORTS2(BaseStringEnumerator, nsISimpleEnumerator, nsIUTF8StringEnumerator)
 
 NS_IMETHODIMP
-BaseStringEnumerator::HasMoreElements(PRBool *_retval)
+BaseStringEnumerator::HasMoreElements(bool *_retval)
 {
   *_retval = (mSimpleCurItem < mCount);
 
@@ -153,7 +119,7 @@ BaseStringEnumerator::GetNext(nsISupports **_retval)
 }
 
 NS_IMETHODIMP
-BaseStringEnumerator::HasMore(PRBool *_retval)
+BaseStringEnumerator::HasMore(bool *_retval)
 {
   *_retval = (mStringCurItem < mCount);
 
@@ -183,7 +149,7 @@ BaseStringEnumerator::SortCallback(const void *e1, const void *e2,
 void
 BaseStringEnumerator::Sort()
 {
-  NS_QuickSort(mArray, mCount, sizeof(mArray[0]), SortCallback, nsnull);
+  NS_QuickSort(mArray, mCount, sizeof(mArray[0]), SortCallback, nullptr);
 }
 
 //
@@ -216,12 +182,12 @@ EntryEnumerator::Create(nsTHashtable<CategoryLeaf>& aTable)
 {
   EntryEnumerator* enumObj = new EntryEnumerator();
   if (!enumObj)
-    return nsnull;
+    return nullptr;
 
   enumObj->mArray = new char const* [aTable.Count()];
   if (!enumObj->mArray) {
     delete enumObj;
-    return nsnull;
+    return nullptr;
   }
 
   aTable.EnumerateEntries(enumfunc_createenumerator, enumObj);
@@ -241,13 +207,9 @@ CategoryNode::Create(PLArenaPool* aArena)
 {
   CategoryNode* node = new(aArena) CategoryNode();
   if (!node)
-    return nsnull;
+    return nullptr;
 
-  if (!node->mTable.Init()) {
-    delete node;
-    return nsnull;
-  }
-
+  node->mTable.Init();
   return node;
 }
 
@@ -352,7 +314,7 @@ CategoryNode::Enumerate(nsISimpleEnumerator **_retval)
 struct persistent_userstruct {
   PRFileDesc* fd;
   const char* categoryName;
-  PRBool      success;
+  bool        success;
 };
 
 PLDHashOperator
@@ -368,8 +330,8 @@ enumfunc_pentries(CategoryLeaf* aLeaf, void* userArg)
                    "%s,%s,%s\n",
                    args->categoryName,
                    aLeaf->GetKey(),
-                   aLeaf->value) == (PRUint32) -1) {
-      args->success = PR_FALSE;
+                   aLeaf->value) == (uint32_t) -1) {
+      args->success = false;
       status = PL_DHASH_STOP;
     }
   }
@@ -399,12 +361,12 @@ CategoryEnumerator::Create(nsClassHashtable<nsDepCharHashKey, CategoryNode>& aTa
 {
   CategoryEnumerator* enumObj = new CategoryEnumerator();
   if (!enumObj)
-    return nsnull;
+    return nullptr;
 
   enumObj->mArray = new const char* [aTable.Count()];
   if (!enumObj->mArray) {
     delete enumObj;
-    return nsnull;
+    return nullptr;
   }
 
   aTable.EnumerateRead(enumfunc_createenumerator, enumObj);
@@ -470,7 +432,7 @@ nsCategoryManager::Create(nsISupports* aOuter, REFNSIID aIID, void** aResult)
 
 nsCategoryManager::nsCategoryManager()
   : mLock("nsCategoryManager")
-  , mSuppressNotifications(PR_FALSE)
+  , mSuppressNotifications(false)
 {
   PL_INIT_ARENA_POOL(&mArena, "CategoryManagerArena",
                      NS_CATEGORYMANAGER_ARENA_SIZE);
@@ -492,10 +454,45 @@ inline CategoryNode*
 nsCategoryManager::get_category(const char* aName) {
   CategoryNode* node;
   if (!mTable.Get(aName, &node)) {
-    return nsnull;
+    return nullptr;
   }
   return node;
 }
+
+namespace {
+
+class CategoryNotificationRunnable : public nsRunnable
+{
+public:
+  CategoryNotificationRunnable(nsISupports* aSubject,
+                               const char* aTopic,
+                               const char* aData)
+    : mSubject(aSubject)
+    , mTopic(aTopic)
+    , mData(aData)
+  { }
+
+  NS_DECL_NSIRUNNABLE
+
+private:
+  nsCOMPtr<nsISupports> mSubject;
+  const char* mTopic;
+  NS_ConvertUTF8toUTF16 mData;
+};
+
+NS_IMETHODIMP
+CategoryNotificationRunnable::Run()
+{
+  nsCOMPtr<nsIObserverService> observerService =
+    mozilla::services::GetObserverService();
+  if (observerService)
+    observerService->NotifyObservers(mSubject, mTopic, mData.get());
+
+  return NS_OK;
+}
+  
+} // anonymous namespace
+
 
 void
 nsCategoryManager::NotifyObservers( const char *aTopic,
@@ -505,19 +502,7 @@ nsCategoryManager::NotifyObservers( const char *aTopic,
   if (mSuppressNotifications)
     return;
 
-  nsCOMPtr<nsIObserverService> observerService =
-    mozilla::services::GetObserverService();
-  if (!observerService)
-    return;
-
-  nsCOMPtr<nsIObserverService> obsProxy;
-  NS_GetProxyForObject(NS_PROXY_TO_MAIN_THREAD,
-                       NS_GET_IID(nsIObserverService),
-                       observerService,
-                       NS_PROXY_ASYNC,
-                       getter_AddRefs(obsProxy));
-  if (!obsProxy)
-    return;
+  nsRefPtr<CategoryNotificationRunnable> r;
 
   if (aEntryName) {
     nsCOMPtr<nsISupportsCString> entry
@@ -529,12 +514,12 @@ nsCategoryManager::NotifyObservers( const char *aTopic,
     if (NS_FAILED(rv))
       return;
 
-    obsProxy->NotifyObservers(entry, aTopic,
-                              NS_ConvertUTF8toUTF16(aCategoryName).get());
+    r = new CategoryNotificationRunnable(entry, aTopic, aCategoryName);
   } else {
-    obsProxy->NotifyObservers(this, aTopic,
-                              NS_ConvertUTF8toUTF16(aCategoryName).get());
+    r = new CategoryNotificationRunnable(this, aTopic, aCategoryName);
   }
+
+  NS_DispatchToMainThread(r);
 }
 
 NS_IMETHODIMP
@@ -565,8 +550,8 @@ NS_IMETHODIMP
 nsCategoryManager::AddCategoryEntry( const char *aCategoryName,
                                      const char *aEntryName,
                                      const char *aValue,
-                                     PRBool aPersist,
-                                     PRBool aReplace,
+                                     bool aPersist,
+                                     bool aReplace,
                                      char **_retval )
 {
   if (aPersist) {
@@ -608,7 +593,7 @@ nsCategoryManager::AddCategoryEntry(const char *aCategoryName,
     return;
 
   // We will need the return value of AddLeaf even if the called doesn't want it
-  char *oldEntry = nsnull;
+  char *oldEntry = nullptr;
 
   nsresult rv = category->AddLeaf(aEntryName,
                                   aValue,
@@ -634,7 +619,7 @@ nsCategoryManager::AddCategoryEntry(const char *aCategoryName,
 NS_IMETHODIMP
 nsCategoryManager::DeleteCategoryEntry( const char *aCategoryName,
                                         const char *aEntryName,
-                                        PRBool aDontPersist)
+                                        bool aDontPersist)
 {
   NS_ENSURE_ARG_POINTER(aCategoryName);
   NS_ENSURE_ARG_POINTER(aEntryName);
@@ -679,7 +664,7 @@ nsCategoryManager::DeleteCategory( const char *aCategoryName )
   if (category) {
     category->Clear();
     NotifyObservers(NS_XPCOM_CATEGORY_CLEARED_OBSERVER_ID,
-                    aCategoryName, nsnull);
+                    aCategoryName, nullptr);
   }
 
   return NS_OK;
@@ -723,11 +708,11 @@ nsCategoryManager::EnumerateCategories(nsISimpleEnumerator **_retval)
 
 struct writecat_struct {
   PRFileDesc* fd;
-  PRBool      success;
+  bool        success;
 };
 
 NS_METHOD
-nsCategoryManager::SuppressNotifications(PRBool aSuppress)
+nsCategoryManager::SuppressNotifications(bool aSuppress)
 {
   mSuppressNotifications = aSuppress;
   return NS_OK;
@@ -742,7 +727,7 @@ nsCategoryManager::SuppressNotifications(PRBool aSuppress)
  * this will attempt to notify the observer with the origin, observerTopic string
  * as parameter.
  */
-NS_COM void
+void
 NS_CreateServicesFromCategory(const char *category,
                               nsISupports *origin,
                               const char *observerTopic)
@@ -770,7 +755,7 @@ NS_CreateServicesFromCategory(const char *category,
     return;
   }
 
-  PRBool hasMore;
+  bool hasMore;
   while (NS_SUCCEEDED(senumerator->HasMore(&hasMore)) && hasMore) {
     // From here on just skip any error we get.
     nsCAutoString entryString;

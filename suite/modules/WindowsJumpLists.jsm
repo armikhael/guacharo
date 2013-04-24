@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jim Mathies <jmathies@mozilla.com> (Original author)
- *   Marco Bonardo <mak77@bonardo.net>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://gre/modules/XPCOMUtils.jsm");
 Components.utils.import("resource://gre/modules/Services.jsm");
@@ -78,8 +44,7 @@ let EXPORTED_SYMBOLS = [
  */
 
 XPCOMUtils.defineLazyGetter(this, "_prefs", function() {
-  return Services.prefs.getBranch(PREF_TASKBAR_BRANCH)
-                       .QueryInterface(Ci.nsIPrefBranch2);
+  return Services.prefs.getBranch(PREF_TASKBAR_BRANCH);
 });
 
 XPCOMUtils.defineLazyGetter(this, "_stringBundle", function() {
@@ -211,7 +176,7 @@ var WinTaskbarJumpList =
 
   /**
    * Startup, shutdown, and update
-   */ 
+   */
 
   startup: function WTBJL_startup() {
     // exit if this isn't win7 or higher.
@@ -220,7 +185,7 @@ var WinTaskbarJumpList =
 
     // Win shell shortcut maintenance. If we've gone through an update,
     // this will update any pinned taskbar shortcuts. Not specific to
-    // jump lists, but this was a convienent place to call it. 
+    // jump lists, but this was a convienent place to call it.
     try {
       // dev builds may not have helper.exe, ignore failures.
       this._shortcutMaintenance();
@@ -318,13 +283,13 @@ var WinTaskbarJumpList =
 
   /**
    * Taskbar api wrappers
-   */ 
+   */
 
   _startBuild: function WTBJL__startBuild() {
     var removedItems = Cc["@mozilla.org/array;1"].
                        createInstance(Ci.nsIMutableArray);
     this._builder.abortListBuild();
-    if (this._builder.initListBuild(removedItems)) { 
+    if (this._builder.initListBuild(removedItems)) {
       // Prior to building, delete removed items from history.
       this._clearHistory(removedItems);
       return true;
@@ -345,10 +310,10 @@ var WinTaskbarJumpList =
       if ((this._shuttingDown && !task.close) || (!this._shuttingDown && !task.open))
         return;
       var item = this._getHandlerAppItem(task.title, task.description,
-                                         task.args, task.iconIndex);
+                                         task.args, task.iconIndex, null);
       items.appendElement(item, false);
     }, this);
-    
+
     if (items.length > 0)
       this._builder.addListToBuild(this._builder.JUMPLIST_CATEGORY_TASKS, items);
   },
@@ -388,7 +353,9 @@ var WinTaskbarJumpList =
         }
 
         let title = aResult.title || aResult.uri;
-        let shortcut = this._getHandlerAppItem(title, title, aResult.uri, 1);
+        let faviconPageUri = Services.io.newURI(aResult.uri, null, null);
+        let shortcut = this._getHandlerAppItem(title, title, aResult.uri, 2,
+                                               faviconPageUri);
         items.appendElement(shortcut, false);
         this._frequentHashList.push(aResult.uri);
       },
@@ -431,7 +398,9 @@ var WinTaskbarJumpList =
         }
 
         let title = aResult.title || aResult.uri;
-        let shortcut = this._getHandlerAppItem(title, title, aResult.uri, 1);
+        let faviconPageUri = Services.io.newURI(aResult.uri, null, null);
+        let shortcut = this._getHandlerAppItem(title, title, aResult.uri, 2,
+                                               faviconPageUri);
         items.appendElement(shortcut, false);
         count++;
       },
@@ -447,7 +416,9 @@ var WinTaskbarJumpList =
    * Jump list item creation helpers
    */
 
-  _getHandlerAppItem: function WTBJL__getHandlerAppItem(name, description, args, icon) {
+  _getHandlerAppItem: function WTBJL__getHandlerAppItem(name, description,
+                                                        args, iconIndex,
+                                                        faviconPageUri) {
     var file = Services.dirsvc.get("XCurProcD", Ci.nsILocalFile);
 
     // XXX where can we grab this from in the build? Do we need to?
@@ -465,7 +436,8 @@ var WinTaskbarJumpList =
     var item = Cc["@mozilla.org/windows-jumplistshortcut;1"].
                createInstance(Ci.nsIJumpListShortcut);
     item.app = handlerApp;
-    item.iconIndex = icon;
+    item.iconIndex = iconIndex;
+    item.faviconPageUri = faviconPageUri;
     return item;
   },
 
@@ -484,8 +456,6 @@ var WinTaskbarJumpList =
     var options = PlacesUtils.history.getNewQueryOptions();
     options.maxResults = aLimit;
     options.sortingMode = aSortingMode;
-    // We don't want source redirects for these queries.
-    options.redirectsMode = Ci.nsINavHistoryQueryOptions.REDIRECTS_MODE_TARGET;
     var query = PlacesUtils.history.getNewQuery();
 
     // Return the pending statement to the caller, to allow cancelation.
@@ -532,7 +502,7 @@ var WinTaskbarJumpList =
 
   /**
    * Prefs utilities
-   */ 
+   */
 
   _refreshPrefs: function WTBJL__refreshPrefs() {
     this._enabled = _prefs.getBoolPref(PREF_TASKBAR_ENABLED);
@@ -544,7 +514,7 @@ var WinTaskbarJumpList =
 
   /**
    * Init and shutdown utilities
-   */ 
+   */
 
   _initTaskbar: function WTBJL__initTaskbar() {
     this._builder = _taskbarService.createJumpListBuilder();
@@ -562,7 +532,7 @@ var WinTaskbarJumpList =
     Services.obs.addObserver(this, "browser:purge-session-history", false);
     _prefs.addObserver("", this, false);
   },
- 
+
   _freeObs: function WTBJL__freeObs() {
     Services.obs.removeObserver(this, "profile-before-change");
     Services.obs.removeObserver(this, "browser:purge-session-history");

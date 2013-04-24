@@ -1,55 +1,31 @@
 /* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil; tab-width: 8 -*- */
 /* vim: set sw=4 ts=8 et tw=80 ft=cpp : */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Content App.
- *
- * The Initial Developer of the Original Code is
- *   The Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 include protocol PAudio;
+include protocol PBlob;
 include protocol PBrowser;
+include protocol PCompositor;
 include protocol PCrashReporter;
-include protocol PTestShell;
-include protocol PNecko;
 include protocol PExternalHelperApp;
-include protocol PStorage;
+include protocol PDeviceStorageRequest;
+include protocol PHal;
+include protocol PIndexedDB;
 include protocol PMemoryReportRequest;
+include protocol PNecko;
+include protocol PSms;
+include protocol PStorage;
+include protocol PTestShell;
+include DOMTypes;
+include URIParams;
 
 include "mozilla/chrome/RegistryMessageUtils.h";
 include "mozilla/net/NeckoMessageUtils.h";
+include "mozilla/dom/TabMessageUtils.h";
 
 include "nsGeoPositionIPCSerialiser.h";
-include "PPrefTuple.h";
 
 using GeoPosition;
 using PrefTuple;
@@ -57,9 +33,10 @@ using PrefTuple;
 using ChromePackage;
 using ResourceMapping;
 using OverrideMapping;
-using IPC::URI;
 using IPC::Permission;
 using mozilla::null_t;
+using mozilla::void_t;
+using mozilla::dom::NativeThreadId;
 using gfxIntSize;
 
 namespace mozilla {
@@ -83,38 +60,156 @@ union StorageConstructData
 };
 
 struct FontListEntry {
-    nsCString familyName;
+    nsString  familyName;
+    nsString  faceName;
     nsCString filepath;
-    PRUint32  index;
+    uint16_t  weight;
+    int16_t   stretch;
+    uint8_t   italic;
+    uint8_t   index;
+};
+
+struct DeviceStorageStatParams
+{
+  nsString fullpath;
+};
+
+struct DeviceStorageAddParams
+{
+  PBlob blob;
+  nsString name;
+  nsString fullpath;
+};
+
+struct DeviceStorageGetParams
+{
+  nsString name;
+  nsString fullpath;
+};
+
+struct DeviceStorageDeleteParams
+{
+  nsString fullpath;
+};
+
+struct DeviceStorageEnumerationParams
+{
+  nsString fullpath;
+  uint64_t since;
+};
+
+union DeviceStorageParams
+{
+  DeviceStorageAddParams;
+  DeviceStorageGetParams;
+  DeviceStorageDeleteParams;
+  DeviceStorageEnumerationParams;
+  DeviceStorageStatParams;
+};
+
+struct SlicedBlobConstructorParams
+{
+  PBlob source;
+  uint64_t begin;
+  uint64_t end;
+  nsString contentType;
+};
+
+struct MysteryBlobConstructorParams
+{
+  // Nothing is known about this type of blob.
+};
+
+union BlobConstructorParams
+{
+  NormalBlobConstructorParams;
+  FileBlobConstructorParams;
+  SlicedBlobConstructorParams;
+  MysteryBlobConstructorParams;
+};
+
+union AppId {
+  uint32_t;
+  nullable PBrowser;
+};
+
+union PrefValue {
+  nsCString;
+  int32_t;
+  bool;
+};
+
+union MaybePrefValue {
+  PrefValue;
+  null_t;
+};
+
+struct PrefSetting {
+  nsCString name;
+  MaybePrefValue defaultValue;
+  MaybePrefValue userValue;
 };
 
 rpc protocol PContent
 {
+    parent opens PCompositor;
+
     manages PAudio;
+    manages PBlob;
     manages PBrowser;
     manages PCrashReporter;
-    manages PTestShell;
-    manages PNecko;
+    manages PDeviceStorageRequest;
     manages PExternalHelperApp;
-    manages PStorage;
+    manages PHal;
+    manages PIndexedDB;
     manages PMemoryReportRequest;
+    manages PNecko;
+    manages PSms;
+    manages PStorage;
+    manages PTestShell;
+
+both:
+    // Depending on exactly how the new browser is being created, it might be
+    // created from either the child or parent process!
+    //
+    // The child creates the PBrowser as part of
+    // TabChild::BrowserFrameProvideWindow, and the parent creates the
+    // PBrowser as part of ContentParent::CreateTab.
+    //
+    // When the parent constructs a PBrowser, the app ID handed to the
+    // child side is trusted.  In that case, |appId| is uint32_t.
+    // However, when the child side constructs a PBrowser, for
+    // window.open(), the parent must validate the app ID used on the
+    // parent side.  To do so, the child process must pass a valid
+    // PBrowser as its |AppId|.
+    async PBrowser(uint32_t chromeFlags, bool isBrowserElement, AppId appId);
+
+    async PBlob(BlobConstructorParams params);
 
 child:
-    PBrowser(PRUint32 chromeFlags);
-
     PMemoryReportRequest();
 
     PTestShell();
 
+    /**
+     * Tell the content process some attributes of itself.  This is
+     * the first message received by content processes after startup.
+     *
+     * |id| is a unique ID among all subprocesses.  When |isForApp &&
+     * isForBrowser|, we're loading <browser> for an app.  When
+     * |isForBrowser|, we're loading <browser>.  When |!isForApp &&
+     * !isForBrowser|, we're probably loading <xul:browser remote>.
+     */
+    SetProcessAttributes(uint64_t id, bool isForApp, bool isForBrowser);
+
     RegisterChrome(ChromePackage[] packages, ResourceMapping[] resources,
                    OverrideMapping[] overrides, nsCString locale);
 
-    async SetOffline(PRBool offline);
+    async SetOffline(bool offline);
 
-    async NotifyVisited(URI uri);
+    async NotifyVisited(URIParams uri);
 
-    PreferenceUpdate(PrefTuple pref);
-    ClearUserPreference(nsCString prefName);
+    PreferenceUpdate(PrefSetting pref);
 
     NotifyAlertsObserver(nsCString topic, nsString data);
 
@@ -123,94 +218,111 @@ child:
     // nsIPermissionManager messages
     AddPermission(Permission permission);
 
-    DeviceMotionChanged(long type, double x, double y, double z);
-
     ScreenSizeChanged(gfxIntSize size);
 
     FlushMemory(nsString reason);
 
+    GarbageCollect();
+    CycleCollect();
+    
     /**
      * Start accessibility engine in content process.
      */
     ActivateA11y();
 
+    AppInfo(nsCString version, nsCString buildID);
+
+    // Notify child that last-pb-context-exited notification was observed
+    LastPrivateDocShellDestroyed();
+
+    FilePathUpdate(nsString filepath, nsCString reasons);
+
+    FileSystemUpdate(nsString fsName, nsString mountPoint, int32_t fsState);
+
 parent:
+    PAudio(int32_t aNumChannels, int32_t aRate, int32_t aFormat);
+
+    PDeviceStorageRequest(DeviceStorageParams params);
+
+    sync PCrashReporter(NativeThreadId tid, uint32_t processType);
+
+    PHal();
+
+    PIndexedDB();
+
     PNecko();
-    PCrashReporter();
+
+    PSms();
     
     PStorage(StorageConstructData data);
 
-    PAudio(PRInt32 aNumChannels, PRInt32 aRate, PRInt32 aFormat);
-
     // Services remoting
 
-    async StartVisitedQuery(URI uri);
-    async VisitURI(URI uri, URI referrer, PRUint32 flags);
-    async SetURITitle(URI uri, nsString title);
+    async StartVisitedQuery(URIParams uri);
+    async VisitURI(URIParams uri, OptionalURIParams referrer, uint32_t flags);
+    async SetURITitle(URIParams uri, nsString title);
     
     // filepicker remoting
-    sync ShowFilePicker(PRInt16 mode, PRInt16 selectedType, PRBool addToRecentDocs,
+    sync ShowFilePicker(int16_t mode, int16_t selectedType, bool addToRecentDocs,
                         nsString title, nsString defaultFile, nsString defaultExtension,
                         nsString[] filters, nsString[] filterNames)
-        returns (nsString[] files, PRInt16 retValue, nsresult result);
+        returns (nsString[] files, int16_t retValue, nsresult result);
 
-    async LoadURIExternal(URI uri);
+    async LoadURIExternal(URIParams uri);
 
     // PrefService message
-    sync ReadPrefsArray() returns (PrefTuple[] retValue);
+    sync ReadPrefsArray() returns (PrefSetting[] prefs);
 
     sync ReadFontList() returns (FontListEntry[] retValue);
 
-    sync SyncMessage(nsString aMessage, nsString aJSON)
+    sync SyncMessage(nsString aMessage, ClonedMessageData aData)
       returns (nsString[] retval);
 
     ShowAlertNotification(nsString imageUrl, 
                           nsString title, 
                           nsString text, 
-                          PRBool textClickable,
+                          bool textClickable,
                           nsString cookie,
                           nsString name);
 
-    PExternalHelperApp(URI uri, nsCString aMimeContentType,
+    PExternalHelperApp(OptionalURIParams uri, nsCString aMimeContentType,
                        nsCString aContentDisposition, bool aForceSave,
-                       PRInt64 aContentLength, URI aReferrer);
-    
+                       int64_t aContentLength, OptionalURIParams aReferrer);
+
     AddGeolocationListener();
     RemoveGeolocationListener();
-    AddDeviceMotionListener();
-    RemoveDeviceMotionListener();
 
     ConsoleMessage(nsString message);
     ScriptError(nsString message, nsString sourceName, nsString sourceLine,
-                PRUint32 lineNumber, PRUint32 colNumber, PRUint32 flags,
+                uint32_t lineNumber, uint32_t colNumber, uint32_t flags,
                 nsCString category); 
 
     // nsIPermissionManager messages
     sync ReadPermissions() returns (Permission[] permissions);
 
-    sync GetIndexedDBDirectory() returns (nsString directory);
-
     // These clipboard methods are only really used on Android since
     // the clipboard is not available in the content process.
-    SetClipboardText(nsString text, PRInt32 whichClipboard);
-    sync GetClipboardText(PRInt32 whichClipboard)
+    SetClipboardText(nsString text, bool isPrivateData, int32_t whichClipboard);
+    sync GetClipboardText(int32_t whichClipboard)
         returns (nsString text);
     EmptyClipboard();
     sync ClipboardHasText()
-        returns (PRBool hasText);
+        returns (bool hasText);
 
-    sync GetSystemColors(PRUint32 colorsCount)
-        returns (PRUint32[] colors);
+    sync GetSystemColors(uint32_t colorsCount)
+        returns (uint32_t[] colors);
 
-    sync GetIconForExtension(nsCString aFileExt, PRUint32 aIconSize)
-        returns (PRUint8[] bits);
+    sync GetIconForExtension(nsCString aFileExt, uint32_t aIconSize)
+        returns (uint8_t[] bits);
 
     sync GetShowPasswordSetting()
-        returns (PRBool showPassword);
+        returns (bool showPassword);
+
+    // Notify the parent of the presence or absence of private docshells
+    PrivateDocShellsExist(bool aExist);
 
 both:
-     AsyncMessage(nsString aMessage, nsString aJSON);
-
+     AsyncMessage(nsString aMessage, ClonedMessageData aData);
 };
 
 }

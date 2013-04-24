@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef _nsIMAPHostSessionList_H_
 #define _nsIMAPHostSessionList_H_
@@ -59,20 +27,20 @@ protected:
   char *fCachedPassword;
   nsCString fOnlineDir;
   nsIMAPHostInfo *fNextHost;
-  PRUint32 fCapabilityFlags;
+  eIMAPCapabilityFlags fCapabilityFlags;
   char *fHierarchyDelimiters;// string of top-level hierarchy delimiters
-  PRBool fHaveWeEverDiscoveredFolders;
+  bool fHaveWeEverDiscoveredFolders;
   char *fCanonicalOnlineSubDir;
   nsIMAPNamespaceList *fNamespaceList, *fTempNamespaceList;
-  PRBool fNamespacesOverridable;
-  PRBool fUsingSubscription;
-  PRBool fOnlineTrashFolderExists;
-  PRBool fShouldAlwaysListInbox;
-  PRBool fHaveAdminURL;
-  PRBool fPasswordVerifiedOnline;
-  PRBool fDeleteIsMoveToTrash;
-  PRBool fShowDeletedMessages;
-  PRBool fGotNamespaces;
+  bool fNamespacesOverridable;
+  bool fUsingSubscription;
+  bool fOnlineTrashFolderExists;
+  bool fShouldAlwaysListInbox;
+  bool fHaveAdminURL;
+  bool fPasswordVerifiedOnline;
+  bool fDeleteIsMoveToTrash;
+  bool fShowDeletedMessages;
+  bool fGotNamespaces;
   nsIMAPBodyShellCache *fShellCache;
 };
 
@@ -92,18 +60,16 @@ public:
   NS_IMETHOD ResetAll();
 
   // Capabilities
-  NS_IMETHOD GetCapabilityForHost(const char *serverKey, PRUint32 &result);
-  NS_IMETHOD SetCapabilityForHost(const char *serverKey, PRUint32 capability);
-  NS_IMETHOD GetHostHasAdminURL(const char *serverKey, PRBool &result);
-  NS_IMETHOD SetHostHasAdminURL(const char *serverKey, PRBool hasAdminUrl);
+  NS_IMETHOD GetHostHasAdminURL(const char *serverKey, bool &result);
+  NS_IMETHOD SetHostHasAdminURL(const char *serverKey, bool hasAdminUrl);
   // Subscription
-  NS_IMETHOD GetHostIsUsingSubscription(const char *serverKey, PRBool &result);
-  NS_IMETHOD SetHostIsUsingSubscription(const char *serverKey, PRBool usingSubscription);
+  NS_IMETHOD GetHostIsUsingSubscription(const char *serverKey, bool &result);
+  NS_IMETHOD SetHostIsUsingSubscription(const char *serverKey, bool usingSubscription);
 
   // Passwords
   NS_IMETHOD GetPasswordForHost(const char *serverKey, nsString &result);
   NS_IMETHOD SetPasswordForHost(const char *serverKey, const char *password);
-  NS_IMETHOD GetPasswordVerifiedOnline(const char *serverKey, PRBool &result);
+  NS_IMETHOD GetPasswordVerifiedOnline(const char *serverKey, bool &result);
   NS_IMETHOD SetPasswordVerifiedOnline(const char *serverKey);
 
   // OnlineDir
@@ -113,27 +79,27 @@ public:
                                  const char *onlineDir);
 
   // Delete is move to trash folder
-  NS_IMETHOD GetDeleteIsMoveToTrashForHost(const char *serverKey, PRBool &result);
-  NS_IMETHOD SetDeleteIsMoveToTrashForHost(const char *serverKey, PRBool isMoveToTrash);
+  NS_IMETHOD GetDeleteIsMoveToTrashForHost(const char *serverKey, bool &result);
+  NS_IMETHOD SetDeleteIsMoveToTrashForHost(const char *serverKey, bool isMoveToTrash);
   // imap delete model (or not)
-  NS_IMETHOD GetShowDeletedMessagesForHost(const char *serverKey, PRBool &result);
-  NS_IMETHOD SetShowDeletedMessagesForHost(const char *serverKey, PRBool showDeletedMessages);
+  NS_IMETHOD GetShowDeletedMessagesForHost(const char *serverKey, bool &result);
+  NS_IMETHOD SetShowDeletedMessagesForHost(const char *serverKey, bool showDeletedMessages);
 
   // Get namespaces
-  NS_IMETHOD GetGotNamespacesForHost(const char *serverKey, PRBool &result);
-  NS_IMETHOD SetGotNamespacesForHost(const char *serverKey, PRBool gotNamespaces);
+  NS_IMETHOD GetGotNamespacesForHost(const char *serverKey, bool &result);
+  NS_IMETHOD SetGotNamespacesForHost(const char *serverKey, bool gotNamespaces);
   // Folders
-  NS_IMETHOD SetHaveWeEverDiscoveredFoldersForHost(const char *serverKey, PRBool discovered);
-  NS_IMETHOD GetHaveWeEverDiscoveredFoldersForHost(const char *serverKey, PRBool &result);
+  NS_IMETHOD SetHaveWeEverDiscoveredFoldersForHost(const char *serverKey, bool discovered);
+  NS_IMETHOD GetHaveWeEverDiscoveredFoldersForHost(const char *serverKey, bool &result);
 
   // Trash Folder
-  NS_IMETHOD SetOnlineTrashFolderExistsForHost(const char *serverKey, PRBool exists);
-  NS_IMETHOD GetOnlineTrashFolderExistsForHost(const char *serverKey, PRBool &result);
+  NS_IMETHOD SetOnlineTrashFolderExistsForHost(const char *serverKey, bool exists);
+  NS_IMETHOD GetOnlineTrashFolderExistsForHost(const char *serverKey, bool &result);
 
   // INBOX
   NS_IMETHOD GetOnlineInboxPathForHost(const char *serverKey, nsString &result);
-  NS_IMETHOD GetShouldAlwaysListInboxForHost(const char *serverKey, PRBool &result);
-  NS_IMETHOD SetShouldAlwaysListInboxForHost(const char *serverKey, PRBool shouldList);
+  NS_IMETHOD GetShouldAlwaysListInboxForHost(const char *serverKey, bool &result);
+  NS_IMETHOD SetShouldAlwaysListInboxForHost(const char *serverKey, bool shouldList);
 
   // Namespaces
   NS_IMETHOD GetNamespaceForMailboxForHost(const char *serverKey, const char *mailbox_name, nsIMAPNamespace *&result);
@@ -142,13 +108,13 @@ public:
   NS_IMETHOD ClearServerAdvertisedNamespacesForHost(const char *serverKey);
   NS_IMETHOD ClearPrefsNamespacesForHost(const char *serverKey);
   NS_IMETHOD GetDefaultNamespaceOfTypeForHost(const char *serverKey, EIMAPNamespaceType type, nsIMAPNamespace *&result);
-  NS_IMETHOD SetNamespacesOverridableForHost(const char *serverKey, PRBool overridable);
-  NS_IMETHOD GetNamespacesOverridableForHost(const char *serverKey,PRBool &result);
-  NS_IMETHOD GetNumberOfNamespacesForHost(const char *serverKey, PRUint32 &result);
-  NS_IMETHOD GetNamespaceNumberForHost(const char *serverKey, PRInt32 n, nsIMAPNamespace * &result);
+  NS_IMETHOD SetNamespacesOverridableForHost(const char *serverKey, bool overridable);
+  NS_IMETHOD GetNamespacesOverridableForHost(const char *serverKey,bool &result);
+  NS_IMETHOD GetNumberOfNamespacesForHost(const char *serverKey, uint32_t &result);
+  NS_IMETHOD GetNamespaceNumberForHost(const char *serverKey, int32_t n, nsIMAPNamespace * &result);
   // ### dmb hoo boy, how are we going to do this?
   NS_IMETHOD CommitNamespacesForHost(nsIImapIncomingServer *host);
-  NS_IMETHOD FlushUncommittedNamespacesForHost(const char *serverKey, PRBool &result);
+  NS_IMETHOD FlushUncommittedNamespacesForHost(const char *serverKey, bool &result);
 
   // Hierarchy Delimiters
   NS_IMETHOD SetNamespaceHierarchyDelimiterFromMailboxForHost(const char *serverKey, const char *boxName, char delimiter);
@@ -160,7 +126,9 @@ public:
   PRMonitor *gCachedHostInfoMonitor;
   nsIMAPHostInfo *fHostInfoList;
 protected:
-  nsresult SetNamespacesPrefForHost(nsIImapIncomingServer *aHost, EIMAPNamespaceType type, char *pref);
+  nsresult SetNamespacesPrefForHost(nsIImapIncomingServer *aHost,
+                                    EIMAPNamespaceType type,
+                                    const char *pref);
   nsIMAPHostInfo *FindHost(const char *serverKey);
 };
 #endif

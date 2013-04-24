@@ -1,43 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Oracle Corporation code.
- *
- * The Initial Developer of the Original Code is Oracle Corporation
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Stuart Parmenter <stuart.parmenter@oracle.com>
- *   Joey Minta <jminta@gmail.com>
- *   Daniel Boelzle <daniel.boelzle@sun.com>
- *   Philipp Kewisch <mozilla@kewis.ch>
- *   Martin Schroeder <mschroeder@mozilla.x-home.org>
- *   Matthew Mecca <matthew.mecca@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://calendar/modules/calUtils.jsm");
 Components.utils.import("resource://calendar/modules/calAlarmUtils.jsm");
@@ -46,7 +9,7 @@ Components.utils.import("resource://gre/modules/XPCOMUtils.jsm");
 const kHoursBetweenUpdates = 6;
 
 function nowUTC() {
-    return jsDateToDateTime(new Date()).getInTimezone(UTC());
+    return cal.jsDateToDateTime(new Date()).getInTimezone(cal.UTC());
 }
 
 function newTimerWithCallback(aCallback, aDelay, aRepeating) {
@@ -133,6 +96,7 @@ function calAlarmService() {
 }
 
 calAlarmService.prototype = {
+    mRangeStart: null,
     mRangeEnd: null,
     mUpdateTimer: null,
     mStarted: false,
@@ -272,7 +236,7 @@ calAlarmService.prototype = {
 
         getCalendarManager().addObserver(this.calendarManagerObserver);
 
-        for each(let calendar in getCalendarManager().getCalendars({})) {
+        for each (let calendar in getCalendarManager().getCalendars({})) {
             this.observeCalendar(calendar);
         }
 
@@ -289,6 +253,7 @@ calAlarmService.prototype = {
                     // for a month, they'll miss some, but that's a slim chance
                     start = now.clone();
                     start.month -= 1;
+                    this.alarmService.mRangeStart = start.clone();
                 } else {
                     // This is a subsequent search, so we got all the past alarms before
                     start = this.alarmService.mRangeEnd.clone();
@@ -446,14 +411,15 @@ calAlarmService.prototype = {
     },
 
     getOccurrencesInRange: function cAS_getOccurrencesInRange(aItem) {
+        // We search 1 month in each direction for alarms.  Therefore,
+        // we need occurrences between initial start date and 1 month from now
+        let until = nowUTC();
+        until.month += 1;
+
         if (aItem && aItem.recurrenceInfo) {
-            let start = this.mRangeEnd.clone();
-            // We search 1 month in each direction for alarms.  Therefore,
-            // we need to go back 2 months from the end to get this right.
-            start.month -= 2;
-            return aItem.recurrenceInfo.getOccurrences(start, this.mRangeEnd, 0, {});
+            return aItem.recurrenceInfo.getOccurrences(this.mRangeStart, until, 0, {});
         } else {
-            return [aItem];
+            return cal.checkIfInRange(aItem, this.mRangeStart, until) ? [aItem] : [];
         }
     },
 

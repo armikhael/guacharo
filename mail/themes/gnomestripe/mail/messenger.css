@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 /* ===== messenger.css ==================================================
   == Styles shared throughout the Messenger application.
   ======================================================================= */
@@ -23,6 +27,16 @@ toolbar:not(.inline-toolbar):not(:-moz-lwtheme) {
   -moz-appearance: menubar;
 }
 
+#tabbar-toolbar {
+  -moz-appearance: none;
+  padding: 0;
+}
+
+#tabbar-toolbar[customizing="true"] {
+  min-width: 16px;
+  min-height: 10px;
+}
+
 /*
  * Override the menulist icon forbidding in menu.css so that we can show
  * check-marks. bug 443516
@@ -34,6 +48,25 @@ menulist > menupopup > menu > .menu-iconic-left {
   display: -moz-box;
 }
 
+/* ::::: Mail Toolbars and Menubars ::::: */
+
+.mail-toolbox,
+.contentTabToolbox {
+  -moz-appearance: none;
+  border-bottom: 1px solid threedshadow;
+  background-image: -moz-linear-gradient(rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 19px);
+}
+
+.mail-toolbox:-moz-lwtheme,
+.contentTabToolbox:-moz-lwtheme {
+  background-image: -moz-linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 19px);
+}
+
+.mail-toolbox > toolbar,
+.contentTabToolbox > toolbar {
+  -moz-appearance: none;
+  background: transparent;
+}
 
 /* ::::: throbber ::::: */
 
@@ -77,7 +110,11 @@ menulist > menupopup > menu > .menu-iconic-left {
 }
 
 toolbar:not(.inline-toolbar) toolbarbutton:not(:-moz-lwtheme) {
-  color: MenuText;
+  color: -moz-menubartext;
+}
+
+toolbar:not(.inline-toolbar) toolbarbutton[disabled="true"]:not(:-moz-lwtheme) {
+  color: GrayText;
 }
 
 toolbarbutton:hover:not([disabled]):not(:-moz-lwtheme) .toolbarbutton-text {
@@ -123,12 +160,21 @@ sidebarheader .toolbarbutton-text:not([value]) {
   display: none;
 }
 
-#searchInput {
+#searchInput,
+#IMSearchInput,
+.remote-gloda-search {
   padding: 2px;
 }
 
-#searchInput:-moz-lwtheme:not([focused="true"]) {
+#searchInput:-moz-lwtheme:not([focused="true"]),
+#IMSearchInput:-moz-lwtheme:not([focused="true"]),
+.remote-gloda-search:-moz-lwtheme:not([focused="true"]) {
   opacity: .85;
+}
+
+.remote-gloda-search-container {
+  padding-top: 3px;
+  padding-bottom: 2px;
 }
 
 /* Stock icons for the menu bar items */
@@ -344,6 +390,24 @@ menuitem[command="cmd_goForward"][disabled]:-moz-locale-dir(rtl) {
 
 statusbarpanel {
   -moz-appearance: none !important;
+  border: none !important;
+}
+
+treechildren::-moz-tree-cell-text {
+  -moz-padding-start: 5px;
+}
+
+notification[value="addon-install-blocked"],
+notification[value="addon-install-failed"],
+notification[value="addon-install-complete"] {
+  background-image: url("chrome://mozapps/skin/extensions/stripes-info-negative.png"),
+                    -moz-linear-gradient(rgba(255, 255, 255, 0),
+                                         rgba(255, 255, 255, 0.5));
+  background-repeat: repeat-x;
+}
+
+notification[value="addon-install-blocked"] .notification-inner,
+notification[value="addon-install-failed"] .notification-inner,
+notification[value="addon-install-complete"] .notification-inner {
   border: none;
-  padding: 0 4px;
 }

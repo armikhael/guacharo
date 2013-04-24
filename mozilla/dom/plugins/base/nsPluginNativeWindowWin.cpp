@@ -1,43 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Andrei Volkov <av@netscape.com>
- *   Brian Stell <bstell@netscape.com>
- *   Peter Lubczynski <peterl@netscape.com>
- *   Jim Mathies <jmathies@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "windows.h"
 #include "windowsx.h"
@@ -60,10 +24,12 @@
 #include "nsTWeakRef.h"
 #include "nsCrashOnException.h"
 
+using namespace mozilla;
+
 #define NP_POPUP_API_VERSION 16
 
-#define nsMajorVersion(v)       (((PRInt32)(v) >> 16) & 0xffff)
-#define nsMinorVersion(v)       ((PRInt32)(v) & 0xffff)
+#define nsMajorVersion(v)       (((int32_t)(v) >> 16) & 0xffff)
+#define nsMinorVersion(v)       ((int32_t)(v) & 0xffff)
 #define versionOK(suppliedV, requiredV)                   \
   (nsMajorVersion(suppliedV) == nsMajorVersion(requiredV) \
    && nsMinorVersion(suppliedV) >= nsMinorVersion(requiredV))
@@ -89,7 +55,7 @@ public:
   UINT   GetMsg()    { return mMsg; };
   WPARAM GetWParam() { return mWParam; };
   LPARAM GetLParam() { return mLParam; };
-  PRBool InUse()     { return (mWnd!=NULL); };
+  bool InUse()     { return (mWnd!=NULL); };
 
   NS_DECL_NSIRUNNABLE
 
@@ -171,34 +137,33 @@ public:
   nsPluginType mPluginType;
 };
 
-static PRBool sInMessageDispatch = PR_FALSE;
-static PRBool sInPreviousMessageDispatch = PR_FALSE;
+static bool sInMessageDispatch = false;
+static bool sInPreviousMessageDispatch = false;
 static UINT sLastMsg = 0;
 
-static PRBool ProcessFlashMessageDelayed(nsPluginNativeWindowWin * aWin, nsNPAPIPluginInstance * aInst,
+static bool ProcessFlashMessageDelayed(nsPluginNativeWindowWin * aWin, nsNPAPIPluginInstance * aInst,
                                          HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-  NS_ENSURE_TRUE(aWin, NS_ERROR_NULL_POINTER);
-  NS_ENSURE_TRUE(aInst, NS_ERROR_NULL_POINTER);
+  NS_ENSURE_TRUE(aWin, false);
+  NS_ENSURE_TRUE(aInst, false);
 
   if (msg == sWM_FLASHBOUNCEMSG) {
     // See PluginWindowEvent::Run() below.
     NS_ASSERTION((sWM_FLASHBOUNCEMSG != 0), "RegisterWindowMessage failed in flash plugin WM_USER message handling!");
-    NS_TRY_SAFE_CALL_VOID(::CallWindowProc((WNDPROC)aWin->GetWindowProc(), hWnd, WM_USER_FLASH, wParam, lParam),
-                                           aInst);
-    return TRUE;
+    ::CallWindowProc((WNDPROC)aWin->GetWindowProc(), hWnd, WM_USER_FLASH, wParam, lParam);
+    return true;
   }
 
   if (msg != WM_USER_FLASH)
-    return PR_FALSE; // no need to delay
+    return false; // no need to delay
 
   // do stuff
   nsCOMPtr<nsIRunnable> pwe = aWin->GetPluginWindowEvent(hWnd, msg, wParam, lParam);
   if (pwe) {
     NS_DispatchToCurrentThread(pwe);
-    return PR_TRUE;  
+    return true;  
   }
-  return PR_FALSE;
+  return false;
 }
 
 class nsDelayedPopupsEnabledEvent : public nsRunnable
@@ -216,9 +181,11 @@ private:
 
 NS_IMETHODIMP nsDelayedPopupsEnabledEvent::Run()
 {
-  mInst->PushPopupsEnabledState(PR_FALSE);
+  mInst->PushPopupsEnabledState(false);
   return NS_OK;	
 }
+
+static LRESULT CALLBACK PluginWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 /**
  *   New plugin window procedure
@@ -240,12 +207,12 @@ static LRESULT CALLBACK PluginWndProcInternal(HWND hWnd, UINT msg, WPARAM wParam
   // on the floor if we get into this recursive situation. See bug 192914.
   if (win->mPluginType == nsPluginType_Real) {
     if (sInMessageDispatch && msg == sLastMsg)
-      return PR_TRUE;
+      return true;
     // Cache the last message sent
     sLastMsg = msg;
   }
 
-  PRBool enablePopups = PR_FALSE;
+  bool enablePopups = false;
 
   // Activate/deactivate mouse capture on the plugin widget
   // here, before we pass the Windows event to the plugin
@@ -259,11 +226,11 @@ static LRESULT CALLBACK PluginWndProcInternal(HWND hWnd, UINT msg, WPARAM wParam
       nsCOMPtr<nsIWidget> widget;
       win->GetPluginWidget(getter_AddRefs(widget));
       if (widget)
-        widget->CaptureMouse(PR_TRUE);
+        widget->CaptureMouse(true);
       break;
     }
     case WM_LBUTTONUP:
-      enablePopups = PR_TRUE;
+      enablePopups = true;
 
       // fall through
     case WM_MBUTTONUP:
@@ -271,7 +238,7 @@ static LRESULT CALLBACK PluginWndProcInternal(HWND hWnd, UINT msg, WPARAM wParam
       nsCOMPtr<nsIWidget> widget;
       win->GetPluginWidget(getter_AddRefs(widget));
       if (widget)
-        widget->CaptureMouse(PR_FALSE);
+        widget->CaptureMouse(false);
       break;
     }
     case WM_KEYDOWN:
@@ -282,7 +249,7 @@ static LRESULT CALLBACK PluginWndProcInternal(HWND hWnd, UINT msg, WPARAM wParam
 
       // fall through
     case WM_KEYUP:
-      enablePopups = PR_TRUE;
+      enablePopups = true;
 
       break;
 
@@ -304,7 +271,7 @@ static LRESULT CALLBACK PluginWndProcInternal(HWND hWnd, UINT msg, WPARAM wParam
         nsCOMPtr<nsIWidget> widget;
         win->GetPluginWidget(getter_AddRefs(widget));
         if (widget) {
-          nsGUIEvent event(PR_TRUE, NS_PLUGIN_ACTIVATE, widget);
+          nsGUIEvent event(true, NS_PLUGIN_ACTIVATE, widget);
           nsEventStatus status;
           widget->DispatchEvent(&event, status);
         }
@@ -323,9 +290,9 @@ static LRESULT CALLBACK PluginWndProcInternal(HWND hWnd, UINT msg, WPARAM wParam
       // recursively.
       WNDPROC prevWndProc = win->GetPrevWindowProc();
       if (prevWndProc && !sInPreviousMessageDispatch) {
-        sInPreviousMessageDispatch = PR_TRUE;
+        sInPreviousMessageDispatch = true;
         ::CallWindowProc(prevWndProc, hWnd, msg, wParam, lParam);
-        sInPreviousMessageDispatch = PR_FALSE;
+        sInPreviousMessageDispatch = false;
       }
       break;
     }
@@ -340,21 +307,24 @@ static LRESULT CALLBACK PluginWndProcInternal(HWND hWnd, UINT msg, WPARAM wParam
   }
 
   if (enablePopups && inst) {
-    PRUint16 apiVersion;
+    uint16_t apiVersion;
     if (NS_SUCCEEDED(inst->GetPluginAPIVersion(&apiVersion)) &&
         !versionOK(apiVersion, NP_POPUP_API_VERSION)) {
-      inst->PushPopupsEnabledState(PR_TRUE);
+      inst->PushPopupsEnabledState(true);
     }
   }
 
-  sInMessageDispatch = PR_TRUE;
-
-  LRESULT res = TRUE;
-  NS_TRY_SAFE_CALL_RETURN(res, 
-                          ::CallWindowProc((WNDPROC)win->GetWindowProc(), hWnd, msg, wParam, lParam),
-                          inst);
-
-  sInMessageDispatch = PR_FALSE;
+  sInMessageDispatch = true;
+  LRESULT res;
+  WNDPROC proc = (WNDPROC)win->GetWindowProc();
+  if (PluginWndProc == proc) {
+    NS_WARNING("Previous plugin window procedure references PluginWndProc! "
+               "Report this bug!");
+    res = CallWindowProc(DefWindowProc, hWnd, msg, wParam, lParam);
+  } else {
+    res = CallWindowProc(proc, hWnd, msg, wParam, lParam);
+  }
+  sInMessageDispatch = false;
 
   if (inst) {
     // Popups are enabled (were enabled before the call to
@@ -418,7 +388,7 @@ typedef LONG
 static User32SetWindowLongA sUser32SetWindowLongAHookStub = NULL;
 static User32SetWindowLongW sUser32SetWindowLongWHookStub = NULL;
 #endif
-static inline PRBool
+static inline bool
 SetWindowLongHookCheck(HWND hWnd,
                        int nIndex,
                        LONG_PTR newLong)
@@ -428,8 +398,8 @@ SetWindowLongHookCheck(HWND hWnd,
   if (!win || (win && win->mPluginType != nsPluginType_Flash) ||
       (nIndex == GWLP_WNDPROC &&
        newLong == reinterpret_cast<LONG_PTR>(PluginWndProc)))
-    return PR_TRUE;
-  return PR_FALSE;
+    return true;
+  return false;
 }
 
 #ifdef _WIN64
@@ -454,9 +424,9 @@ SetWindowLongAHook(HWND hWnd,
   nsPluginNativeWindowWin * win =
     (nsPluginNativeWindowWin *)GetProp(hWnd, NS_PLUGIN_WINDOW_PROPERTY_ASSOCIATION);
 
-  // Hook our subclass back up, just like we do on setwindow.   
+  // Hook our subclass back up, just like we do on setwindow.
   win->SetPrevWindowProc(
-    reinterpret_cast<WNDPROC>(sUser32SetWindowLongAHookStub(hWnd, nIndex,
+    reinterpret_cast<WNDPROC>(sUser32SetWindowLongWHookStub(hWnd, nIndex,
       reinterpret_cast<LONG_PTR>(PluginWndProc))));
   return proc;
 }
@@ -495,15 +465,23 @@ HookSetWindowLongPtr()
 {
   sUser32Intercept.Init("user32.dll");
 #ifdef _WIN64
-  sUser32Intercept.AddHook("SetWindowLongPtrA", reinterpret_cast<intptr_t>(SetWindowLongPtrAHook),
-                           (void**) &sUser32SetWindowLongAHookStub);
-  sUser32Intercept.AddHook("SetWindowLongPtrW", reinterpret_cast<intptr_t>(SetWindowLongPtrWHook),
-                           (void**) &sUser32SetWindowLongWHookStub);
+  if (!sUser32SetWindowLongAHookStub)
+    sUser32Intercept.AddHook("SetWindowLongPtrA",
+                             reinterpret_cast<intptr_t>(SetWindowLongPtrAHook),
+                             (void**) &sUser32SetWindowLongAHookStub);
+  if (!sUser32SetWindowLongWHookStub)
+    sUser32Intercept.AddHook("SetWindowLongPtrW",
+                             reinterpret_cast<intptr_t>(SetWindowLongPtrWHook),
+                             (void**) &sUser32SetWindowLongWHookStub);
 #else
-  sUser32Intercept.AddHook("SetWindowLongA", reinterpret_cast<intptr_t>(SetWindowLongAHook),
-                           (void**) &sUser32SetWindowLongAHookStub);
-  sUser32Intercept.AddHook("SetWindowLongW", reinterpret_cast<intptr_t>(SetWindowLongWHook),
-                           (void**) &sUser32SetWindowLongWHookStub);
+  if (!sUser32SetWindowLongAHookStub)
+    sUser32Intercept.AddHook("SetWindowLongA",
+                             reinterpret_cast<intptr_t>(SetWindowLongAHook),
+                             (void**) &sUser32SetWindowLongAHookStub);
+  if (!sUser32SetWindowLongWHookStub)
+    sUser32Intercept.AddHook("SetWindowLongW",
+                             reinterpret_cast<intptr_t>(SetWindowLongWHook),
+                             (void**) &sUser32SetWindowLongWHookStub);
 #endif
 }
 
@@ -513,7 +491,7 @@ HookSetWindowLongPtr()
 nsPluginNativeWindowWin::nsPluginNativeWindowWin() : nsPluginNativeWindow()
 {
   // initialize the struct fields
-  window = nsnull; 
+  window = nullptr; 
   x = 0; 
   y = 0; 
   width = 0; 
@@ -569,12 +547,11 @@ NS_IMETHODIMP PluginWindowEvent::Run()
   else {
     // Currently not used, but added so that processing events here
     // is more generic.
-    NS_TRY_SAFE_CALL_VOID(::CallWindowProc(win->GetWindowProc(), 
-                          hWnd, 
-                          GetMsg(), 
-                          GetWParam(), 
-                          GetLParam()),
-                          inst);
+    ::CallWindowProc(win->GetWindowProc(), 
+                     hWnd, 
+                     GetMsg(), 
+                     GetWParam(), 
+                     GetLParam());
   }
 
   Clear();
@@ -587,7 +564,7 @@ nsPluginNativeWindowWin::GetPluginWindowEvent(HWND aWnd, UINT aMsg, WPARAM aWPar
   if (!mWeakRef) {
     mWeakRef = this;
     if (!mWeakRef)
-      return nsnull;
+      return nullptr;
   }
 
   PluginWindowEvent *event;
@@ -598,13 +575,13 @@ nsPluginNativeWindowWin::GetPluginWindowEvent(HWND aWnd, UINT aMsg, WPARAM aWPar
   if (!mCachedPluginWindowEvent) 
   {
     event = new PluginWindowEvent();
-    if (!event) return nsnull;
+    if (!event) return nullptr;
     mCachedPluginWindowEvent = event;
   }
   else if (mCachedPluginWindowEvent->InUse())
   {
     event = new PluginWindowEvent();
-    if (!event) return nsnull;
+    if (!event) return nullptr;
   }
   else
   {
@@ -629,7 +606,7 @@ nsresult nsPluginNativeWindowWin::CallSetWindow(nsRefPtr<nsNPAPIPluginInstance> 
 
   // check plugin mime type and cache it if it will need special treatment later
   if (mPluginType == nsPluginType_Unknown) {
-    const char* mimetype = nsnull;
+    const char* mimetype = nullptr;
     aPluginInstance->GetMIMEType(&mimetype);
     if (mimetype) { 
       if (!strcmp(mimetype, "application/x-shockwave-flash"))
@@ -729,7 +706,7 @@ nsresult nsPluginNativeWindowWin::SubclassAndAssociateWindow()
 nsresult nsPluginNativeWindowWin::UndoSubclassAndAssociateWindow()
 {
   // release plugin instance
-  SetPluginInstance(nsnull);
+  SetPluginInstance(nullptr);
 
   // remove window property
   HWND hWnd = (HWND)window;

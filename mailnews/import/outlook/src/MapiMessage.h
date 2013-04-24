@@ -1,54 +1,20 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #ifndef MapiMessage_h___
 #define MapiMessage_h___
 
 #include "nsTArray.h"
-#include "nsString.h"
-#include "nsILocalFile.h"
+#include "nsStringGlue.h"
+#include "nsIFile.h"
 #include "MapiApi.h"
 #include "nsIMsgSend.h"
-
-#include "nsProxiedService.h"
 
 #include <vector>
 
 #ifndef PR_LAST_VERB_EXECUTED
-#define PR_LAST_VERB_EXECUTED PROP_TAG( PT_LONG, 0x1081)
+#define PR_LAST_VERB_EXECUTED PROP_TAG(PT_LONG, 0x1081)
 #endif
 
 #define EXCHIVERB_REPLYTOSENDER (102)
@@ -56,13 +22,13 @@
 #define EXCHIVERB_FORWARD       (104)
 
 #ifndef PR_ATTACH_CONTENT_ID
-#define PR_ATTACH_CONTENT_ID PROP_TAG( PT_TSTRING,	0x3712)
+#define PR_ATTACH_CONTENT_ID PROP_TAG(PT_TSTRING,	0x3712)
 #endif
 #ifndef PR_ATTACH_CONTENT_ID_W
-#define PR_ATTACH_CONTENT_ID_W PROP_TAG( PT_UNICODE,	0x3712)
+#define PR_ATTACH_CONTENT_ID_W PROP_TAG(PT_UNICODE,	0x3712)
 #endif
 #ifndef PR_ATTACH_CONTENT_ID_A
-#define PR_ATTACH_CONTENT_ID_A PROP_TAG( PT_STRING8,	0x3712)
+#define PR_ATTACH_CONTENT_ID_A PROP_TAG(PT_STRING8,	0x3712)
 #endif
 
 #ifndef PR_ATTACH_FLAGS
@@ -100,47 +66,49 @@ public:
                        hdrMax // utility value
                      };
 
-  CMapiMessageHeaders(const wchar_t* headers = 0) { Assign(headers); }
-  CMapiMessageHeaders(const char* headers)
-  {
-    nsString uniHeaders;
-    CopyASCIItoUTF16(headers, uniHeaders);
-    Assign(uniHeaders.get());
-  }
+  CMapiMessageHeaders(const char* headers = 0) { Assign(headers); }
   ~CMapiMessageHeaders();
-  void Assign(const wchar_t* headers);
+  void Assign(const char* headers);
 
   inline bool IsEmpty() const { return m_headerFields.empty(); }
   // if no such header exists then 0 is returned, else the first value returned
-  const wchar_t* Value(const wchar_t* name) const;
+  const char* Value(const char* name) const;
   // if no such header exists then 0 is returned
-  const wchar_t* Value(SpecialHeader special) const;
+  const char* Value(SpecialHeader special) const;
 
-  void UnfoldValue(const wchar_t* name, nsString& dest) const;
-  void UnfoldValue(SpecialHeader special, nsString& dest) const;
+  void UnfoldValue(const char* name, nsString& dest, const char* fallbackCharset) const;
+  void UnfoldValue(SpecialHeader special, nsString& dest, const char* fallbackCharset) const;
 
+  // value must be utf-8 or 7-bit; supposed that this function will be called
+  // when the charset of the value is known
   // TODO: if replace is set, then all headers with this name will be removed
   //  and one with this value will be added, otherwise a new header is added
   // (Unnecessary for now)
-  int SetValue(const wchar_t* name, const wchar_t* value, bool replace = true);
-  int SetValue(SpecialHeader special, const wchar_t* value);
+  int SetValue(const char* name, const char* value, bool replace = true);
+  int SetValue(SpecialHeader special, const char* value);
+
+  static const char* SpecialName(SpecialHeader special);
 
   nsresult ToStream(nsIOutputStream *pDst) const;
 private:
   class CHeaderField {
   public:
-    CHeaderField(const wchar_t* begin, int len);
-    CHeaderField(const wchar_t* name, const wchar_t* body);
+    CHeaderField(const char* begin, int len);
+    CHeaderField(const char* name, const char* body, bool utf8 = false);
     ~CHeaderField();
     inline bool Valid() const { return m_fname; }
-    inline const wchar_t* fname() const { return m_fname; }
-    inline const wchar_t* fbody() const { return m_fbody; }
-    void set_fbody(const wchar_t* txt);
+    inline const char* fname() const { return m_fname; }
+    inline const char* fbody() const { return m_fbody; }
+    
+    // txt must be utf-8 or 7-bit; supposed that this function will be called
+    // when the charset of the txt is known
+    void set_fbody(const char* txt);
 
-    static void UnfoldFoldedSpaces(const wchar_t* body, nsString& dest);
+    void GetUnfoldedString(nsString& dest, const char* fallbackCharset) const;
   private:
-    wchar_t* m_fname;
-    wchar_t* m_fbody;
+    char* m_fname;
+    char* m_fbody;
+    bool m_fbody_utf8;
   }; //class HeaderField
 
   class write_to_stream {
@@ -156,23 +124,23 @@ private:
   // Search helper
   class fname_equals {
   public:
-    fname_equals(const wchar_t* search) : m_search(search) {}
-    inline bool operator () (const CHeaderField* f) const { return wcsicmp(f->fname(), m_search) == 0; }
+    fname_equals(const char* search) : m_search(search) {}
+    inline bool operator () (const CHeaderField* f) const { return stricmp(f->fname(), m_search) == 0; }
   private:
-    const wchar_t* m_search;
+    const char* m_search;
   }; // class fname_equals
 
   // The common array of special headers' names
-  static const wchar_t* Specials[hdrMax];
+  static const char* Specials[hdrMax];
   
   std::vector<CHeaderField*> m_headerFields;
   CHeaderField* m_SpecialHeaders[hdrMax]; // Pointers into the m_headerFields
 
   void ClearHeaderFields();
   void Add(CHeaderField* f);
-  SpecialHeader CheckSpecialHeader(const wchar_t* fname) const;
-  const CHeaderField* CFind(const wchar_t* name) const;
-  inline CHeaderField* Find(const wchar_t* name) { return const_cast<CHeaderField*>(CFind(name)); }
+  static SpecialHeader CheckSpecialHeader(const char* fname);
+  const CHeaderField* CFind(const char* name) const;
+  inline CHeaderField* Find(const char* name) { return const_cast<CHeaderField*>(CFind(name)); }
 
 }; // class CMapiMessageHeaders
 
@@ -180,13 +148,12 @@ private:
 
 class CMapiMessage {
 public:
-  CMapiMessage( LPMESSAGE  lpMsg);
+  CMapiMessage(LPMESSAGE  lpMsg);
   ~CMapiMessage();
 
   // Attachments
-  // Ordinary (not embedded) attachments; result MUST be disposed of with DisposeAttachments()
-  nsMsgAttachedFile* GetAttachments();
-  static void DisposeAttachments(nsMsgAttachedFile* att) { delete[] att; }
+  // Ordinary (not embedded) attachments.
+  nsresult GetAttachments(nsIArray **aArray);
   // Embedded attachments
   size_t EmbeddedAttachmentsCount() const { return m_embattachments.size(); }
   bool GetEmbeddedAttachmentInfo(unsigned int i, nsIURI **uri, const char **cid,
@@ -198,19 +165,19 @@ public:
   inline bool HasAttach() const { return !m_stdattachments.empty(); }
 
   // Retrieve info for message
-  inline bool BodyIsHtml( void) const { return( m_bodyIsHtml);}
+  inline bool BodyIsHtml(void) const { return m_bodyIsHtml;}
   const char *GetFromLine(int& len) const {
     if (m_fromLine.IsEmpty())
       return NULL; 
     else {
       len = m_fromLine.Length();
-      return( m_fromLine.get());}
+      return m_fromLine.get();}
   }
   inline CMapiMessageHeaders *GetHeaders() { return &m_headers; }
-  inline const wchar_t *GetBody( void) const { return( m_body.get()); }
-  inline size_t GetBodyLen( void) const { return( m_body.Length()); }
+  inline const wchar_t *GetBody(void) const { return m_body.get(); }
+  inline size_t GetBodyLen(void) const { return m_body.Length(); }
   void GetBody(nsCString& dest) const;
-  inline const char *GetBodyCharset( void) const { return( m_mimeCharset.get());}
+  inline const char *GetBodyCharset(void) const { return m_mimeCharset.get();}
   inline bool IsRead() const { return m_msgFlags & MSGFLAG_READ; }
   inline bool IsReplied() const {
     return (m_msgLastVerb == EXCHIVERB_REPLYTOSENDER) ||
@@ -218,14 +185,13 @@ public:
   inline bool IsForvarded() const {
     return m_msgLastVerb == EXCHIVERB_FORWARD; }
 
-  bool    IsMultipart( void) const;
-  bool    HasContentHeader( void) const {
-    return( !m_mimeContentType.IsEmpty());}
-  bool    HasMimeVersion( void) const {
+  bool    HasContentHeader(void) const {
+    return !m_mimeContentType.IsEmpty();}
+  bool    HasMimeVersion(void) const {
     return m_headers.Value(CMapiMessageHeaders::hdrMimeVersion); }
-  const char *GetMimeContent( void) const { return( m_mimeContentType.get());}
-  PRInt32     GetMimeContentLen( void) const { return( m_mimeContentType.Length());}
-  const char *GetMimeBoundary( void) const { return( m_mimeBoundary.get());}
+  const char *GetMimeContent(void) const { return m_mimeContentType.get();}
+  int32_t     GetMimeContentLen(void) const { return m_mimeContentType.Length();}
+  const char *GetMimeBoundary(void) const { return m_mimeBoundary.get();}
 
    // The only required part of a message is its header
   inline bool ValidState() const { return !m_headers.IsEmpty(); }
@@ -234,7 +200,7 @@ public:
 private:
   struct attach_data {
     nsCOMPtr<nsIURI> orig_url;
-    nsCOMPtr<nsILocalFile> tmp_file;
+    nsCOMPtr<nsIFile> tmp_file;
     char *type;
     char *encoding;
     char *real_name;
@@ -260,10 +226,10 @@ private:
   nsString     m_body; // to be converted from UTF-16 using m_mimeCharset
   bool         m_bodyIsHtml;
 
-  PRUint32 m_msgFlags;
-  PRUint32 m_msgLastVerb;
-  
-  nsIIOService *      m_pIOService;
+  uint32_t m_msgFlags;
+  uint32_t m_msgLastVerb;
+
+  nsCOMPtr<nsIIOService> m_pIOService;
 
   void    GetDownloadState();
 
@@ -273,13 +239,13 @@ private:
   //  PR_SUBJECT
   //  PR_MESSAGE_RECIPIENTS
   // and PR_CREATION_TIME if needed?
-  bool    FetchHeaders( void);
-  bool    FetchBody( void);
-  void    FetchFlags( void);
+  bool    FetchHeaders(void);
+  bool    FetchBody(void);
+  void    FetchFlags(void);
 
-  static bool GetTmpFile(/*out*/ nsILocalFile **aResult);
-  static bool CopyMsgAttachToFile(LPATTACH lpAttach, /*out*/ nsILocalFile **tmp_file);
-  static bool CopyBinAttachToFile( LPATTACH lpAttach, nsILocalFile **tmp_file);
+  static bool GetTmpFile(/*out*/ nsIFile **aResult);
+  static bool CopyMsgAttachToFile(LPATTACH lpAttach, /*out*/ nsIFile **tmp_file);
+  static bool CopyBinAttachToFile(LPATTACH lpAttach, nsIFile **tmp_file);
 
   static void ClearAttachment(attach_data* data);
   void    ClearAttachments();
@@ -293,12 +259,12 @@ private:
 
   void    ProcessContentType();
   bool    CheckBodyInCharsetRange(const char* charset);
-  void    FormatDateTime( SYSTEMTIME & tm, nsString& s, bool includeTZ = true);
-  void    BuildFromLine( void);
+  void    FormatDateTime(SYSTEMTIME& tm, nsCString& s, bool includeTZ = true);
+  void    BuildFromLine(void);
 
-  inline static bool IsSpace( char c) {
+  inline static bool IsSpace(char c) {
     return c == ' ' || c == '\r' || c == '\n' || c == '\b' || c == '\t';}
-  inline static bool IsSpace( wchar_t c) { 
+  inline static bool IsSpace(wchar_t c) { 
     return ((c & 0xFF) == c) && IsSpace(static_cast<char>(c)); } // Avoid false detections
 };
 

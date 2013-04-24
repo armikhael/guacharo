@@ -1,40 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Ben Bucksch <mozilla@bucksch.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "mimetpla.h"
 #include "mimebuf.h"
@@ -56,8 +23,8 @@ MimeDefClass(MimeInlineTextPlain, MimeInlineTextPlainClass,
        mimeInlineTextPlainClass, &MIME_SUPERCLASS);
 
 static int MimeInlineTextPlain_parse_begin (MimeObject *);
-static int MimeInlineTextPlain_parse_line (const char *, PRInt32, MimeObject *);
-static int MimeInlineTextPlain_parse_eof (MimeObject *, PRBool);
+static int MimeInlineTextPlain_parse_line (const char *, int32_t, MimeObject *);
+static int MimeInlineTextPlain_parse_eof (MimeObject *, bool);
 
 static int
 MimeInlineTextPlainClassInitialize(MimeInlineTextPlainClass *clazz)
@@ -72,8 +39,8 @@ MimeInlineTextPlainClassInitialize(MimeInlineTextPlainClass *clazz)
 
 extern "C"
 void
-MimeTextBuildPrefixCSS(PRInt32    quotedSizeSetting,   // mail.quoted_size
-                       PRInt32    quotedStyleSetting,  // mail.quoted_style
+MimeTextBuildPrefixCSS(int32_t    quotedSizeSetting,   // mail.quoted_size
+                       int32_t    quotedStyleSetting,  // mail.quoted_style
                        char       *citationColor,      // mail.citation_color
                        nsACString &style)
 {
@@ -116,14 +83,14 @@ static int
 MimeInlineTextPlain_parse_begin (MimeObject *obj)
 {
   int status = 0;
-  PRBool quoting = ( obj->options
+  bool quoting = ( obj->options
     && ( obj->options->format_out == nsMimeOutput::nsMimeMessageQuoting ||
          obj->options->format_out == nsMimeOutput::nsMimeMessageBodyQuoting
        )       );  // The output will be inserted in the composer as quotation
-  PRBool plainHTML = quoting || (obj->options &&
+  bool plainHTML = quoting || (obj->options &&
        (obj->options->format_out == nsMimeOutput::nsMimeMessageSaveAs));
        // Just good(tm) HTML. No reliance on CSS.
-  PRBool rawPlainText = obj->options &&
+  bool rawPlainText = obj->options &&
        (obj->options->format_out == nsMimeOutput::nsMimeMessageFilterSniffer
          || obj->options->format_out == nsMimeOutput::nsMimeMessageAttach);
 
@@ -142,13 +109,13 @@ MimeInlineTextPlain_parse_begin (MimeObject *obj)
       // Get the prefs
 
       // Quoting
-      text->mBlockquoting = PR_TRUE; // mail.quoteasblock
+      text->mBlockquoting = true; // mail.quoteasblock
 
       // Viewing
       text->mQuotedSizeSetting = 0;   // mail.quoted_size
       text->mQuotedStyleSetting = 0;  // mail.quoted_style
-      text->mCitationColor = nsnull;  // mail.citation_color
-      PRBool graphicalQuote = PR_TRUE; // mail.quoted_graphical
+      text->mCitationColor = nullptr;  // mail.citation_color
+      bool graphicalQuote = true; // mail.quoted_graphical
 
       nsIPrefBranch *prefBranch = GetPrefBranch(obj->options);
       if (prefBranch)
@@ -176,8 +143,8 @@ MimeInlineTextPlain_parse_begin (MimeObject *obj)
         if (nsMimeOutput::nsMimeMessageBodyDisplay == obj->options->format_out ||
             nsMimeOutput::nsMimeMessagePrintOutput == obj->options->format_out)
         {
-          PRInt32 fontSize;       // default font size
-          PRInt32 fontSizePercentage;   // size percentage
+          int32_t fontSize;       // default font size
+          int32_t fontSizePercentage;   // size percentage
           nsresult rv = GetMailNewsFont(obj,
                              !obj->options->variable_width_plaintext_p,
                              &fontSize, &fontSizePercentage, fontLang);
@@ -234,7 +201,7 @@ MimeInlineTextPlain_parse_begin (MimeObject *obj)
       status = MimeObject_write_separator(obj);
       if (status < 0) return status;
 
-      status = MimeObject_write(obj, openingDiv.get(), openingDiv.Length(), PR_TRUE);
+      status = MimeObject_write(obj, openingDiv.get(), openingDiv.Length(), true);
       if (status < 0) return status;
     }
   }
@@ -243,7 +210,7 @@ MimeInlineTextPlain_parse_begin (MimeObject *obj)
 }
 
 static int
-MimeInlineTextPlain_parse_eof (MimeObject *obj, PRBool abort_p)
+MimeInlineTextPlain_parse_eof (MimeObject *obj, bool abort_p)
 {
   int status;
 
@@ -256,12 +223,12 @@ MimeInlineTextPlain_parse_eof (MimeObject *obj, PRBool abort_p)
   if (text && text->mCitationColor)
     citationColor.Adopt(text->mCitationColor);
 
-  PRBool quoting = ( obj->options
+  bool quoting = ( obj->options
     && ( obj->options->format_out == nsMimeOutput::nsMimeMessageQuoting ||
          obj->options->format_out == nsMimeOutput::nsMimeMessageBodyQuoting
        )           );  // see above
 
-  PRBool rawPlainText = obj->options &&
+  bool rawPlainText = obj->options &&
        (obj->options->format_out == nsMimeOutput::nsMimeMessageFilterSniffer
         || obj->options->format_out == nsMimeOutput::nsMimeMessageAttach);
 
@@ -279,14 +246,14 @@ MimeInlineTextPlain_parse_eof (MimeObject *obj, PRBool abort_p)
       MimeInlineTextPlain *text = (MimeInlineTextPlain *) obj;
       if (text->mIsSig && !quoting)
       {
-        status = MimeObject_write(obj, "</div>", 6, PR_FALSE);  // .moz-txt-sig
+        status = MimeObject_write(obj, "</div>", 6, false);  // .moz-txt-sig
         if (status < 0) return status;
       }
-      status = MimeObject_write(obj, "</pre>", 6, PR_FALSE);
+      status = MimeObject_write(obj, "</pre>", 6, false);
       if (status < 0) return status;
       if (!quoting)
       {
-        status = MimeObject_write(obj, "</div>", 6, PR_FALSE);
+        status = MimeObject_write(obj, "</div>", 6, false);
                                         // .moz-text-plain
         if (status < 0) return status;
       }
@@ -303,18 +270,18 @@ MimeInlineTextPlain_parse_eof (MimeObject *obj, PRBool abort_p)
 
 
 static int
-MimeInlineTextPlain_parse_line (const char *line, PRInt32 length, MimeObject *obj)
+MimeInlineTextPlain_parse_line (const char *line, int32_t length, MimeObject *obj)
 {
   int status;
-  PRBool quoting = ( obj->options
+  bool quoting = ( obj->options
     && ( obj->options->format_out == nsMimeOutput::nsMimeMessageQuoting ||
          obj->options->format_out == nsMimeOutput::nsMimeMessageBodyQuoting
        )           );  // see above
-  PRBool plainHTML = quoting || (obj->options &&
+  bool plainHTML = quoting || (obj->options &&
        obj->options->format_out == nsMimeOutput::nsMimeMessageSaveAs);
        // see above
 
-  PRBool rawPlainText = obj->options &&
+  bool rawPlainText = obj->options &&
        (obj->options->format_out == nsMimeOutput::nsMimeMessageFilterSniffer
        || obj->options->format_out == nsMimeOutput::nsMimeMessageAttach);
 
@@ -329,7 +296,7 @@ MimeInlineTextPlain_parse_line (const char *line, PRInt32 length, MimeObject *ob
   mozITXTToHTMLConv *conv = GetTextConverter(obj->options);
   MimeInlineTextPlain *text = (MimeInlineTextPlain *) obj;
 
-  PRBool skipConversion = !conv || rawPlainText ||
+  bool skipConversion = !conv || rawPlainText ||
                           (obj->options && obj->options->force_user_charset);
 
   char *mailCharset = NULL;
@@ -361,14 +328,14 @@ MimeInlineTextPlain_parse_line (const char *line, PRInt32 length, MimeObject *ob
     nsCAutoString prefaceResultStr;  // Quoting stuff before the real text
 
     // Recognize quotes
-    PRUint32 oldCiteLevel = text->mCiteLevel;
-    PRUint32 logicalLineStart = 0;
+    uint32_t oldCiteLevel = text->mCiteLevel;
+    uint32_t logicalLineStart = 0;
     rv = conv->CiteLevelTXT(lineSourceStr.get(),
                             &logicalLineStart, &(text->mCiteLevel));
     NS_ENSURE_SUCCESS(rv, -1);
 
     // Find out, which recognitions to do
-    PRUint32 whattodo = obj->options->whattodo;
+    uint32_t whattodo = obj->options->whattodo;
     if (plainHTML)
     {
       if (quoting)
@@ -386,7 +353,7 @@ MimeInlineTextPlain_parse_line (const char *line, PRInt32 length, MimeObject *ob
     if (text->mCiteLevel > oldCiteLevel)
     {
       prefaceResultStr += "</pre>";
-      for (PRUint32 i = 0; i < text->mCiteLevel - oldCiteLevel; i++)
+      for (uint32_t i = 0; i < text->mCiteLevel - oldCiteLevel; i++)
       {
         nsCAutoString style;
         MimeTextBuildPrefixCSS(text->mQuotedSizeSetting, text->mQuotedStyleSetting,
@@ -405,7 +372,7 @@ MimeInlineTextPlain_parse_line (const char *line, PRInt32 length, MimeObject *ob
     else if (text->mCiteLevel < oldCiteLevel)
     {
       prefaceResultStr += "</pre>";
-      for (PRUint32 i = 0; i < oldCiteLevel - text->mCiteLevel; i++)
+      for (uint32_t i = 0; i < oldCiteLevel - text->mCiteLevel; i++)
         prefaceResultStr += "</blockquote>";
       prefaceResultStr += "<pre wrap>\n";
     }
@@ -436,7 +403,7 @@ MimeInlineTextPlain_parse_line (const char *line, PRInt32 length, MimeObject *ob
         && Substring(lineSourceStr, 0, 3).EqualsLiteral("-- ")
         && (lineSourceStr[3] == '\r' || lineSourceStr[3] == '\n') )
     {
-      text->mIsSig = PR_TRUE;
+      text->mIsSig = true;
       if (!quoting)
         prefaceResultStr += "<div class=\"moz-txt-sig\">";
     }
@@ -452,7 +419,7 @@ MimeInlineTextPlain_parse_line (const char *line, PRInt32 length, MimeObject *ob
 
     if (!(text->mIsSig && quoting))
     {
-      status = MimeObject_write(obj, prefaceResultStr.get(), prefaceResultStr.Length(), PR_TRUE);
+      status = MimeObject_write(obj, prefaceResultStr.get(), prefaceResultStr.Length(), true);
       if (status < 0) return status;
       nsCAutoString outString;
       if (obj->options->format_out != nsMimeOutput::nsMimeMessageSaveAs ||
@@ -465,7 +432,7 @@ MimeInlineTextPlain_parse_line (const char *line, PRInt32 length, MimeObject *ob
         NS_ENSURE_SUCCESS(rv, -1);
       }
 
-      status = MimeObject_write(obj, outString.get(), outString.Length(), PR_TRUE);
+      status = MimeObject_write(obj, outString.get(), outString.Length(), true);
     }
     else
     {
@@ -474,7 +441,7 @@ MimeInlineTextPlain_parse_line (const char *line, PRInt32 length, MimeObject *ob
   }
   else
   {
-    status = MimeObject_write(obj, line, length, PR_TRUE);
+    status = MimeObject_write(obj, line, length, true);
   }
 
   return status;

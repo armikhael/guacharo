@@ -1,43 +1,7 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License
- * Version 1.1 (the "License"); you may not use this file except in
- * compliance with the License. You may obtain a copy of the License
- * at http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS"
- * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
- * the License for the specific language governing rights and
- * limitations under the License.
- *
- * The Original Code is the Places Tagging Service.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Asaf Romano <mano@mozilla.com> (Original Author)
- *   Dietrich Ayala <dietrich@mozilla.com>
- *   Marco Bonardo <mak77@bonardo.net>
- *   Drew Willcoxon <adw@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 const Cc = Components.classes;
 const Ci = Components.interfaces;
@@ -61,29 +25,6 @@ function TaggingService() {
 }
 
 TaggingService.prototype = {
-  /**
-   * If there's no tag with the given name or id, null is returned;
-   */
-  _getTagResult: function TS__getTagResult(aTagNameOrId) {
-    if (!aTagNameOrId)
-      throw Cr.NS_ERROR_INVALID_ARG;
-
-    var tagId = null;
-    if (typeof(aTagNameOrId) == "string")
-      tagId = this._getItemIdForTag(aTagNameOrId);
-    else
-      tagId = aTagNameOrId;
-
-    if (tagId == -1)
-      return null;
-
-    var options = PlacesUtils.history.getNewQueryOptions();
-    var query = PlacesUtils.history.getNewQuery();
-    query.setFolders([tagId], 1);
-    var result = PlacesUtils.history.executeQuery(query, options);
-    return result;
-  },
-
   /**
    * Creates a tag container under the tags-root with the given name.
    *
@@ -116,11 +57,24 @@ TaggingService.prototype = {
     var tagId = this._getItemIdForTag(aTagName);
     if (tagId == -1)
       return -1;
-    var bookmarkIds = PlacesUtils.bookmarks.getBookmarkIdsForURI(aURI);
-    for (var i=0; i < bookmarkIds.length; i++) {
-      var parent = PlacesUtils.bookmarks.getFolderIdForItem(bookmarkIds[i]);
-      if (parent == tagId)
-        return bookmarkIds[i];
+    // Using bookmarks service API for this would be a pain.
+    // Until tags implementation becomes sane, go the query way.
+    let db = PlacesUtils.history.QueryInterface(Ci.nsPIPlacesDatabase)
+                                .DBConnection;
+    let stmt = db.createStatement(
+      "SELECT id FROM moz_bookmarks "
+    + "WHERE parent = :tag_id "
+    + "AND fk = (SELECT id FROM moz_places WHERE url = :page_url)"
+    );
+    stmt.params.tag_id = tagId;
+    stmt.params.page_url = aURI.spec;
+    try {
+      if (stmt.executeStep()) {
+        return stmt.row.id;
+      }
+    }
+    finally {
+      stmt.finalize();
     }
     return -1;
   },
@@ -223,14 +177,24 @@ TaggingService.prototype = {
    *        the itemId of the tag element under the tags root
    */
   _removeTagIfEmpty: function TS__removeTagIfEmpty(aTagId) {
-    var result = this._getTagResult(aTagId);
-    if (!result)
-      return;
-    var node = PlacesUtils.asContainer(result.root);
-    node.containerOpen = true;
-    var cc = node.childCount;
-    node.containerOpen = false;
-    if (cc == 0) {
+    let count = 0;
+    let db = PlacesUtils.history.QueryInterface(Ci.nsPIPlacesDatabase)
+                                .DBConnection;
+    let stmt = db.createStatement(
+      "SELECT count(*) AS count FROM moz_bookmarks "
+    + "WHERE parent = :tag_id"
+    );
+    stmt.params.tag_id = aTagId;
+    try {
+      if (stmt.executeStep()) {
+        count = stmt.row.count;
+      }
+    }
+    finally {
+      stmt.finalize();
+    }
+
+    if (count == 0) {
       PlacesUtils.bookmarks.removeItem(aTagId);
     }
   },
@@ -271,27 +235,34 @@ TaggingService.prototype = {
   },
 
   // nsITaggingService
-  getURIsForTag: function TS_getURIsForTag(aTag) {
-    if (!aTag || aTag.length == 0)
+  getURIsForTag: function TS_getURIsForTag(aTagName) {
+    if (!aTagName || aTagName.length == 0)
       throw Cr.NS_ERROR_INVALID_ARG;
 
-    var uris = [];
-    var tagResult = this._getTagResult(aTag);
-    if (tagResult) {
-      var tagNode = tagResult.root;
-      tagNode.QueryInterface(Ci.nsINavHistoryContainerResultNode);
-      tagNode.containerOpen = true;
-      var cc = tagNode.childCount;
-      for (var i = 0; i < cc; i++) {
+    let uris = [];
+    let tagId = this._getItemIdForTag(aTagName);
+    if (tagId == -1)
+      return uris;
+
+    let db = PlacesUtils.history.QueryInterface(Ci.nsPIPlacesDatabase)
+                                .DBConnection;
+    let stmt = db.createStatement(
+      "SELECT h.url FROM moz_places h "
+    + "JOIN moz_bookmarks b ON b.fk = h.id "
+    + "WHERE b.parent = :tag_id "
+    );
+    stmt.params.tag_id = tagId;
+    try {
+      while (stmt.executeStep()) {
         try {
-          uris.push(Services.io.newURI(tagNode.getChild(i).uri, null, null));
-        } catch (ex) {
-          // This is an invalid node, tags should only contain valid uri nodes.
-          // continue to next node.
-        }
+          uris.push(Services.io.newURI(stmt.row.url, null, null));
+        } catch (ex) {}
       }
-      tagNode.containerOpen = false;
     }
+    finally {
+      stmt.finalize();
+    }
+
     return uris;
   },
 
@@ -321,18 +292,21 @@ TaggingService.prototype = {
   get _tagFolders() {
     if (!this.__tagFolders) {
       this.__tagFolders = [];
-      var options = PlacesUtils.history.getNewQueryOptions();
-      var query = PlacesUtils.history.getNewQuery();
-      query.setFolders([PlacesUtils.tagsFolderId], 1);
-      var tagsResult = PlacesUtils.history.executeQuery(query, options);
-      var root = tagsResult.root;
-      root.containerOpen = true;
-      var cc = root.childCount;
-      for (var i=0; i < cc; i++) {
-        var child = root.getChild(i);
-        this.__tagFolders[child.itemId] = child.title;
+
+      let db = PlacesUtils.history.QueryInterface(Ci.nsPIPlacesDatabase)
+                                  .DBConnection;
+      let stmt = db.createStatement(
+        "SELECT id, title FROM moz_bookmarks WHERE parent = :tags_root "
+      );
+      stmt.params.tags_root = PlacesUtils.tagsFolderId;
+      try {
+        while (stmt.executeStep()) {
+          this.__tagFolders[stmt.row.id] = stmt.row.title;
+        }
       }
-      root.containerOpen = false;
+      finally {
+        stmt.finalize();
+      }
     }
 
     return this.__tagFolders;
@@ -350,6 +324,11 @@ TaggingService.prototype = {
     return allTags;
   },
 
+  // nsITaggingService
+  get hasTags() {
+    return this._tagFolders.length > 0;
+  },
+
   // nsIObserver
   observe: function TS_observe(aSubject, aTopic, aData) {
     if (aTopic == TOPIC_SHUTDOWN) {
@@ -360,29 +339,47 @@ TaggingService.prototype = {
 
   /**
    * If the only bookmark items associated with aURI are contained in tag
-   * folders, returns the IDs of those tag folders.  This can be the case if
+   * folders, returns the IDs of those items.  This can be the case if
    * the URI was bookmarked and tagged at some point, but the bookmark was
-   * removed, leaving only the bookmark items in tag folders.  Returns null
-   * if the URI is either properly bookmarked or not tagged.
+   * removed, leaving only the bookmark items in tag folders.  If the URI is
+   * either properly bookmarked or not tagged just returns and empty array.
    *
    * @param   aURI
    *          A URI (string) that may or may not be bookmarked
-   * @returns null or an array of tag IDs
+   * @returns an array of item ids
    */
-  _getTagsIfUnbookmarkedURI: function TS__getTagsIfUnbookmarkedURI(aURI) {
-    var tagIds = [];
+  _getTaggedItemIdsIfUnbookmarkedURI:
+  function TS__getTaggedItemIdsIfUnbookmarkedURI(aURI) {
+    var itemIds = [];
     var isBookmarked = false;
-    var itemIds = PlacesUtils.bookmarks.getBookmarkIdsForURI(aURI);
 
-    for (let i = 0; !isBookmarked && i < itemIds.length; i++) {
-      var parentId = PlacesUtils.bookmarks.getFolderIdForItem(itemIds[i]);
-      if (this._tagFolders[parentId])
-        tagIds.push(parentId);
-      else
-        isBookmarked = true;
+    // Using bookmarks service API for this would be a pain.
+    // Until tags implementation becomes sane, go the query way.
+    let db = PlacesUtils.history.QueryInterface(Ci.nsPIPlacesDatabase)
+                                .DBConnection;
+    let stmt = db.createStatement(
+      "SELECT id, parent "
+    + "FROM moz_bookmarks "
+    + "WHERE fk = (SELECT id FROM moz_places WHERE url = :page_url)"
+    );
+    stmt.params.page_url = aURI.spec;
+    try {
+      while (stmt.executeStep() && !isBookmarked) {
+        if (this._tagFolders[stmt.row.parent]) {
+          // This is a tag entry.
+          itemIds.push(stmt.row.id);
+        }
+        else {
+          // This is a real bookmark, so the bookmarked URI is not an orphan.
+          isBookmarked = true;
+        }
+      }
+    }
+    finally {
+      stmt.finalize();
     }
 
-    return !isBookmarked && tagIds.length > 0 ? tagIds : null;
+    return isBookmarked ? [] : itemIds;
   },
 
   // nsINavBookmarkObserver
@@ -399,20 +396,21 @@ TaggingService.prototype = {
   onItemRemoved: function TS_onItemRemoved(aItemId, aFolderId, aIndex,
                                            aItemType, aURI) {
     // Item is a tag folder.
-    if (aFolderId == PlacesUtils.tagsFolderId && this._tagFolders[aItemId])
+    if (aFolderId == PlacesUtils.tagsFolderId && this._tagFolders[aItemId]) {
       delete this._tagFolders[aItemId];
-
+    }
     // Item is a bookmark that was removed from a non-tag folder.
     else if (aURI && !this._tagFolders[aFolderId]) {
-
       // If the only bookmark items now associated with the bookmark's URI are
       // contained in tag folders, the URI is no longer properly bookmarked, so
       // untag it.
-      var tagIds = this._getTagsIfUnbookmarkedURI(aURI);
-      if (tagIds)
-        this.untagURI(aURI, tagIds);
+      let itemIds = this._getTaggedItemIdsIfUnbookmarkedURI(aURI);
+      for (let i = 0; i < itemIds.length; i++) {
+        try {
+          PlacesUtils.bookmarks.removeItem(itemIds[i]);
+        } catch (ex) {}
+      }
     }
-
     // Item is a tag entry.  If this was the last entry for this tag, remove it.
     else if (aURI && this._tagFolders[aFolderId]) {
       this._removeTagIfEmpty(aFolderId);
@@ -438,9 +436,13 @@ TaggingService.prototype = {
   onBeginUpdateBatch: function () {},
   onEndUpdateBatch: function () {},
 
-  // nsISupports
+  //////////////////////////////////////////////////////////////////////////////
+  //// nsISupports
+
   classID: Components.ID("{bbc23860-2553-479d-8b78-94d9038334f7}"),
-  
+
+  _xpcom_factory: XPCOMUtils.generateSingletonFactory(TaggingService),
+
   QueryInterface: XPCOMUtils.generateQI([
     Ci.nsITaggingService
   , Ci.nsINavBookmarkObserver
@@ -500,6 +502,8 @@ TagAutoCompleteResult.prototype = {
   get matchCount() {
     return this._results.length;
   },
+
+  get typeAheadResult() false,
 
   /**
    * Get the value of the result at the given index
@@ -639,8 +643,11 @@ TagAutoCompleteSearch.prototype = {
         */
       }
 
-      var newResult = new TagAutoCompleteResult(searchString,
-        Ci.nsIAutoCompleteResult.RESULT_SUCCESS, 0, "", results, comments);
+      let searchResult = results.length > 0 ?
+                           Ci.nsIAutoCompleteResult.RESULT_SUCCESS :
+                           Ci.nsIAutoCompleteResult.RESULT_NOMATCH;
+      var newResult = new TagAutoCompleteResult(searchString, searchResult, 0,
+                                                "", results, comments);
       listener.onSearchResult(self, newResult);
       yield false;
     }
@@ -658,12 +665,16 @@ TagAutoCompleteSearch.prototype = {
     this._stopped = true;
   },
 
-  // nsISupports
+  //////////////////////////////////////////////////////////////////////////////
+  //// nsISupports
+
+  classID: Components.ID("{1dcc23b0-d4cb-11dc-9ad6-479d56d89593}"),
+
+  _xpcom_factory: XPCOMUtils.generateSingletonFactory(TagAutoCompleteSearch),
+
   QueryInterface: XPCOMUtils.generateQI([
     Ci.nsIAutoCompleteSearch
-  ]),
-
-  classID: Components.ID("{1dcc23b0-d4cb-11dc-9ad6-479d56d89593}")
+  ])
 };
 
 let component = [TaggingService, TagAutoCompleteSearch];

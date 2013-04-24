@@ -1,43 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Seth Spitzer <sspitzer@netscape.com>
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *   Mark Banner <mark@standard8.demon.co.uk>
- *   Joshua Cranmer <Pidgeot18@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsAbCardProperty.h"
 #include "nsAbBaseCID.h"
@@ -61,6 +25,9 @@
 #include "nsCOMArray.h"
 #include "nsArrayEnumerator.h"
 #include "prmem.h"
+#include "mozilla/Services.h"
+#include "mozilla/Util.h"
+using namespace mozilla;
 
 #define PREF_MAIL_ADDR_BOOK_LASTNAMEFIRST "mail.addr_book.lastnamefirst"
 
@@ -82,8 +49,12 @@ static const AppendItem NAME_ATTRS_ARRAY[] = {
   {kDisplayNameProperty, "propertyDisplayName", eAppendLabel},
   {kNicknameProperty, "propertyNickname", eAppendLabel},
   {kPriEmailProperty, "", eAppendLine},
+#ifndef MOZ_THUNDERBIRD
   {k2ndEmailProperty, "", eAppendLine},
   {kScreenNameProperty, "propertyScreenName", eAppendLabel}
+#else
+  {k2ndEmailProperty, "", eAppendLine}
+#endif
 };
 
 static const AppendItem PHONE_ATTRS_ARRAY[] = {
@@ -121,8 +92,19 @@ static const AppendItem CUSTOM_ATTRS_ARRAY[] = {
   {kNotesProperty, "", eAppendLine}
 };
 
+static const AppendItem CHAT_ATTRS_ARRAY[] = {
+  {kGtalkProperty, "propertyGtalk", eAppendLabel},
+  {kAIMProperty, "propertyAIM", eAppendLabel},
+  {kYahooProperty, "propertyYahoo", eAppendLabel},
+  {kSkypeProperty, "propertySkype", eAppendLabel},
+  {kQQProperty, "propertyQQ", eAppendLabel},
+  {kMSNProperty, "propertyMSN", eAppendLabel},
+  {kICQProperty, "propertyICQ", eAppendLabel},
+  {kXMPPProperty, "propertyXMPP", eAppendLabel}
+};
+
 nsAbCardProperty::nsAbCardProperty()
-  : m_IsMailList(PR_FALSE)
+  : m_IsMailList(false)
 {
   m_properties.Init();
 
@@ -131,7 +113,7 @@ nsAbCardProperty::nsAbCardProperty()
   SetPropertyAsUint32(kPopularityIndexProperty, 0);
   // Uninitialized...
   SetPropertyAsUint32(kLastModifiedDateProperty, 0);
-  SetPropertyAsBool(kAllowRemoteContentProperty, PR_FALSE);
+  SetPropertyAsBool(kAllowRemoteContentProperty, false);
 }
 
 nsAbCardProperty::~nsAbCardProperty(void)
@@ -182,13 +164,13 @@ NS_IMETHODIMP nsAbCardProperty::SetLocalId(const nsACString &aLocalId)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-NS_IMETHODIMP nsAbCardProperty::GetIsMailList(PRBool *aIsMailList)
+NS_IMETHODIMP nsAbCardProperty::GetIsMailList(bool *aIsMailList)
 {
     *aIsMailList = m_IsMailList;
     return NS_OK;
 }
 
-NS_IMETHODIMP nsAbCardProperty::SetIsMailList(PRBool aIsMailList)
+NS_IMETHODIMP nsAbCardProperty::SetIsMailList(bool aIsMailList)
 {
     m_IsMailList = aIsMailList;
     return NS_OK;
@@ -288,14 +270,14 @@ NS_IMETHODIMP nsAbCardProperty::GetPropertyAsAUTF8String(const char *name, nsACS
     variant->GetAsAUTF8String(value) : NS_ERROR_NOT_AVAILABLE;
 }
 
-NS_IMETHODIMP nsAbCardProperty::GetPropertyAsUint32(const char *name, PRUint32 *value) 
+NS_IMETHODIMP nsAbCardProperty::GetPropertyAsUint32(const char *name, uint32_t *value) 
 {
   nsCOMPtr<nsIVariant> variant;
   return m_properties.Get(nsDependentCString(name), getter_AddRefs(variant)) ?
     variant->GetAsUint32(value) : NS_ERROR_NOT_AVAILABLE;
 }
 
-NS_IMETHODIMP nsAbCardProperty::GetPropertyAsBool(const char *name, PRBool *value) 
+NS_IMETHODIMP nsAbCardProperty::GetPropertyAsBool(const char *name, bool *value) 
 {
   nsCOMPtr<nsIVariant> variant;
   return m_properties.Get(nsDependentCString(name), getter_AddRefs(variant)) ?
@@ -304,35 +286,40 @@ NS_IMETHODIMP nsAbCardProperty::GetPropertyAsBool(const char *name, PRBool *valu
 
 NS_IMETHODIMP nsAbCardProperty::SetProperty(const nsACString &name, nsIVariant *value)
 {
-  return m_properties.Put(name, value);
+  m_properties.Put(name, value);
+  return NS_OK;
 }
 
 NS_IMETHODIMP nsAbCardProperty::SetPropertyAsAString(const char *name, const nsAString &value) 
 {
   nsCOMPtr<nsIWritableVariant> variant = do_CreateInstance(NS_VARIANT_CONTRACTID);
   variant->SetAsAString(value);
-  return m_properties.Put(nsDependentCString(name), variant);
+  m_properties.Put(nsDependentCString(name), variant);
+  return NS_OK;
 }
 
 NS_IMETHODIMP nsAbCardProperty::SetPropertyAsAUTF8String(const char *name, const nsACString &value) 
 {
   nsCOMPtr<nsIWritableVariant> variant = do_CreateInstance(NS_VARIANT_CONTRACTID);
   variant->SetAsAUTF8String(value);
-  return m_properties.Put(nsDependentCString(name), variant);
+  m_properties.Put(nsDependentCString(name), variant);
+  return NS_OK;
 }
 
-NS_IMETHODIMP nsAbCardProperty::SetPropertyAsUint32(const char *name, PRUint32 value) 
+NS_IMETHODIMP nsAbCardProperty::SetPropertyAsUint32(const char *name, uint32_t value) 
 {
   nsCOMPtr<nsIWritableVariant> variant = do_CreateInstance(NS_VARIANT_CONTRACTID);
   variant->SetAsUint32(value);
-  return m_properties.Put(nsDependentCString(name), variant);
+  m_properties.Put(nsDependentCString(name), variant);
+  return NS_OK;
 }
 
-NS_IMETHODIMP nsAbCardProperty::SetPropertyAsBool(const char *name, PRBool value) 
+NS_IMETHODIMP nsAbCardProperty::SetPropertyAsBool(const char *name, bool value) 
 {
   nsCOMPtr<nsIWritableVariant> variant = do_CreateInstance(NS_VARIANT_CONTRACTID);
   variant->SetAsBool(value);
-  return m_properties.Put(nsDependentCString(name), variant);
+  m_properties.Put(nsDependentCString(name), variant);
+  return NS_OK;
 }
 
 NS_IMETHODIMP nsAbCardProperty::DeleteProperty(const nsACString &name)
@@ -406,25 +393,25 @@ NS_IMETHODIMP nsAbCardProperty::SetPrimaryEmail(const nsAString &aString)
 }
 
 NS_IMETHODIMP nsAbCardProperty::HasEmailAddress(const nsACString &aEmailAddress,
-                                                PRBool *aResult)
+                                                bool *aResult)
 {
   NS_ENSURE_ARG_POINTER(aResult);
 
-  *aResult = PR_FALSE;
+  *aResult = false;
 
   nsCString emailAddress;
   nsresult rv = GetPropertyAsAUTF8String(kPriEmailProperty, emailAddress);
   if (rv != NS_ERROR_NOT_AVAILABLE &&
       emailAddress.Equals(aEmailAddress, nsCaseInsensitiveCStringComparator()))
   {
-    *aResult = PR_TRUE;
+    *aResult = true;
     return NS_OK;
   }
 
   rv = GetPropertyAsAUTF8String(k2ndEmailProperty, emailAddress);
   if (rv != NS_ERROR_NOT_AVAILABLE &&
       emailAddress.Equals(aEmailAddress, nsCaseInsensitiveCStringComparator()))
-    *aResult = PR_TRUE;
+    *aResult = true;
 
   return NS_OK;
 }
@@ -439,7 +426,7 @@ NS_IMETHODIMP nsAbCardProperty::Copy(nsIAbCard* srcCard)
   nsresult rv = srcCard->GetProperties(getter_AddRefs(properties));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool hasMore;
+  bool hasMore;
   nsCOMPtr<nsISupports> result;
   while (NS_SUCCEEDED(rv = properties->HasMoreElements(&hasMore)) && hasMore)
   {
@@ -458,7 +445,7 @@ NS_IMETHODIMP nsAbCardProperty::Copy(nsIAbCard* srcCard)
   }
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool isMailList;
+  bool isMailList;
   srcCard->GetIsMailList(&isMailList);
   SetIsMailList(isMailList);
 
@@ -469,7 +456,7 @@ NS_IMETHODIMP nsAbCardProperty::Copy(nsIAbCard* srcCard)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsAbCardProperty::Equals(nsIAbCard *card, PRBool *result)
+NS_IMETHODIMP nsAbCardProperty::Equals(nsIAbCard *card, bool *result)
 {
   *result = (card == this);
   return NS_OK;
@@ -498,10 +485,10 @@ NS_IMETHODIMP nsAbCardProperty::TranslateTo(const nsACString &type, nsACString &
   return NS_ERROR_ILLEGAL_VALUE;
 }
 //
-static VObject* myAddPropValue(VObject *o, const char *propName, const PRUnichar *propValue, PRBool *aCardHasData)
+static VObject* myAddPropValue(VObject *o, const char *propName, const PRUnichar *propValue, bool *aCardHasData)
 {
     if (aCardHasData)
-        *aCardHasData = PR_TRUE;
+        *aCardHasData = true;
     return addPropValue(o, propName, NS_ConvertUTF16toUTF8(propValue).get());
 }
 
@@ -509,7 +496,7 @@ nsresult nsAbCardProperty::ConvertToEscapedVCard(nsACString &aResult)
 {
     nsString str;
     nsresult rv;
-    PRBool vCardHasData = PR_FALSE;
+    bool vCardHasData = false;
     VObject* vObj = newVObject(VCCardProp);
     VObject* t;
 
@@ -680,7 +667,7 @@ nsresult nsAbCardProperty::ConvertToEscapedVCard(nsACString &aResult)
         myAddPropValue(vObj, VCNoteProp, str.get(), &vCardHasData);
     }
 
-    PRUint32 format;
+    uint32_t format;
     rv = GetPropertyAsUint32(kPreferMailFormatProperty, &format);
     if (NS_SUCCEEDED(rv) && format == nsIAbPreferMailFormat::html) {
         myAddPropValue(vObj, VCUseHTML, NS_LITERAL_STRING("TRUE").get(), &vCardHasData);
@@ -695,7 +682,7 @@ nsresult nsAbCardProperty::ConvertToEscapedVCard(nsACString &aResult)
         myAddPropValue(vObj, VCURLProp, str.get(), &vCardHasData);
     }
 
-    myAddPropValue(vObj, VCVersionProp, NS_LITERAL_STRING("2.1").get(), nsnull);
+    myAddPropValue(vObj, VCVersionProp, NS_LITERAL_STRING("2.1").get(), nullptr);
 
     if (!vCardHasData) {
         aResult.Truncate();
@@ -724,8 +711,9 @@ nsresult nsAbCardProperty::ConvertToBase64EncodedXML(nsACString &result)
 
   // Get Address Book string and set it as title of XML document
   nsCOMPtr<nsIStringBundle> bundle;
-  nsCOMPtr<nsIStringBundleService> stringBundleService = do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-  if (NS_SUCCEEDED(rv)) {
+  nsCOMPtr<nsIStringBundleService> stringBundleService =
+    mozilla::services::GetStringBundleService();
+  if (stringBundleService) {
     rv = stringBundleService->CreateBundle(sAddrbookProperties, getter_AddRefs(bundle));
     if (NS_SUCCEEDED(rv)) {
       nsString addrBook;
@@ -745,7 +733,7 @@ nsresult nsAbCardProperty::ConvertToBase64EncodedXML(nsACString &result)
   xmlStr.Append(xmlSubstr);
   xmlStr.AppendLiteral("</directory>\n");
 
-  char *tmpRes = PL_Base64Encode(NS_ConvertUTF16toUTF8(xmlStr).get(), 0, nsnull);
+  char *tmpRes = PL_Base64Encode(NS_ConvertUTF16toUTF8(xmlStr).get(), 0, nullptr);
   result.Assign(tmpRes);
   PR_Free(tmpRes);
   return NS_OK;
@@ -757,12 +745,13 @@ nsresult nsAbCardProperty::ConvertToXMLPrintData(nsAString &aXMLSubstr)
   nsCOMPtr<nsIPrefBranch> prefBranch = do_GetService(NS_PREFSERVICE_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv,rv);
 
-  PRInt32 generatedNameFormat;
+  int32_t generatedNameFormat;
   rv = prefBranch->GetIntPref(PREF_MAIL_ADDR_BOOK_LASTNAMEFIRST, &generatedNameFormat);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  nsCOMPtr<nsIStringBundleService> stringBundleService = do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-  NS_ENSURE_SUCCESS(rv,rv);
+  nsCOMPtr<nsIStringBundleService> stringBundleService =
+    mozilla::services::GetStringBundleService();
+  NS_ENSURE_TRUE(stringBundleService, NS_ERROR_UNEXPECTED);
 
   nsCOMPtr<nsIStringBundle> bundle;
   rv = stringBundleService->CreateBundle(sAddrbookProperties, getter_AddRefs(bundle));
@@ -809,6 +798,9 @@ nsresult nsAbCardProperty::ConvertToXMLPrintData(nsAString &aXMLSubstr)
 
   if (!m_IsMailList) {
     rv = AppendSection(CUSTOM_ATTRS_ARRAY, sizeof(CUSTOM_ATTRS_ARRAY)/sizeof(AppendItem), NS_LITERAL_STRING("headingOther"), bundle, conv, xmlStr);
+#ifdef MOZ_THUNDERBIRD
+    rv = AppendSection(CHAT_ATTRS_ARRAY, sizeof(CHAT_ATTRS_ARRAY)/sizeof(AppendItem), NS_LITERAL_STRING("headingChat"), bundle, conv, xmlStr);
+#endif
   }
   else {
     rv = AppendSection(CUSTOM_ATTRS_ARRAY, sizeof(CUSTOM_ATTRS_ARRAY)/sizeof(AppendItem), NS_LITERAL_STRING("headingDescription"),
@@ -826,17 +818,17 @@ nsresult nsAbCardProperty::ConvertToXMLPrintData(nsAString &aXMLSubstr)
     nsCOMPtr<nsIAbManager> abManager = do_GetService(NS_ABMANAGER_CONTRACTID, &rv);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    nsCOMPtr <nsIAbDirectory> mailList = nsnull;
+    nsCOMPtr <nsIAbDirectory> mailList = nullptr;
     rv = abManager->GetDirectory(m_MailListURI, getter_AddRefs(mailList));
     NS_ENSURE_SUCCESS(rv, rv);
 
     nsCOMPtr<nsIMutableArray> addresses;
     rv = mailList->GetAddressLists(getter_AddRefs(addresses));
     if (addresses) {
-      PRUint32 total = 0;
+      uint32_t total = 0;
       addresses->GetLength(&total);
       if (total) {
-        PRUint32 i;
+        uint32_t i;
         nsAutoString displayName;
         nsAutoString primaryEmail;
         for (i = 0; i < total; i++) {
@@ -884,7 +876,7 @@ nsresult nsAbCardProperty::ConvertToXMLPrintData(nsAString &aXMLSubstr)
   return NS_OK;
 }
 
-nsresult nsAbCardProperty::AppendSection(const AppendItem *aArray, PRInt16 aCount, const nsString& aHeading,
+nsresult nsAbCardProperty::AppendSection(const AppendItem *aArray, int16_t aCount, const nsString& aHeading,
                                          nsIStringBundle *aBundle,
                                          mozITXTToHTMLConv *aConv,
                                          nsString &aResult)
@@ -894,13 +886,13 @@ nsresult nsAbCardProperty::AppendSection(const AppendItem *aArray, PRInt16 aCoun
   aResult.AppendLiteral("<section>");
 
   nsString attrValue;
-  PRBool sectionIsEmpty = PR_TRUE;
+  bool sectionIsEmpty = true;
 
-  PRInt16 i = 0;
+  int16_t i = 0;
   for (i=0;i<aCount;i++) {
     rv = GetPropertyAsAString(aArray[i].mColumn, attrValue);
     if (NS_SUCCEEDED(rv) && !attrValue.IsEmpty())
-      sectionIsEmpty = PR_FALSE;
+      sectionIsEmpty = false;
   }
 
   if (!sectionIsEmpty && !aHeading.IsEmpty()) {
@@ -1039,18 +1031,18 @@ nsresult nsAbCardProperty::AppendCityStateZip(const AppendItem &aItem,
 
   if (!cityResult.IsEmpty() && !stateResult.IsEmpty() && !zipResult.IsEmpty()) {
     const PRUnichar *formatStrings[] = { cityResult.get(), stateResult.get(), zipResult.get() };
-    rv = aBundle->FormatStringFromName(NS_LITERAL_STRING("cityAndStateAndZip").get(), formatStrings, NS_ARRAY_LENGTH(formatStrings), getter_Copies(formattedString));
+    rv = aBundle->FormatStringFromName(NS_LITERAL_STRING("cityAndStateAndZip").get(), formatStrings, ArrayLength(formatStrings), getter_Copies(formattedString));
     NS_ENSURE_SUCCESS(rv,rv);
   }
   else if (!cityResult.IsEmpty() && !stateResult.IsEmpty() && zipResult.IsEmpty()) {
     const PRUnichar *formatStrings[] = { cityResult.get(), stateResult.get() };
-    rv = aBundle->FormatStringFromName(NS_LITERAL_STRING("cityAndStateNoZip").get(), formatStrings, NS_ARRAY_LENGTH(formatStrings), getter_Copies(formattedString));
+    rv = aBundle->FormatStringFromName(NS_LITERAL_STRING("cityAndStateNoZip").get(), formatStrings, ArrayLength(formatStrings), getter_Copies(formattedString));
     NS_ENSURE_SUCCESS(rv,rv);
   }
   else if ((!cityResult.IsEmpty() && stateResult.IsEmpty() && !zipResult.IsEmpty()) ||
           (cityResult.IsEmpty() && !stateResult.IsEmpty() && !zipResult.IsEmpty())) {
     const PRUnichar *formatStrings[] = { cityResult.IsEmpty() ? stateResult.get() : cityResult.get(), zipResult.get() };
-    rv = aBundle->FormatStringFromName(NS_LITERAL_STRING("cityOrStateAndZip").get(), formatStrings, NS_ARRAY_LENGTH(formatStrings), getter_Copies(formattedString));
+    rv = aBundle->FormatStringFromName(NS_LITERAL_STRING("cityOrStateAndZip").get(), formatStrings, ArrayLength(formatStrings), getter_Copies(formattedString));
     NS_ENSURE_SUCCESS(rv,rv);
   }
   else {
@@ -1067,7 +1059,7 @@ nsresult nsAbCardProperty::AppendCityStateZip(const AppendItem &aItem,
   return NS_OK;
 }
 
-NS_IMETHODIMP nsAbCardProperty::GenerateName(PRInt32 aGenerateFormat,
+NS_IMETHODIMP nsAbCardProperty::GenerateName(int32_t aGenerateFormat,
                                              nsIStringBundle* aBundle,
                                              nsAString &aResult)
 {
@@ -1091,8 +1083,8 @@ NS_IMETHODIMP nsAbCardProperty::GenerateName(PRInt32 aGenerateFormat,
     nsCOMPtr<nsIStringBundle> bundle(aBundle);
     if (!bundle) {
       nsCOMPtr<nsIStringBundleService> stringBundleService =
-        do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv); 
-      NS_ENSURE_SUCCESS(rv, rv);
+        mozilla::services::GetStringBundleService();
+      NS_ENSURE_TRUE(stringBundleService, NS_ERROR_UNEXPECTED);
         
       rv = stringBundleService->CreateBundle(sAddrbookProperties,
                                              getter_AddRefs(bundle));
@@ -1136,7 +1128,7 @@ NS_IMETHODIMP nsAbCardProperty::GenerateName(PRInt32 aGenerateFormat,
     // use the userid from the email address
     // it is better than nothing.
     GetPrimaryEmail(aResult);
-    PRInt32 index = aResult.FindChar('@');
+    int32_t index = aResult.FindChar('@');
     if (index != -1)
       aResult.SetLength(index);
   }
@@ -1144,7 +1136,7 @@ NS_IMETHODIMP nsAbCardProperty::GenerateName(PRInt32 aGenerateFormat,
   return NS_OK;
 }
 
-NS_IMETHODIMP nsAbCardProperty::GeneratePhoneticName(PRBool aLastNameFirst,
+NS_IMETHODIMP nsAbCardProperty::GeneratePhoneticName(bool aLastNameFirst,
                                                      nsAString &aResult)
 {
   nsAutoString firstName, lastName;
@@ -1162,5 +1154,24 @@ NS_IMETHODIMP nsAbCardProperty::GeneratePhoneticName(PRBool aLastNameFirst,
     aResult += lastName;
   }
 
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsAbCardProperty::GenerateChatName(nsAString &aResult)
+{
+  aResult.Truncate();
+
+#define CHECK_CHAT_PROPERTY(aProtocol)                                       \
+  if (NS_SUCCEEDED(GetPropertyAsAString(k##aProtocol##Property, aResult)) && \
+      !aResult.IsEmpty())                                                    \
+    return NS_OK
+  CHECK_CHAT_PROPERTY(Gtalk);
+  CHECK_CHAT_PROPERTY(AIM);
+  CHECK_CHAT_PROPERTY(Yahoo);
+  CHECK_CHAT_PROPERTY(Skype);
+  CHECK_CHAT_PROPERTY(QQ);
+  CHECK_CHAT_PROPERTY(MSN);
+  CHECK_CHAT_PROPERTY(ICQ);
+  CHECK_CHAT_PROPERTY(XMPP);
   return NS_OK;
 }

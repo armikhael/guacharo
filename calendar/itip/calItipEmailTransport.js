@@ -1,43 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Simdesk Technologies code.
- *
- * The Initial Developer of the Original Code is
- * Simdesk Technologies.
- * Portions created by the Initial Developer are Copyright (C) 2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Clint Talbert <ctalbert.moz@gmail.com>
- *   Matthew Willis <lilmatt@mozilla.com>
- *   Philipp Kewisch <mozilla@kewis.ch>
- *   Daniel Boelzle <daniel.boelzle@sun.com>
- *   Martin Schroeder <mschroeder@mozilla.x-home.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://calendar/modules/calUtils.jsm");
 Components.utils.import("resource://gre/modules/XPCOMUtils.jsm");
@@ -115,8 +78,10 @@ calItipEmailTransport.prototype = {
             let aBody = "";
             switch (aItipItem.responseMethod) {
                 case 'REQUEST':
+                    let seq = item.getProperty("SEQUENCE");
+                    let subjectKey = (seq && seq > 0 ? "itipRequestUpdatedSubject" : "itipRequestSubject");
                     aSubject = cal.calGetString("lightning",
-                                                "itipRequestSubject",
+                                                subjectKey,
                                                 [summary],
                                                 "lightning");
                     aBody = cal.calGetString("lightning",
@@ -136,8 +101,7 @@ calItipEmailTransport.prototype = {
                     break;
                 case 'REPLY': {
                     // Get my participation status
-                    let att = (cal.calInstanceOf(aItipItem.targetCalendar, Components.interfaces.calISchedulingSupport)
-                               ? aItipItem.targetCalendar.getInvitedAttendee(item) : null);
+                    let att = cal.getInvitedAttendee(item, aItipItem.targetCalendar);
                     if (!att && aItipItem.identity) {
                         att = item.getAttendeeById("mailto:" + aItipItem.identity);
                     }
@@ -151,15 +115,28 @@ calItipEmailTransport.prototype = {
                     let name = att.toString();
 
                     // Generate proper body from my participation status
-                    aSubject = cal.calGetString("lightning",
-                                                "itipReplySubject",
-                                                [summary],
-                                                "lightning");
-                    aBody = cal.calGetString("lightning",
-                                             (myPartStat == "DECLINED") ? "itipReplyBodyDecline"
-                                                                        : "itipReplyBodyAccept",
-                                             [name],
-                                             "lightning");
+                    let subjectKey, bodyKey;
+                    switch (myPartStat) {
+                        case "ACCEPTED":
+                            subjectKey = "itipReplySubjectAccept";
+                            bodyKey = "itipReplyBodyAccept";
+                            break;
+                        case "TENTATIVE":
+                            subjectKey = "itipReplySubjectTentative";
+                            bodyKey = "itipReplyBodyAccept";
+                            break;
+                        case "DECLINED":
+                            subjectKey = "itipReplySubjectDecline";
+                            bodyKey = "itipReplyBodyDecline";
+                            break;
+                        default:
+                            subjectKey = "itipReplySubject";
+                            bodyKey = "itipReplyBodyAccept";
+                            break;
+                    }
+                    aSubject = cal.calGetString("lightning", subjectKey, [summary], "lightning");
+                    aBody = cal.calGetString("lightning", bodyKey, [name], "lightning");
+
                     break;
                 }
             }
@@ -177,7 +154,7 @@ calItipEmailTransport.prototype = {
         try {
             let smtpSvc = Components.classes["@mozilla.org/messengercompose/smtp;1"]
                                     .getService(Components.interfaces.nsISmtpService);
-            this.mSmtpServer = smtpSvc.defaultServer;
+            this.mDefaultSmtpServer = smtpSvc.defaultServer;
 
             let accountMgrSvc = Components.classes["@mozilla.org/messenger/account-manager;1"]
                                           .getService(Components.interfaces.nsIMsgAccountManager);
@@ -236,11 +213,15 @@ calItipEmailTransport.prototype = {
                                               .getService(Components.interfaces.nsIPromptService);
                 let prefCompatMode = cal.getPrefSafe("calendar.itip.compatSendMode", 0);
                 let inoutCheck = { value: (prefCompatMode == 1) };
-                if (!promptService.confirmCheck(null,
-                                                cal.calGetString("lightning", "imipSendMail.title", null, "lightning"),
-                                                cal.calGetString("lightning", "imipSendMail.text", null, "lightning"),
-                                                cal.calGetString("lightning", "imipSendMail.Outlook2000CompatMode.text", null, "lightning"),
-                                                inoutCheck)) {
+                if (promptService.confirmEx(null,
+                                            cal.calGetString("lightning", "imipSendMail.title", null, "lightning"),
+                                            cal.calGetString("lightning", "imipSendMail.text", null, "lightning"),
+                                            promptService.STD_YES_NO_BUTTONS,
+                                            null,
+                                            null,
+                                            null,
+                                            cal.calGetString("lightning", "imipSendMail.Outlook2000CompatMode.text", null, "lightning"),
+                                            inoutCheck)) {
                     break;
                 } // else go on with auto sending for now
                 compatMode = (inoutCheck.value ? 1 : 0);

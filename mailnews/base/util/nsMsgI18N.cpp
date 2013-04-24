@@ -1,44 +1,10 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // as does this
 #include "nsICharsetConverterManager.h"
-#include "nsICharsetAlias.h"
 #include "nsIPlatformCharset.h"
 #include "nsIServiceManager.h"
 
@@ -67,7 +33,7 @@
 nsresult nsMsgI18NConvertFromUnicode(const char* aCharset,
                                      const nsString& inString,
                                      nsACString& outString,
-                                     PRBool aIsCharsetCanonical)
+                                     bool aIsCharsetCanonical)
 {
   if (inString.IsEmpty()) {
     outString.Truncate();
@@ -96,16 +62,16 @@ nsresult nsMsgI18NConvertFromUnicode(const char* aCharset,
   else
     rv = ccm->GetUnicodeEncoder(aCharset, getter_AddRefs(encoder));
   NS_ENSURE_SUCCESS(rv, rv);
-  rv = encoder->SetOutputErrorBehavior(nsIUnicodeEncoder::kOnError_Replace, nsnull, '?');
+  rv = encoder->SetOutputErrorBehavior(nsIUnicodeEncoder::kOnError_Replace, nullptr, '?');
   NS_ENSURE_SUCCESS(rv, rv);
 
   const PRUnichar *originalSrcPtr = inString.get();
   const PRUnichar *currentSrcPtr = originalSrcPtr;
-  PRInt32 originalUnicharLength = inString.Length();
-  PRInt32 srcLength;
-  PRInt32 dstLength;
+  int32_t originalUnicharLength = inString.Length();
+  int32_t srcLength;
+  int32_t dstLength;
   char localbuf[512];
-  PRInt32 consumedLen = 0;
+  int32_t consumedLen = 0;
 
   outString.Truncate();
   // convert
@@ -129,7 +95,7 @@ nsresult nsMsgI18NConvertFromUnicode(const char* aCharset,
 nsresult nsMsgI18NConvertToUnicode(const char* aCharset,
                                    const nsCString& inString, 
                                    nsAString& outString,
-                                   PRBool aIsCharsetCanonical)
+                                   bool aIsCharsetCanonical)
 {
   if (inString.IsEmpty()) {
     outString.Truncate();
@@ -162,18 +128,18 @@ nsresult nsMsgI18NConvertToUnicode(const char* aCharset,
 
   // get an unicode converter
   if (aIsCharsetCanonical)  // optimize for modified UTF-7 used by IMAP
-    rv = ccm->GetUnicodeDecoderRawInternal(aCharset, getter_AddRefs(decoder));
+    rv = ccm->GetUnicodeDecoderRaw(aCharset, getter_AddRefs(decoder));
   else
-    rv = ccm->GetUnicodeDecoder(aCharset, getter_AddRefs(decoder));
+    rv = ccm->GetUnicodeDecoderInternal(aCharset, getter_AddRefs(decoder));
   NS_ENSURE_SUCCESS(rv, rv);
 
   const char *originalSrcPtr = inString.get();
   const char *currentSrcPtr = originalSrcPtr;
-  PRInt32 originalLength = inString.Length();
-  PRInt32 srcLength;
-  PRInt32 dstLength;
+  int32_t originalLength = inString.Length();
+  int32_t srcLength;
+  int32_t dstLength;
   PRUnichar localbuf[512];
-  PRInt32 consumedLen = 0;
+  int32_t consumedLen = 0;
 
   outString.Truncate();
 
@@ -230,10 +196,10 @@ void nsMsgI18NTextFileCharset(nsACString& aCharset)
 
 // MIME encoder, output string should be freed by PR_FREE
 // XXX : fix callers later to avoid allocation and copy
-char * nsMsgI18NEncodeMimePartIIStr(const char *header, PRBool structured, const char *charset, PRInt32 fieldnamelen, PRBool usemime) 
+char * nsMsgI18NEncodeMimePartIIStr(const char *header, bool structured, const char *charset, int32_t fieldnamelen, bool usemime) 
 {
   // No MIME, convert to the outgoing mail charset.
-  if (PR_FALSE == usemime) {
+  if (false == usemime) {
     nsCAutoString convertedStr;
     if (NS_SUCCEEDED(ConvertFromUnicode(charset, NS_ConvertUTF8toUTF16(header),
                                         convertedStr)))
@@ -242,28 +208,28 @@ char * nsMsgI18NEncodeMimePartIIStr(const char *header, PRBool structured, const
       return PL_strdup(header);
   }
 
-  char *encodedString = nsnull;
+  char *encodedString = nullptr;
   nsresult res;
   nsCOMPtr<nsIMimeConverter> converter = do_GetService(NS_MIME_CONVERTER_CONTRACTID, &res);
-  if (NS_SUCCEEDED(res) && nsnull != converter)
+  if (NS_SUCCEEDED(res) && nullptr != converter)
     res = converter->EncodeMimePartIIStr_UTF8(nsDependentCString(header), structured, charset,
       fieldnamelen, nsIMimeConverter::MIME_ENCODED_WORD_SIZE, &encodedString);
 
-  return NS_SUCCEEDED(res) ? encodedString : nsnull;
+  return NS_SUCCEEDED(res) ? encodedString : nullptr;
 }
 
 // Return True if a charset is stateful (e.g. JIS).
-PRBool nsMsgI18Nstateful_charset(const char *charset)
+bool nsMsgI18Nstateful_charset(const char *charset)
 {
   //TODO: use charset manager's service
   return (PL_strcasecmp(charset, "ISO-2022-JP") == 0);
 }
 
-PRBool nsMsgI18Nmultibyte_charset(const char *charset)
+bool nsMsgI18Nmultibyte_charset(const char *charset)
 {
   nsresult res;
   nsCOMPtr <nsICharsetConverterManager> ccm = do_GetService(NS_CHARSETCONVERTERMANAGER_CONTRACTID, &res);
-  PRBool result = PR_FALSE;
+  bool result = false;
 
   if (NS_SUCCEEDED(res)) {
     nsAutoString charsetData;
@@ -276,13 +242,13 @@ PRBool nsMsgI18Nmultibyte_charset(const char *charset)
   return result;
 }
 
-PRBool nsMsgI18Ncheck_data_in_charset_range(const char *charset, const PRUnichar* inString, char **fallbackCharset)
+bool nsMsgI18Ncheck_data_in_charset_range(const char *charset, const PRUnichar* inString, char **fallbackCharset)
 {
   if (!charset || !*charset || !inString || !*inString)
-    return PR_TRUE;
+    return true;
 
   nsresult res;
-  PRBool result = PR_TRUE;
+  bool result = true;
   
   nsCOMPtr <nsICharsetConverterManager> ccm = do_GetService(NS_CHARSETCONVERTERMANAGER_CONTRACTID, &res);
 
@@ -293,12 +259,12 @@ PRBool nsMsgI18Ncheck_data_in_charset_range(const char *charset, const PRUnichar
     res = ccm->GetUnicodeEncoderRaw(charset, getter_AddRefs(encoder));
     if(NS_SUCCEEDED(res)) {
       const PRUnichar *originalPtr = inString;
-      PRInt32 originalLen = NS_strlen(inString);
+      int32_t originalLen = NS_strlen(inString);
       const PRUnichar *currentSrcPtr = originalPtr;
       char localBuff[512];
-      PRInt32 consumedLen = 0;
-      PRInt32 srcLen;
-      PRInt32 dstLength;
+      int32_t consumedLen = 0;
+      int32_t srcLen;
+      int32_t dstLength;
 
       // convert from unicode
       while (consumedLen < originalLen) {
@@ -306,7 +272,7 @@ PRBool nsMsgI18Ncheck_data_in_charset_range(const char *charset, const PRUnichar
         dstLength = 512;
         res = encoder->Convert(currentSrcPtr, &srcLen, localBuff, &dstLength);
         if (NS_ERROR_UENC_NOMAPPING == res) {
-          result = PR_FALSE;
+          result = false;
           break;
         }
         else if (NS_FAILED(res) || (0 == dstLength))
@@ -332,13 +298,13 @@ PRBool nsMsgI18Ncheck_data_in_charset_range(const char *charset, const PRUnichar
 // Simple parser to parse META charset. 
 // It only supports the case when the description is within one line. 
 const char * 
-nsMsgI18NParseMetaCharset(nsILocalFile* file) 
+nsMsgI18NParseMetaCharset(nsIFile* file) 
 { 
   static char charset[nsIMimeConverter::MAX_CHARSET_NAME_LENGTH+1];
 
   *charset = '\0'; 
 
-  PRBool isDirectory = PR_FALSE;
+  bool isDirectory = false;
   file->IsDirectory(&isDirectory);
   if (isDirectory) {
     NS_ERROR("file is a directory");
@@ -349,11 +315,11 @@ nsMsgI18NParseMetaCharset(nsILocalFile* file)
   nsCOMPtr <nsIFileInputStream> fileStream = do_CreateInstance(NS_LOCALFILEINPUTSTREAM_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, charset);
   
-  rv = fileStream->Init(file, PR_RDONLY, 0664, PR_FALSE);
+  rv = fileStream->Init(file, PR_RDONLY, 0664, false);
   nsCOMPtr <nsILineInputStream> lineStream = do_QueryInterface(fileStream, &rv);
 
   nsCString curLine;
-  PRBool more = PR_TRUE;
+  bool more = true;
   while (NS_SUCCEEDED(rv) && more) { 
     rv = lineStream->ReadLine(curLine, &more); 
     if (curLine.IsEmpty()) 
@@ -369,7 +335,7 @@ nsMsgI18NParseMetaCharset(nsILocalFile* file)
         curLine.Find("CONTENT-TYPE") != -1 && 
        curLine.Find("CHARSET") != -1) { 
       char *cp = (char *) PL_strchr(PL_strstr(curLine.get(), "CHARSET"), '=');
-      char *token = nsnull;
+      char *token = nullptr;
       if (cp)
       {
         char *newStr = cp + 1;
@@ -398,41 +364,40 @@ nsMsgI18NParseMetaCharset(nsILocalFile* file)
 
 nsresult nsMsgI18NSaveAsCharset(const char* contentType, const char *charset, 
                                 const PRUnichar* inString, char** outString, 
-                                char **fallbackCharset, PRBool *isAsciiOnly)
+                                char **fallbackCharset, bool *isAsciiOnly)
 {
   NS_ENSURE_ARG_POINTER(contentType);
   NS_ENSURE_ARG_POINTER(charset);
   NS_ENSURE_ARG_POINTER(inString);
   NS_ENSURE_ARG_POINTER(outString);
 
-  *outString = nsnull;
+  *outString = nullptr;
 
   if (NS_IsAscii(inString)) {
     if (isAsciiOnly)
-      *isAsciiOnly = PR_TRUE;
+      *isAsciiOnly = true;
     *outString = ToNewCString(NS_LossyConvertUTF16toASCII(inString));
-    return (nsnull != *outString) ? NS_OK : NS_ERROR_OUT_OF_MEMORY;
+    return (nullptr != *outString) ? NS_OK : NS_ERROR_OUT_OF_MEMORY;
   }
   if (isAsciiOnly)
-    *isAsciiOnly = PR_FALSE;
+    *isAsciiOnly = false;
 
-  PRBool bTEXT_HTML = PR_FALSE;
+  bool bTEXT_HTML = false;
   nsresult res;
 
   if (!PL_strcasecmp(contentType, TEXT_HTML)) {
-    bTEXT_HTML = PR_TRUE;
+    bTEXT_HTML = true;
   }
   else if (PL_strcasecmp(contentType, TEXT_PLAIN)) {
     return NS_ERROR_ILLEGAL_VALUE;  // not supported type
   }
 
-  nsCOMPtr <nsICharsetAlias> calias =
-    do_GetService(NS_CHARSETALIAS_CONTRACTID, &res);
+  nsCOMPtr <nsICharsetConverterManager> ccm =
+    do_GetService(NS_CHARSETCONVERTERMANAGER_CONTRACTID, &res);
   NS_ENSURE_SUCCESS(res, res);
 
   nsCAutoString charsetName;
-  res = calias->GetPreferred(nsDependentCString(charset),
-                             charsetName);
+  res = ccm->GetCharsetAlias(charset, charsetName);
   NS_ENSURE_SUCCESS(res, res);
 
   // charset converter plus entity, NCR generation
@@ -490,7 +455,7 @@ nsresult nsMsgI18NSaveAsCharset(const char* contentType, const char *charset,
 
     // get the actual charset used for the conversion
     if (NS_FAILED(conv->GetCharset(fallbackCharset)))
-      *fallbackCharset = nsnull;
+      *fallbackCharset = nullptr;
   }
   // In case of HTML, non ASCII may be encoded as CER, NCR.
   // Exclude stateful charset which is 7 bit but not ASCII only.
@@ -502,7 +467,7 @@ nsresult nsMsgI18NSaveAsCharset(const char* contentType, const char *charset,
 }
 
 nsresult nsMsgI18NShrinkUTF8Str(const nsCString &inString,
-                                PRUint32 aMaxLength,
+                                uint32_t aMaxLength,
                                 nsACString &outString)
 {
   if (inString.IsEmpty()) {
@@ -518,8 +483,8 @@ nsresult nsMsgI18NShrinkUTF8Str(const nsCString &inString,
   const char* end = start + inString.Length();
   const char* last = start + aMaxLength;
   const char* cur = start;
-  const char* prev = nsnull;
-  PRBool err = PR_FALSE;
+  const char* prev = nullptr;
+  bool err = false;
   while (cur < last) {
     prev = cur;
     if (!UTF8CharEnumerator::NextChar(&cur, end, &err) || err)
@@ -529,7 +494,7 @@ nsresult nsMsgI18NShrinkUTF8Str(const nsCString &inString,
     outString.Truncate();
     return NS_OK;
   }
-  PRUint32 len = prev - start;
+  uint32_t len = prev - start;
   outString.Assign(Substring(inString, 0, len));
   return NS_OK;
 }

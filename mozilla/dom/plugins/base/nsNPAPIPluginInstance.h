@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Tim Copperfield <timecop@network.email.ne.jp>
- *   Roland Mainz <roland.mainz@informatik.med.uni-giessen.de>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsNPAPIPluginInstance_h_
 #define nsNPAPIPluginInstance_h_
@@ -49,6 +15,15 @@
 #include "nsIChannel.h"
 #include "nsInterfaceHashtable.h"
 #include "nsHashKeys.h"
+#ifdef MOZ_WIDGET_ANDROID
+#include "nsAutoPtr.h"
+#include "nsIRunnable.h"
+#include "GLContext.h"
+#include "nsSurfaceTexture.h"
+#include <map>
+class PluginEventRunnable;
+class SharedPluginTexture;
+#endif
 
 #include "mozilla/TimeStamp.h"
 #include "mozilla/PluginLibrary.h"
@@ -58,8 +33,21 @@ struct JSObject;
 class nsPluginStreamListenerPeer; // browser-initiated stream class
 class nsNPAPIPluginStreamListener; // plugin-initiated stream class
 class nsIPluginInstanceOwner;
-class nsIPluginStreamListener;
 class nsIOutputStream;
+
+#if defined(OS_WIN)
+const NPDrawingModel kDefaultDrawingModel = NPDrawingModelSyncWin;
+#elif defined(MOZ_X11)
+const NPDrawingModel kDefaultDrawingModel = NPDrawingModelSyncX;
+#elif defined(XP_MACOSX)
+#ifndef NP_NO_QUICKDRAW
+const NPDrawingModel kDefaultDrawingModel = NPDrawingModelQuickDraw;
+#else
+const NPDrawingModel kDefaultDrawingModel = NPDrawingModelCoreGraphics;
+#endif
+#else
+const NPDrawingModel kDefaultDrawingModel = static_cast<NPDrawingModel>(0);
+#endif
 
 class nsNPAPITimer
 {
@@ -68,6 +56,7 @@ public:
   uint32_t id;
   nsCOMPtr<nsITimer> timer;
   void (*callback)(NPP npp, uint32_t timerID);
+  bool inCallback;
 };
 
 class nsNPAPIPluginInstance : public nsISupports
@@ -78,70 +67,150 @@ private:
 public:
   NS_DECL_ISUPPORTS
 
-  nsresult Initialize(nsIPluginInstanceOwner* aOwner, const char* aMIMEType);
+  nsresult Initialize(nsNPAPIPlugin *aPlugin, nsIPluginInstanceOwner* aOwner, const char* aMIMEType);
   nsresult Start();
   nsresult Stop();
   nsresult SetWindow(NPWindow* window);
-  nsresult NewStreamToPlugin(nsIPluginStreamListener** listener);
   nsresult NewStreamFromPlugin(const char* type, const char* target, nsIOutputStream* *result);
   nsresult Print(NPPrint* platformPrint);
-  nsresult HandleEvent(void* event, PRInt16* result);
+  nsresult HandleEvent(void* event, int16_t* result);
   nsresult GetValueFromPlugin(NPPVariable variable, void* value);
-  nsresult GetDrawingModel(PRInt32* aModel);
-  nsresult IsRemoteDrawingCoreAnimation(PRBool* aDrawing);
+  nsresult GetDrawingModel(int32_t* aModel);
+  nsresult IsRemoteDrawingCoreAnimation(bool* aDrawing);
   nsresult GetJSObject(JSContext *cx, JSObject** outObject);
-  nsresult DefineJavaProperties();
-  nsresult IsWindowless(PRBool* isWindowless);
+  bool ShouldCache();
+  nsresult IsWindowless(bool* isWindowless);
   nsresult AsyncSetWindow(NPWindow* window);
-  nsresult GetImage(ImageContainer* aContainer, Image** aImage);
+  nsresult GetImageContainer(ImageContainer **aContainer);
   nsresult GetImageSize(nsIntSize* aSize);
   nsresult NotifyPainted(void);
-  nsresult UseAsyncPainting(PRBool* aIsAsync);
+  nsresult UseAsyncPainting(bool* aIsAsync);
   nsresult SetBackgroundUnknown();
   nsresult BeginUpdateBackground(nsIntRect* aRect, gfxContext** aContext);
   nsresult EndUpdateBackground(gfxContext* aContext, nsIntRect* aRect);
-  nsresult IsTransparent(PRBool* isTransparent);
+  nsresult IsTransparent(bool* isTransparent);
   nsresult GetFormValue(nsAString& aValue);
-  nsresult PushPopupsEnabledState(PRBool aEnabled);
+  nsresult PushPopupsEnabledState(bool aEnabled);
   nsresult PopPopupsEnabledState();
-  nsresult GetPluginAPIVersion(PRUint16* version);
+  nsresult GetPluginAPIVersion(uint16_t* version);
   nsresult InvalidateRect(NPRect *invalidRect);
   nsresult InvalidateRegion(NPRegion invalidRegion);
-  nsresult ForceRedraw();
   nsresult GetMIMEType(const char* *result);
   nsresult GetJSContext(JSContext* *outContext);
   nsresult GetOwner(nsIPluginInstanceOwner **aOwner);
   nsresult SetOwner(nsIPluginInstanceOwner *aOwner);
   nsresult ShowStatus(const char* message);
   nsresult InvalidateOwner();
+#if defined(MOZ_WIDGET_QT) && (MOZ_PLATFORM_MAEMO == 6)
+  nsresult HandleGUIEvent(const nsGUIEvent& anEvent, bool* handled);
+#endif
 
   nsNPAPIPlugin* GetPlugin();
 
   nsresult GetNPP(NPP * aNPP);
 
-  void SetURI(nsIURI* uri);
-  nsIURI* GetURI();
+  NPError SetWindowless(bool aWindowless);
 
-  NPError SetWindowless(PRBool aWindowless);
+  NPError SetTransparent(bool aTransparent);
 
-  NPError SetWindowlessLocal(PRBool aWindowlessLocal);
+  NPError SetWantsAllNetworkStreams(bool aWantsAllNetworkStreams);
 
-  NPError SetTransparent(PRBool aTransparent);
+  NPError SetUsesDOMForCursor(bool aUsesDOMForCursor);
+  bool UsesDOMForCursor();
 
-  NPError SetWantsAllNetworkStreams(PRBool aWantsAllNetworkStreams);
-
-  NPError SetUsesDOMForCursor(PRBool aUsesDOMForCursor);
-  PRBool UsesDOMForCursor();
-
-#ifdef XP_MACOSX
   void SetDrawingModel(NPDrawingModel aModel);
+  void RedrawPlugin();
+#ifdef XP_MACOSX
   void SetEventModel(NPEventModel aModel);
 #endif
 
-  nsresult NewStreamListener(const char* aURL, void* notifyData,
-                             nsIPluginStreamListener** listener);
+#ifdef MOZ_WIDGET_ANDROID
+  void NotifyForeground(bool aForeground);
+  void NotifyOnScreen(bool aOnScreen);
+  void MemoryPressure();
+  void NotifyFullScreen(bool aFullScreen);
+  void NotifySize(nsIntSize size);
 
-  nsNPAPIPluginInstance(nsNPAPIPlugin* plugin);
+  nsIntSize CurrentSize() { return mCurrentSize; }
+
+  bool IsOnScreen() {
+    return mOnScreen;
+  }
+
+  uint32_t GetANPDrawingModel() { return mANPDrawingModel; }
+  void SetANPDrawingModel(uint32_t aModel);
+
+  void* GetJavaSurface();
+
+  void PostEvent(void* event);
+
+  // These are really mozilla::dom::ScreenOrientation, but it's
+  // difficult to include that here
+  uint32_t FullScreenOrientation() { return mFullScreenOrientation; }
+  void SetFullScreenOrientation(uint32_t orientation);
+
+  void SetWakeLock(bool aLock);
+
+  mozilla::gl::GLContext* GLContext();
+  
+  // For ANPOpenGL
+  class TextureInfo {
+  public:
+    TextureInfo() :
+      mTexture(0), mWidth(0), mHeight(0), mInternalFormat(0)
+    {
+    }
+
+    TextureInfo(GLuint aTexture, int32_t aWidth, int32_t aHeight, GLuint aInternalFormat) :
+      mTexture(aTexture), mWidth(aWidth), mHeight(aHeight), mInternalFormat(aInternalFormat)
+    {
+    }
+
+    GLuint mTexture;
+    int32_t mWidth;
+    int32_t mHeight;
+    GLuint mInternalFormat;
+  };
+
+  TextureInfo LockContentTexture();
+  void ReleaseContentTexture(TextureInfo& aTextureInfo);
+
+  // For ANPNativeWindow
+  void* AcquireContentWindow();
+
+  mozilla::gl::SharedTextureHandle CreateSharedHandle();
+
+  // For ANPVideo
+  class VideoInfo {
+  public:
+    VideoInfo(nsSurfaceTexture* aSurfaceTexture) :
+      mSurfaceTexture(aSurfaceTexture)
+    {
+    }
+
+    ~VideoInfo()
+    {
+      mSurfaceTexture = nullptr;
+    }
+
+    nsRefPtr<nsSurfaceTexture> mSurfaceTexture;
+    gfxRect mDimensions;
+  };
+
+  void* AcquireVideoWindow();
+  void ReleaseVideoWindow(void* aWindow);
+  void SetVideoDimensions(void* aWindow, gfxRect aDimensions);
+
+  void GetVideos(nsTArray<VideoInfo*>& aVideos);
+
+  void SetInverted(bool aInverted);
+  bool Inverted() { return mInverted; }
+#endif
+
+  nsresult NewStreamListener(const char* aURL, void* notifyData,
+                             nsNPAPIPluginStreamListener** listener);
+
+  nsNPAPIPluginInstance();
   virtual ~nsNPAPIPluginInstance();
 
   // To be called when an instance becomes orphaned, when
@@ -161,13 +230,19 @@ public:
     return mRunning == RUNNING || mRunning == DESTROYING;
   }
 
+  // return is only valid when the plugin is not running
+  mozilla::TimeStamp StopTime();
+
+  // cache this NPAPI plugin
+  void SetCached(bool aCache);
+
   already_AddRefed<nsPIDOMWindow> GetDOMWindow();
 
-  nsresult PrivateModeStateChanged();
+  nsresult PrivateModeStateChanged(bool aEnabled);
 
   nsresult GetDOMElement(nsIDOMElement* *result);
 
-  nsNPAPITimer* TimerWithID(uint32_t id, PRUint32* index);
+  nsNPAPITimer* TimerWithID(uint32_t id, uint32_t* index);
   uint32_t      ScheduleTimer(uint32_t interval, NPBool repeat, void (*timerFunc)(NPP npp, uint32_t timerID));
   void          UnscheduleTimer(uint32_t timerID);
   NPError       PopUpContextMenu(NPMenu* menu);
@@ -182,26 +257,51 @@ public:
 
   void URLRedirectResponse(void* notifyData, NPBool allow);
 
+  NPError InitAsyncSurface(NPSize *size, NPImageFormat format,
+                           void *initData, NPAsyncSurface *surface);
+  NPError FinalizeAsyncSurface(NPAsyncSurface *surface);
+  void SetCurrentAsyncSurface(NPAsyncSurface *surface, NPRect *changed);
+
   // Called when the instance fails to instantiate beceause the Carbon
   // event model is not supported.
   void CarbonNPAPIFailure();
 
 protected:
-  nsresult InitializePlugin();
 
   nsresult GetTagType(nsPluginTagType *result);
-  nsresult GetAttributes(PRUint16& n, const char*const*& names,
+  nsresult GetAttributes(uint16_t& n, const char*const*& names,
                          const char*const*& values);
-  nsresult GetParameters(PRUint16& n, const char*const*& names,
+  nsresult GetParameters(uint16_t& n, const char*const*& names,
                          const char*const*& values);
-  nsresult GetMode(PRInt32 *result);
+  nsresult GetMode(int32_t *result);
+
+  // check if this is a Java applet and affected by bug 750480
+  void CheckJavaC2PJSObjectQuirk(uint16_t paramCount,
+                                 const char* const* names,
+                                 const char* const* values);
 
   // The structure used to communicate between the plugin instance and
   // the browser.
   NPP_t mNPP;
 
-#ifdef XP_MACOSX
   NPDrawingModel mDrawingModel;
+
+#ifdef MOZ_WIDGET_ANDROID
+  uint32_t mANPDrawingModel;
+
+  friend class PluginEventRunnable;
+
+  nsTArray<nsCOMPtr<PluginEventRunnable>> mPostedEvents;
+  void PopPostedEvent(PluginEventRunnable* r);
+  void OnSurfaceTextureFrameAvailable();
+
+  uint32_t mFullScreenOrientation;
+  bool mWakeLocked;
+  bool mFullScreen;
+  bool mInverted;
+
+  nsRefPtr<SharedPluginTexture> mContentTexture;
+  nsRefPtr<nsSurfaceTexture> mContentSurface;
 #endif
 
   enum {
@@ -213,14 +313,14 @@ protected:
 
   // these are used to store the windowless properties
   // which the browser will later query
-  PRPackedBool mWindowless;
-  PRPackedBool mWindowlessLocal;
-  PRPackedBool mTransparent;
-  PRPackedBool mUsesDOMForCursor;
+  bool mWindowless;
+  bool mTransparent;
+  bool mCached;
+  bool mUsesDOMForCursor;
 
 public:
   // True while creating the plugin, or calling NPP_SetWindow() on it.
-  PRPackedBool mInPluginInitCall;
+  bool mInPluginInitCall;
 
   nsXPIDLCString mFakeURL;
 
@@ -244,9 +344,23 @@ private:
   // non-null during a HandleEvent call
   void* mCurrentPluginEvent;
 
-  nsCOMPtr<nsIURI> mURI;
+  // Timestamp for the last time this plugin was stopped.
+  // This is only valid when the plugin is actually stopped!
+  mozilla::TimeStamp mStopTime;
 
-  PRPackedBool mUsePluginLayersPref;
+  bool mUsePluginLayersPref;
+#ifdef MOZ_WIDGET_ANDROID
+  void EnsureSharedTexture();
+  nsSurfaceTexture* CreateSurfaceTexture();
+
+  std::map<void*, VideoInfo*> mVideos;
+  bool mOnScreen;
+
+  nsIntSize mCurrentSize;
+#endif
+
+  // is this instance Java and affected by bug 750480?
+  bool mHaveJavaC2PJSObjectQuirk;
 };
 
 #endif // nsNPAPIPluginInstance_h_

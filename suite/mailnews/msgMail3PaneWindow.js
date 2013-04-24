@@ -1,48 +1,10 @@
 /* -*- Mode: javascript; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jan Varga (varga@ku.sk)
- *   Håkan Waara (hwaara@chello.se)
- *   Neil Rashbrook (neil@parkwaycc.co.uk)
- *   Seth Spitzer <sspitzer@netscape.com>
- *   Karsten Düsterloh <mnyromyr@tprac.de>
- *   Ian Neal <iann_bugzilla@blueyonder.co.uk>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* This is where functions related to the 3 pane window are kept */
+Components.utils.import("resource:///modules/msgDBCacheManager.js");
 
 // from MailNewsTypes.h
 const nsMsgKey_None = 0xFFFFFFFF;
@@ -712,12 +674,14 @@ function OnLoadMessenger()
   UpdateMailPaneConfig();
   Create3PaneGlobals();
   verifyAccounts(null, false);
+  msgDBCacheManager.init();
 
   // initialize tabmail system - see tabmail.js and tabmail.xml for details
   let tabmail = GetTabMail();
   tabmail.registerTabType(gMailNewsTabsType);
   tabmail.openFirstTab();
-  window.tryToClose = MailWindowIsClosing;
+  Services.obs.addObserver(MailWindowIsClosing,
+                           "quit-application-requested", false);
 
   InitMsgWindow();
   messenger.setWindow(window, msgWindow);
@@ -819,6 +783,8 @@ function OnUnloadMessenger()
   pref.removeObserver("mail.pane_config.dynamic", MailPrefObserver, false);
   pref.removeObserver("mail.showCondensedAddresses", MailPrefObserver, false);
   window.removeEventListener("AppCommand", HandleAppCommandEvent, true);
+  Services.obs.removeObserver(MailWindowIsClosing,
+                              "quit-application-requested");
 
   OnLeavingFolder(gMsgFolderSelected);  // mark all read in current folder
   accountManager.removeIncomingServerListener(gThreePaneIncomingServerListener);
@@ -831,8 +797,13 @@ function OnUnloadMessenger()
 }
 
 // we probably want to warn if more than one tab is closed
-function MailWindowIsClosing()
+function MailWindowIsClosing(aCancelQuit, aTopic, aData)
 {
+  if (aTopic == "quit-application-requested" &&
+      aCancelQuit instanceof Components.interfaces.nsISupportsPRBool &&
+      aCancelQuit.data)
+    return false;
+
   let reallyClose = true;
   let numtabs = GetTabMail().tabInfo.length;
   if (numtabs > 1)
@@ -859,6 +830,10 @@ function MailWindowIsClosing()
         pref.setBoolPref("browser.tabs.warnOnClose", false);
     }
   }
+
+  if (!reallyClose && aTopic == "quit-application-requested")
+    aCancelQuit.data = true;
+
   return reallyClose;
 }
 
@@ -926,8 +901,8 @@ function loadStartFolder(initialUri)
     }
     catch(ex)
     {
-      dump(ex);
-      dump('Exception in LoadStartFolder caused by no default account.  We know about this\n');
+      // If no default account then show account central page.
+      ShowAccountCentral();
     }
 
     MsgGetMessagesForAllServers(defaultServer);
@@ -991,20 +966,18 @@ function InitializeDataSources()
   SetupMoveCopyMenus('goMenu', accountManagerDataSource, folderDataSource);
 }
 
-function OnFolderUnreadColAttrModified(event)
+function AddMutationObserver(callback)
 {
-  if (event.attrName == "hidden")
-  {
-    var folderNameCell = document.getElementById("folderNameCell");
-    var label = {"true": "?folderTreeName", "false": "?folderTreeSimpleName"};
-    folderNameCell.setAttribute("label", label[event.newValue]);
-  }
+  new MutationObserver(callback).observe(callback(), {attributes: true, attributeFilter: ["hidden"]});
 }
 
-function OnAttachmentColAttrModified(event)
+function UpdateFolderUnreadCol()
 {
-  if (event.attrName == "hidden")
-    UpdateAttachmentCol(false);
+  var folderUnreadCol = document.getElementById("folderUnreadCol");
+  var folderNameCell = document.getElementById("folderNameCell");
+  var label = {true: "?folderTreeName", false: "?folderTreeSimpleName"};
+  folderNameCell.setAttribute("label", label[folderUnreadCol.hidden]);
+  return folderUnreadCol;
 }
 
 function UpgradeFolderPaneUI()
@@ -1017,15 +990,7 @@ function UpgradeFolderPaneUI()
 function OnLoadFolderPane()
 {
     UpgradeFolderPaneUI();
-
-    var folderUnreadCol = document.getElementById("folderUnreadCol");
-    var hidden = folderUnreadCol.getAttribute("hidden");
-    if (hidden != "true")
-    {
-        var folderNameCell = document.getElementById("folderNameCell");
-        folderNameCell.setAttribute("label", "?folderTreeSimpleName");
-    }
-    folderUnreadCol.addEventListener("DOMAttrModified", OnFolderUnreadColAttrModified, false);
+    AddMutationObserver(UpdateFolderUnreadCol);
 
     //Add folderDataSource and accountManagerDataSource to folderPane
     var database = GetFolderDatasource();
@@ -1057,18 +1022,16 @@ function UpgradeThreadPaneUI()
 function OnLoadThreadPane()
 {
   UpgradeThreadPaneUI();
-  UpdateAttachmentCol(true);
+  AddMutationObserver(UpdateAttachmentCol);
 }
 
-function UpdateAttachmentCol(aFirstTimeFlag)
+function UpdateAttachmentCol()
 {
   var attachmentCol = document.getElementById("attachmentCol");
   var threadTree = GetThreadTree();
   threadTree.setAttribute("noattachcol", attachmentCol.getAttribute("hidden"));
-  if (aFirstTimeFlag)
-    attachmentCol.addEventListener("DOMAttrModified", OnAttachmentColAttrModified, false);
-  else
-    threadTree.treeBoxObject.clearStyleAndImageCaches();
+  threadTree.treeBoxObject.clearStyleAndImageCaches();
+  return attachmentCol;
 }
 
 function OnLoadLocationTree()
@@ -1170,11 +1133,6 @@ function GetTotalCountElement()
   return gTotalCount;
 }
 
-function FindMessenger()
-{
-  return messenger;
-}
-
 function ClearThreadPaneSelection()
 {
   try {
@@ -1204,14 +1162,6 @@ function ClearMessagePane()
     gMessageNotificationBar.clearMsgNotifications();
     ClearPendingReadTimer();
   }
-}
-
-function GetSelectedFolderIndex()
-{
-    var startIndex = {};
-    var endIndex = {};
-    GetFolderTree().view.selection.getRangeAt(0, startIndex, endIndex);
-    return startIndex.value;
 }
 
 // Function to change the highlighted row to where the mouse was clicked
@@ -1508,11 +1458,6 @@ function GetDBView()
 function GetFolderResource(tree, index)
 {
   return tree.builderView.getResourceAtIndex(index);
-}
-
-function GetFolderIndex(tree, resource)
-{
-  return tree.builderView.getIndexOfResource(resource);
 }
 
 // Some of the per account junk mail settings have been

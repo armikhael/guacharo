@@ -1,4 +1,13 @@
+; This Source Code Form is subject to the terms of the Mozilla Public
+; License, v. 2.0. If a copy of the MPL was not distributed with this
+; file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 ; Package file for the Thunderbird build.
+;
+; Packaging manifest is used to copy files from dist/bin
+; to the staging directory.
+; Some other files are built in the staging directory directly,
+; so they will be implicitly packaged too.
 ;
 ; File format:
 ;
@@ -19,8 +28,8 @@
 ; Mac bundle stuff
 @APPNAME@/Contents/Info.plist
 @APPNAME@/Contents/PkgInfo
-@APPNAME@/Contents/Plug-Ins/
 @APPNAME@/Contents/Resources/
+@APPNAME@/Contents/_CodeSignature/CodeResources
 @APPNAME@/Contents/Library/
 #endif
 
@@ -28,6 +37,7 @@
 @BINPATH@/chrome/@AB_CD@@JAREXT@
 @BINPATH@/chrome/@AB_CD@.manifest
 @BINPATH@/@PREF_DIR@/all-l10n.js
+@BINPATH@/searchplugins/*
 @BINPATH@/dictionaries/*
 @BINPATH@/hyphenation/*
 #ifdef XP_WIN32
@@ -37,6 +47,7 @@
 @BINPATH@/updater.ini
 
 [xpcom]
+@BINPATH@/dependentlibs.list
 @BINPATH@/@DLL_PREFIX@xpcom@DLL_SUFFIX@
 @BINPATH@/@DLL_PREFIX@nspr4@DLL_SUFFIX@
 @BINPATH@/@DLL_PREFIX@plc4@DLL_SUFFIX@
@@ -45,7 +56,7 @@
 @BINPATH@/@DLL_PREFIX@mozjs@DLL_SUFFIX@
 #endif
 #ifdef XP_WIN32
-#ifndef MOZ_MEMORY
+@BINPATH@/@DLL_PREFIX@gkmedias@DLL_SUFFIX@
 #if _MSC_VER == 1400
 @BINPATH@/Microsoft.VC80.CRT.manifest
 @BINPATH@/msvcm80.dll
@@ -59,16 +70,13 @@
 #elif _MSC_VER == 1600
 @BINPATH@/msvcp100.dll
 @BINPATH@/msvcr100.dll
-#endif
-#else
-@BINPATH@/mozcrt19.dll
-@BINPATH@/mozcpp19.dll
+#elif _MSC_VER == 1700
+@BINPATH@/msvcp110.dll
+@BINPATH@/msvcr110.dll
 #endif
 #endif
 @BINPATH@/@DLL_PREFIX@mozalloc@DLL_SUFFIX@
-#ifdef MOZ_MEMORY_DARWIN
-@BINPATH@/@DLL_PREFIX@jemalloc@DLL_SUFFIX@
-#endif
+@BINPATH@/@DLL_PREFIX@mozglue@DLL_SUFFIX@
 #ifdef XP_MACOSX
 @BINPATH@/XUL
 #else
@@ -103,11 +111,10 @@
 @BINPATH@/@MOZ_APP_NAME@.exe
 #else
 @BINPATH@/@MOZ_APP_NAME@-bin
-#ifndef XP_MACOSX
 @BINPATH@/@MOZ_APP_NAME@
 #endif
-#endif
 @BINPATH@/application.ini
+@BINPATH@/update-settings.ini
 @BINPATH@/blocklist.xml
 @BINPATH@/platform.ini
 #ifdef XP_OS2
@@ -141,6 +148,8 @@
 @BINPATH@/components/aboutRedirector.js
 @BINPATH@/components/activity.xpt
 @BINPATH@/components/activityComponents.manifest
+@BINPATH@/components/cloudFileComponents.manifest
+@BINPATH@/components/cloudfile.xpt
 @BINPATH@/components/addrbook.xpt
 @BINPATH@/components/fts3tok.xpt
 ; interfaces.manifest doesn't get packaged because it is dynamically
@@ -159,7 +168,7 @@
 @BINPATH@/components/msgnews.xpt
 @BINPATH@/components/msgsearch.xpt
 @BINPATH@/components/import.xpt
-@BINPATH@/components/impComm4xMail.xpt
+@BINPATH@/components/mailcompsbase.xpt
 @BINPATH@/components/mailview.xpt
 @BINPATH@/components/mailprofilemigration.xpt
 @BINPATH@/components/messageWakeupService.js
@@ -167,6 +176,10 @@
 @BINPATH@/components/nsActivity.js
 @BINPATH@/components/nsActivityManager.js
 @BINPATH@/components/nsActivityManagerUI.js
+@BINPATH@/components/nsYouSendIt.js
+@BINPATH@/components/nsUbuntuOne.js
+@BINPATH@/components/nsBox.js
+@BINPATH@/components/cloudFileAccounts.js
 @BINPATH@/components/nsAddrbook.manifest
 @BINPATH@/components/nsMailNewsCommandLineHandler.js
 @BINPATH@/components/services-crypto-component.xpt
@@ -198,6 +211,7 @@
 @BINPATH@/extensions/{972ce4c6-7e08-4474-a285-3208198ce6fd}/icon.png
 @BINPATH@/extensions/{972ce4c6-7e08-4474-a285-3208198ce6fd}/preview.png
 @BINPATH@/extensions/{972ce4c6-7e08-4474-a285-3208198ce6fd}/chrome.manifest
+@BINPATH@/distribution/extensions/tbtestpilot@labs.mozilla.com.xpi
 
 ; Gloda
 @BINPATH@/chrome/gloda@JAREXT@
@@ -205,6 +219,9 @@
 @BINPATH@/components/glautocomp.js
 @BINPATH@/components/gloda.manifest
 @BINPATH@/components/jsmimeemitter.js
+
+; New message notification
+@BINPATH@/components/newMailNotificationService.js
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Mail Extensions (smime, etc.)
@@ -235,6 +252,45 @@
 @BINPATH@/components/msgsmime.xpt
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; instant messaging
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; shared with Instantbird
+@BINPATH@/@PREF_DIR@/chat-prefs.js
+@BINPATH@/chrome/chat@JAREXT@
+@BINPATH@/chrome/chat.manifest
+@BINPATH@/components/chat.xpt
+@BINPATH@/components/imAccounts.js
+@BINPATH@/components/imAccounts.manifest
+@BINPATH@/components/imCommands.js
+@BINPATH@/components/imCommands.manifest
+@BINPATH@/components/imContacts.js
+@BINPATH@/components/imContacts.manifest
+@BINPATH@/components/imConversations.js
+@BINPATH@/components/imConversations.manifest
+@BINPATH@/components/imCore.js
+@BINPATH@/components/imCore.manifest
+@BINPATH@/components/facebook.js
+@BINPATH@/components/facebook.manifest
+@BINPATH@/components/gtalk.js
+@BINPATH@/components/gtalk.manifest
+@BINPATH@/components/twitter.js
+@BINPATH@/components/twitter.manifest
+@BINPATH@/components/irc.js
+@BINPATH@/components/irc.manifest
+@BINPATH@/components/xmpp.js
+@BINPATH@/components/xmpp.manifest
+@BINPATH@/components/smileProtocolHandler.js
+@BINPATH@/components/smileProtocolHandler.manifest
+@BINPATH@/components/logger.js
+@BINPATH@/components/logger.manifest
+
+; Thunderbird specific
+@BINPATH@/@PREF_DIR@/all-im.js
+@BINPATH@/components/im.manifest
+@BINPATH@/components/imIncomingServer.js
+@BINPATH@/components/imProtocolInfo.js
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Chrome Files
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -252,7 +308,11 @@
 @BINPATH@/defaults/pref/mailnews.js
 @BINPATH@/defaults/pref/mdn.js
 @BINPATH@/defaults/pref/smime.js
+#ifdef MOZ_ESR
+@BINPATH@/defaults/pref/thunderbird-esr-branding.js
+#else
 @BINPATH@/defaults/pref/thunderbird-branding.js
+#endif
 @BINPATH@/greprefs.js
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -355,7 +415,9 @@
 @BINPATH@/components/content_htmldoc.xpt
 @BINPATH@/components/content_xslt.xpt
 @BINPATH@/components/content_xtf.xpt
+@BINPATH@/components/html5.xpt
 @BINPATH@/components/htmlparser.xpt
+@BINPATH@/components/identity.xpt
 @BINPATH@/components/layout_base.xpt
 @BINPATH@/components/layout_forms.xpt
 #ifdef NS_PRINTING
@@ -363,6 +425,7 @@
 #endif
 @BINPATH@/components/layout_xul.xpt
 @BINPATH@/components/xulapp.xpt
+@BINPATH@/components/xul.xpt
 @BINPATH@/components/xuldoc.xpt
 @BINPATH@/components/xultmpl.xpt
 
@@ -422,12 +485,14 @@
 @BINPATH@/components/nsSearchSuggestions.js
 @BINPATH@/components/nsTaggingService.js
 @BINPATH@/components/PlacesCategoriesStarter.js
+@BINPATH@/components/TCPSocket.js
+@BINPATH@/components/TCPSocket.manifest
 @BINPATH@/components/TelemetryPing.js
 @BINPATH@/components/TelemetryPing.manifest
 @BINPATH@/components/toolkitplaces.manifest
 @BINPATH@/components/toolkitsearch.manifest
 #ifdef XP_MACOSX
-@BINPATH@/components/libalerts_s.dylib
+@BINPATH@/components/libalerts.dylib
 #elifdef XP_UNIX
 @BINPATH@/components/toolkitremote.xpt
 @BINPATH@/mozilla-xremote-client
@@ -439,6 +504,9 @@
 #endif
 #ifdef MOZ_ENABLE_DBUS
 @BINPATH@/components/@DLL_PREFIX@dbusservice@DLL_SUFFIX@
+#endif
+#ifdef MOZ_ENABLE_PROFILER_SPS
+@BINPATH@/components/profiler.xpt
 #endif
 
 ; rdf
@@ -452,8 +520,11 @@
 
 ; dom
 @BINPATH@/components/dom.xpt
+@BINPATH@/components/dom_apps.xpt
 @BINPATH@/components/dom_base.xpt
+@BINPATH@/components/dom_battery.xpt
 @BINPATH@/components/dom_canvas.xpt
+@BINPATH@/components/dom_contacts.xpt
 @BINPATH@/components/dom_core.xpt
 @BINPATH@/components/dom_css.xpt
 @BINPATH@/components/dom_events.xpt
@@ -461,13 +532,14 @@
 @BINPATH@/components/dom_html.xpt
 @BINPATH@/components/dom_indexeddb.xpt
 @BINPATH@/components/dom_json.xpt
+@BINPATH@/components/dom_network.xpt
 @BINPATH@/components/dom_notification.xpt
 @BINPATH@/components/dom_offline.xpt
+@BINPATH@/componnets/dom_power.xpt
 @BINPATH@/components/dom_range.xpt
 @BINPATH@/components/dom_sidebar.xpt
-#ifdef MOZ_SMIL
+@BINPATH@/components/dom_sms.xpt
 @BINPATH@/components/dom_smil.xpt
-#endif
 @BINPATH@/components/dom_storage.xpt
 @BINPATH@/components/dom_stylesheets.xpt
 @BINPATH@/components/dom_traversal.xpt
@@ -534,36 +606,30 @@
 @BINPATH@/components/nsContentPrefService.manifest
 
 ; [Personal Security Manager]
-@BINPATH@/@DLL_PREFIX@nssckbi@DLL_SUFFIX@
-@BINPATH@/components/pipboot.xpt
-@BINPATH@/components/pipnss.xpt
-@BINPATH@/components/pippki.xpt
+;
+; NSS libraries are signed in the staging directory,
+; meaning their .chk files are created there directly.
+;
+@BINPATH@/@DLL_PREFIX@freebl3@DLL_SUFFIX@
 @BINPATH@/@DLL_PREFIX@nss3@DLL_SUFFIX@
+@BINPATH@/@DLL_PREFIX@nssckbi@DLL_SUFFIX@
+#ifndef NSS_DISABLE_DBM
+@BINPATH@/@DLL_PREFIX@nssdbm3@DLL_SUFFIX@
+#endif
 @BINPATH@/@DLL_PREFIX@nssutil3@DLL_SUFFIX@
 @BINPATH@/@DLL_PREFIX@smime3@DLL_SUFFIX@
 @BINPATH@/@DLL_PREFIX@softokn3@DLL_SUFFIX@
-@BINPATH@/@DLL_PREFIX@freebl3@DLL_SUFFIX@
 @BINPATH@/@DLL_PREFIX@ssl3@DLL_SUFFIX@
-#ifndef CROSS_COMPILE
-@BINPATH@/@DLL_PREFIX@freebl3.chk
-@BINPATH@/@DLL_PREFIX@softokn3.chk
-#endif
-#ifndef NSS_DISABLE_DBM
-@BINPATH@/@DLL_PREFIX@nssdbm3@DLL_SUFFIX@
-#ifndef CROSS_COMPILE
-@BINPATH@/@DLL_PREFIX@nssdbm3.chk
-#endif
-#endif
 @BINPATH@/chrome/pippki@JAREXT@
 @BINPATH@/chrome/pippki.manifest
+@BINPATH@/components/pipboot.xpt
+@BINPATH@/components/pipnss.xpt
+@BINPATH@/components/pippki.xpt
 
 ; for Solaris SPARC
 #ifdef SOLARIS
-@BINPATH@/@DLL_PREFIX@freebl_32fpu_3.chk
 @BINPATH@/@DLL_PREFIX@freebl_32fpu_3@DLL_SUFFIX@
-@BINPATH@/@DLL_PREFIX@freebl_32int_3.chk
 @BINPATH@/@DLL_PREFIX@freebl_32int_3@DLL_SUFFIX@
-@BINPATH@/@DLL_PREFIX@freebl_32int64_3.chk
 @BINPATH@/@DLL_PREFIX@freebl_32int64_3@DLL_SUFFIX@
 #endif
 
@@ -573,12 +639,16 @@
 @BINPATH@/components/xpautocomplete.xpt
 @BINPATH@/components/autocomplete.xpt
 @BINPATH@/components/alerts.xpt
+@BINPATH@/components/jsdebugger.xpt
 @BINPATH@/components/jsdservice.xpt
+@BINPATH@/components/jsinspector.xpt
 @BINPATH@/components/fastfind.xpt
 @BINPATH@/components/find.xpt
 @BINPATH@/components/chardet.xpt
 @BINPATH@/components/ConsoleAPI.js
 @BINPATH@/components/ConsoleAPI.manifest
+@BINPATH@/components/ContactManager.js
+@BINPATH@/components/ContactManager.manifest
 @BINPATH@/components/contentAreaDropListener.js
 @BINPATH@/components/contentAreaDropListener.manifest
 @BINPATH@/components/contentSecurityPolicy.js
@@ -590,7 +660,6 @@
 @BINPATH@/components/mozfind.xpt
 @BINPATH@/components/mimetype.xpt
 @BINPATH@/components/parentalcontrols.xpt
-@BINPATH@/components/proxyObject.xpt
 @BINPATH@/components/exthandler.xpt
 @BINPATH@/components/exthelper.xpt
 @BINPATH@/components/embed_base.xpt
@@ -599,8 +668,6 @@
 @BINPATH@/components/lwbrk.xpt
 @BINPATH@/components/nsINIProcessor.js
 @BINPATH@/components/nsINIProcessor.manifest
-@BINPATH@/components/nsTryToClose.js
-@BINPATH@/components/nsTryToClose.manifest
 @BINPATH@/components/pluginGlue.manifest
 @BINPATH@/components/txEXSLTRegExFunctions.js
 @BINPATH@/components/txEXSLTRegExFunctions.manifest
@@ -615,6 +682,7 @@
 @BINPATH@/components/nsBadCertHandler.manifest
 @BINPATH@/components/cookie.xpt
 @BINPATH@/components/places.xpt
+@BINPATH@/components/plugin.xpt
 @BINPATH@/components/prefetch.xpt
 @BINPATH@/res/langGroups.properties
 @BINPATH@/res/language.properties
@@ -662,7 +730,16 @@
 @BINPATH@/updater@BIN_SUFFIX@
 #endif
 
-; [crash reporter]
+; [MaintenanceService]
+;
+#ifdef MOZ_MAINTENANCE_SERVICE
+@BINPATH@/maintenanceservice.exe
+@BINPATH@/maintenanceservice_installer.exe
+#endif
+
+; [Crash Reporter]
+;
+#ifdef MOZ_CRASHREPORTER
 #ifdef XP_MACOSX
 @BINPATH@/crashreporter.app/
 #else
@@ -671,6 +748,7 @@
 @BINPATH@/crashreporter.ini
 #ifdef XP_UNIX
 @BINPATH@/Throbber-small.gif
+#endif
 #endif
 #endif
 #endif

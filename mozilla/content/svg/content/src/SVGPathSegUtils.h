@@ -1,47 +1,15 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla SVG Project code.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef MOZILLA_SVGPATHSEGUTILS_H__
 #define MOZILLA_SVGPATHSEGUTILS_H__
 
-#include "nsIDOMSVGPathSeg.h"
-#include "nsIContent.h"
-#include "nsAString.h"
-#include "nsContentUtils.h"
 #include "gfxPoint.h"
+#include "nsDebug.h"
+#include "nsIDOMSVGPathSeg.h"
+#include "nsMemory.h"
 
 #define NS_SVG_PATH_SEG_MAX_ARGS         7
 #define NS_SVG_PATH_SEG_FIRST_VALID_TYPE nsIDOMSVGPathSeg::PATHSEG_CLOSEPATH
@@ -71,7 +39,7 @@ struct SVGPathTraversalState
     , mode(eUpdateAll)
   {}
 
-  PRBool ShouldUpdateLengthAndControlPoints() { return mode == eUpdateAll; }
+  bool ShouldUpdateLengthAndControlPoints() { return mode == eUpdateAll; }
 
   gfxPoint start; // start point of current sub path (reset each moveto)
 
@@ -119,23 +87,23 @@ public:
    * At some point in the future we will likely want to encode other
    * information into the float, such as whether the command was explicit or
    * not. For now all this method does is save on int to float runtime
-   * conversion by requiring PRUint32 and float to be of the same size so we
-   * can simply do a bitwise PRUint32<->float copy.
+   * conversion by requiring uint32_t and float to be of the same size so we
+   * can simply do a bitwise uint32_t<->float copy.
    */
-  static float EncodeType(PRUint32 aType) {
-    PR_STATIC_ASSERT(sizeof(PRUint32) == sizeof(float));
+  static float EncodeType(uint32_t aType) {
+    PR_STATIC_ASSERT(sizeof(uint32_t) == sizeof(float));
     NS_ABORT_IF_FALSE(IsValidType(aType), "Seg type not recognized");
     return *(reinterpret_cast<float*>(&aType));
   }
 
-  static PRUint32 DecodeType(float aType) {
-    PR_STATIC_ASSERT(sizeof(PRUint32) == sizeof(float));
-    PRUint32 type = *(reinterpret_cast<PRUint32*>(&aType));
+  static uint32_t DecodeType(float aType) {
+    PR_STATIC_ASSERT(sizeof(uint32_t) == sizeof(float));
+    uint32_t type = *(reinterpret_cast<uint32_t*>(&aType));
     NS_ABORT_IF_FALSE(IsValidType(type), "Seg type not recognized");
     return type;
   }
 
-  static PRUnichar GetPathSegTypeAsLetter(PRUint32 aType) {
+  static PRUnichar GetPathSegTypeAsLetter(uint32_t aType) {
     NS_ABORT_IF_FALSE(IsValidType(aType), "Seg type not recognized");
 
     static const PRUnichar table[] = {
@@ -165,10 +133,10 @@ public:
     return table[aType];
   }
 
-  static PRUint32 ArgCountForType(PRUint32 aType) {
+  static uint32_t ArgCountForType(uint32_t aType) {
     NS_ABORT_IF_FALSE(IsValidType(aType), "Seg type not recognized");
 
-    static const PRUint8 table[] = {
+    static const uint8_t table[] = {
       0,  //  0 == PATHSEG_UNKNOWN
       0,  //  1 == PATHSEG_CLOSEPATH
       2,  //  2 == PATHSEG_MOVETO_ABS
@@ -199,35 +167,35 @@ public:
    * Convenience so that callers can pass a float containing an encoded type
    * and have it decoded implicitly.
    */
-  static PRUint32 ArgCountForType(float aType) {
+  static uint32_t ArgCountForType(float aType) {
     return ArgCountForType(DecodeType(aType));
   }
 
-  static PRBool IsValidType(PRUint32 aType) {
+  static bool IsValidType(uint32_t aType) {
     return aType >= NS_SVG_PATH_SEG_FIRST_VALID_TYPE &&
            aType <= NS_SVG_PATH_SEG_LAST_VALID_TYPE;
   }
 
-  static PRBool IsCubicType(PRUint32 aType) {
+  static bool IsCubicType(uint32_t aType) {
     return aType == nsIDOMSVGPathSeg::PATHSEG_CURVETO_CUBIC_REL ||
            aType == nsIDOMSVGPathSeg::PATHSEG_CURVETO_CUBIC_ABS ||
            aType == nsIDOMSVGPathSeg::PATHSEG_CURVETO_CUBIC_SMOOTH_REL ||
            aType == nsIDOMSVGPathSeg::PATHSEG_CURVETO_CUBIC_SMOOTH_ABS;
   }
 
-  static PRBool IsQuadraticType(PRUint32 aType) {
+  static bool IsQuadraticType(uint32_t aType) {
     return aType == nsIDOMSVGPathSeg::PATHSEG_CURVETO_QUADRATIC_REL ||
            aType == nsIDOMSVGPathSeg::PATHSEG_CURVETO_QUADRATIC_ABS ||
            aType == nsIDOMSVGPathSeg::PATHSEG_CURVETO_QUADRATIC_SMOOTH_REL ||
            aType == nsIDOMSVGPathSeg::PATHSEG_CURVETO_QUADRATIC_SMOOTH_ABS;
   }
 
-  static PRBool IsArcType(PRUint32 aType) {
+  static bool IsArcType(uint32_t aType) {
     return aType == nsIDOMSVGPathSeg::PATHSEG_ARC_ABS || 
            aType == nsIDOMSVGPathSeg::PATHSEG_ARC_REL;
   }
 
-  static PRBool IsRelativeOrAbsoluteType(PRUint32 aType) {
+  static bool IsRelativeOrAbsoluteType(uint32_t aType) {
     NS_ABORT_IF_FALSE(IsValidType(aType), "Seg type not recognized");
 
     // When adding a new path segment type, ensure that the returned condition
@@ -238,7 +206,7 @@ public:
     return aType >= nsIDOMSVGPathSeg::PATHSEG_MOVETO_ABS;
   }
 
-  static PRBool IsRelativeType(PRUint32 aType) {
+  static bool IsRelativeType(uint32_t aType) {
     NS_ABORT_IF_FALSE
       (IsRelativeOrAbsoluteType(aType),
        "IsRelativeType called with segment type that does not come in relative and absolute forms");
@@ -251,7 +219,7 @@ public:
     return aType & 1;
   }
 
-  static PRUint32 RelativeVersionOfType(PRUint32 aType) {
+  static uint32_t RelativeVersionOfType(uint32_t aType) {
     NS_ABORT_IF_FALSE
       (IsRelativeOrAbsoluteType(aType),
        "RelativeVersionOfType called with segment type that does not come in relative and absolute forms");
@@ -264,7 +232,7 @@ public:
     return aType | 1;
   }
 
-  static PRUint32 SameTypeModuloRelativeness(PRUint32 aType1, PRUint32 aType2) {
+  static uint32_t SameTypeModuloRelativeness(uint32_t aType1, uint32_t aType2) {
     if (!IsRelativeOrAbsoluteType(aType1)) {
       return aType1 == aType2;
     }

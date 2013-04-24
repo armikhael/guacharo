@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- *   Mark Banner <bugzilla@standard8.plus.com>
- * Portions created by the Initial Developer are Copyright (C) 2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jeremy Laine <jeremy.laine@m4x.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsAbLDAPDirectoryModify.h"
 #include "nsILDAPMessage.h"
@@ -42,12 +9,10 @@
 #include "nsILDAPErrors.h"
 #include "nsILDAPModification.h"
 #include "nsIServiceManager.h"
-#include "nsIProxyObjectManager.h"
 #include "nsIAbLDAPDirectory.h"
 #include "nsIMutableArray.h"
 #include "nsComponentManagerUtils.h"
 #include "nsServiceManagerUtils.h"
-#include "nsXPCOMCIDInternal.h"
 
 #include <stdio.h>
 
@@ -58,7 +23,7 @@ class nsAbModifyLDAPMessageListener : public nsAbLDAPListenerBase
 public:
   NS_DECL_ISUPPORTS
 
-  nsAbModifyLDAPMessageListener(const PRInt32 type,
+  nsAbModifyLDAPMessageListener(const int32_t type,
                                 const nsACString &cardDN,
                                 nsIArray* modArray,
                                 const nsACString &newRDN,
@@ -68,7 +33,7 @@ public:
                                 nsIMutableArray* serverSearchControls,
                                 nsIMutableArray* clientSearchControls,
                                 const nsACString &login,
-                                const PRInt32 timeOut = 0);
+                                const int32_t timeOut = 0);
   virtual ~nsAbModifyLDAPMessageListener();
 
   // nsILDAPMessageListener
@@ -76,21 +41,21 @@ public:
 
 protected:
   nsresult Cancel();
-  virtual void InitFailed(PRBool aCancelled = PR_FALSE);
+  virtual void InitFailed(bool aCancelled = false);
   virtual nsresult DoTask();
   nsresult DoMainTask();
   nsresult OnLDAPMessageModifyResult(nsILDAPMessage *aMessage);
   nsresult OnLDAPMessageRenameResult(nsILDAPMessage *aMessage);
 
-  PRInt32 mType;
+  int32_t mType;
   nsCString mCardDN;
   nsCOMPtr<nsIArray> mModification;
   nsCString mNewRDN;
   nsCString mNewBaseDN;
 
-  PRBool mFinished;
-  PRBool mCanceled;
-  PRBool mFlagRename;
+  bool mFinished;
+  bool mCanceled;
+  bool mFlagRename;
 
   nsCOMPtr<nsILDAPOperation> mModifyOperation;
   nsCOMPtr<nsIMutableArray> mServerSearchControls;
@@ -101,7 +66,7 @@ protected:
 NS_IMPL_THREADSAFE_ISUPPORTS1(nsAbModifyLDAPMessageListener, nsILDAPMessageListener)
 
 nsAbModifyLDAPMessageListener::nsAbModifyLDAPMessageListener(
-    const PRInt32 type,
+    const int32_t type,
     const nsACString &cardDN,
     nsIArray* modArray,
     const nsACString &newRDN,
@@ -111,22 +76,22 @@ nsAbModifyLDAPMessageListener::nsAbModifyLDAPMessageListener(
     nsIMutableArray* serverSearchControls,
     nsIMutableArray* clientSearchControls,
     const nsACString &login,
-    const PRInt32 timeOut) :
+    const int32_t timeOut) :
     nsAbLDAPListenerBase(directoryUrl, connection, login, timeOut),
     mType(type),
     mCardDN(cardDN),
     mModification(modArray),
     mNewRDN(newRDN),
     mNewBaseDN(newBaseDN),
-    mFinished(PR_FALSE),
-    mCanceled(PR_FALSE),
-    mFlagRename(PR_FALSE),
+    mFinished(false),
+    mCanceled(false),
+    mFlagRename(false),
     mServerSearchControls(serverSearchControls),
     mClientSearchControls(clientSearchControls)
 {
   if (mType == nsILDAPModification::MOD_REPLACE &&
       !mNewRDN.IsEmpty() && !mNewBaseDN.IsEmpty())
-    mFlagRename = PR_TRUE;
+    mFlagRename = true;
 }
 
 nsAbModifyLDAPMessageListener::~nsAbModifyLDAPMessageListener ()
@@ -143,7 +108,7 @@ nsresult nsAbModifyLDAPMessageListener::Cancel ()
   if (mFinished || mCanceled)
     return NS_OK;
 
-  mCanceled = PR_TRUE;
+  mCanceled = true;
 
   return NS_OK;
 }
@@ -153,11 +118,11 @@ NS_IMETHODIMP nsAbModifyLDAPMessageListener::OnLDAPMessage(nsILDAPMessage *aMess
   nsresult rv = Initiate();
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRInt32 messageType;
+  int32_t messageType;
   rv = aMessage->GetType(&messageType);
   NS_ENSURE_SUCCESS(rv, rv);
   
-  PRBool cancelOperation = PR_FALSE;
+  bool cancelOperation = false;
 
   // Enter lock
   {
@@ -170,11 +135,11 @@ NS_IMETHODIMP nsAbModifyLDAPMessageListener::OnLDAPMessage(nsILDAPMessage *aMess
     if ((messageType == nsILDAPMessage::RES_ADD) || 
         (messageType == nsILDAPMessage::RES_DELETE) ||
         (messageType == nsILDAPMessage::RES_MODIFY))
-      mFinished = PR_TRUE;
+      mFinished = true;
     else if (mCanceled)
     {
-      mFinished = PR_TRUE;
-      cancelOperation = PR_TRUE;
+      mFinished = true;
+      cancelOperation = true;
     }
   }
   // Leave lock
@@ -198,11 +163,11 @@ NS_IMETHODIMP nsAbModifyLDAPMessageListener::OnLDAPMessage(nsILDAPMessage *aMess
       rv = OnLDAPMessageModifyResult(aMessage);
       break;
     case nsILDAPMessage::RES_MODDN:
-      mFlagRename = PR_FALSE;
+      mFlagRename = false;
       rv = OnLDAPMessageRenameResult(aMessage);
       if (NS_FAILED(rv)) 
         // Rename failed, so we stop here
-        mFinished = PR_TRUE;
+        mFinished = true;
       break;
     default:
       break;
@@ -216,13 +181,13 @@ NS_IMETHODIMP nsAbModifyLDAPMessageListener::OnLDAPMessage(nsILDAPMessage *aMess
     // reset because we might re-use this listener...except don't do this
     // until the search is done, so we'll ignore results from a previous
     // search.
-    mCanceled = mFinished = PR_FALSE;
+    mCanceled = mFinished = false;
   }
 
   return rv;
 }
 
-void nsAbModifyLDAPMessageListener::InitFailed(PRBool aCancelled)
+void nsAbModifyLDAPMessageListener::InitFailed(bool aCancelled)
 {
   // XXX Just cancel the operation for now
   // we'll need to review this when we've got the proper listeners in place.
@@ -232,22 +197,12 @@ void nsAbModifyLDAPMessageListener::InitFailed(PRBool aCancelled)
 nsresult nsAbModifyLDAPMessageListener::DoTask()
 {
   nsresult rv;
-  mCanceled = mFinished = PR_FALSE;
+  mCanceled = mFinished = false;
 
   mModifyOperation = do_CreateInstance(NS_LDAPOPERATION_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  nsCOMPtr<nsIProxyObjectManager> proxyObjMgr = do_GetService(NS_XPCOMPROXY_CONTRACTID, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  nsCOMPtr<nsILDAPMessageListener> proxyListener;
-  rv = proxyObjMgr->GetProxyForObject( NS_PROXY_TO_MAIN_THREAD,
-                             NS_GET_IID(nsILDAPMessageListener),
-                             this, NS_PROXY_SYNC | NS_PROXY_ALWAYS,
-                             getter_AddRefs(proxyListener));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  rv = mModifyOperation->Init (mConnection, proxyListener, nsnull);
+  rv = mModifyOperation->Init (mConnection, this, nullptr);
   NS_ENSURE_SUCCESS(rv, rv);
 
   // XXX do we need the search controls?
@@ -258,7 +213,7 @@ nsresult nsAbModifyLDAPMessageListener::DoTask()
   NS_ENSURE_SUCCESS(rv, rv);
 
   if (mFlagRename)
-    return mModifyOperation->Rename(mCardDN, mNewRDN, mNewBaseDN, PR_TRUE);
+    return mModifyOperation->Rename(mCardDN, mNewRDN, mNewBaseDN, true);
 
   switch (mType)
   {
@@ -279,7 +234,7 @@ nsresult nsAbModifyLDAPMessageListener::OnLDAPMessageModifyResult(nsILDAPMessage
   nsresult rv;
   NS_ENSURE_ARG_POINTER(aMessage);
   
-  PRInt32 errCode;
+  int32_t errCode;
   rv = aMessage->GetErrorCode(&errCode);
   NS_ENSURE_SUCCESS(rv, rv);
  
@@ -303,7 +258,7 @@ nsresult nsAbModifyLDAPMessageListener::OnLDAPMessageRenameResult(nsILDAPMessage
   nsresult rv;
   NS_ENSURE_ARG_POINTER(aMessage);
   
-  PRInt32 errCode;
+  int32_t errCode;
   rv = aMessage->GetErrorCode(&errCode);
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -337,7 +292,7 @@ nsAbLDAPDirectoryModify::~nsAbLDAPDirectoryModify()
 }
 
 nsresult nsAbLDAPDirectoryModify::DoModify(nsIAbLDAPDirectory *directory,
-                                           const PRInt32 &updateType,
+                                           const int32_t &updateType,
                                            const nsACString &cardDN,
                                            nsIArray* modArray,
                                            const nsACString &newRDN,
@@ -392,7 +347,7 @@ nsresult nsAbLDAPDirectoryModify::DoModify(nsIAbLDAPDirectory *directory,
   rv = directory->GetAuthDn(login);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRUint32 protocolVersion;
+  uint32_t protocolVersion;
   rv = directory->GetProtocolVersion(&protocolVersion);
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -412,6 +367,6 @@ nsresult nsAbLDAPDirectoryModify::DoModify(nsIAbLDAPDirectory *directory,
   // Now lets initialize the LDAP connection properly. We'll kick
   // off the bind operation in the callback function, |OnLDAPInit()|.
   return ldapConnection->Init(currentUrl, login,
-                              _messageListener, nsnull, protocolVersion);
+                              _messageListener, nullptr, protocolVersion);
 }
 

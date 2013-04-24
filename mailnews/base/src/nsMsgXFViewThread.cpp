@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * David Bienvenu.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   David Bienvenu <bienvenu@nventure.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"
 #include "nsMsgXFViewThread.h"
@@ -70,14 +37,14 @@ NS_IMETHODIMP nsMsgXFViewThread::GetThreadKey(nsMsgKey *aResult)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgXFViewThread::GetFlags(PRUint32 *aFlags)
+NS_IMETHODIMP nsMsgXFViewThread::GetFlags(uint32_t *aFlags)
 {
   NS_ENSURE_ARG_POINTER(aFlags);
   *aFlags = m_flags;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgXFViewThread::SetFlags(PRUint32 aFlags)
+NS_IMETHODIMP nsMsgXFViewThread::SetFlags(uint32_t aFlags)
 {
   m_flags = aFlags;
   return NS_OK;
@@ -85,24 +52,24 @@ NS_IMETHODIMP nsMsgXFViewThread::SetFlags(PRUint32 aFlags)
 
 NS_IMETHODIMP nsMsgXFViewThread::SetSubject(const nsACString& aSubject)
 {
-  NS_ASSERTION(PR_FALSE, "shouldn't call this");
+  NS_ASSERTION(false, "shouldn't call this");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP nsMsgXFViewThread::GetSubject(nsACString& result)
 {
-  NS_ASSERTION(PR_FALSE, "shouldn't call this");
+  NS_ASSERTION(false, "shouldn't call this");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
-NS_IMETHODIMP nsMsgXFViewThread::GetNumChildren(PRUint32 *aNumChildren)
+NS_IMETHODIMP nsMsgXFViewThread::GetNumChildren(uint32_t *aNumChildren)
 {
   NS_ENSURE_ARG_POINTER(aNumChildren);
   *aNumChildren = m_keys.Length();
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgXFViewThread::GetNumUnreadChildren (PRUint32 *aNumUnreadChildren)
+NS_IMETHODIMP nsMsgXFViewThread::GetNumUnreadChildren (uint32_t *aNumUnreadChildren)
 {
   NS_ENSURE_ARG_POINTER(aNumUnreadChildren);
   *aNumUnreadChildren = m_numUnreadChildren;
@@ -111,25 +78,25 @@ NS_IMETHODIMP nsMsgXFViewThread::GetNumUnreadChildren (PRUint32 *aNumUnreadChild
 
 NS_IMETHODIMP 
 nsMsgXFViewThread::AddChild(nsIMsgDBHdr *aNewHdr, nsIMsgDBHdr *aInReplyTo, 
-                            PRBool aThreadInThread, nsIDBChangeAnnouncer *aAnnouncer)
+                            bool aThreadInThread, nsIDBChangeAnnouncer *aAnnouncer)
 {
-  PRUint32 whereInserted;
-  return AddHdr(aNewHdr, PR_FALSE, whereInserted, nsnull);
+  uint32_t whereInserted;
+  return AddHdr(aNewHdr, false, whereInserted, nullptr);
 }
 
 // Returns the parent of the newly added header. If reparentChildren
 // is true, we believe that the new header is a parent of an existing
 // header, and we should find it, and reparent it.
 nsresult nsMsgXFViewThread::AddHdr(nsIMsgDBHdr *newHdr,
-                                   PRBool reparentChildren,
-                                   PRUint32 &whereInserted,
+                                   bool reparentChildren,
+                                   uint32_t &whereInserted,
                                    nsIMsgDBHdr **outParent)
 {
   nsCOMPtr<nsIMsgFolder> newHdrFolder;
   newHdr->GetFolder(getter_AddRefs(newHdrFolder));
 
-  PRUint32 newHdrFlags = 0;
-  PRUint32 msgDate;
+  uint32_t newHdrFlags = 0;
+  uint32_t msgDate;
   nsMsgKey newHdrKey = 0;
 
   newHdr->GetMessageKey(&newHdrKey);
@@ -151,7 +118,7 @@ nsresult nsMsgXFViewThread::AddHdr(nsIMsgDBHdr *newHdr,
     m_levels.InsertElementAt(0, 0);
     m_folders.InsertObjectAt(newHdrFolder, 0);
     if (outParent)
-      *outParent = nsnull;
+      *outParent = nullptr;
     whereInserted = 0;
     return NS_OK;
   }
@@ -159,12 +126,12 @@ nsresult nsMsgXFViewThread::AddHdr(nsIMsgDBHdr *newHdr,
   // Find our parent, if any, in the thread. Starting at the newest
   // reference, and working our way back, see if we've mapped that reference
   // to this thread.
-  PRUint16 numReferences;
+  uint16_t numReferences;
   newHdr->GetNumReferences(&numReferences);
   nsCOMPtr<nsIMsgDBHdr> parent;
-  PRInt32 parentIndex;
+  int32_t parentIndex;
 
-  for (PRInt32 i = numReferences - 1; i >= 0;  i--)
+  for (int32_t i = numReferences - 1; i >= 0;  i--)
   {
     nsCAutoString reference;
     newHdr->GetStringReference(i, reference);
@@ -181,7 +148,7 @@ nsresult nsMsgXFViewThread::AddHdr(nsIMsgDBHdr *newHdr,
       if (parentIndex == -1)
       {
         NS_ERROR("how did we get in the wrong thread?");
-        parent = nsnull;
+        parent = nullptr;
       }
       break;
     }
@@ -190,7 +157,7 @@ nsresult nsMsgXFViewThread::AddHdr(nsIMsgDBHdr *newHdr,
   {
     if (outParent)
       NS_ADDREF(*outParent = parent);
-    PRUint8 parentLevel = m_levels[parentIndex];
+    uint32_t parentLevel = m_levels[parentIndex];
     nsMsgKey parentKey;
     parent->GetMessageKey(&parentKey);
     nsCOMPtr<nsIMsgFolder> parentFolder;
@@ -198,56 +165,61 @@ nsresult nsMsgXFViewThread::AddHdr(nsIMsgDBHdr *newHdr,
     // iterate over our parents' children until we find one we're older than,
     // and insert ourselves before it, or as the last child. In other words,
     // insert, sorted by date.
-    PRUint32 msgDate, childDate;
+    uint32_t msgDate, childDate;
     newHdr->GetDateInSeconds(&msgDate);
     nsCOMPtr<nsIMsgDBHdr> child;
     nsMsgViewIndex i;
-    PRInt32 insertIndex = m_keys.Length();
+    nsMsgViewIndex insertIndex = m_keys.Length();
+    uint32_t insertLevel = parentLevel + 1;
     for (i = parentIndex; 
-         i < m_keys.Length() && (i == parentIndex ||  m_levels[i] > parentLevel); i++)
+         i < m_keys.Length() && (i == (nsMsgViewIndex)parentIndex || m_levels[i] >= parentLevel);
+         i++)
     {
-      if (m_levels[i] == parentLevel + 1) // possible sibling
+      GetChildHdrAt(i, getter_AddRefs(child));
+      if (child)
       {
-        GetChildHdrAt(i, getter_AddRefs(child));
-        if (child)
+        if (reparentChildren && IsHdrParentOf(newHdr, child))
         {
-          if (reparentChildren && IsHdrParentOf(newHdr, child))
+          insertIndex = i;
+          // bump all the children of the current child, and the child
+          nsMsgViewIndex j = insertIndex;
+          uint8_t childLevel = m_levels[insertIndex];
+          do
           {
-            insertIndex = i;
-            // bump all the children of the current child.
-            nsMsgViewIndex i = insertIndex; 
-            do 
-            {
-              m_levels[i] = m_levels[i] + 1;
-              i++;
-            }
-            while (i < m_keys.Length() && m_levels[i] > parentLevel + 1);
-            break;
+            m_levels[j] = m_levels[j] + 1;
+            j++;
           }
-          else
+          while (j < m_keys.Length() && m_levels[j] > childLevel);
+          break;
+        }
+        else if (m_levels[i] == parentLevel + 1) // possible sibling
+        {
+          child->GetDateInSeconds(&childDate);
+          if (msgDate < childDate)
           {
-            child->GetDateInSeconds(&childDate);
-            if (msgDate < childDate)
-            {
-              // if we think we need to reparent, remember this
-              // insert index, but keep looking for children.
-              insertIndex = i;
-              if (!reparentChildren)
-                break;
-            }
+            // if we think we need to reparent, remember this
+            // insert index, but keep looking for children.
+            insertIndex = i;
+            insertLevel = m_levels[i];
+            // if the sibling we're inserting after has children, we need
+            // to go after the children.
+            while (insertIndex + 1 < m_keys.Length() && m_levels[insertIndex + 1] > insertLevel)
+              insertIndex++;
+            if (!reparentChildren)
+              break;
           }
         }
       }
     }
     m_keys.InsertElementAt(insertIndex, newHdrKey);
-    m_levels.InsertElementAt(insertIndex, m_levels[parentIndex] + 1);
+    m_levels.InsertElementAt(insertIndex, insertLevel);
     m_folders.InsertObjectAt(newHdrFolder, insertIndex);
     whereInserted = insertIndex;
   }
   else
   {
     if (outParent)
-      *outParent = nsnull;
+      *outParent = nullptr;
     nsCOMPtr<nsIMsgDBHdr> rootHdr;
     GetChildHdrAt(0, getter_AddRefs(rootHdr));
     // If the new header is a parent of the root then it should be promoted. 
@@ -257,9 +229,9 @@ nsresult nsMsgXFViewThread::AddHdr(nsIMsgDBHdr *newHdr,
       m_levels.InsertElementAt(0, 0);
       m_folders.InsertObjectAt(newHdrFolder, 0);
       whereInserted = 0;
-      // Adjust level of root hdr. We still have to reparent children of root,
-      // and adjust levels if if neccessary.
-      m_levels[1] = 1;
+      // Adjust level of old root hdr and its children
+      for (nsMsgViewIndex i = 1; i < m_keys.Length(); i++)
+        m_levels[i] = m_levels[1] + 1;
     }
     else
     {
@@ -284,20 +256,20 @@ nsresult nsMsgXFViewThread::AddHdr(nsIMsgDBHdr *newHdr,
 //    PRTime topLevelHdrDate;
 
 //    nsCOMPtr<nsIMsgDBHdr> topLevelHdr;
-//    rv = GetRootHdr(nsnull, getter_AddRefs(topLevelHdr));
+//    rv = GetRootHdr(nullptr, getter_AddRefs(topLevelHdr));
 //    if (NS_SUCCEEDED(rv) && topLevelHdr)
 //    {
 //      topLevelHdr->GetDate(&topLevelHdrDate);
-//      if (LL_CMP(newHdrDate, <, topLevelHdrDate))
+//      if (newHdrDate < topLevelHdrDate)
       
 //    }
 //  }
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgXFViewThread::GetChildHdrAt(PRInt32 aIndex, nsIMsgDBHdr **aResult)
+NS_IMETHODIMP nsMsgXFViewThread::GetChildHdrAt(int32_t aIndex, nsIMsgDBHdr **aResult)
 {
-  if (aIndex < 0 || aIndex >= (PRInt32) m_keys.Length())
+  if (aIndex < 0 || aIndex >= (int32_t) m_keys.Length())
     return NS_MSG_MESSAGE_NOT_FOUND;
   nsCOMPtr<nsIMsgDatabase> db;
   nsresult rv = m_folders[aIndex]->GetMsgDatabase(getter_AddRefs(db));
@@ -305,7 +277,7 @@ NS_IMETHODIMP nsMsgXFViewThread::GetChildHdrAt(PRInt32 aIndex, nsIMsgDBHdr **aRe
   return db->GetMsgHdrForKey(m_keys[aIndex], aResult);
 }
 
-NS_IMETHODIMP nsMsgXFViewThread::RemoveChildAt(PRInt32 aIndex)
+NS_IMETHODIMP nsMsgXFViewThread::RemoveChildAt(int32_t aIndex)
 {
   m_keys.RemoveElementAt(aIndex);
   m_levels.RemoveElementAt(aIndex);
@@ -317,22 +289,22 @@ NS_IMETHODIMP nsMsgXFViewThread::RemoveChildHdr(nsIMsgDBHdr *child, nsIDBChangeA
 {
   NS_ENSURE_ARG_POINTER(child);
   nsMsgKey msgKey;
-  PRUint32 msgFlags;
+  uint32_t msgFlags;
   child->GetMessageKey(&msgKey);
   child->GetFlags(&msgFlags);
   nsCOMPtr<nsIMsgFolder> msgFolder;
   child->GetFolder(getter_AddRefs(msgFolder));
   // if this was the newest msg, clear the newest msg date so we'll recalc.
-  PRUint32 date;
+  uint32_t date;
   child->GetDateInSeconds(&date);
   if (date == m_newestMsgDate)
     SetNewestMsgDate(0);
 
-  for (PRUint32 childIndex = 0; childIndex < m_keys.Length(); childIndex++)
+  for (uint32_t childIndex = 0; childIndex < m_keys.Length(); childIndex++)
   {
     if (m_keys[childIndex] == msgKey && m_folders[childIndex] == msgFolder)
     {
-      PRUint8 levelRemoved = m_keys[childIndex];
+      uint8_t levelRemoved = m_keys[childIndex];
       // Adjust the levels of all the children of this header
       nsMsgViewIndex i;
       for (i = childIndex + 1; 
@@ -353,7 +325,7 @@ NS_IMETHODIMP nsMsgXFViewThread::RemoveChildHdr(nsIMsgDBHdr *child, nsIDBChangeA
   return NS_ERROR_FAILURE;
 }
 
-NS_IMETHODIMP nsMsgXFViewThread::GetRootHdr(PRInt32 *aResultIndex, nsIMsgDBHdr **aResult)
+NS_IMETHODIMP nsMsgXFViewThread::GetRootHdr(int32_t *aResultIndex, nsIMsgDBHdr **aResult)
 {
   NS_ENSURE_ARG_POINTER(aResult);
   if (aResultIndex)
@@ -361,26 +333,26 @@ NS_IMETHODIMP nsMsgXFViewThread::GetRootHdr(PRInt32 *aResultIndex, nsIMsgDBHdr *
   return GetChildHdrAt(0, aResult);
 }
 
-NS_IMETHODIMP nsMsgXFViewThread::GetChildKeyAt(PRInt32 aIndex, nsMsgKey *aResult)
+NS_IMETHODIMP nsMsgXFViewThread::GetChildKeyAt(int32_t aIndex, nsMsgKey *aResult)
 {
-  NS_ASSERTION(PR_FALSE, "shouldn't call this");
+  NS_ASSERTION(false, "shouldn't call this");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP nsMsgXFViewThread::GetChild(nsMsgKey msgKey, nsIMsgDBHdr **aResult)
 {
-  NS_ASSERTION(PR_FALSE, "shouldn't call this");
+  NS_ASSERTION(false, "shouldn't call this");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 
-PRUint32 nsMsgXFViewThread::HdrIndex(nsIMsgDBHdr *hdr)
+int32_t nsMsgXFViewThread::HdrIndex(nsIMsgDBHdr *hdr)
 {
   nsMsgKey msgKey;
   nsCOMPtr<nsIMsgFolder> folder;
   hdr->GetMessageKey(&msgKey);
   hdr->GetFolder(getter_AddRefs(folder));
-  for (PRUint32 i = 0; i < m_keys.Length(); i++)
+  for (uint32_t i = 0; i < m_keys.Length(); i++)
   {
     if (m_keys[i] == msgKey && m_folders[i] == folder)
       return i;
@@ -388,20 +360,20 @@ PRUint32 nsMsgXFViewThread::HdrIndex(nsIMsgDBHdr *hdr)
   return -1;
 }
 
-void nsMsgXFViewThread::ChangeUnreadChildCount(PRInt32 delta)
+void nsMsgXFViewThread::ChangeUnreadChildCount(int32_t delta)
 {
   m_numUnreadChildren += delta;
 }
 
-void nsMsgXFViewThread::ChangeChildCount(PRInt32 delta)
+void nsMsgXFViewThread::ChangeChildCount(int32_t delta)
 {
   m_numChildren += delta;
 }
 
-PRBool nsMsgXFViewThread::IsHdrParentOf(nsIMsgDBHdr *possibleParent, 
+bool nsMsgXFViewThread::IsHdrParentOf(nsIMsgDBHdr *possibleParent, 
                                         nsIMsgDBHdr *possibleChild)
 {
-  PRUint16 referenceToCheck = 0;
+  uint16_t referenceToCheck = 0;
   possibleChild->GetNumReferences(&referenceToCheck);
   nsCAutoString reference;
 
@@ -413,7 +385,7 @@ PRBool nsMsgXFViewThread::IsHdrParentOf(nsIMsgDBHdr *possibleParent,
     possibleChild->GetStringReference(referenceToCheck - 1, reference);
 
     if (reference.Equals(messageId))
-      return PR_TRUE;
+      return true;
     // if reference didn't match, check if this ref is for a non-existent
     // header. If it is, continue looking at ancestors.
     nsCOMPtr<nsIMsgDBHdr> refHdr;
@@ -422,29 +394,29 @@ PRBool nsMsgXFViewThread::IsHdrParentOf(nsIMsgDBHdr *possibleParent,
       break;
     referenceToCheck--;
   }
-  return PR_FALSE;
+  return false;
 }
 
-NS_IMETHODIMP nsMsgXFViewThread::GetNewestMsgDate(PRUint32 *aResult) 
+NS_IMETHODIMP nsMsgXFViewThread::GetNewestMsgDate(uint32_t *aResult) 
 {
   // if this hasn't been set, figure it out by enumerating the msgs in the thread.
   if (!m_newestMsgDate)
   {
-    PRUint32 numChildren;
+    uint32_t numChildren;
     nsresult rv = NS_OK;
   
     GetNumChildren(&numChildren);
   
-    if ((PRInt32) numChildren < 0)
+    if ((int32_t) numChildren < 0)
       numChildren = 0;
   
-    for (PRUint32 childIndex = 0; childIndex < numChildren; childIndex++)
+    for (uint32_t childIndex = 0; childIndex < numChildren; childIndex++)
     {
       nsCOMPtr<nsIMsgDBHdr> child;
       rv = GetChildHdrAt(childIndex, getter_AddRefs(child));
       if (NS_SUCCEEDED(rv) && child)
       {
-        PRUint32 msgDate;
+        uint32_t msgDate;
         child->GetDateInSeconds(&msgDate);
         if (msgDate > m_newestMsgDate)
           m_newestMsgDate = msgDate;
@@ -455,13 +427,13 @@ NS_IMETHODIMP nsMsgXFViewThread::GetNewestMsgDate(PRUint32 *aResult)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgXFViewThread::SetNewestMsgDate(PRUint32 aNewestMsgDate) 
+NS_IMETHODIMP nsMsgXFViewThread::SetNewestMsgDate(uint32_t aNewestMsgDate) 
 {
   m_newestMsgDate = aNewestMsgDate;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgXFViewThread::MarkChildRead(PRBool aRead)
+NS_IMETHODIMP nsMsgXFViewThread::MarkChildRead(bool aRead)
 {
   ChangeUnreadChildCount(aRead ? -1 : 1);
   return NS_OK;
@@ -470,15 +442,15 @@ NS_IMETHODIMP nsMsgXFViewThread::MarkChildRead(PRBool aRead)
 NS_IMETHODIMP nsMsgXFViewThread::GetFirstUnreadChild(nsIMsgDBHdr **aResult)
 {
   NS_ENSURE_ARG(aResult);
-  PRUint32 numChildren;
+  uint32_t numChildren;
   nsresult rv = NS_OK;
   
   GetNumChildren(&numChildren);
   
-  if ((PRInt32) numChildren < 0)
+  if ((int32_t) numChildren < 0)
     numChildren = 0;
   
-  for (PRUint32 childIndex = 0; childIndex < numChildren; childIndex++)
+  for (uint32_t childIndex = 0; childIndex < numChildren; childIndex++)
   {
     nsCOMPtr<nsIMsgDBHdr> child;
     rv = GetChildHdrAt(childIndex, getter_AddRefs(child));
@@ -487,7 +459,7 @@ NS_IMETHODIMP nsMsgXFViewThread::GetFirstUnreadChild(nsIMsgDBHdr **aResult)
       nsMsgKey msgKey;
       child->GetMessageKey(&msgKey);
       
-      PRBool isRead;
+      bool isRead;
       nsCOMPtr<nsIMsgDatabase> db;
       nsresult rv = m_folders[childIndex]->GetMsgDatabase(getter_AddRefs(db));
       if (NS_SUCCEEDED(rv))
@@ -501,7 +473,7 @@ NS_IMETHODIMP nsMsgXFViewThread::GetFirstUnreadChild(nsIMsgDBHdr **aResult)
   }
   return rv;
 }
-NS_IMETHODIMP nsMsgXFViewThread::EnumerateMessages(PRUint32 aParentKey,
+NS_IMETHODIMP nsMsgXFViewThread::EnumerateMessages(uint32_t aParentKey,
                                                    nsISimpleEnumerator **aResult)
 {
   NS_ERROR("shouldn't call this");

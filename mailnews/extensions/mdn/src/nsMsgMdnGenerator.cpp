@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jeff Tsai <jt95070@netscape.net>
- *   Michiel van Leeuwen <mvl@exedo.nl>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsMsgMdnGenerator.h"
 #include "nsImapCore.h"
@@ -64,6 +30,7 @@
 #include "nsMsgUtils.h"
 #include "nsNetUtil.h"
 #include "nsIMsgDatabase.h"
+#include "mozilla/Services.h"
 
 #define MDN_NOT_IN_TO_CC          ((int) 0x0001)
 #define MDN_OUTSIDE_DOMAIN        ((int) 0x0002)
@@ -113,11 +80,11 @@ NS_IMPL_ISUPPORTS2(nsMsgMdnGenerator, nsIMsgMdnGenerator, nsIUrlListener)
 nsMsgMdnGenerator::nsMsgMdnGenerator()
 {
     m_disposeType = eDisplayed;
-    m_outputStream = nsnull;
-    m_reallySendMdn = PR_FALSE;
-    m_autoSend = PR_FALSE;
-    m_autoAction = PR_FALSE;
-    m_mdnEnabled = PR_FALSE;
+    m_outputStream = nullptr;
+    m_reallySendMdn = false;
+    m_autoSend = false;
+    m_autoAction = false;
+    m_mdnEnabled = false;
     m_notInToCcOp = eNeverSendOp;
     m_outsideDomainOp = eNeverSendOp;
     m_otherOp = eNeverSendOp;
@@ -132,15 +99,14 @@ nsresult nsMsgMdnGenerator::FormatStringFromName(const PRUnichar *aName,
                                                  PRUnichar **aResultString)
 {
     DEBUG_MDN("nsMsgMdnGenerator::FormatStringFromName");
-    nsresult rv;
 
-    nsCOMPtr<nsIStringBundleService>
-        bundleService(do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv));
-    NS_ENSURE_SUCCESS(rv,rv);
+    nsCOMPtr<nsIStringBundleService> bundleService =
+      mozilla::services::GetStringBundleService();
+    NS_ENSURE_TRUE(bundleService, NS_ERROR_UNEXPECTED);
 
     nsCOMPtr <nsIStringBundle> bundle;
-    rv = bundleService->CreateBundle(MDN_STRINGBUNDLE_URL,
-                                     getter_AddRefs(bundle));
+    nsresult rv = bundleService->CreateBundle(MDN_STRINGBUNDLE_URL,
+                                              getter_AddRefs(bundle));
     NS_ENSURE_SUCCESS(rv,rv);
 
     const PRUnichar *formatStrings[1] = { aString };
@@ -154,15 +120,14 @@ nsresult nsMsgMdnGenerator::GetStringFromName(const PRUnichar *aName,
                                                PRUnichar **aResultString)
 {
     DEBUG_MDN("nsMsgMdnGenerator::GetStringFromName");
-    nsresult rv;
 
-    nsCOMPtr<nsIStringBundleService>
-        bundleService(do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv));
-    NS_ENSURE_SUCCESS(rv,rv);
+    nsCOMPtr<nsIStringBundleService> bundleService =
+      mozilla::services::GetStringBundleService();
+    NS_ENSURE_TRUE(bundleService, NS_ERROR_UNEXPECTED);
 
     nsCOMPtr <nsIStringBundle> bundle;
-    rv = bundleService->CreateBundle(MDN_STRINGBUNDLE_URL,
-                                     getter_AddRefs(bundle));
+    nsresult rv = bundleService->CreateBundle(MDN_STRINGBUNDLE_URL,
+                                              getter_AddRefs(bundle));
     NS_ENSURE_SUCCESS(rv,rv);
 
     rv = bundle->GetStringFromName(aName, aResultString);
@@ -178,12 +143,12 @@ nsresult nsMsgMdnGenerator::StoreMDNSentFlag(nsIMsgFolder *folder,
     nsCOMPtr<nsIMsgDatabase> msgDB;
     nsresult rv = folder->GetMsgDatabase(getter_AddRefs(msgDB));
     NS_ENSURE_SUCCESS(rv, rv);
-    rv = msgDB->MarkMDNSent(key, PR_TRUE, nsnull);
+    rv = msgDB->MarkMDNSent(key, true, nullptr);
 
     nsCOMPtr<nsIMsgImapMailFolder> imapFolder = do_QueryInterface(folder);
     // Store the $MDNSent flag if the folder is an Imap Mail Folder
     if (imapFolder)
-      return imapFolder->StoreImapFlags(kImapMsgMDNSentFlag, PR_TRUE, &key, 1, nsnull);
+      return imapFolder->StoreImapFlags(kImapMsgMDNSentFlag, true, &key, 1, nullptr);
     return rv;
 }
 
@@ -195,13 +160,13 @@ nsresult nsMsgMdnGenerator::ClearMDNNeededFlag(nsIMsgFolder *folder,
   nsCOMPtr<nsIMsgDatabase> msgDB;
   nsresult rv = folder->GetMsgDatabase(getter_AddRefs(msgDB));
   NS_ENSURE_SUCCESS(rv, rv);
-  return msgDB->MarkMDNNeeded(key, PR_FALSE, nsnull);
+  return msgDB->MarkMDNNeeded(key, false, nullptr);
 }
 
-PRBool nsMsgMdnGenerator::ProcessSendMode()
+bool nsMsgMdnGenerator::ProcessSendMode()
 {
     DEBUG_MDN("nsMsgMdnGenerator::ProcessSendMode");
-    PRInt32 miscState = 0;
+    int32_t miscState = 0;
 
     if (m_identity)
     {
@@ -214,7 +179,7 @@ PRBool nsMsgMdnGenerator::ProcessSendMode()
             return m_reallySendMdn;
 
         if (MailAddrMatch(m_email.get(), m_dntRrt.get())) // return address is self, don't send
-          return PR_FALSE;
+          return false;
 
         // *** fix me see Bug 132504 for more information
         // *** what if the message has been filtered to different account
@@ -222,7 +187,7 @@ PRBool nsMsgMdnGenerator::ProcessSendMode()
             miscState |= MDN_OUTSIDE_DOMAIN;
         if (NotInToOrCc())
             miscState |= MDN_NOT_IN_TO_CC;
-        m_reallySendMdn = PR_TRUE;
+        m_reallySendMdn = true;
         // *********
         // How are we gona deal with the auto forwarding issues? Some server
         // didn't bother to add addition header or modify existing header to
@@ -239,16 +204,16 @@ PRBool nsMsgMdnGenerator::ProcessSendMode()
             {
             default:
             case eNeverSendOp:
-                m_reallySendMdn = PR_FALSE;
+                m_reallySendMdn = false;
                 break;
             case eAutoSendOp:
-                m_autoSend = PR_TRUE;
+                m_autoSend = true;
                 break;
             case eAskMeOp:
-                m_autoSend = PR_FALSE;
+                m_autoSend = false;
                 break;
             case eDeniedOp:
-                m_autoSend = PR_TRUE;
+                m_autoSend = true;
                 m_disposeType = eDenied;
                 break;
             }
@@ -257,7 +222,7 @@ PRBool nsMsgMdnGenerator::ProcessSendMode()
         {
             if (m_outsideDomainOp != m_notInToCcOp)
             {
-                m_autoSend = PR_FALSE; // ambiguous; always ask user
+                m_autoSend = false; // ambiguous; always ask user
             }
             else
             {
@@ -265,13 +230,13 @@ PRBool nsMsgMdnGenerator::ProcessSendMode()
                 {
                 default:
                 case eNeverSendOp:
-                    m_reallySendMdn = PR_FALSE;
+                    m_reallySendMdn = false;
                     break;
                 case eAutoSendOp:
-                    m_autoSend = PR_TRUE;
+                    m_autoSend = true;
                     break;
                 case eAskMeOp:
-                    m_autoSend = PR_FALSE;
+                    m_autoSend = false;
                     break;
                 }
             }
@@ -282,13 +247,13 @@ PRBool nsMsgMdnGenerator::ProcessSendMode()
             {
             default:
             case eNeverSendOp:
-                m_reallySendMdn = PR_FALSE;
+                m_reallySendMdn = false;
                 break;
             case eAutoSendOp:
-                m_autoSend = PR_TRUE;
+                m_autoSend = true;
                 break;
             case eAskMeOp:
-                m_autoSend = PR_FALSE;
+                m_autoSend = false;
                 break;
             }
         }
@@ -298,13 +263,13 @@ PRBool nsMsgMdnGenerator::ProcessSendMode()
             {
             default:
             case eNeverSendOp:
-                m_reallySendMdn = PR_FALSE;
+                m_reallySendMdn = false;
                 break;
             case eAutoSendOp:
-                m_autoSend = PR_TRUE;
+                m_autoSend = true;
                 break;
             case eAskMeOp:
-                m_autoSend = PR_FALSE;
+                m_autoSend = false;
                 break;
             }
         }
@@ -312,19 +277,19 @@ PRBool nsMsgMdnGenerator::ProcessSendMode()
     return m_reallySendMdn;
 }
 
-PRBool nsMsgMdnGenerator::MailAddrMatch(const char *addr1, const char *addr2)
+bool nsMsgMdnGenerator::MailAddrMatch(const char *addr1, const char *addr2)
 {
     // Comparing two email addresses returns true if matched; local/account
     // part comparison is case sensitive; domain part comparison is case
     // insensitive
     DEBUG_MDN("nsMsgMdnGenerator::MailAddrMatch");
-    PRBool isMatched = PR_TRUE;
-    const char *atSign1 = nsnull, *atSign2 = nsnull;
-    const char *lt = nsnull, *local1 = nsnull, *local2 = nsnull;
-    const char *end1 = nsnull, *end2 = nsnull;
+    bool isMatched = true;
+    const char *atSign1 = nullptr, *atSign2 = nullptr;
+    const char *lt = nullptr, *local1 = nullptr, *local2 = nullptr;
+    const char *end1 = nullptr, *end2 = nullptr;
 
     if (!addr1 || !addr2)
-        return PR_FALSE;
+        return false;
 
     lt = strchr(addr1, '<');
     local1 = !lt ? addr1 : lt+1;
@@ -340,18 +305,18 @@ PRBool nsMsgMdnGenerator::MailAddrMatch(const char *addr1, const char *addr2)
     atSign2 = strchr(local2, '@');
     if (!atSign1 || !atSign2 // ill formed addr spec
         || (atSign1 - local1) != (atSign2 - local2))
-        isMatched = PR_FALSE;
+        isMatched = false;
     else if (strncmp(local1, local2, (atSign1-local1))) // case sensitive
         // compare for local part
-        isMatched = PR_FALSE;
+        isMatched = false;
     else if ((end1 - atSign1) != (end2 - atSign2) ||
              PL_strncasecmp(atSign1, atSign2, (end1-atSign1))) // case
         // insensitive compare for domain part
-        isMatched = PR_FALSE;
+        isMatched = false;
     return isMatched;
 }
 
-PRBool nsMsgMdnGenerator::NotInToOrCc()
+bool nsMsgMdnGenerator::NotInToOrCc()
 {
     DEBUG_MDN("nsMsgMdnGenerator::NotInToOrCc");
     nsCString reply_to;
@@ -359,23 +324,23 @@ PRBool nsMsgMdnGenerator::NotInToOrCc()
     nsCString cc;
 
     m_identity->GetReplyTo(reply_to);
-    m_headers->ExtractHeader(HEADER_TO, PR_TRUE, getter_Copies(to));
-    m_headers->ExtractHeader(HEADER_CC, PR_TRUE, getter_Copies(cc));
+    m_headers->ExtractHeader(HEADER_TO, true, getter_Copies(to));
+    m_headers->ExtractHeader(HEADER_CC, true, getter_Copies(cc));
 
   // start with a simple check
   if ((!to.IsEmpty() && PL_strcasestr(to.get(), m_email.get())) ||
       (!cc.IsEmpty() && PL_strcasestr(cc.get(), m_email.get()))) {
-      return PR_FALSE;
+      return false;
   }
 
   if ((!reply_to.IsEmpty() && !to.IsEmpty() && PL_strcasestr(to.get(), reply_to.get())) ||
       (!reply_to.IsEmpty() && !cc.IsEmpty() && PL_strcasestr(cc.get(), reply_to.get()))) {
-      return PR_FALSE;
+      return false;
   }
-  return PR_TRUE;
+  return true;
 }
 
-PRBool nsMsgMdnGenerator::ValidateReturnPath()
+bool nsMsgMdnGenerator::ValidateReturnPath()
 {
     DEBUG_MDN("nsMsgMdnGenerator::ValidateReturnPath");
     // ValidateReturnPath applies to Automatic Send Mode only. If we were not
@@ -384,11 +349,11 @@ PRBool nsMsgMdnGenerator::ValidateReturnPath()
         return m_reallySendMdn;
 
     nsCString returnPath;
-    m_headers->ExtractHeader(HEADER_RETURN_PATH, PR_FALSE,
+    m_headers->ExtractHeader(HEADER_RETURN_PATH, false,
                              getter_Copies(returnPath));
     if (returnPath.IsEmpty())
     {
-      m_autoSend = PR_FALSE;
+      m_autoSend = false;
       return m_reallySendMdn;
     }
     m_autoSend = MailAddrMatch(returnPath.get(), m_dntRrt.get());
@@ -407,10 +372,9 @@ nsresult nsMsgMdnGenerator::CreateMdnMsg()
     NS_ENSURE_SUCCESS(rv, rv);
 
     rv = m_file->CreateUnique(nsIFile::NORMAL_FILE_TYPE, 00600);
-    nsCOMPtr <nsILocalFile> localFile = do_QueryInterface(m_file);
     NS_ENSURE_SUCCESS(rv, rv);
     rv = NS_NewLocalFileOutputStream(getter_AddRefs(m_outputStream),
-                                     localFile,
+                                     m_file,
                                      PR_CREATE_FILE | PR_WRONLY | PR_TRUNCATE,
                                      0664);
     NS_ASSERTION(NS_SUCCEEDED(rv),"creating mdn: failed to output stream");
@@ -431,7 +395,7 @@ nsresult nsMsgMdnGenerator::CreateMdnMsg()
         m_outputStream->Close();
     }
     if (NS_FAILED(rv))
-        m_file->Remove(PR_FALSE);
+        m_file->Remove(false);
     else
         rv = SendMdnMsg();
 
@@ -441,8 +405,8 @@ nsresult nsMsgMdnGenerator::CreateMdnMsg()
 nsresult nsMsgMdnGenerator::CreateFirstPart()
 {
     DEBUG_MDN("nsMsgMdnGenerator::CreateFirstPart");
-    char *convbuf = nsnull, *tmpBuffer = nsnull;
-    char *parm = nsnull;
+    char *convbuf = nullptr, *tmpBuffer = nullptr;
+    char *parm = nullptr;
     nsString firstPart1;
     nsString firstPart2;
     nsresult rv = NS_OK;
@@ -488,7 +452,7 @@ nsresult nsMsgMdnGenerator::CreateFirstPart()
     if (NS_FAILED(rv))
         return rv;
 
-    PRBool conformToStandard = PR_FALSE;
+    bool conformToStandard = false;
     if (compUtils)
       compUtils->GetMsgMimeConformToStandard(&conformToStandard);
 
@@ -506,7 +470,7 @@ nsresult nsMsgMdnGenerator::CreateFirstPart()
 
     convbuf = nsMsgI18NEncodeMimePartIIStr(
         (!fullAddress.IsEmpty()) ? fullAddress.get(): m_email.get(),
-        PR_TRUE, m_charset.get(), 0, conformToStandard);
+        true, m_charset.get(), 0, conformToStandard);
 
     parm = PR_smprintf("From: %s" CRLF, convbuf ? convbuf : m_email.get());
 
@@ -570,13 +534,13 @@ nsresult nsMsgMdnGenerator::CreateFirstPart()
 
     receipt_string.AppendLiteral(" - ");
 
-    char * encodedReceiptString = nsMsgI18NEncodeMimePartIIStr(NS_ConvertUTF16toUTF8(receipt_string).get(), PR_FALSE,
+    char * encodedReceiptString = nsMsgI18NEncodeMimePartIIStr(NS_ConvertUTF16toUTF8(receipt_string).get(), false,
                                                                "UTF-8", 0, conformToStandard);
 
     nsCString subject;
-    m_headers->ExtractHeader(HEADER_SUBJECT, PR_FALSE, getter_Copies(subject));
+    m_headers->ExtractHeader(HEADER_SUBJECT, false, getter_Copies(subject));
     convbuf = nsMsgI18NEncodeMimePartIIStr(subject.Length() ? subject.get() : "[no subject]",
-                                           PR_FALSE, m_charset.get(), 0, conformToStandard);
+                                           false, m_charset.get(), 0, conformToStandard);
     tmpBuffer = PR_smprintf("Subject: %s%s" CRLF,
                              encodedReceiptString,
                             (convbuf ? convbuf : (subject.Length() ? subject.get() :
@@ -586,7 +550,7 @@ nsresult nsMsgMdnGenerator::CreateFirstPart()
     PR_Free(convbuf);
     PR_Free(encodedReceiptString);
 
-    convbuf = nsMsgI18NEncodeMimePartIIStr(m_dntRrt.get(), PR_TRUE, m_charset.get(), 0, conformToStandard);
+    convbuf = nsMsgI18NEncodeMimePartIIStr(m_dntRrt.get(), true, m_charset.get(), 0, conformToStandard);
     tmpBuffer = PR_smprintf("To: %s" CRLF, convbuf ? convbuf :
                             m_dntRrt.get());
     PUSH_N_FREE_STRING(tmpBuffer);
@@ -595,7 +559,7 @@ nsresult nsMsgMdnGenerator::CreateFirstPart()
 
   // *** This is not in the spec. I am adding this so we could do
   // threading
-    m_headers->ExtractHeader(HEADER_MESSAGE_ID, PR_FALSE,
+    m_headers->ExtractHeader(HEADER_MESSAGE_ID, false,
                              getter_Copies(m_messageId));
 
     if (!m_messageId.IsEmpty())
@@ -684,11 +648,11 @@ report-type=disposition-notification;\r\n\tboundary=\"%s\"" CRLF CRLF,
 nsresult nsMsgMdnGenerator::CreateSecondPart()
 {
     DEBUG_MDN("nsMsgMdnGenerator::CreateSecondPart");
-    char *tmpBuffer = nsnull;
-    char *convbuf = nsnull;
+    char *tmpBuffer = nullptr;
+    char *convbuf = nullptr;
     nsresult rv = NS_OK;
     nsCOMPtr <nsIMsgCompUtils> compUtils;
-    PRBool conformToStandard = PR_FALSE;
+    bool conformToStandard = false;
 
     tmpBuffer = PR_smprintf("--%s" CRLF, m_mimeSeparator.get());
     PUSH_N_FREE_STRING(tmpBuffer);
@@ -728,7 +692,7 @@ nsresult nsMsgMdnGenerator::CreateSecondPart()
     }
 
     nsCString originalRecipient;
-    m_headers->ExtractHeader(HEADER_ORIGINAL_RECIPIENT, PR_FALSE,
+    m_headers->ExtractHeader(HEADER_ORIGINAL_RECIPIENT, false,
                              getter_Copies(originalRecipient));
 
     if (!originalRecipient.IsEmpty())
@@ -743,7 +707,7 @@ nsresult nsMsgMdnGenerator::CreateSecondPart()
       compUtils->GetMsgMimeConformToStandard(&conformToStandard);
 
     convbuf = nsMsgI18NEncodeMimePartIIStr(
-        m_email.get(), PR_TRUE, m_charset.get(), 0,
+        m_email.get(), true, m_charset.get(), 0,
         conformToStandard);
     tmpBuffer = PR_smprintf("Final-Recipient: rfc822;%s" CRLF, convbuf ?
                             convbuf : m_email.get());
@@ -771,7 +735,7 @@ nsresult nsMsgMdnGenerator::CreateSecondPart()
 nsresult nsMsgMdnGenerator::CreateThirdPart()
 {
     DEBUG_MDN("nsMsgMdnGenerator::CreateThirdPart");
-    char *tmpBuffer = nsnull;
+    char *tmpBuffer = nullptr;
     nsresult rv = NS_OK;
 
     tmpBuffer = PR_smprintf("--%s" CRLF, m_mimeSeparator.get());
@@ -806,7 +770,7 @@ nsresult nsMsgMdnGenerator::OutputAllHeaders()
 {
     DEBUG_MDN("nsMsgMdnGenerator::OutputAllHeaders");
     nsCString all_headers;
-    PRInt32 all_headers_size = 0;
+    int32_t all_headers_size = 0;
     nsresult rv = NS_OK;
 
     rv = m_headers->GetAllHeaders(getter_Copies(all_headers));
@@ -816,7 +780,6 @@ nsresult nsMsgMdnGenerator::OutputAllHeaders()
     char *buf = (char *) all_headers.get(),
         *buf_end = (char *) all_headers.get()+all_headers_size;
     char *start = buf, *end = buf;
-    PRInt32 count = 0;
 
     while (buf < buf_end)
     {
@@ -882,7 +845,7 @@ nsresult nsMsgMdnGenerator::OutputAllHeaders()
             buf = start;
         }
     }
-    return count;
+    return NS_OK;
 }
 
 nsresult nsMsgMdnGenerator::SendMdnMsg()
@@ -894,7 +857,7 @@ nsresult nsMsgMdnGenerator::SendMdnMsg()
 
     nsCOMPtr<nsIRequest> aRequest;
     smtpService->SendMailMessage(m_file, m_dntRrt.get(), m_identity,
-                                     nsnull, this, nsnull, nsnull, PR_FALSE, nsnull,
+                                     nullptr, this, nullptr, nullptr, false, nullptr,
                                      getter_AddRefs(aRequest));
 
     return NS_OK;
@@ -903,13 +866,13 @@ nsresult nsMsgMdnGenerator::SendMdnMsg()
 nsresult nsMsgMdnGenerator::WriteString( const char *str )
 {
   NS_ENSURE_ARG (str);
-  PRUint32 len = strlen(str);
-  PRUint32 wLen = 0;
+  uint32_t len = strlen(str);
+  uint32_t wLen = 0;
 
   return m_outputStream->Write(str, len, &wLen);
 }
 
-nsresult nsMsgMdnGenerator::InitAndProcess(PRBool *needToAskUser)
+nsresult nsMsgMdnGenerator::InitAndProcess(bool *needToAskUser)
 {
     DEBUG_MDN("nsMsgMdnGenerator::InitAndProcess");
     nsresult rv = m_folder->GetServer(getter_AddRefs(m_server));
@@ -922,7 +885,7 @@ nsresult nsMsgMdnGenerator::InitAndProcess(PRBool *needToAskUser)
           // check if this is a message delivered to the global inbox,
           // in which case we find the originating account's identity.
           nsCString accountKey;
-          m_headers->ExtractHeader(HEADER_X_MOZILLA_ACCOUNT_KEY, PR_FALSE,
+          m_headers->ExtractHeader(HEADER_X_MOZILLA_ACCOUNT_KEY, false,
                                getter_Copies(accountKey));
           nsCOMPtr <nsIMsgAccount> account;
           if (!accountKey.IsEmpty())
@@ -935,18 +898,18 @@ nsresult nsMsgMdnGenerator::InitAndProcess(PRBool *needToAskUser)
             // Find the correct identity based on the "To:" and "Cc:" header
             nsCString mailTo;
             nsCString mailCC;
-            m_headers->ExtractHeader(HEADER_TO, PR_TRUE, getter_Copies(mailTo));
-            m_headers->ExtractHeader(HEADER_CC, PR_TRUE, getter_Copies(mailCC));
+            m_headers->ExtractHeader(HEADER_TO, true, getter_Copies(mailTo));
+            m_headers->ExtractHeader(HEADER_CC, true, getter_Copies(mailCC));
             nsCOMPtr<nsISupportsArray> servIdentities;
             accountManager->GetIdentitiesForServer(m_server, getter_AddRefs(servIdentities));
             if (servIdentities)
             {
               nsCOMPtr<nsIMsgIdentity> ident;
               nsCString identEmail;
-              PRUint32 count = 0;
+              uint32_t count = 0;
               servIdentities->Count(&count);
               // First check in the "To:" header
-              for (PRUint32 i = 0; i < count; i++)
+              for (uint32_t i = 0; i < count; i++)
               {
                 rv = servIdentities->QueryElementAt(i, NS_GET_IID(nsIMsgIdentity),getter_AddRefs(ident));
                 if (NS_FAILED(rv))
@@ -962,7 +925,7 @@ nsresult nsMsgMdnGenerator::InitAndProcess(PRBool *needToAskUser)
               // If no match, check the "Cc:" header
               if (!m_identity)
               {
-                for (PRUint32 i = 0; i < count; i++)
+                for (uint32_t i = 0; i < count; i++)
                 {
                   rv = servIdentities->QueryElementAt(i, NS_GET_IID(nsIMsgIdentity),getter_AddRefs(ident));
                   if (NS_FAILED(rv))
@@ -987,11 +950,11 @@ nsresult nsMsgMdnGenerator::InitAndProcess(PRBool *needToAskUser)
 
         if (m_identity)
         {
-            PRBool useCustomPrefs = PR_FALSE;
+            bool useCustomPrefs = false;
             m_identity->GetBoolAttribute("use_custom_prefs", &useCustomPrefs);
             if (useCustomPrefs)
             {
-                PRBool bVal = PR_FALSE;
+                bool bVal = false;
                 m_server->GetBoolValue("mdn_report_enabled", &bVal);
                 m_mdnEnabled = bVal;
                 m_server->GetIntValue("mdn_not_in_to_cc", &m_notInToCcOp);
@@ -1001,7 +964,7 @@ nsresult nsMsgMdnGenerator::InitAndProcess(PRBool *needToAskUser)
             }
             else
             {
-                PRBool bVal = PR_FALSE;
+                bool bVal = false;
 
                 nsCOMPtr<nsIPrefBranch> prefBranch(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
                 if (NS_FAILED(rv))
@@ -1026,21 +989,21 @@ nsresult nsMsgMdnGenerator::InitAndProcess(PRBool *needToAskUser)
     rv = m_folder->GetCharset(m_charset);
     if (m_mdnEnabled)
     {
-        m_headers->ExtractHeader(HEADER_DISPOSITION_NOTIFICATION_TO, PR_FALSE,
+        m_headers->ExtractHeader(HEADER_DISPOSITION_NOTIFICATION_TO, false,
                                  getter_Copies(m_dntRrt));
         if (m_dntRrt.IsEmpty())
-            m_headers->ExtractHeader(HEADER_RETURN_RECEIPT_TO, PR_FALSE,
+            m_headers->ExtractHeader(HEADER_RETURN_RECEIPT_TO, false,
                                      getter_Copies(m_dntRrt));
         if (!m_dntRrt.IsEmpty() && ProcessSendMode() && ValidateReturnPath())
         {
             if (!m_autoSend)
             {
-                *needToAskUser = PR_TRUE;
+                *needToAskUser = true;
                 rv = NS_OK;
             }
             else
             {
-                *needToAskUser = PR_FALSE;
+                *needToAskUser = false;
                 rv = UserAgreed();
             }
         }
@@ -1053,8 +1016,8 @@ NS_IMETHODIMP nsMsgMdnGenerator::Process(EDisposeType type,
                                          nsIMsgFolder *folder,
                                          nsMsgKey key,
                                          nsIMimeHeaders *headers,
-                                         PRBool autoAction,
-                                         PRBool *_retval)
+                                         bool autoAction,
+                                         bool *_retval)
 {
     DEBUG_MDN("nsMsgMdnGenerator::Process");
     NS_ENSURE_ARG_POINTER(folder);
@@ -1112,7 +1075,7 @@ NS_IMETHODIMP nsMsgMdnGenerator::OnStopRunningUrl(nsIURI *url,
 
     DEBUG_MDN("nsMsgMdnGenerator::OnStopRunningUrl");
     if (m_file)
-      m_file->Remove(PR_FALSE);
+      m_file->Remove(false);
 
     if (NS_SUCCEEDED(aExitCode))
       return NS_OK;
@@ -1158,8 +1121,9 @@ NS_IMETHODIMP nsMsgMdnGenerator::OnStopRunningUrl(nsIURI *url,
     const PRUnichar *params[] = { hostStr.get() };
 
     nsCOMPtr<nsIStringBundle> bundle;
-    nsCOMPtr<nsIStringBundleService> bundleService(do_GetService("@mozilla.org/intl/stringbundle;1", &rv));
-    NS_ENSURE_SUCCESS(rv, rv);
+    nsCOMPtr<nsIStringBundleService> bundleService =
+      mozilla::services::GetStringBundleService();
+    NS_ENSURE_TRUE(bundleService, NS_ERROR_UNEXPECTED);
 
     rv = bundleService->CreateBundle("chrome://messenger/locale/messengercompose/composeMsgs.properties", getter_AddRefs(bundle));
     NS_ENSURE_SUCCESS(rv, rv);

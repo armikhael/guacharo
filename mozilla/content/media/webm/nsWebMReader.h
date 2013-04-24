@@ -1,58 +1,28 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim:set ts=2 sw=2 sts=2 et cindent: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla code.
- *
- * The Initial Developer of the Original Code is the Mozilla Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Chris Double <chris.double@double.co.nz>
- *  Chris Pearce <chris@pearce.org.nz>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #if !defined(nsWebMReader_h_)
 #define nsWebMReader_h_
 
+#include "mozilla/StandardInteger.h"
+
 #include "nsDeque.h"
 #include "nsBuiltinDecoderReader.h"
-#include "nsWebMBufferedParser.h"
 #include "nsAutoRef.h"
 #include "nestegg/nestegg.h"
-#include "vpx/vpx_decoder.h"
-#include "vpx/vp8dx.h"
+
+#define VPX_DONT_DEFINE_STDINT_TYPES
+#include "vpx/vpx_codec.h"
+
 #ifdef MOZ_TREMOR
 #include "tremor/ivorbiscodec.h"
 #else
 #include "vorbis/codec.h"
 #endif
 
-class nsMediaDecoder;
+class nsWebMBufferedState;
 
 // Holds a nestegg_packet, and its file offset. This is needed so we
 // know the offset in the file we've played up to, in order to calculate
@@ -60,7 +30,7 @@ class nsMediaDecoder;
 // to stop to buffer, given the current download rate.
 class NesteggPacketHolder {
 public:
-  NesteggPacketHolder(nestegg_packet* aPacket, PRInt64 aOffset)
+  NesteggPacketHolder(nestegg_packet* aPacket, int64_t aOffset)
     : mPacket(aPacket), mOffset(aOffset)
   {
     MOZ_COUNT_CTOR(NesteggPacketHolder);
@@ -72,7 +42,7 @@ public:
   nestegg_packet* mPacket;
   // Offset in bytes. This is the offset of the end of the Block
   // which contains the packet.
-  PRInt64 mOffset;
+  int64_t mOffset;
 private:
   // Copy constructor and assignment operator not implemented. Don't use them!
   NesteggPacketHolder(const NesteggPacketHolder &aOther);
@@ -83,7 +53,7 @@ private:
 class PacketQueueDeallocator : public nsDequeFunctor {
   virtual void* operator() (void* anObject) {
     delete static_cast<NesteggPacketHolder*>(anObject);
-    return nsnull;
+    return nullptr;
   }
 };
 
@@ -100,7 +70,7 @@ class PacketQueue : private nsDeque {
     Reset();
   }
 
-  inline PRInt32 GetSize() { 
+  inline int32_t GetSize() { 
     return nsDeque::GetSize();
   }
   
@@ -133,30 +103,36 @@ public:
 
   virtual nsresult Init(nsBuiltinDecoderReader* aCloneDonor);
   virtual nsresult ResetDecode();
-  virtual PRBool DecodeAudioData();
+  virtual bool DecodeAudioData();
 
   // If the Theora granulepos has not been captured, it may read several packets
   // until one with a granulepos has been captured, to ensure that all packets
   // read have valid time info.  
-  virtual PRBool DecodeVideoFrame(PRBool &aKeyframeSkip,
-                                  PRInt64 aTimeThreshold);
+  virtual bool DecodeVideoFrame(bool &aKeyframeSkip,
+                                  int64_t aTimeThreshold);
 
-  virtual PRBool HasAudio()
+  virtual bool HasAudio()
   {
     NS_ASSERTION(mDecoder->OnDecodeThread(), "Should be on decode thread.");
     return mHasAudio;
   }
 
-  virtual PRBool HasVideo()
+  virtual bool HasVideo()
   {
     NS_ASSERTION(mDecoder->OnDecodeThread(), "Should be on decode thread.");
     return mHasVideo;
   }
 
-  virtual nsresult ReadMetadata(nsVideoInfo* aInfo);
-  virtual nsresult Seek(PRInt64 aTime, PRInt64 aStartTime, PRInt64 aEndTime, PRInt64 aCurrentTime);
-  virtual nsresult GetBuffered(nsTimeRanges* aBuffered, PRInt64 aStartTime);
-  virtual void NotifyDataArrived(const char* aBuffer, PRUint32 aLength, PRUint32 aOffset);
+  // Bug 575140, cannot seek in webm if no cue is present.
+  bool IsSeekableInBufferedRanges() {
+    return false;
+  }
+
+  virtual nsresult ReadMetadata(nsVideoInfo* aInfo,
+                                nsHTMLMediaElement::MetadataTags** aTags);
+  virtual nsresult Seek(int64_t aTime, int64_t aStartTime, int64_t aEndTime, int64_t aCurrentTime);
+  virtual nsresult GetBuffered(nsTimeRanges* aBuffered, int64_t aStartTime);
+  virtual void NotifyDataArrived(const char* aBuffer, uint32_t aLength, int64_t aOffset);
 
 private:
   // Value passed to NextPacket to determine if we are reading a video or an
@@ -174,17 +150,17 @@ private:
   // Returns an initialized ogg packet with data obtained from the WebM container.
   ogg_packet InitOggPacket(unsigned char* aData,
                            size_t aLength,
-                           PRBool aBOS,
-                           PRBool aEOS,
-                           PRInt64 aGranulepos);
-                     
+                           bool aBOS,
+                           bool aEOS,
+                           int64_t aGranulepos);
+
   // Decode a nestegg packet of audio data. Push the audio data on the
-  // audio queue. Returns PR_TRUE when there's more audio to decode,
-  // PR_FALSE if the audio is finished, end of file has been reached,
+  // audio queue. Returns true when there's more audio to decode,
+  // false if the audio is finished, end of file has been reached,
   // or an un-recoverable read error has occured. The reader's monitor
   // must be held during this call. This function will free the packet
   // so the caller must not use the packet after calling.
-  PRBool DecodeAudioPacket(nestegg_packet* aPacket, PRInt64 aOffset);
+  bool DecodeAudioPacket(nestegg_packet* aPacket, int64_t aOffset);
 
   // Release context and set to null. Called when an error occurs during
   // reading metadata or destruction of the reader itself.
@@ -196,15 +172,15 @@ private:
   nestegg* mContext;
 
   // VP8 decoder state
-  vpx_codec_ctx_t  mVP8;
+  vpx_codec_ctx_t mVP8;
 
   // Vorbis decoder state
   vorbis_info mVorbisInfo;
   vorbis_comment mVorbisComment;
   vorbis_dsp_state mVorbisDsp;
   vorbis_block mVorbisBlock;
-  PRUint32 mPacketCount;
-  PRUint32 mChannels;
+  uint32_t mPacketCount;
+  uint32_t mChannels;
 
   // Queue of video and audio packets that have been read but not decoded. These
   // must only be accessed from the state machine thread.
@@ -212,14 +188,14 @@ private:
   PacketQueue mAudioPackets;
 
   // Index of video and audio track to play
-  PRUint32 mVideoTrack;
-  PRUint32 mAudioTrack;
+  uint32_t mVideoTrack;
+  uint32_t mAudioTrack;
 
-  // Time in microseconds of the start of the first audio sample we've decoded.
-  PRInt64 mAudioStartUsec;
+  // Time in microseconds of the start of the first audio frame we've decoded.
+  int64_t mAudioStartUsec;
 
-  // Number of samples we've decoded since decoding began at mAudioStartMs.
-  PRUint64 mAudioSamples;
+  // Number of audio frames we've decoded since decoding began at mAudioStartMs.
+  uint64_t mAudioFrames;
 
   // Parser state and computed offset-time mappings.  Shared by multiple
   // readers when decoder has been cloned.  Main thread only.
@@ -233,8 +209,8 @@ private:
   nsIntRect mPicture;
 
   // Booleans to indicate if we have audio and/or video data
-  PRPackedBool mHasVideo;
-  PRPackedBool mHasAudio;
+  bool mHasVideo;
+  bool mHasAudio;
 };
 
 #endif

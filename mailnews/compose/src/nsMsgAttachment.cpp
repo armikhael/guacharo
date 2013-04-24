@@ -1,55 +1,24 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsMsgAttachment.h"
-#include "nsILocalFile.h"
+#include "nsIFile.h"
 #include "nsNetUtil.h"
 
 NS_IMPL_ISUPPORTS1(nsMsgAttachment, nsIMsgAttachment)
 
 nsMsgAttachment::nsMsgAttachment()
 {
-  mTemporary = PR_FALSE;
+  mTemporary = false;
+  mSendViaCloud = false;
   mSize = -1;
 }
 
 nsMsgAttachment::~nsMsgAttachment()
 {
-  if (mTemporary)
+  if (mTemporary && !mSendViaCloud)
     (void)DeleteAttachment();
 }
 
@@ -92,34 +61,70 @@ NS_IMETHODIMP nsMsgAttachment::SetUrlCharset(const nsACString & aUrlCharset)
 }
 
 /* attribute boolean temporary; */
-NS_IMETHODIMP nsMsgAttachment::GetTemporary(PRBool *aTemporary)
+NS_IMETHODIMP nsMsgAttachment::GetTemporary(bool *aTemporary)
 {
   NS_ENSURE_ARG_POINTER(aTemporary);
 
   *aTemporary = mTemporary;
   return NS_OK;
 }
-NS_IMETHODIMP nsMsgAttachment::SetTemporary(PRBool aTemporary)
+NS_IMETHODIMP nsMsgAttachment::SetTemporary(bool aTemporary)
 {
   mTemporary = aTemporary;
   return NS_OK;
 }
 
-/* attribute string contentLocation; */
-NS_IMETHODIMP nsMsgAttachment::GetContentLocation(char * *aContentLocation)
+NS_IMETHODIMP nsMsgAttachment::GetSendViaCloud(bool *aSendViaCloud)
 {
-  NS_ENSURE_ARG_POINTER(aContentLocation);
+  NS_ENSURE_ARG_POINTER(aSendViaCloud);
 
-  *aContentLocation = ToNewCString(mContentLocation);
-  return (*aContentLocation ? NS_OK : NS_ERROR_OUT_OF_MEMORY);
+  *aSendViaCloud = mSendViaCloud;
+  return NS_OK;
 }
-NS_IMETHODIMP nsMsgAttachment::SetContentLocation(const char * aContentLocation)
+NS_IMETHODIMP nsMsgAttachment::SetSendViaCloud(bool aSendViaCloud)
+{
+  mSendViaCloud = aSendViaCloud;
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsMsgAttachment::SetHtmlAnnotation(const nsAString &aAnnotation)
+{
+  mHtmlAnnotation = aAnnotation;
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsMsgAttachment::GetHtmlAnnotation(nsAString &aAnnotation)
+{
+  aAnnotation = mHtmlAnnotation;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsMsgAttachment::SetCloudProviderKey(const nsACString &aCloudProviderKey)
+{
+  mCloudProviderKey = aCloudProviderKey;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsMsgAttachment::GetCloudProviderKey(nsACString &aCloudProviderKey)
+{
+  aCloudProviderKey = mCloudProviderKey;
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsMsgAttachment::GetContentLocation(nsACString &aContentLocation)
+{
+  aContentLocation = mContentLocation;
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsMsgAttachment::SetContentLocation(const nsACString &aContentLocation)
 {
   mContentLocation = aContentLocation;
   return NS_OK;
 }
 
-/* attribute string contentType; */
 NS_IMETHODIMP nsMsgAttachment::GetContentType(char * *aContentType)
 {
   NS_ENSURE_ARG_POINTER(aContentType);
@@ -127,20 +132,20 @@ NS_IMETHODIMP nsMsgAttachment::GetContentType(char * *aContentType)
   *aContentType = ToNewCString(mContentType);
   return (*aContentType ? NS_OK : NS_ERROR_OUT_OF_MEMORY);
 }
+
 NS_IMETHODIMP nsMsgAttachment::SetContentType(const char * aContentType)
 {
   mContentType = aContentType;
   /* a full content type could also contains parameters but we need to
      keep only the content type alone. Therefore we need to cleanup it.
   */
-  PRInt32 offset = mContentType.FindChar(';');
+  int32_t offset = mContentType.FindChar(';');
   if (offset >= 0)
     mContentType.SetLength(offset);
 
   return NS_OK;
 }
 
-/* attribute string contentTypeParam; */
 NS_IMETHODIMP nsMsgAttachment::GetContentTypeParam(char * *aContentTypeParam)
 {
   NS_ENSURE_ARG_POINTER(aContentTypeParam);
@@ -148,6 +153,7 @@ NS_IMETHODIMP nsMsgAttachment::GetContentTypeParam(char * *aContentTypeParam)
   *aContentTypeParam = ToNewCString(mContentTypeParam);
   return (*aContentTypeParam ? NS_OK : NS_ERROR_OUT_OF_MEMORY);
 }
+
 NS_IMETHODIMP nsMsgAttachment::SetContentTypeParam(const char * aContentTypeParam)
 {
   if (aContentTypeParam)
@@ -200,22 +206,22 @@ NS_IMETHODIMP nsMsgAttachment::SetMacCreator(const char * aMacCreator)
   return NS_OK;
 }
 
-/* attribute PRInt64 size; */
-NS_IMETHODIMP nsMsgAttachment::GetSize(PRInt64 *aSize)
+/* attribute int64_t size; */
+NS_IMETHODIMP nsMsgAttachment::GetSize(int64_t *aSize)
 {
   NS_ENSURE_ARG_POINTER(aSize);
 
   *aSize = mSize;
   return NS_OK;
 }
-NS_IMETHODIMP nsMsgAttachment::SetSize(PRInt64 aSize)
+NS_IMETHODIMP nsMsgAttachment::SetSize(int64_t aSize)
 {
   mSize = aSize;
   return NS_OK;
 }
 
 /* boolean equalsUrl (in nsIMsgAttachment attachment); */
-NS_IMETHODIMP nsMsgAttachment::EqualsUrl(nsIMsgAttachment *attachment, PRBool *_retval)
+NS_IMETHODIMP nsMsgAttachment::EqualsUrl(nsIMsgAttachment *attachment, bool *_retval)
 {
   NS_ENSURE_ARG_POINTER(attachment);
   NS_ENSURE_ARG_POINTER(_retval);
@@ -231,14 +237,14 @@ NS_IMETHODIMP nsMsgAttachment::EqualsUrl(nsIMsgAttachment *attachment, PRBool *_
 nsresult nsMsgAttachment::DeleteAttachment()
 {
   nsresult rv;
-  PRBool isAFile = PR_FALSE;
+  bool isAFile = false;
 
   nsCOMPtr<nsIFile> urlFile;
   rv = NS_GetFileFromURLSpec(mUrl, getter_AddRefs(urlFile));
   NS_ASSERTION(NS_SUCCEEDED(rv), "Can't nsIFile from URL string");
   if (NS_SUCCEEDED(rv))
   {
-    PRBool bExists = PR_FALSE;
+    bool bExists = false;
     rv = urlFile->Exists(&bExists);
     NS_ASSERTION(NS_SUCCEEDED(rv), "Exists() call failed!");
     if (NS_SUCCEEDED(rv) && bExists)
@@ -250,7 +256,7 @@ nsresult nsMsgAttachment::DeleteAttachment()
 
   // remove it if it's a valid file
   if (isAFile)
-	  rv = urlFile->Remove(PR_FALSE); 
+	  rv = urlFile->Remove(false); 
 
   return rv;
 }

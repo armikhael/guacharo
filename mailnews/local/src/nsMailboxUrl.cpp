@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"    // precompiled header...
 
@@ -64,7 +31,7 @@
 #include "nsMsgBaseCID.h"
 #include "nsIMsgAccountManager.h"
 #include "nsMsgUtils.h"
-
+#include "mozilla/Services.h"
 
 // helper function for parsing the search field of a url
 char * extractAttributeValue(const char * searchString, const char * attributeName);
@@ -72,13 +39,13 @@ char * extractAttributeValue(const char * searchString, const char * attributeNa
 nsMailboxUrl::nsMailboxUrl()
 {
   m_mailboxAction = nsIMailboxUrl::ActionParseMailbox;
-  m_filePath = nsnull;
-  m_messageID = nsnull;
+  m_filePath = nullptr;
+  m_messageID = nullptr;
   m_messageKey = nsMsgKey_None;
   m_messageSize = 0;
-  m_messageFile = nsnull;
-  m_addDummyEnvelope = PR_FALSE;
-  m_canonicalLineEnding = PR_FALSE;
+  m_messageFile = nullptr;
+  m_addDummyEnvelope = false;
+  m_canonicalLineEnding = false;
   m_curMsgIndex = 0;
 }
 
@@ -141,7 +108,7 @@ nsresult nsMailboxUrl::GetMessageKey(nsMsgKey* aMessageKey)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMailboxUrl::GetMessageSize(PRUint32 * aMessageSize)
+NS_IMETHODIMP nsMailboxUrl::GetMessageSize(uint32_t * aMessageSize)
 {
   if (aMessageSize)
   {
@@ -152,7 +119,7 @@ NS_IMETHODIMP nsMailboxUrl::GetMessageSize(PRUint32 * aMessageSize)
     return NS_ERROR_NULL_POINTER;
 }
 
-nsresult nsMailboxUrl::SetMessageSize(PRUint32 aMessageSize)
+nsresult nsMailboxUrl::SetMessageSize(uint32_t aMessageSize)
 {
   m_messageSize = aMessageSize;
   return NS_OK;
@@ -205,7 +172,7 @@ NS_IMETHODIMP nsMailboxUrl::GetUri(char ** aURI)
       *aURI = ToNewCString(uriStr);
     }
     else
-      *aURI = nsnull;
+      *aURI = nullptr;
   }
 
   return NS_OK;
@@ -221,7 +188,8 @@ nsresult nsMailboxUrl::GetMsgHdrForKey(nsMsgKey  msgKey, nsIMsgDBHdr ** aMsgHdr)
     nsCOMPtr<nsIMsgDBService> msgDBService = do_GetService(NS_MSGDB_SERVICE_CONTRACTID, &rv);
 
     if (msgDBService)
-      rv = msgDBService->OpenMailDBFromFile(m_filePath, PR_FALSE, PR_FALSE, (nsIMsgDatabase **) getter_AddRefs(mailDB));
+      rv = msgDBService->OpenMailDBFromFile(m_filePath, nullptr, false,
+                                            false, getter_AddRefs(mailDB));
     if (NS_SUCCEEDED(rv) && mailDB) // did we get a db back?
       rv = mailDB->GetMsgHdrForKey(msgKey, aMsgHdr);
     else
@@ -232,7 +200,6 @@ nsresult nsMailboxUrl::GetMsgHdrForKey(nsMsgKey  msgKey, nsIMsgDBHdr ** aMsgHdr)
         nsCOMPtr<nsIMsgMailSession> mailSession = do_GetService(NS_MSGMAILSESSION_CONTRACTID, &rv);
         NS_ENSURE_SUCCESS(rv, rv);
         mailSession->GetTopmostMsgWindow(getter_AddRefs(msgWindow));
-        SetMsgWindow(msgWindow);
       }
 
       // maybe this is .eml file we're trying to read. See if we can get a header from the header sink.
@@ -245,7 +212,7 @@ nsresult nsMailboxUrl::GetMsgHdrForKey(nsMsgKey  msgKey, nsIMsgDBHdr ** aMsgHdr)
           rv = headerSink->GetDummyMsgHeader(aMsgHdr);
           if (NS_SUCCEEDED(rv))
           {
-            PRInt64 fileSize = 0;
+            int64_t fileSize = 0;
             m_filePath->GetFileSize(&fileSize);
             (*aMsgHdr)->SetMessageSize(fileSize);
           }
@@ -261,11 +228,22 @@ nsresult nsMailboxUrl::GetMsgHdrForKey(nsMsgKey  msgKey, nsIMsgDBHdr ** aMsgHdr)
 
 NS_IMETHODIMP nsMailboxUrl::GetMessageHeader(nsIMsgDBHdr ** aMsgHdr)
 {
+  if (m_dummyHdr)
+  {
+    NS_IF_ADDREF(*aMsgHdr = m_dummyHdr);
+    return NS_OK;
+  }
   return GetMsgHdrForKey(m_messageKey, aMsgHdr);
 }
 
-NS_IMPL_GETSET(nsMailboxUrl, AddDummyEnvelope, PRBool, m_addDummyEnvelope)
-NS_IMPL_GETSET(nsMailboxUrl, CanonicalLineEnding, PRBool, m_canonicalLineEnding)
+NS_IMETHODIMP nsMailboxUrl::SetMessageHeader(nsIMsgDBHdr *aMsgHdr)
+{
+  m_dummyHdr = aMsgHdr;
+  return NS_OK;
+}
+
+NS_IMPL_GETSET(nsMailboxUrl, AddDummyEnvelope, bool, m_addDummyEnvelope)
+NS_IMPL_GETSET(nsMailboxUrl, CanonicalLineEnding, bool, m_canonicalLineEnding)
 
 NS_IMETHODIMP
 nsMailboxUrl::GetOriginalSpec(char **aSpec)
@@ -297,7 +275,7 @@ NS_IMETHODIMP nsMailboxUrl::GetMessageFile(nsIFile ** aFile)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMailboxUrl::IsUrlType(PRUint32 type, PRBool *isType)
+NS_IMETHODIMP nsMailboxUrl::IsUrlType(uint32_t type, bool *isType)
 {
   NS_ENSURE_ARG(isType);
 
@@ -310,10 +288,11 @@ NS_IMETHODIMP nsMailboxUrl::IsUrlType(PRUint32 type, PRBool *isType)
       *isType = (m_mailboxAction == nsIMailboxUrl::ActionMoveMessage);
       break;
     case nsIMsgMailNewsUrl::eDisplay:
-      *isType = (m_mailboxAction == nsIMailboxUrl::ActionFetchMessage);
+      *isType = (m_mailboxAction == nsIMailboxUrl::ActionFetchMessage ||
+                 m_mailboxAction == nsIMailboxUrl::ActionFetchPart);
       break;
     default:
-      *isType = PR_FALSE;
+      *isType = false;
   };
 
   return NS_OK;
@@ -344,7 +323,7 @@ nsresult nsMailboxUrl::ParseSearchPart()
     char * messageKey = extractAttributeValue(searchPart.get(), "number=");
     m_messageID = extractAttributeValue(searchPart.get(),"messageid=");
     if (messageKey)
-      m_messageKey = (nsMsgKey) ParseUint64Str(messageKey); // convert to a PRUint32...
+      m_messageKey = (nsMsgKey) ParseUint64Str(messageKey); // convert to a uint32_t...
 
     PR_Free(msgPart);
     PR_Free(messageKey);
@@ -365,16 +344,17 @@ nsresult nsMailboxUrl::ParseUrl()
   // this hack is to avoid asserting on every local message loaded because the security manager
   // is creating an empty "mailbox://" uri for every message.
   if (m_file.Length() < 2)
-    m_filePath = nsnull;
+    m_filePath = nullptr;
   else
   {
     nsCString fileUri("file://");
     fileUri.Append(m_file);
     nsresult rv;
-    nsCOMPtr<nsIIOService> ioService = do_GetService(NS_IOSERVICE_CONTRACTID, &rv);
-    NS_ENSURE_SUCCESS(rv, rv);
+    nsCOMPtr<nsIIOService> ioService =
+      mozilla::services::GetIOService();
+    NS_ENSURE_TRUE(ioService, NS_ERROR_UNEXPECTED);
     nsCOMPtr <nsIURI> uri;
-    rv = ioService->NewURI(fileUri, nsnull, nsnull, getter_AddRefs(uri));
+    rv = ioService->NewURI(fileUri, nullptr, nullptr, getter_AddRefs(uri));
     NS_ENSURE_SUCCESS(rv, rv);
     nsCOMPtr <nsIFileURL> fileURL = do_QueryInterface(uri);
     NS_ENSURE_SUCCESS(rv, rv);
@@ -412,19 +392,19 @@ NS_IMETHODIMP nsMailboxUrl::SetQuery(const nsACString &aQuery)
 // Assumption: attribute pairs in the string are separated by '&'.
 char * extractAttributeValue(const char * searchString, const char * attributeName)
 {
-  char * attributeValue = nsnull;
+  char * attributeValue = nullptr;
 
   if (searchString && attributeName)
   {
     // search the string for attributeName
-    PRUint32 attributeNameSize = PL_strlen(attributeName);
+    uint32_t attributeNameSize = PL_strlen(attributeName);
     char * startOfAttribute = PL_strcasestr(searchString, attributeName);
     if (startOfAttribute)
     {
       startOfAttribute += attributeNameSize; // skip over the attributeName
       if (startOfAttribute) // is there something after the attribute name
       {
-        char * endOfAttribute = startOfAttribute ? PL_strchr(startOfAttribute, '&') : nsnull;
+        char * endOfAttribute = startOfAttribute ? PL_strchr(startOfAttribute, '&') : nullptr;
         nsDependentCString attributeValueStr;
         if (startOfAttribute && endOfAttribute) // is there text after attribute value
           attributeValueStr.Assign(startOfAttribute, endOfAttribute - startOfAttribute);
@@ -475,7 +455,7 @@ NS_IMETHODIMP nsMailboxUrl::GetFolderCharset(char ** aCharacterSet)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMailboxUrl::GetFolderCharsetOverride(PRBool * aCharacterSetOverride)
+NS_IMETHODIMP nsMailboxUrl::GetFolderCharsetOverride(bool * aCharacterSetOverride)
 {
   nsCOMPtr<nsIMsgFolder> folder;
   nsresult rv = GetFolder(getter_AddRefs(folder));
@@ -491,7 +471,7 @@ NS_IMETHODIMP nsMailboxUrl::GetCharsetOverRide(char ** aCharacterSet)
   if (!mCharsetOverride.IsEmpty())
     *aCharacterSet = ToNewCString(mCharsetOverride);
   else
-    *aCharacterSet = nsnull;
+    *aCharacterSet = nullptr;
   return NS_OK;
 }
 
@@ -502,7 +482,7 @@ NS_IMETHODIMP nsMailboxUrl::SetCharsetOverRide(const char * aCharacterSet)
 }
 
 /* void setMoveCopyMsgKeys (out nsMsgKey keysToFlag, in long numKeys); */
-NS_IMETHODIMP nsMailboxUrl::SetMoveCopyMsgKeys(nsMsgKey *keysToFlag, PRInt32 numKeys)
+NS_IMETHODIMP nsMailboxUrl::SetMoveCopyMsgKeys(nsMsgKey *keysToFlag, int32_t numKeys)
 {
   m_keys.ReplaceElementsAt(0, m_keys.Length(), keysToFlag, numKeys);
   if (!m_keys.IsEmpty() && m_messageKey == nsMsgKey_None)
@@ -510,7 +490,7 @@ NS_IMETHODIMP nsMailboxUrl::SetMoveCopyMsgKeys(nsMsgKey *keysToFlag, PRInt32 num
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMailboxUrl::GetMoveCopyMsgHdrForIndex(PRUint32 msgIndex, nsIMsgDBHdr **msgHdr)
+NS_IMETHODIMP nsMailboxUrl::GetMoveCopyMsgHdrForIndex(uint32_t msgIndex, nsIMsgDBHdr **msgHdr)
 {
   NS_ENSURE_ARG(msgHdr);
   if (msgIndex < m_keys.Length())
@@ -521,7 +501,7 @@ NS_IMETHODIMP nsMailboxUrl::GetMoveCopyMsgHdrForIndex(PRUint32 msgIndex, nsIMsgD
   return NS_MSG_MESSAGE_NOT_FOUND;
 }
 
-NS_IMETHODIMP nsMailboxUrl::GetNumMoveCopyMsgs(PRUint32 *numMsgs)
+NS_IMETHODIMP nsMailboxUrl::GetNumMoveCopyMsgs(uint32_t *numMsgs)
 {
   NS_ENSURE_ARG(numMsgs);
   *numMsgs = m_keys.Length();

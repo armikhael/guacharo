@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Mozilla GNOME integration code.
- *
- * The Initial Developer of the Original Code is
- * IBM Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Asaf Romano <mozilla.mano@sent.com>
- *   Scott MacGregor <mscott@mozilla.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsMailMacIntegration.h"
 #include "nsCOMPtr.h"
@@ -61,13 +27,13 @@ extern "C" {
 
 NS_IMPL_ISUPPORTS1(nsMailMacIntegration, nsIShellService)
 
-nsMailMacIntegration::nsMailMacIntegration(): mCheckedThisSession(PR_FALSE)
+nsMailMacIntegration::nsMailMacIntegration(): mCheckedThisSession(false)
 {}
 
 NS_IMETHODIMP
-nsMailMacIntegration::IsDefaultClient(PRBool aStartupCheck, PRUint16 aApps, PRBool * aIsDefaultClient)
+nsMailMacIntegration::IsDefaultClient(bool aStartupCheck, uint16_t aApps, bool * aIsDefaultClient)
 {
-  *aIsDefaultClient = PR_TRUE;
+  *aIsDefaultClient = true;
   if (aApps & nsIShellService::MAIL)
     *aIsDefaultClient &= isDefaultHandlerForProtocol(CFSTR("mailto"));
   if (aApps & nsIShellService::NEWS)
@@ -80,12 +46,12 @@ nsMailMacIntegration::IsDefaultClient(PRBool aStartupCheck, PRUint16 aApps, PRBo
   // default client dialog.
   
   if (aStartupCheck)
-    mCheckedThisSession = PR_TRUE;
+    mCheckedThisSession = true;
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsMailMacIntegration::SetDefaultClient(PRBool aForAllUsers, PRUint16 aApps)
+nsMailMacIntegration::SetDefaultClient(bool aForAllUsers, uint16_t aApps)
 {
   nsresult rv = NS_OK;
   if (aApps & nsIShellService::MAIL)
@@ -99,11 +65,11 @@ nsMailMacIntegration::SetDefaultClient(PRBool aForAllUsers, PRUint16 aApps)
 }
 
 NS_IMETHODIMP
-nsMailMacIntegration::GetShouldCheckDefaultClient(PRBool* aResult)
+nsMailMacIntegration::GetShouldCheckDefaultClient(bool* aResult)
 {
   if (mCheckedThisSession) 
   {
-    *aResult = PR_FALSE;
+    *aResult = false;
     return NS_OK;
   }
 
@@ -112,16 +78,16 @@ nsMailMacIntegration::GetShouldCheckDefaultClient(PRBool* aResult)
 }
 
 NS_IMETHODIMP
-nsMailMacIntegration::SetShouldCheckDefaultClient(PRBool aShouldCheck)
+nsMailMacIntegration::SetShouldCheckDefaultClient(bool aShouldCheck)
 {
   nsCOMPtr<nsIPrefBranch> prefs(do_GetService(NS_PREFSERVICE_CONTRACTID));
   return prefs->SetBoolPref("mail.shell.checkDefaultClient", aShouldCheck);
 }
 
-PRBool
+bool
 nsMailMacIntegration::isDefaultHandlerForProtocol(CFStringRef aScheme)
 {
-  PRBool isDefault = PR_FALSE;
+  bool isDefault = false;
   // Since neither Launch Services nor Internet Config actually differ between 
   // bundles which have the same bundle identifier (That is, if we set our
   // URL of our bundle as the default handler for the given protocol,
@@ -161,7 +127,7 @@ nsMailMacIntegration::isDefaultHandlerForProtocol(CFStringRef aScheme)
       else {
         // If the bundle doesn't have an identifier in its info property list,
         // it's not our bundle.
-        isDefault = PR_FALSE;
+        isDefault = false;
       }
 
       ::CFRelease(defaultHandlerBundle);
@@ -172,7 +138,7 @@ nsMailMacIntegration::isDefaultHandlerForProtocol(CFStringRef aScheme)
   else {
     // If |_LSCopyDefaultSchemeHandlerURL| failed, there's no default
     // handler for the given protocol
-    isDefault = PR_FALSE;
+    isDefault = false;
   }
 
   ::CFRelease(tbirdID);

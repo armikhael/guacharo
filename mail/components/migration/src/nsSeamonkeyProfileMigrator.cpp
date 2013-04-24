@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is The Mail Profile Migrator.
- *
- * The Initial Developer of the Original Code is Ben Goodger.
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Ben Goodger <ben@bengoodger.com>
- *  Scott MacGregor <mscott@mozilla.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsMailProfileMigratorUtils.h"
 #include "nsDirectoryServiceDefs.h"
@@ -68,11 +35,11 @@
 
 struct PrefBranchStruct {
   char*         prefName;
-  PRInt32       type;
+  int32_t       type;
   union {
     char*       stringValue;
-    PRInt32     intValue;
-    PRBool      boolValue;
+    int32_t     intValue;
+    bool        boolValue;
     PRUnichar*  wstringValue;
   };
 };
@@ -92,10 +59,10 @@ nsSeamonkeyProfileMigrator::~nsSeamonkeyProfileMigrator()
 // nsIMailProfileMigrator
 
 NS_IMETHODIMP
-nsSeamonkeyProfileMigrator::Migrate(PRUint16 aItems, nsIProfileStartup* aStartup, const PRUnichar* aProfile)
+nsSeamonkeyProfileMigrator::Migrate(uint16_t aItems, nsIProfileStartup* aStartup, const PRUnichar* aProfile)
 {
   nsresult rv = NS_OK;
-  PRBool aReplace = aStartup ? PR_TRUE : PR_FALSE;
+  bool aReplace = aStartup ? true : false;
 
   if (!mTargetProfile) {
     GetProfilePath(aStartup, mTargetProfile);
@@ -107,7 +74,7 @@ nsSeamonkeyProfileMigrator::Migrate(PRUint16 aItems, nsIProfileStartup* aStartup
       return NS_ERROR_FAILURE;
   }
 
-  NOTIFY_OBSERVERS(MIGRATION_STARTED, nsnull);
+  NOTIFY_OBSERVERS(MIGRATION_STARTED, nullptr);
 
   COPY_DATA(CopyPreferences,  aReplace, nsIMailProfileMigrator::SETTINGS);
 
@@ -128,13 +95,13 @@ nsSeamonkeyProfileMigrator::Migrate(PRUint16 aItems, nsIProfileStartup* aStartup
   NOTIFY_OBSERVERS(MIGRATION_ITEMBEFOREMIGRATE, index.get());
 
   // Generate the max progress value now that we know all of the files we need to copy
-  PRUint32 count = mFileCopyTransactions.Length();
-  for (PRUint32 i = 0; i < count; ++i)
+  uint32_t count = mFileCopyTransactions.Length();
+  for (uint32_t i = 0; i < count; ++i)
   {
     fileTransactionEntry fileTransaction = mFileCopyTransactions.ElementAt(i);
-    PRInt64 fileSize;
+    int64_t fileSize;
     fileTransaction.srcFile->GetFileSize(&fileSize);
-    LL_ADD(mMaxProgress, mMaxProgress, fileSize);
+    mMaxProgress += fileSize;
   }
 
   CopyNextFolder();
@@ -144,8 +111,8 @@ nsSeamonkeyProfileMigrator::Migrate(PRUint16 aItems, nsIProfileStartup* aStartup
 
 NS_IMETHODIMP
 nsSeamonkeyProfileMigrator::GetMigrateData(const PRUnichar* aProfile,
-                                           PRBool aReplace,
-                                           PRUint16* aResult)
+                                           bool aReplace,
+                                           uint16_t* aResult)
 {
   *aResult = 0;
 
@@ -157,10 +124,10 @@ nsSeamonkeyProfileMigrator::GetMigrateData(const PRUnichar* aProfile,
 
   MigrationData data[] = { { ToNewUnicode(FILE_NAME_PREFS),
                              nsIMailProfileMigrator::SETTINGS,
-                             PR_TRUE },
+                             true },
                            { ToNewUnicode(FILE_NAME_JUNKTRAINING),
                              nsIMailProfileMigrator::JUNKTRAINING,
-                             PR_TRUE },
+                             true },
                           };
 
   // Frees file name strings allocated above.
@@ -178,7 +145,7 @@ nsSeamonkeyProfileMigrator::GetMigrateData(const PRUnichar* aProfile,
     mSourceProfile->Clone(getter_AddRefs(sourcePasswordsFile));
     sourcePasswordsFile->Append(fileName);
 
-    PRBool exists;
+    bool exists;
     sourcePasswordsFile->Exists(&exists);
     if (exists)
       *aResult |= nsIMailProfileMigrator::PASSWORDS;
@@ -220,9 +187,9 @@ nsSeamonkeyProfileMigrator::GetSourceProfiles(nsIArray** aResult)
 nsresult
 nsSeamonkeyProfileMigrator::GetSourceProfile(const PRUnichar* aProfile)
 {
-  PRUint32 count;
+  uint32_t count;
   mProfileNames->GetLength(&count);
-  for (PRUint32 i = 0; i < count; ++i) {
+  for (uint32_t i = 0; i < count; ++i) {
     nsCOMPtr<nsISupportsString> str(do_QueryElementAt(mProfileNames, i));
     nsString profileName;
     str->GetData(profileName);
@@ -241,44 +208,36 @@ nsSeamonkeyProfileMigrator::FillProfileDataFromSeamonkeyRegistry()
   // Find the Seamonkey Registry
   nsCOMPtr<nsIProperties> fileLocator(
     do_GetService("@mozilla.org/file/directory_service;1"));
-  nsCOMPtr<nsILocalFile> seamonkeyData;
+  nsCOMPtr<nsIFile> seamonkeyData;
 #undef EXTRA_PREPEND
 
 #ifdef XP_WIN
-#define REGISTRY_FILE "registry.dat"
-#define OLD_FOLDER "Mozilla"
 #define NEW_FOLDER "SeaMonkey"
 #define EXTRA_PREPEND "Mozilla"
 
-  fileLocator->Get(NS_WIN_APPDATA_DIR, NS_GET_IID(nsILocalFile),
+  fileLocator->Get(NS_WIN_APPDATA_DIR, NS_GET_IID(nsIFile),
                    getter_AddRefs(seamonkeyData));
   NS_ENSURE_TRUE(seamonkeyData, NS_ERROR_FAILURE);
 
 #elif defined(XP_MACOSX)
-#define REGISTRY_FILE "Application Registry"
-#define OLD_FOLDER "Mozilla"
 #define NEW_FOLDER "SeaMonkey"
 #define EXTRA_PREPEND "Application Support"
-  fileLocator->Get(NS_MAC_USER_LIB_DIR, NS_GET_IID(nsILocalFile),
+  fileLocator->Get(NS_MAC_USER_LIB_DIR, NS_GET_IID(nsIFile),
                    getter_AddRefs(seamonkeyData));
   NS_ENSURE_TRUE(seamonkeyData, NS_ERROR_FAILURE);
 
 #elif defined(XP_UNIX)
-#define REGISTRY_FILE "appreg"
-#define OLD_FOLDER ".mozilla"
 #define NEW_FOLDER "seamonkey"
 #define EXTRA_PREPEND ".mozilla"
-  fileLocator->Get(NS_UNIX_HOME_DIR, NS_GET_IID(nsILocalFile),
+  fileLocator->Get(NS_UNIX_HOME_DIR, NS_GET_IID(nsIFile),
                    getter_AddRefs(seamonkeyData));
   NS_ENSURE_TRUE(seamonkeyData, NS_ERROR_FAILURE);
 
 #elif defined(XP_OS2)
-#define REGISTRY_FILE "registry.dat"
-#define OLD_FOLDER "Mozilla"
 #define NEW_FOLDER "SeaMonkey"
 #define EXTRA_PREPEND "Mozilla"
 
-  fileLocator->Get(NS_OS2_HOME_DIR, NS_GET_IID(nsILocalFile),
+  fileLocator->Get(NS_OS2_HOME_DIR, NS_GET_IID(nsIFile),
                    getter_AddRefs(seamonkeyData));
   NS_ENSURE_TRUE(seamonkeyData, NS_ERROR_FAILURE);
 
@@ -296,21 +255,11 @@ nsSeamonkeyProfileMigrator::FillProfileDataFromSeamonkeyRegistry()
 #endif
   newSeamonkeyData->Append(NS_LITERAL_STRING(NEW_FOLDER));
 
-  nsCOMPtr<nsILocalFile> newSmDataLocal(do_QueryInterface(newSeamonkeyData));
-  NS_ENSURE_TRUE(newSmDataLocal, NS_ERROR_FAILURE);
-
-  nsresult rv = GetProfileDataFromProfilesIni(newSmDataLocal,
+  nsresult rv = GetProfileDataFromProfilesIni(newSeamonkeyData,
                                               mProfileNames,
                                               mProfileLocations);
 
-  if (rv != NS_ERROR_FILE_NOT_FOUND)
-    return rv;
-
-  seamonkeyData->Append(NS_LITERAL_STRING(OLD_FOLDER));
-  seamonkeyData->Append(NS_LITERAL_STRING(REGISTRY_FILE));
-
-  return GetProfileDataFromRegistry(seamonkeyData, mProfileNames,
-                                    mProfileLocations);
+  return rv;
 }
 
 static
@@ -397,7 +346,7 @@ nsSeamonkeyProfileMigrator::TransformPreferences(const nsAString& aSourcePrefFil
 
   // read in the various pref branch trees for accounts, identities, servers, etc.
   PBStructArray branches[NS_ARRAY_LENGTH(branchNames)];
-  PRUint32 i;
+  uint32_t i;
   for (i = 0; i < NS_ARRAY_LENGTH(branchNames); ++i)
     ReadBranch(branchNames[i], psvc, branches[i]);
 
@@ -443,8 +392,8 @@ nsSeamonkeyProfileMigrator::CopyAddressBookDirectories(PBStructArray &aLdapServe
   index.AppendInt(nsIMailProfileMigrator::ADDRESSBOOK_DATA);
   NOTIFY_OBSERVERS(MIGRATION_ITEMBEFOREMIGRATE, index.get());
 
-  PRUint32 count = aLdapServers.Length();
-  for (PRUint32 i = 0; i < count; ++i)
+  uint32_t count = aLdapServers.Length();
+  for (uint32_t i = 0; i < count; ++i)
   {
     PrefBranchStruct* pref = aLdapServers.ElementAt(i);
     nsDependentCString prefName(pref->prefName);
@@ -469,8 +418,8 @@ nsSeamonkeyProfileMigrator::CopySignatureFiles(PBStructArray &aIdentities,
 {
   nsresult rv = NS_OK;
 
-  PRUint32 count = aIdentities.Length();
-  for (PRUint32 i = 0; i < count; ++i)
+  uint32_t count = aIdentities.Length();
+  for (uint32_t i = 0; i < count; ++i)
   {
     PrefBranchStruct* pref = aIdentities.ElementAt(i);
     nsDependentCString prefName(pref->prefName);
@@ -483,8 +432,8 @@ nsSeamonkeyProfileMigrator::CopySignatureFiles(PBStructArray &aIdentities,
     // below the seamonkey profile root
     if (StringEndsWith(prefName, nsDependentCString(".sig_file")))
     {
-      // turn the pref into a nsILocalFile
-      nsCOMPtr<nsILocalFile> srcSigFile =
+      // turn the pref into a nsIFile
+      nsCOMPtr<nsIFile> srcSigFile =
         do_CreateInstance(NS_LOCAL_FILE_CONTRACTID);
       srcSigFile->SetPersistentDescriptor(nsDependentCString(pref->stringValue));
 
@@ -493,7 +442,7 @@ nsSeamonkeyProfileMigrator::CopySignatureFiles(PBStructArray &aIdentities,
       NS_ENSURE_SUCCESS(rv, rv);
 
       // now make the copy
-      PRBool exists;
+      bool exists;
       srcSigFile->Exists(&exists);
       if (exists)
       {
@@ -504,8 +453,7 @@ nsSeamonkeyProfileMigrator::CopySignatureFiles(PBStructArray &aIdentities,
 
         // now write out the new descriptor
         nsCAutoString descriptorString;
-        nsCOMPtr<nsILocalFile> localFile = do_QueryInterface(targetSigFile);
-        localFile->GetPersistentDescriptor(descriptorString);
+        targetSigFile->GetPersistentDescriptor(descriptorString);
         NS_Free(pref->stringValue);
         pref->stringValue = ToNewCString(descriptorString);
       }
@@ -525,8 +473,8 @@ nsSeamonkeyProfileMigrator::CopyMailFolders(PBStructArray &aMailServers,
 
   nsresult rv = NS_OK;
 
-  PRUint32 count = aMailServers.Length();
-  for (PRUint32 i = 0; i < count; ++i)
+  uint32_t count = aMailServers.Length();
+  for (uint32_t i = 0; i < count; ++i)
   {
     PrefBranchStruct* pref = aMailServers.ElementAt(i);
     nsDependentCString prefName(pref->prefName);
@@ -560,8 +508,8 @@ nsSeamonkeyProfileMigrator::CopyMailFolders(PBStructArray &aMailServers,
       nsCString serverType;
       serverBranch->GetCharPref("type", getter_Copies(serverType));
 
-      nsCOMPtr<nsILocalFile> sourceMailFolder;
-      serverBranch->GetComplexValue("directory", NS_GET_IID(nsILocalFile), getter_AddRefs(sourceMailFolder));
+      nsCOMPtr<nsIFile> sourceMailFolder;
+      serverBranch->GetComplexValue("directory", NS_GET_IID(nsIFile), getter_AddRefs(sourceMailFolder));
 
       // now based on type, we need to build a new destination path for the mail folders for this server
       nsCOMPtr<nsIFile> targetMailFolder;
@@ -599,8 +547,7 @@ nsSeamonkeyProfileMigrator::CopyMailFolders(PBStructArray &aMailServers,
         // transformed into the new profile's pref.js has the right file
         // location.
         nsCAutoString descriptorString;
-        nsCOMPtr<nsILocalFile> localFile = do_QueryInterface(targetMailFolder);
-        localFile->GetPersistentDescriptor(descriptorString);
+        targetMailFolder->GetPersistentDescriptor(descriptorString);
         NS_Free(pref->stringValue);
         pref->stringValue = ToNewCString(descriptorString);
       }
@@ -614,12 +561,12 @@ nsSeamonkeyProfileMigrator::CopyMailFolders(PBStructArray &aMailServers,
       mTargetProfile->Clone(getter_AddRefs(targetNewsRCFile));
       targetNewsRCFile->Append(NEWS_DIR_50_NAME);
 
-      // turn the pref into a nsILocalFile
-      nsCOMPtr<nsILocalFile> srcNewsRCFile = do_CreateInstance(NS_LOCAL_FILE_CONTRACTID);
+      // turn the pref into a nsIFile
+      nsCOMPtr<nsIFile> srcNewsRCFile = do_CreateInstance(NS_LOCAL_FILE_CONTRACTID);
       srcNewsRCFile->SetPersistentDescriptor(nsDependentCString(pref->stringValue));
 
       // now make the copy
-      PRBool exists;
+      bool exists;
       srcNewsRCFile->Exists(&exists);
       if (exists)
       {
@@ -630,8 +577,7 @@ nsSeamonkeyProfileMigrator::CopyMailFolders(PBStructArray &aMailServers,
 
         // now write out the new descriptor
         nsCAutoString descriptorString;
-        nsCOMPtr<nsILocalFile> localFile = do_QueryInterface(targetNewsRCFile);
-        localFile->GetPersistentDescriptor(descriptorString);
+        targetNewsRCFile->GetPersistentDescriptor(descriptorString);
         NS_Free(pref->stringValue);
         pref->stringValue = ToNewCString(descriptorString);
       }
@@ -642,24 +588,48 @@ nsSeamonkeyProfileMigrator::CopyMailFolders(PBStructArray &aMailServers,
 }
 
 nsresult
-nsSeamonkeyProfileMigrator::CopyPreferences(PRBool aReplace)
+nsSeamonkeyProfileMigrator::CopyPreferences(bool aReplace)
 {
   nsresult rv = NS_OK;
   if (!aReplace)
     return rv;
 
-  rv |= TransformPreferences(FILE_NAME_PREFS, FILE_NAME_PREFS);
-  rv |= CopyFile(FILE_NAME_USER_PREFS, FILE_NAME_USER_PREFS);
+  nsresult tmp = TransformPreferences(FILE_NAME_PREFS, FILE_NAME_PREFS);
+  if (NS_FAILED(tmp)) {
+    rv = tmp;
+  }
+  tmp = CopyFile(FILE_NAME_USER_PREFS, FILE_NAME_USER_PREFS);
+  if (NS_FAILED(tmp)) {
+    rv = tmp;
+  }
 
   // Security Stuff
-  rv |= CopyFile(FILE_NAME_CERT8DB, FILE_NAME_CERT8DB);
-  rv |= CopyFile(FILE_NAME_KEY3DB, FILE_NAME_KEY3DB);
-  rv |= CopyFile(FILE_NAME_SECMODDB, FILE_NAME_SECMODDB);
+  tmp = CopyFile(FILE_NAME_CERT8DB, FILE_NAME_CERT8DB);
+  if (NS_FAILED(tmp)) {
+    rv = tmp;
+  }
+  tmp = CopyFile(FILE_NAME_KEY3DB, FILE_NAME_KEY3DB);
+  if (NS_FAILED(tmp)) {
+    rv = tmp;
+  }
+  tmp = CopyFile(FILE_NAME_SECMODDB, FILE_NAME_SECMODDB);
+  if (NS_FAILED(tmp)) {
+    rv = tmp;
+  }
 
   // User MIME Type overrides
-  rv |= CopyFile(FILE_NAME_MIMETYPES, FILE_NAME_MIMETYPES);
-  rv |= CopyFile(FILE_NAME_PERSONALDICTIONARY, FILE_NAME_PERSONALDICTIONARY);
-  rv |= CopyFile(FILE_NAME_MAILVIEWS, FILE_NAME_MAILVIEWS);
+  tmp = CopyFile(FILE_NAME_MIMETYPES, FILE_NAME_MIMETYPES);
+  if (NS_FAILED(tmp)) {
+    rv = tmp;
+  }
+  tmp = CopyFile(FILE_NAME_PERSONALDICTIONARY, FILE_NAME_PERSONALDICTIONARY);
+  if (NS_FAILED(tmp)) {
+    rv = tmp;
+  }
+  tmp = CopyFile(FILE_NAME_MAILVIEWS, FILE_NAME_MAILVIEWS);
+  if (NS_FAILED(tmp)) {
+    rv = tmp;
+  }
   return rv;
 }
 
@@ -672,16 +642,16 @@ nsSeamonkeyProfileMigrator::ReadBranch(const char *branchName,
   nsCOMPtr<nsIPrefBranch> branch;
   aPrefService->GetBranch(branchName, getter_AddRefs(branch));
 
-  PRUint32 count;
-  char** prefs = nsnull;
+  uint32_t count;
+  char** prefs = nullptr;
   nsresult rv = branch->GetChildList("", &count, &prefs);
   if (NS_FAILED(rv))
     return;
 
-  for (PRUint32 i = 0; i < count; ++i) {
+  for (uint32_t i = 0; i < count; ++i) {
     // Save each pref's value into an array
     char* currPref = prefs[i];
-    PRInt32 type;
+    int32_t type;
     branch->GetPrefType(currPref, &type);
     PrefBranchStruct* pref = new PrefBranchStruct;
     pref->prefName = currPref;
@@ -718,14 +688,14 @@ nsSeamonkeyProfileMigrator::WriteBranch(const char *branchName,
   nsCOMPtr<nsIPrefBranch> branch;
   aPrefService->GetBranch(branchName, getter_AddRefs(branch));
 
-  PRUint32 count = aPrefs.Length();
-  for (PRUint32 i = 0; i < count; ++i) {
+  uint32_t count = aPrefs.Length();
+  for (uint32_t i = 0; i < count; ++i) {
     PrefBranchStruct* pref = aPrefs.ElementAt(i);
     switch (pref->type) {
     case nsIPrefBranch::PREF_STRING:
       rv = branch->SetCharPref(pref->prefName, pref->stringValue);
       NS_Free(pref->stringValue);
-      pref->stringValue = nsnull;
+      pref->stringValue = nullptr;
       break;
     case nsIPrefBranch::PREF_BOOL:
       rv = branch->SetBoolPref(pref->prefName, pref->boolValue);
@@ -739,27 +709,27 @@ nsSeamonkeyProfileMigrator::WriteBranch(const char *branchName,
       break;
     }
     NS_Free(pref->prefName);
-    pref->prefName = nsnull;
+    pref->prefName = nullptr;
     delete pref;
-    pref = nsnull;
+    pref = nullptr;
   }
   aPrefs.Clear();
 }
 
-nsresult nsSeamonkeyProfileMigrator::DummyCopyRoutine(PRBool aReplace)
+nsresult nsSeamonkeyProfileMigrator::DummyCopyRoutine(bool aReplace)
 {
   // place holder function only to fake the UI out into showing some migration process.
   return NS_OK;
 }
 
 nsresult
-nsSeamonkeyProfileMigrator::CopyJunkTraining(PRBool aReplace)
+nsSeamonkeyProfileMigrator::CopyJunkTraining(bool aReplace)
 {
   return aReplace ? CopyFile(FILE_NAME_JUNKTRAINING, FILE_NAME_JUNKTRAINING) : NS_OK;
 }
 
 nsresult
-nsSeamonkeyProfileMigrator::CopyPasswords(PRBool aReplace)
+nsSeamonkeyProfileMigrator::CopyPasswords(bool aReplace)
 {
   nsresult rv;
 

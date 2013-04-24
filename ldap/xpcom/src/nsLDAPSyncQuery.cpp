@@ -1,50 +1,16 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Mitesh Shah <mitesh@netscape.com>
- *   Dan Mosedale <dmose@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsLDAPSyncQuery.h"
 #include "nsIServiceManager.h"
-#include "nsIProxyObjectManager.h"
-#include "nsXPIDLString.h"
 #include "nsILDAPErrors.h"
 #include "nsThreadUtils.h"
-#include "nsReadableUtils.h"
 #include "nsILDAPMessage.h"
+#include "nsComponentManagerUtils.h"
+#include "nsServiceManagerUtils.h"
+#include "nsMemory.h"
 
 // nsISupports Implementation
 
@@ -53,7 +19,7 @@ NS_IMPL_THREADSAFE_ISUPPORTS2(nsLDAPSyncQuery, nsILDAPSyncQuery, nsILDAPMessageL
 // Constructor
 //
 nsLDAPSyncQuery::nsLDAPSyncQuery() :
-    mFinished(PR_FALSE), // This is a control variable for event loop
+    mFinished(false), // This is a control variable for event loop
     mProtocolVersion(nsILDAPConnection::VERSION3)
 {
 }
@@ -71,7 +37,7 @@ nsLDAPSyncQuery::~nsLDAPSyncQuery()
 NS_IMETHODIMP 
 nsLDAPSyncQuery::OnLDAPMessage(nsILDAPMessage *aMessage)
 {
-    PRInt32 messageType;
+    int32_t messageType;
 
     // just in case.
     //
@@ -129,8 +95,6 @@ NS_IMETHODIMP
 nsLDAPSyncQuery::OnLDAPInit(nsILDAPConnection *aConn, nsresult aStatus)
 {
     nsresult rv;        // temp for xpcom return values
-    nsCOMPtr<nsILDAPMessageListener> selfProxy;
-
     // create and initialize an LDAP operation (to be used for the bind)
     //  
     mOperation = do_CreateInstance("@mozilla.org/network/ldap-operation;1", 
@@ -140,21 +104,9 @@ nsLDAPSyncQuery::OnLDAPInit(nsILDAPConnection *aConn, nsresult aStatus)
         return NS_ERROR_FAILURE;
     }
 
-    // get a proxy object so the callback happens on the main thread
-    //
-    rv = NS_GetProxyForObject(NS_PROXY_TO_CURRENT_THREAD,
-                              NS_GET_IID(nsILDAPMessageListener), 
-                              static_cast<nsILDAPMessageListener *>(this),
-                              NS_PROXY_ASYNC | NS_PROXY_ALWAYS, 
-                              getter_AddRefs(selfProxy));
-    if (NS_FAILED(rv)) {
-        FinishLDAPQuery();
-        return NS_ERROR_FAILURE;
-    }
-
     // our OnLDAPMessage accepts all result callbacks
     //
-    rv = mOperation->Init(mConnection, selfProxy, nsnull);
+    rv = mOperation->Init(mConnection, this, nullptr);
     if (NS_FAILED(rv)) {
         FinishLDAPQuery();
         return NS_ERROR_UNEXPECTED; // this should never happen
@@ -175,7 +127,7 @@ nsresult
 nsLDAPSyncQuery::OnLDAPBind(nsILDAPMessage *aMessage)
 {
 
-    PRInt32 errCode;
+    int32_t errCode;
 
     mOperation = 0;  // done with bind op; make nsCOMPtr release it
 
@@ -206,7 +158,7 @@ nsLDAPSyncQuery::OnLDAPBind(nsILDAPMessage *aMessage)
 nsresult
 nsLDAPSyncQuery::OnLDAPSearchEntry(nsILDAPMessage *aMessage)
 {
-  PRUint32 attrCount;
+  uint32_t attrCount;
   char** attributes;
   nsresult rv = aMessage->GetAttributes(&attrCount, &attributes);
   if (NS_FAILED(rv))
@@ -218,10 +170,10 @@ nsLDAPSyncQuery::OnLDAPSearchEntry(nsILDAPMessage *aMessage)
   }
 
   // Iterate through the attributes received in this message
-  for (PRUint32 i = 0; i < attrCount; i++)
+  for (uint32_t i = 0; i < attrCount; i++)
   {
     PRUnichar **vals;
-    PRUint32 valueCount;
+    uint32_t valueCount;
 
     // Get the values of this attribute.
     // XXX better failure handling
@@ -235,7 +187,7 @@ nsLDAPSyncQuery::OnLDAPSearchEntry(nsILDAPMessage *aMessage)
     }
 
     // Store all values of this attribute in the mResults.
-    for (PRUint32 j = 0; j < valueCount; j++) {
+    for (uint32_t j = 0; j < valueCount; j++) {
       mResults.Append(PRUnichar('\n'));
       mResults.AppendASCII(attributes[i]);
       mResults.Append(PRUnichar('='));
@@ -263,10 +215,7 @@ nsLDAPSyncQuery::OnLDAPSearchResult(nsILDAPMessage *aMessage)
 nsresult
 nsLDAPSyncQuery::StartLDAPSearch()
 {
-    nsresult rv; 
-    nsCOMPtr<nsILDAPMessageListener> selfProxy; // for callback
-
-
+    nsresult rv;
     // create and initialize an LDAP operation (to be used for the search
     //  
     mOperation = 
@@ -279,23 +228,9 @@ nsLDAPSyncQuery::StartLDAPSearch()
         return NS_ERROR_FAILURE;
     }
 
-    // get a proxy object so the callback happens on the main thread
-    //
-    rv = NS_GetProxyForObject(NS_PROXY_TO_CURRENT_THREAD, 
-                              NS_GET_IID(nsILDAPMessageListener),
-                              static_cast<nsILDAPMessageListener *>(this),
-                              NS_PROXY_ASYNC | NS_PROXY_ALWAYS,
-                              getter_AddRefs(selfProxy));
-    if (NS_FAILED(rv)) {
-        NS_ERROR("nsLDAPSyncQuery::StartLDAPSearch(): couldn't "
-                 "create proxy to this object for callback");
-        FinishLDAPQuery();
-        return NS_ERROR_FAILURE;
-    }
-
     // initialize the LDAP operation object
     //
-    rv = mOperation->Init(mConnection, selfProxy, nsnull);
+    rv = mOperation->Init(mConnection, this, nullptr);
     if (NS_FAILED(rv)) {
         NS_ERROR("nsLDAPSyncQuery::StartLDAPSearch(): couldn't "
                  "initialize LDAP operation");
@@ -323,7 +258,7 @@ nsLDAPSyncQuery::StartLDAPSearch()
 
     // and the scope
     //
-    PRInt32 scope;
+    int32_t scope;
     rv = mServerURL->GetScope(&scope);
     if (NS_FAILED(rv)) {
         FinishLDAPQuery();
@@ -352,9 +287,10 @@ nsLDAPSyncQuery::StartLDAPSearch()
 //
 nsresult nsLDAPSyncQuery::InitConnection()
 {
-    nsCOMPtr<nsILDAPMessageListener> selfProxy;
+    // Because mConnection->Init proxies back to the main thread, this
+    // better be the main thread.
+    NS_ENSURE_TRUE(NS_IsMainThread(), NS_ERROR_FAILURE);
     nsresult rv;        // temp for xpcom return values
-    
     // create an LDAP connection
     //
     mConnection = do_CreateInstance("@mozilla.org/network/ldap-connection;1",
@@ -374,23 +310,8 @@ nsresult nsLDAPSyncQuery::InitConnection()
         FinishLDAPQuery();
         return NS_ERROR_NOT_INITIALIZED;
     }
-
-    // get a proxy object so the callback happens on the main thread
-    //
-    rv = NS_GetProxyForObject(NS_PROXY_TO_CURRENT_THREAD,
-                              NS_GET_IID(nsILDAPMessageListener), 
-                              static_cast<nsILDAPMessageListener *>(this), 
-                              NS_PROXY_ASYNC | NS_PROXY_ALWAYS, 
-                              getter_AddRefs(selfProxy));
-    if (NS_FAILED(rv)) {
-        FinishLDAPQuery();
-        NS_ERROR("nsLDAPSyncQuery::InitConnection(): couldn't "
-                 "create proxy to this object for callback");
-        return NS_ERROR_FAILURE;
-    }
-
-    rv = mConnection->Init(mServerURL, EmptyCString(), selfProxy,
-                           nsnull, mProtocolVersion);
+    rv = mConnection->Init(mServerURL, EmptyCString(), this,
+                           nullptr, mProtocolVersion);
     if (NS_FAILED(rv)) {
         FinishLDAPQuery();
         return NS_ERROR_UNEXPECTED; // this should never happen
@@ -405,7 +326,7 @@ nsLDAPSyncQuery::FinishLDAPQuery()
     // We are done with the LDAP operation. 
     // Release the Control variable for the eventloop
     //
-    mFinished = PR_TRUE;
+    mFinished = true;
     
     // Release member variables
     //
@@ -417,7 +338,7 @@ nsLDAPSyncQuery::FinishLDAPQuery()
 
 /* wstring getQueryResults (in nsILDAPURL aServerURL, in unsigned long aVersion); */
 NS_IMETHODIMP nsLDAPSyncQuery::GetQueryResults(nsILDAPURL *aServerURL,
-                                               PRUint32 aProtocolVersion,
+                                               uint32_t aProtocolVersion,
                                                PRUnichar **_retval)
 {
     nsresult rv;

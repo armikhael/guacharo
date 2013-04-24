@@ -1,40 +1,7 @@
 /* vim: set shiftwidth=2 tabstop=8 autoindent cindent expandtab: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is AnimationCommon, common animation code for transitions
- * and animations.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   L. David Baron <dbaron@dbaron.org>, Mozilla Corporation (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef mozilla_css_AnimationCommon_h
 #define mozilla_css_AnimationCommon_h
@@ -48,11 +15,15 @@
 #include "mozilla/dom/Element.h"
 #include "nsSMILKeySpline.h"
 #include "nsStyleStruct.h"
+#include "mozilla/Attributes.h"
 
 class nsPresContext;
 
+
 namespace mozilla {
 namespace css {
+
+bool IsGeometricProperty(nsCSSProperty aProperty);
 
 struct CommonElementAnimationData;
 
@@ -67,18 +38,21 @@ public:
 
   // nsIStyleRuleProcessor (parts)
   virtual nsRestyleHint HasStateDependentStyle(StateRuleProcessorData* aData);
-  virtual PRBool HasDocumentStateDependentStyle(StateRuleProcessorData* aData);
+  virtual bool HasDocumentStateDependentStyle(StateRuleProcessorData* aData);
   virtual nsRestyleHint
     HasAttributeDependentStyle(AttributeRuleProcessorData* aData);
-  virtual PRBool MediumFeaturesChanged(nsPresContext* aPresContext);
-  virtual PRInt64 SizeOf() const;
+  virtual bool MediumFeaturesChanged(nsPresContext* aPresContext);
+  virtual NS_MUST_OVERRIDE size_t
+    SizeOfExcludingThis(nsMallocSizeOfFun aMallocSizeOf) const MOZ_OVERRIDE;
+  virtual NS_MUST_OVERRIDE size_t
+    SizeOfIncludingThis(nsMallocSizeOfFun aMallocSizeOf) const MOZ_OVERRIDE;
 
   /**
    * Notify the manager that the pres context is going away.
    */
   void Disconnect();
 
-  static PRBool ExtractComputedValueForTransition(
+  static bool ExtractComputedValueForTransition(
                   nsCSSProperty aProperty,
                   nsStyleContext* aStyleContext,
                   nsStyleAnimation::Value& aComputedValue);
@@ -96,7 +70,7 @@ protected:
 /**
  * A style rule that maps property-nsStyleAnimation::Value pairs.
  */
-class AnimValuesStyleRule : public nsIStyleRule
+class AnimValuesStyleRule MOZ_FINAL : public nsIStyleRule
 {
 public:
   // nsISupports implementation
@@ -105,7 +79,7 @@ public:
   // nsIStyleRule implementation
   virtual void MapRuleInfoInto(nsRuleData* aRuleData);
 #ifdef DEBUG
-  virtual void List(FILE* out = stdout, PRInt32 aIndent = 0) const;
+  virtual void List(FILE* out = stdout, int32_t aIndent = 0) const;
 #endif
 
   void AddValue(nsCSSProperty aProperty, nsStyleAnimation::Value &aStartValue)
@@ -136,10 +110,16 @@ public:
   typedef nsTimingFunction::Type Type;
   void Init(const nsTimingFunction &aFunction);
   double GetValue(double aPortion) const;
+  const nsSMILKeySpline* GetFunction() const {
+    NS_ASSERTION(mType == nsTimingFunction::Function, "Type mismatch");
+    return &mTimingFunction;
+  }
+  Type GetType() const { return mType; }
+  uint32_t GetSteps() const { return mSteps; }
 private:
   Type mType;
   nsSMILKeySpline mTimingFunction;
-  PRUint32 mSteps;
+  uint32_t mSteps;
 };
 
 struct CommonElementAnimationData : public PRCList
@@ -171,6 +151,14 @@ struct CommonElementAnimationData : public PRCList
     mElement->DeleteProperty(mElementProperty);
   }
 
+  static bool
+  CanAnimatePropertyOnCompositor(const dom::Element *aElement,
+                                 nsCSSProperty aProperty,
+                                 bool aHasGeometricProperties);
+
+  static void LogAsyncAnimationFailure(nsCString& aMessage,
+                                       const nsIContent* aContent = nullptr);
+
   dom::Element *mElement;
 
   // the atom we use in mElement's prop table (must be a static atom,
@@ -178,6 +166,17 @@ struct CommonElementAnimationData : public PRCList
   nsIAtom *mElementProperty;
 
   CommonAnimationManager *mManager;
+
+  // This style rule contains the style data for currently animating
+  // values.  It only matches when styling with animation.  When we
+  // style without animation, we need to not use it so that we can
+  // detect any new changes; if necessary we restyle immediately
+  // afterwards with animation.
+  // NOTE: If we don't need to apply any styles, mStyleRule will be
+  // null, but mStyleRuleRefreshTime will still be valid.
+  nsRefPtr<mozilla::css::AnimValuesStyleRule> mStyleRule;
+  // The refresh time associated with mStyleRule.
+  TimeStamp mStyleRuleRefreshTime;
 
 #ifdef DEBUG
   bool mCalledPropertyDtor;

@@ -57,6 +57,12 @@ pluginSupportsWindowlessMode()
   return true;
 }
 
+bool
+pluginSupportsAsyncBitmapDrawing()
+{
+  return false;
+}
+
 NPError
 pluginInstanceInit(InstanceData* instanceData)
 {
@@ -110,10 +116,12 @@ pluginDrawWindow(InstanceData* instanceData, void* event)
   int width = window.width;
   int height = window.height;
 
+#ifdef MOZ_X11
   XEvent* nsEvent = (XEvent*)event;
   const XGraphicsExposeEvent& expose = nsEvent->xgraphicsexpose;
 
   QColor drawColor((QColor)instanceData->scriptableObject->drawColor);//QRgb qRgba ( int r, int g, int b, int a )
+#ifdef Q_WS_X11
   QPixmap pixmap = QPixmap::fromX11Pixmap(expose.drawable, QPixmap::ExplicitlyShared);
 
   QRect exposeRect(expose.x, expose.y, expose.width, expose.height);
@@ -126,6 +134,8 @@ pluginDrawWindow(InstanceData* instanceData, void* event)
     return;
 
   }
+#endif
+#endif
 
   NPP npp = instanceData->npp;
   if (!npp)
@@ -135,6 +145,8 @@ pluginDrawWindow(InstanceData* instanceData, void* event)
   if (text.isEmpty())
     return;
 
+#ifdef MOZ_X11
+#ifdef Q_WS_X11
   //printf("Drawing Default\n");
   // drawing a solid color for reftests
   QColor color;
@@ -147,6 +159,8 @@ pluginDrawWindow(InstanceData* instanceData, void* event)
   painter.drawRect(theRect);
   painter.drawText(QRect(theRect), Qt::AlignCenter, text);
   notifyDidPaint(instanceData);
+#endif
+#endif
   return;
 }
 
@@ -179,6 +193,7 @@ pluginHandleEvent(InstanceData* instanceData, void* event)
     XButtonEvent* button = &nsEvent->xbutton;
     instanceData->lastMouseX = button->x;
     instanceData->lastMouseY = button->y;
+    instanceData->mouseUpEventCount++;
     break;
   }
   default:

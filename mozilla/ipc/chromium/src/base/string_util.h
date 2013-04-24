@@ -108,9 +108,7 @@ bool IsWprintfFormatPortable(const wchar_t* format);
 #error Define string operations appropriately for your platform
 #endif
 
-#ifdef CHROMIUM_MOZILLA_BUILD
 namespace base {
-#endif
 // Returns a reference to a globally unique empty string that functions can
 // return.  Use this to avoid static construction of strings, not to replace
 // any and all uses of "std::string()" as nicer-looking sugar.
@@ -118,9 +116,7 @@ namespace base {
 const std::string& EmptyString();
 const std::wstring& EmptyWString();
 const string16& EmptyString16();
-#ifdef CHROMIUM_MOZILLA_BUILD
 }
-#endif
 
 extern const wchar_t kWhitespaceWide[];
 extern const char kWhitespaceASCII[];
@@ -150,7 +146,7 @@ enum TrimPositions {
   TRIM_NONE     = 0,
   TRIM_LEADING  = 1 << 0,
   TRIM_TRAILING = 1 << 1,
-  TRIM_ALL      = TRIM_LEADING | TRIM_TRAILING,
+  TRIM_ALL      = TRIM_LEADING | TRIM_TRAILING
 };
 TrimPositions TrimWhitespace(const std::wstring& input,
                              TrimPositions positions,
@@ -228,7 +224,7 @@ class OnStringUtilConversionError {
 
     // The offending characters are skipped and the conversion will proceed as
     // if they did not exist.
-    SKIP,
+    SKIP
   };
 
  private:
@@ -357,7 +353,7 @@ enum DataUnits {
   DATA_UNITS_BYTE = 0,
   DATA_UNITS_KILOBYTE,
   DATA_UNITS_MEGABYTE,
-  DATA_UNITS_GIGABYTE,
+  DATA_UNITS_GIGABYTE
 };
 
 // Return the unit type that is appropriate for displaying the amount of bytes
@@ -509,11 +505,7 @@ inline typename string_type::value_type* WriteInto(string_type* str,
 
 // Function objects to aid in comparing/searching strings.
 
-#if defined(CHROMIUM_MOZILLA_BUILD)
 template<typename Char> struct chromium_CaseInsensitiveCompare {
-#else
-template<typename Char> struct CaseInsensitiveCompare {
-#endif
  public:
   bool operator()(Char x, Char y) const {
     return tolower(x) == tolower(y);

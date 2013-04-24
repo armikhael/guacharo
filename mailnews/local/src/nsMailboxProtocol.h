@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsMailboxProtocol_h___
 #define nsMailboxProtocol_h___
@@ -99,8 +67,8 @@ public:
 private:
   nsCOMPtr<nsIMailboxUrl>  m_runningUrl; // the nsIMailboxURL that is currently running
   nsMailboxAction m_mailboxAction; // current mailbox action associated with this connnection...
-  PRInt32      m_originalContentLength; /* the content length at the time of calling graph progress */
-
+  int32_t      m_originalContentLength; /* the content length at the time of calling graph progress */
+  uint64_t m_msgOffset;
   // Event sink handles
   nsCOMPtr<nsIStreamListener> m_mailboxParser;
 
@@ -112,8 +80,8 @@ private:
   MailboxStatesEnum  m_nextState;
   MailboxStatesEnum  m_initialState;
 
-  PRInt64   mCurrentProgress;
-  PRUint32  m_messageID;
+  int64_t   mCurrentProgress;
+  uint32_t  m_messageID;
 
         // can we just use the base class m_tempMsgFile?
   nsCOMPtr<nsIFile> m_tempMessageFile;
@@ -124,13 +92,13 @@ private:
   nsCOMPtr<nsIInputStream> m_multipleMsgMoveCopyStream;
 
   virtual nsresult ProcessProtocolState(nsIURI * url, nsIInputStream * inputStream,
-                        PRUint32 sourceOffset, PRUint32 length);
+                        uint32_t sourceOffset, uint32_t length);
   virtual nsresult CloseSocket();
 
-  PRInt32 SetupMessageExtraction();
-  nsresult OpenMultipleMsgTransport(PRUint32 offset, PRInt32 size);
-  nsresult OpenFileSocketForReuse(nsIURI * aURL, PRUint32 aStartPosition, PRInt32 aReadCount);
-  PRBool RunningMultipleMsgUrl();
+  nsresult SetupMessageExtraction();
+  nsresult OpenMultipleMsgTransport(uint64_t offset, int32_t size);
+  nsresult OpenFileSocketForReuse(nsIURI * aURL, uint64_t aStartPosition, int32_t aReadCount);
+  bool RunningMultipleMsgUrl();
 
   ////////////////////////////////////////////////////////////////////////////////////////
   // Protocol Methods --> This protocol is state driven so each protocol method is
@@ -140,9 +108,9 @@ private:
 
   // When parsing a mailbox folder in chunks, this protocol state reads in the current chunk
   // and forwards it to the mailbox parser.
-  PRInt32 ReadFolderResponse(nsIInputStream * inputStream, PRUint32 sourceOffset, PRUint32 length);
-  PRInt32 ReadMessageResponse(nsIInputStream * inputStream, PRUint32 sourceOffset, PRUint32 length);
-  PRInt32 DoneReadingMessage();
+  int32_t ReadFolderResponse(nsIInputStream * inputStream, uint32_t sourceOffset, uint32_t length);
+  int32_t ReadMessageResponse(nsIInputStream * inputStream, uint32_t sourceOffset, uint32_t length);
+  int32_t DoneReadingMessage();
 
   ////////////////////////////////////////////////////////////////////////////////////////
   // End of Protocol Methods

@@ -1,40 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Global Database.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Andrew Sutherland <asutherland@asutherland.org>
- *   Siddharth Agarwal <sid.bugzilla@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* This file looks to Myk Melez <myk@mozilla.org>'s Mozilla Labs snowl
  * project's (http://hg.mozilla.org/labs/snowl/) modules/datastore.js
@@ -48,19 +14,20 @@ const Ci = Components.interfaces;
 const Cr = Components.results;
 const Cu = Components.utils;
 
+Cu.import("resource:///modules/IOUtils.js");
+Cu.import("resource://gre/modules/Services.jsm");
+
 Cu.import("resource:///modules/gloda/log4moz.js");
 
 Cu.import("resource:///modules/gloda/datamodel.js");
 Cu.import("resource:///modules/gloda/databind.js");
 Cu.import("resource:///modules/gloda/collection.js");
 
-let PCH_LOG = Log4Moz.repository.getLogger("gloda.ds.pch");
+const MIN_CACHE_SIZE = 8 * 1048576;
+const MAX_CACHE_SIZE = 64 * 1048576;
+const MEMSIZE_FALLBACK_BYTES = 256 * 1048576;
 
-/**
- * Bug 507414 introduces support for true asynchronous statements.  We can tell
- * we've got it if there is a mozIStorageAsyncStatement interface.
- */
-const HAVE_TRUE_ASYNC = "mozIStorageAsyncStatement" in Ci;
+let PCH_LOG = Log4Moz.repository.getLogger("gloda.ds.pch");
 
 /**
  * Commit async handler; hands off the notification to
@@ -99,7 +66,7 @@ PostCommitHandler.prototype = {
       GlodaDatastore._asyncCompleted();
     }
     catch (e) {
-      PCH_LOG.error("Exception in handleCompletion: " + e);
+      PCH_LOG.error("Exception in handleCompletion:", e);
     }
 
   }
@@ -293,8 +260,7 @@ QueryFromQueryCallback.prototype = {
       }
     }
     catch (e) {
-      GlodaDatastore._log.error("Exception in handleResult: (" + e.fileName +
-                                ":" + e.lineNumber + "): " + e);
+      GlodaDatastore._log.error("Exception in handleResult:", e);
     }
   },
 
@@ -419,7 +385,7 @@ QueryFromQueryCallback.prototype = {
       }
       catch (e) {
         Components.utils.reportError(e);
-        QFQ_LOG.error("Exception: " + e);
+        QFQ_LOG.error("Exception:", e);
       }
     }
     finally {
@@ -609,6 +575,13 @@ ExplainedStatementProcessor.prototype = {
   }
 };
 
+// See the documentation on GlodaDatastore._schemaVersion to understand these:
+const DB_SCHEMA_ACCEPT_LEAVE_LOW = 31,
+      DB_SCHEMA_ACCEPT_LEAVE_HIGH = 34,
+      DB_SCHEMA_ACCEPT_DOWNGRADE_LOW = 35,
+      DB_SCHEMA_ACCEPT_DOWNGRADE_HIGH = 39,
+      DB_SCHEMA_DOWNGRADE_DELTA = 5;
+
 /**
  * Database abstraction layer.  Contains explicit SQL schemas for our
  *  fundamental representations (core 'nouns', if you will) as well as
@@ -710,6 +683,7 @@ var GlodaDatastore = {
   kSpecialColumnParent: 16|2,
   kSpecialString: 32,
   kSpecialFulltext: 64,
+  IGNORE_FACET: {},
 
   kConstraintIdIn: 0,
   kConstraintIn: 1,
@@ -720,7 +694,87 @@ var GlodaDatastore = {
 
   /* ******************* SCHEMA ******************* */
 
-  _schemaVersion: 21,
+  /**
+   * Schema version policy. IMPORTANT!  We expect the following potential things
+   *  to happen in the life of gloda that can impact our schema and the ability
+   *  to move between different versions of Thunderbird:
+   *
+   * - Fundamental changes to the schema so that two versions of Thunderbird
+   *    cannot use the same global database.  To wit, Thunderbird N+1 needs to
+   *    blow away the database of Thunderbird N and reindex from scratch.
+   *    Likewise, Thunderbird N will need to blow away Thunderbird N+1's
+   *    database because it can't understand it.  And we can't simply use a
+   *    different file because there would be fatal bookkeeping losses.
+   *
+   * - Bidirectional minor schema changes (rare).
+   *    Thunderbird N+1 does something that does not affect Thunderbird N's use
+   *    of the database, and a user switching back to Thunderbird N will not be
+   *    negatively impacted.  It will also be fine when they go back to N+1 and
+   *    N+1 will not be missing any vital data.  The historic example of this is
+   *    when we added a missing index that was important for performance.  In
+   *    that case, Thunderbird N could have potentially left the schema revision
+   *    intact (if there was a safe revision), rather than swapping it on the
+   *    downgrade, compelling N+1 to redo the transform on upgrade.
+   *
+   * - Backwards compatible, upgrade-transition minor schema changes.
+   *    Thunderbird N+1 does something that does not require nuking the
+   *    database / a full re-index, but does require processing on upgrade from
+   *    a version of the database previously used by Thunderbird.  These changes
+   *    do not impact N's ability to use the database.  For example, adding a
+   *    new indexed attribute that affects a small number of messages could be
+   *    handled by issuing a query on upgrade to dirty/index those messages.
+   *    However, if the user goes back to N from N+1, when they upgrade to N+1
+   *    again, we need to re-index.  In this case N would need to have downgrade
+   *    the schema revision.
+   *
+   * - Backwards incompatible, minor schema changes.
+   *    Thunderbird N+1 does something that does not require nuking the database
+   *    but will break Thunderbird N's ability to use the database.
+   *
+   * - Regression fixes.  Sometimes we may land something that screws up
+   *    databases, or the platform changes in a way that breaks our code and we
+   *    had insufficient unit test coverage and so don't detect it until some
+   *    databases have gotten messed up.
+   *
+   * Accordingly, every version of Thunderbird has a concept of potential schema
+   *  versions with associated semantics to prepare for the minor schema upgrade
+   *  cases were inter-op is possible.  These ranges and their semantics are:
+   * - accepts and leaves intact.  Covers:
+   *    - regression fixes that no longer exist with the landing of the upgrade
+   *       code as long as users never go back a build in the given channel.
+   *    - bidirectional minor schema changes.
+   * - accepts but downgrades version to self.  Covers:
+   *    - backwards compatible, upgrade-transition minor schema changes.
+   * - nuke range (anything beyond a specific revision needs to be nuked):
+   *    - backwards incompatible, minor scheme changes
+   *    - fundamental changes
+   *
+   *
+   * SO, YOU WANT TO CHANGE THE SCHEMA?
+   *
+   * Use the ranges below for Thunderbird 11 as a guide, bumping things as little
+   *  as possible.  If we start to use up the "accepts and leaves intact" range
+   *  without majorly changing things up, re-do the numbering acceptance range
+   *  to give us additional runway.
+   *
+   * Also, if we keep needing non-nuking upgrades, consider adding an additional
+   *  table to the database that can tell older versions of Thunderbird what to
+   *  do when confronted with a newer database and where it can set flags to tell
+   *  the newer Thunderbird what the older Thunderbird got up to.  For example,
+   *  it would be much easier if we just tell Thunderbird N what to do when it's
+   *  confronted with the database.
+   *
+   *
+   * CURRENT STATE OF THE MIGRATION LOGIC:
+   *
+   * Thunderbird 11: uses 30 (regression fix from 26)
+   * - accepts and leaves intact: 31-34
+   * - accepts and downgrades by 5: 35-39
+   * - nukes: 40+
+   */
+  _schemaVersion: 30,
+  // what is the schema in the database right now?
+  _actualSchemaVersion: 0,
   _schema: {
     tables: {
 
@@ -801,10 +855,11 @@ var GlodaDatastore = {
         },
 
         // note: if reordering the columns, you need to change this file's
-        //  row-loading logic as well as msg_search.js's ranking usages.
+        //  row-loading logic, msg_search.js's ranking usages and also the
+        //  column saturations in nsGlodaRankerFunction
         fulltextColumns: [
-          ["subject", "TEXT"],
           ["body", "TEXT"],
+          ["subject", "TEXT"],
           ["attachmentNames", "TEXT"],
           ["author", "TEXT"],
           ["recipients", "TEXT"],
@@ -946,6 +1001,12 @@ var GlodaDatastore = {
   _prefBranch: null,
 
   /**
+   * The unique ID assigned to an index when it has been built. This value
+   * changes once the index has been rebuilt.
+   */
+  _datastoreID: null,
+
+  /**
    * Initialize logging, create the database if it doesn't exist, "upgrade" it
    *  if it does and it's not up-to-date, fill our authoritative folder uri/id
    *  mapping.
@@ -959,7 +1020,7 @@ var GlodaDatastore = {
     let prefService = Cc["@mozilla.org/preferences-service;1"].
                         getService(Ci.nsIPrefService);
     let branch = prefService.getBranch("mailnews.database.global.datastore.");
-    this._prefBranch = branch.QueryInterface(Ci.nsIPrefBranch2);
+    this._prefBranch = branch;
 
     // Not sure the weak reference really makes a difference given that we are a
     // GC root.
@@ -979,9 +1040,20 @@ var GlodaDatastore = {
 
     var dbConnection;
 
+    // Report about the size of the database through telemetry (if there's a
+    // database, naturally).
+    if (dbFile.exists()) {
+      try {
+        let h = Services.telemetry.getHistogramById("THUNDERBIRD_GLODA_SIZE_MB");
+        h.add(dbFile.fileSize/1048576);
+      } catch (e) {
+        this._log.warn("Couldn't report telemetry", e);
+      }
+    }
+
     // Create the file if it does not exist
     if (!dbFile.exists()) {
-      this._log.debug("Creating database because it does't exist.");
+      this._log.debug("Creating database because it doesn't exist.");
       dbConnection = this._createDB(dbService, dbFile);
     }
     // It does exist, but we (someday) might need to upgrade the schema
@@ -989,8 +1061,9 @@ var GlodaDatastore = {
       // (Exceptions may be thrown if the database is corrupt)
       try {
         dbConnection = dbService.openUnsharedDatabase(dbFile);
+        let cacheSize = this._determineCachePages(dbConnection);
         // see _createDB...
-        dbConnection.executeSimpleSQL("PRAGMA cache_size = 8192");
+        dbConnection.executeSimpleSQL("PRAGMA cache_size = "+cacheSize);
         dbConnection.executeSimpleSQL("PRAGMA synchronous = FULL");
 
         // Register custom tokenizer to index all language text
@@ -998,15 +1071,49 @@ var GlodaDatastore = {
                           getService(Ci.nsIFts3Tokenizer);
         tokenizer.registerTokenizer(dbConnection);
 
-        if (dbConnection.schemaVersion != this._schemaVersion) {
+        // -- database schema changes
+        let dbSchemaVersion = this._actualSchemaVersion =
+          dbConnection.schemaVersion;
+        // - database from the future!
+        if (dbSchemaVersion > this._schemaVersion) {
+          if (dbSchemaVersion >= DB_SCHEMA_ACCEPT_LEAVE_LOW &&
+              dbSchemaVersion <= DB_SCHEMA_ACCEPT_LEAVE_HIGH) {
+            this._log.debug("db from the future in acceptable range; leaving " +
+                            "version at: " + dbSchemaVersion);
+          }
+          else if (dbSchemaVersion >= DB_SCHEMA_ACCEPT_DOWNGRADE_LOW &&
+                   dbSchemaVersion <= DB_SCHEMA_ACCEPT_DOWNGRADE_HIGH) {
+            let newVersion = dbSchemaVersion - DB_SCHEMA_DOWNGRADE_DELTA;
+            this._log.debug("db from the future in downgrade range; setting " +
+                            "version to " + newVersion + " down from " +
+                            dbSchemaVersion);
+            dbConnection.schemaVersion = this._actualSchemaVersion = newVersion;
+          }
+          // too far from the future, nuke it.
+          else {
+            dbConnection = this._nukeMigration(dbService, dbFile,
+                                               dbConnection);
+          }
+        }
+        // - database from the past!  migrate it, possibly.
+        else if (dbSchemaVersion < this._schemaVersion) {
           this._log.debug("Need to migrate database.  (DB version: " +
-            dbConnection.schemaVersion + " desired version: " +
+            this._actualSchemaVersion + " desired version: " +
             this._schemaVersion);
           dbConnection = this._migrate(dbService, dbFile,
                                        dbConnection,
-                                       dbConnection.schemaVersion,
+                                       this._actualSchemaVersion,
                                        this._schemaVersion);
-          this._log.debug("Migration completed.");
+          this._log.debug("Migration call completed.");
+        }
+        // else: this database is juuust right.
+
+        // If we never had a datastore ID, make sure to create one now.
+        if (!this._prefBranch.prefHasUserValue("id")) {
+          this._datastoreID = this._generateDatastoreID();
+          this._prefBranch.setCharPref("id", this._datastoreID);
+        } else {
+          this._datastoreID = this._prefBranch.getCharPref("id");
         }
       }
       // Handle corrupt databases, other oddities
@@ -1018,8 +1125,8 @@ var GlodaDatastore = {
           dbConnection = this._createDB(dbService, dbFile);
         }
         else {
-          this._log.error("Unexpected error when trying to open the database:" +
-                          " " + ex);
+          this._log.error("Unexpected error when trying to open the database:",
+                          ex);
           throw ex;
         }
       }
@@ -1141,13 +1248,10 @@ var GlodaDatastore = {
       //  exist, and it may be advisable to attempt to track and cancel those.
       //  For simplicity we don't currently do this, and I expect this should
       //  not pose a major problem, but those are famous last words.
-      // Note: In the HAVE_TRUE_ASYNC case asyncClose does not spin a nested
-      //  event loop, but the thread manager shutdown code will spin the
-      //  async thread's event loop, so it nets out to be the same.
-      if (HAVE_TRUE_ASYNC)
-        this.asyncConnection.asyncClose();
-      else
-        this.asyncConnection.close();
+      // Note: asyncClose does not spin a nested event loop, but the thread
+      //  manager shutdown code will spin the async thread's event loop, so it
+      //  nets out to be the same.
+      this.asyncConnection.asyncClose();
     }
     catch (ex) {
       this._log.debug("Potentially expected exception during connection " +
@@ -1159,21 +1263,61 @@ var GlodaDatastore = {
   },
 
   /**
+   * Generates and returns a UUID.
+   *
+   * @return a UUID as a string, ex: "c4dd0159-9287-480f-a648-a4613e147fdb"
+   */
+  _generateDatastoreID: function gloda_ds_generateDatastoreID() {
+    let uuidGen = Cc["@mozilla.org/uuid-generator;1"]
+                    .getService(Ci.nsIUUIDGenerator);
+    let uuid = uuidGen.generateUUID().toString();
+    // We snip off the { and } from each end of the UUID.
+    return uuid.substring(1, uuid.length - 2);
+  },
+
+  _determineCachePages: function gloda_ds_determineCachePages(aDBConn) {
+    try {
+      // For the details of the computations, one should read
+      //  nsNavHistory::InitDB. We're slightly diverging from them in the sense
+      //  that we won't allow gloda to use insane amounts of memory cache, and
+      //  we start with 1% instead of 6% like them.
+      let pageStmt = aDBConn.createStatement("PRAGMA page_size");
+      pageStmt.executeStep();
+      let pageSize = pageStmt.row.page_size;
+      pageStmt.finalize();
+      let cachePermillage = this._prefBranch
+                            .getIntPref("cache_to_memory_permillage");
+      cachePermillage = Math.min(cachePermillage, 50);
+      cachePermillage = Math.max(cachePermillage, 0);
+      let physMem = IOUtils.getPhysicalMemorySize();
+      if (physMem == 0)
+        physMem = MEMSIZE_FALLBACK_BYTES;
+      let cacheSize = Math.round(physMem * cachePermillage / 1000);
+      cacheSize = Math.max(cacheSize, MIN_CACHE_SIZE);
+      cacheSize = Math.min(cacheSize, MAX_CACHE_SIZE);
+      let cachePages = Math.round(cacheSize / pageSize);
+      return cachePages;
+    } catch (ex) {
+      this._log.warn("Error determining cache size: " + ex);
+      // A little bit lower than on my personal machine, will result in ~40M.
+      return 1000;
+    }
+  },
+
+  /**
    * Create our database; basically a wrapper around _createSchema.
    */
   _createDB: function gloda_ds_createDB(aDBService, aDBFile) {
     var dbConnection = aDBService.openUnsharedDatabase(aDBFile);
-    // Explicitly choose a page size of 1024 which is the default.  According
-    //  to bug 401985 this is actually the optimal page size for Linux and OS X
-    //  (while there are alleged performance improvements with 4k pages on
-    //  windows).  Increasing the page size to 4096 increases the actual byte
-    //  turnover significantly for rollback journals than a page size of 1024,
-    //  and since the rollback journal has to be fsynced, that is undesirable.
-    dbConnection.executeSimpleSQL("PRAGMA page_size = 1024");
+    // We now follow the Firefox strategy for places, which mainly consists in
+    //  picking a default 32k page size, and then figuring out the amount of
+    //  cache accordingly. The default 32k come from mozilla/toolkit/storage,
+    //  but let's get it directly from sqlite in case they change it.
+    let cachePages = this._determineCachePages(dbConnection);
     // This is a maximum number of pages to be used.  If the database does not
     //  get this large, then the memory does not get used.
     // Do not forget to update the code in _init if you change this value.
-    dbConnection.executeSimpleSQL("PRAGMA cache_size = 8192");
+    dbConnection.executeSimpleSQL("PRAGMA cache_size = "+cachePages);
     // The mozStorage default is NORMAL which shaves off some fsyncs in the
     //  interest of performance.  Since everything we do after bootstrap is
     //  async, we do not care about the performance, but we really want the
@@ -1187,6 +1331,12 @@ var GlodaDatastore = {
     var tokenizer = Cc["@mozilla.org/messenger/fts3tokenizer;1"].
                       getService(Ci.nsIFts3Tokenizer);
     tokenizer.registerTokenizer(dbConnection);
+
+    // We're creating a new database, so let's generate a new ID for this
+    // version of the datastore. This way, indexers can know when the index
+    // has been rebuilt in the event that they need to rebuild dependent data.
+    this._datastoreID = this._generateDatastoreID();
+    this._prefBranch.setCharPref("id", this._datastoreID);
 
     dbConnection.beginTransaction();
     try {
@@ -1259,7 +1409,8 @@ var GlodaDatastore = {
       this._createTableSchema(aDBConnection, tableName, tableDef);
     }
 
-    aDBConnection.schemaVersion = this._schemaVersion;
+    aDBConnection.schemaVersion = this._actualSchemaVersion =
+      this._schemaVersion;
   },
 
   /**
@@ -1296,11 +1447,21 @@ var GlodaDatastore = {
     }
   },
 
+  _nukeMigration: function gloda_ds_nukeMigration(aDBService, aDBFile,
+                                                  aDBConnection) {
+    aDBConnection.close();
+    aDBFile.remove(false);
+    this._log.warn("Global database has been purged due to schema change.  " +
+                   "old version was " + this._actualSchemaVersion +
+                   ", new version is: " + this._schemaVersion);
+    return this._createDB(aDBService, aDBFile);
+  },
+
   /**
-   * Migrate the database _to the latest version_.  We only keep enough logic
-   *  around to get us to the recent version.  This code is not a time machine!
-   *  If we need to blow away the database to get to the most recent version,
-   *  then that's the sum total of the migration!
+   * Migrate the database _to the latest version_ from an older version.  We
+   *  only keep enough logic around to get us to the recent version.  This code
+   *  is not a time machine!  If we need to blow away the database to get to the
+   *  most recent version, then that's the sum total of the migration!
    */
   _migrate: function gloda_ds_migrate(aDBService, aDBFile, aDBConnection,
                                       aCurVersion, aNewVersion) {
@@ -1337,25 +1498,43 @@ var GlodaDatastore = {
     // version 21
     // - add the messagesAttribFastDeletion index we thought was already covered
     //  by an index we removed a while ago (migrate-able)
-    // (version 22-25 GAP being left for incremental, non-explodey change. jump
-    //  the schema to 26 if 22 is the next number but you have an explodey
-    //  change!)
+    // version 26
+    // - bump page size and also cache size (blow away)
+    // version 30
+    // - recover from bug 732372 that affected TB 11 beta / TB 12 alpha / TB 13
+    //    trunk.  The fix is bug 734507.  The revision bump happens
+    //    asynchronously. (migrate-able)
 
-    // If it's not version 20 or inside our safe bound-range of 25, nuke.
-    if (aCurVersion < 20 || aCurVersion > 25) {
-      aDBConnection.close();
-      aDBFile.remove(false);
-      this._log.warn("Global database has been purged due to schema change.");
-      return this._createDB(aDBService, aDBFile);
-    }
+    // nuke if prior to 26
+    if (aCurVersion < 26)
+      return this._nukeMigration(aDBService, aDBFile, aDBConnection);
 
-    this._log.warn("Global database performing schema update.");
-    // version 21
-    aDBConnection.executeSimpleSQL(
-      "CREATE INDEX messageAttribFastDeletion ON messageAttributes(messageID)");
+    // They must be desiring our "a.contact is undefined" fix!
+    // This fix runs asynchronously as the first indexing job the indexer ever
+    //  performs.  It is scheduled by the enabling of the message indexer and
+    //  it is the one that updates the schema version when done.
 
-    aDBConnection.schemaVersion = aNewVersion;
+    // return the same DB connection since we didn't create a new one or do
+    //  anything.
     return aDBConnection;
+  },
+
+  /**
+   * Asynchronously update the schema version; only for use by in-tree callers
+   *  who asynchronously perform migration work triggered by their initial
+   *  indexing sweep and who have properly updated the schema version in all
+   *  the appropriate locations in this file.
+   *
+   * This is done without doing anything about the current transaction state,
+   *  which is desired.
+   */
+  _updateSchemaVersion: function(newSchemaVersion) {
+    this._actualSchemaVersion = newSchemaVersion;
+    let stmt = this._createAsyncStatement(
+      // we need to concat; pragmas don't like "?1" binds
+      "PRAGMA user_version = " + newSchemaVersion, true);
+    stmt.executeAsync(this.trackAsync());
+    stmt.finalize();
   },
 
   _outstandingAsyncStatements: [],
@@ -1371,13 +1550,10 @@ var GlodaDatastore = {
                                                                 aWillFinalize) {
     let statement = null;
     try {
-      if (HAVE_TRUE_ASYNC)
-        statement = this.asyncConnection.createAsyncStatement(aSQLString);
-      else
-        statement = this.asyncConnection.createStatement(aSQLString);
+      statement = this.asyncConnection.createAsyncStatement(aSQLString);
     }
     catch(ex) {
-       throw("error creating async statement " + aSQLString + " - " +
+       throw new Error("error creating async statement " + aSQLString + " - " +
              this.asyncConnection.lastError + ": " +
              this.asyncConnection.lastErrorString + " - " + ex);
     }
@@ -1433,7 +1609,7 @@ var GlodaDatastore = {
       statement = this.syncConnection.createStatement(aSQLString);
     }
     catch(ex) {
-       throw("error creating sync statement " + aSQLString + " - " +
+       throw new Error("error creating sync statement " + aSQLString + " - " +
              this.syncConnection.lastError + ": " +
              this.syncConnection.lastErrorString + " - " + ex);
     }
@@ -1499,7 +1675,7 @@ var GlodaDatastore = {
         aStatement.bindDoubleParameter(aIndex, aVariant);
     }
     else
-      throw("Attempt to bind variant with unsupported type: " +
+      throw new Error("Attempt to bind variant with unsupported type: " +
             (typeof aVariant));
   },
 
@@ -1590,7 +1766,7 @@ var GlodaDatastore = {
           this._rollbackTransactionStatement.executeAsync(this.trackAsync());
       }
       catch (ex) {
-        this._log.error("Commit problem: " + ex);
+        this._log.error("Commit problem:", ex);
       }
       this._pendingPostCommitCallbacks = [];
     }
@@ -1608,7 +1784,7 @@ var GlodaDatastore = {
         this._rollbackTransactionStatement.executeAsync(this.trackAsync());
       }
       catch (ex) {
-        this._log.error("Rollback problem: " + ex);
+        this._log.error("Rollback problem:", ex);
       }
     }
   },
@@ -1638,7 +1814,7 @@ var GlodaDatastore = {
         GlodaDatastore._asyncCompleted();
       }
       catch (e) {
-        this._log.error("Exception in handleCompletion: " + e);
+        this._log.error("Exception in handleCompletion:", e);
       }
     }
   },
@@ -1857,8 +2033,8 @@ var GlodaDatastore = {
     let indexingPriority = GlodaFolder.prototype.kIndexingDefaultPriority;
     // Do not walk into trash/junk folders, unless the user is explicitly
     //  telling us to do so.
-    if (aFolder.flags & (Ci.nsMsgFolderFlags.Trash
-                         | Ci.nsMsgFolderFlags.Junk))
+    let specialFolderFlags = Ci.nsMsgFolderFlags.Trash | Ci.nsMsgFolderFlags.Junk;
+    if (aFolder.isSpecialFolder(specialFolderFlags, true))
       indexingPriority = aAllowSpecialFolderIndexing ?
                            GlodaFolder.prototype.kIndexingDefaultPriority :
                            GlodaFolder.prototype.kIndexingNeverPriority;
@@ -1950,7 +2126,7 @@ var GlodaDatastore = {
       return null;
     if (aFolderID in this._folderByID)
       return this._folderByID[aFolderID];
-    throw "Got impossible folder ID: " + aFolderID;
+    throw new Error("Got impossible folder ID: " + aFolderID);
   },
 
   /**
@@ -2320,7 +2496,7 @@ var GlodaDatastore = {
        ims.executeAsync(this.trackAsync());
     }
     catch(ex) {
-       throw("error executing statement... " +
+       throw new Error("error executing statement... " +
              this.asyncConnection.lastError + ": " +
              this.asyncConnection.lastErrorString + " - " + ex);
     }
@@ -2362,7 +2538,7 @@ var GlodaDatastore = {
       imts.executeAsync(this.trackAsync());
     }
     catch(ex) {
-      throw("error executing fulltext statement... " +
+      throw new Error("error executing fulltext statement... " +
             this.asyncConnection.lastError + ": " +
             this.asyncConnection.lastErrorString + " - " + ex);
     }
@@ -2474,7 +2650,7 @@ var GlodaDatastore = {
       umts.executeAsync(this.trackAsync());
     }
     catch(ex) {
-      throw("error executing fulltext statement... " +
+      throw new Error("error executing fulltext statement... " +
             this.asyncConnection.lastError + ": " +
             this.asyncConnection.lastErrorString + " - " + ex);
     }
@@ -2625,14 +2801,14 @@ var GlodaDatastore = {
       jsonText = aRow.getString(7);
     // only queryFromQuery queries will have these columns
     if (aRow.numEntries >= 14) {
-      if (aRow.getTypeOfIndex(9) == Ci.mozIStorageValueArray.VALUE_TYPE_NULL)
+      if (aRow.getTypeOfIndex(10) == Ci.mozIStorageValueArray.VALUE_TYPE_NULL)
         subject = undefined;
       else
-        subject = aRow.getString(9);
-      if (aRow.getTypeOfIndex(10) == Ci.mozIStorageValueArray.VALUE_TYPE_NULL)
+        subject = aRow.getString(10);
+      if (aRow.getTypeOfIndex(9) == Ci.mozIStorageValueArray.VALUE_TYPE_NULL)
         indexedBodyText = undefined;
       else
-        indexedBodyText = aRow.getString(10);
+        indexedBodyText = aRow.getString(9);
       if (aRow.getTypeOfIndex(11) == Ci.mozIStorageValueArray.VALUE_TYPE_NULL)
         attachmentNames = null;
       else {
@@ -2860,7 +3036,7 @@ var GlodaDatastore = {
       this._commitTransaction();
     }
     catch (ex) {
-      this._log.error("adjustMessageAttributes:" + ex.lineNumber + ": " + eX);
+      this._log.error("adjustMessageAttributes:", ex);
       this._rollbackTransaction();
       throw ex;
     }
@@ -2954,7 +3130,7 @@ var GlodaDatastore = {
       this._commitTransaction();
     }
     catch (ex) {
-      this._log.error("adjustAttributes:" + ex.lineNumber + ": " + eX);
+      this._log.error("adjustAttributes:", ex);
       this._rollbackTransaction();
       throw ex;
     }
@@ -3284,8 +3460,8 @@ var GlodaDatastore = {
           selects.push(select);
         }
         else
-          this._log.warning("Unable to translate constraint of type " +
-            constraintType + " on attribute bound as " + aAttrDef.boundName);
+          this._log.warn("Unable to translate constraint of type " +
+            constraintType + " on attribute bound as " + nounDef.name);
 
         lastConstraintWasSpecial = curConstraintIsSpecial;
       }
@@ -3511,7 +3687,7 @@ var GlodaDatastore = {
         if (attrib.singular) {
           // For consistency with the non-singular case, we don't assign the
           //  attribute if undefined is returned.
-          let deserialized = objectNounDef.fromJSON(jsonValue);
+          let deserialized = objectNounDef.fromJSON(jsonValue, aItem);
           if (deserialized !== undefined)
             aItem[attrib.boundName] = deserialized;
         }
@@ -3520,7 +3696,7 @@ var GlodaDatastore = {
           //  values. (TagNoun will do this if the tag is now dead.)
           let outList = [];
           for each (let [, val] in Iterator(jsonValue)) {
-            let deserialized = objectNounDef.fromJSON(val);
+            let deserialized = objectNounDef.fromJSON(val, aItem);
             if (deserialized !== undefined)
               outList.push(deserialized);
           }

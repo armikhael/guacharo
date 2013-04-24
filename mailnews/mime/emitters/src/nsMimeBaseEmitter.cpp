@@ -1,42 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *   Henrik Gemal <mozilla@gemal.dk>
- *   Tobias Koenig <tobias.koenig@credativ.de>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsCOMPtr.h"
 #include <stdio.h>
@@ -66,8 +31,9 @@
 #include "nsComponentManagerUtils.h"
 #include "nsMsgUtils.h"
 #include "nsTextFormatter.h"
+#include "mozilla/Services.h"
 
-static PRLogModuleInfo * gMimeEmitterLogModule = nsnull;
+static PRLogModuleInfo * gMimeEmitterLogModule = nullptr;
 
 #define   MIME_HEADER_URL      "chrome://messenger/locale/mimeheader.properties"
 #define   MIME_URL             "chrome://messenger/locale/mime.properties"
@@ -84,39 +50,38 @@ NS_INTERFACE_MAP_END
 nsMimeBaseEmitter::nsMimeBaseEmitter()
 {
   // Initialize data output vars...
-  mFirstHeaders = PR_TRUE;
+  mFirstHeaders = true;
 
-  mBufferMgr = nsnull;
+  mBufferMgr = nullptr;
   mTotalWritten = 0;
   mTotalRead = 0;
-  mInputStream = nsnull;
-  mOutStream = nsnull;
-  mOutListener = nsnull;
-  mChannel = nsnull;
+  mInputStream = nullptr;
+  mOutStream = nullptr;
+  mOutListener = nullptr;
 
   // Display output control vars...
-  mDocHeader = PR_FALSE;
-  m_stringBundle = nsnull;
-  mURL = nsnull;
+  mDocHeader = false;
+  m_stringBundle = nullptr;
+  mURL = nullptr;
   mHeaderDisplayType = nsMimeHeaderDisplayTypes::NormalHeaders;
 
   // Setup array for attachments
   mAttachCount = 0;
   mAttachArray = new nsVoidArray();
-  mCurrentAttachment = nsnull;
+  mCurrentAttachment = nullptr;
 
   // Header cache...
   mHeaderArray = new nsVoidArray();
 
   // Embedded Header Cache...
-  mEmbeddedHeaderArray = nsnull;
+  mEmbeddedHeaderArray = nullptr;
 
   // HTML Header Data...
 //  mHTMLHeaders = "";
 //  mCharset = "";
 
   // Init the body...
-  mBodyStarted = PR_FALSE;
+  mBodyStarted = false;
 //  mBody = "";
 
   // This is needed for conversion of I18N Strings...
@@ -133,13 +98,13 @@ nsMimeBaseEmitter::nsMimeBaseEmitter()
 
 nsMimeBaseEmitter::~nsMimeBaseEmitter(void)
 {
-  PRInt32 i;
+  int32_t i;
 
   // Delete the buffer manager...
   if (mBufferMgr)
   {
     delete mBufferMgr;
-    mBufferMgr = nsnull;
+    mBufferMgr = nullptr;
   }
 
   // Clean up the attachment array structures...
@@ -162,10 +127,10 @@ nsMimeBaseEmitter::~nsMimeBaseEmitter(void)
 
   // Cleanup allocated header arrays...
   CleanupHeaderArray(mHeaderArray);
-  mHeaderArray = nsnull;
+  mHeaderArray = nullptr;
 
   CleanupHeaderArray(mEmbeddedHeaderArray);
-  mEmbeddedHeaderArray = nsnull;
+  mEmbeddedHeaderArray = nullptr;
 }
 
 NS_IMETHODIMP nsMimeBaseEmitter::GetInterface(const nsIID & aIID, void * *aInstancePtr)
@@ -180,7 +145,7 @@ nsMimeBaseEmitter::CleanupHeaderArray(nsVoidArray *aArray)
   if (!aArray)
     return;
 
-  for (PRInt32 i=0; i<aArray->Count(); i++)
+  for (int32_t i=0; i<aArray->Count(); i++)
   {
     headerInfoType *headerInfo = (headerInfoType *)aArray->ElementAt(i);
     if (!headerInfo)
@@ -194,7 +159,7 @@ nsMimeBaseEmitter::CleanupHeaderArray(nsVoidArray *aArray)
   delete aArray;
 }
 
-static PRInt32 MapHeaderNameToID(const char *header)
+static int32_t MapHeaderNameToID(const char *header)
 {
   // emitter passes UPPERCASE for header names
   if (!strcmp(header, "DATE"))
@@ -245,8 +210,8 @@ nsMimeBaseEmitter::MimeGetStringByName(const char *aHeaderName)
     static const char propertyURL[] = MIME_HEADER_URL;
 
     nsCOMPtr<nsIStringBundleService> sBundleService =
-             do_GetService(NS_STRINGBUNDLE_CONTRACTID, &res);
-    if (NS_SUCCEEDED(res) && (nsnull != sBundleService))
+      mozilla::services::GetStringBundleService();
+    if (sBundleService)
     {
       res = sBundleService->CreateBundle(propertyURL, getter_AddRefs(m_headerStringBundle));
     }
@@ -260,7 +225,7 @@ nsMimeBaseEmitter::MimeGetStringByName(const char *aHeaderName)
                                                   getter_Copies(val));
 
     if (NS_FAILED(res))
-      return nsnull;
+      return nullptr;
 
     // Here we need to return a new copy of the string
     // This returns a UTF-8 string so the caller needs to perform a conversion
@@ -270,12 +235,12 @@ nsMimeBaseEmitter::MimeGetStringByName(const char *aHeaderName)
   }
   else
   {
-    return nsnull;
+    return nullptr;
   }
 }
 
 char *
-nsMimeBaseEmitter::MimeGetStringByID(PRInt32 aID)
+nsMimeBaseEmitter::MimeGetStringByID(int32_t aID)
 {
   nsresult res = NS_OK;
 
@@ -284,8 +249,8 @@ nsMimeBaseEmitter::MimeGetStringByID(PRInt32 aID)
     static const char propertyURL[] = MIME_URL;
 
     nsCOMPtr<nsIStringBundleService> sBundleService =
-                            do_GetService(NS_STRINGBUNDLE_CONTRACTID, &res);
-    if (NS_SUCCEEDED(res))
+      mozilla::services::GetStringBundleService();
+    if (sBundleService)
       res = sBundleService->CreateBundle(propertyURL, getter_AddRefs(m_stringBundle));
   }
 
@@ -296,12 +261,12 @@ nsMimeBaseEmitter::MimeGetStringByID(PRInt32 aID)
     res = m_stringBundle->GetStringFromID(aID, getter_Copies(val));
 
     if (NS_FAILED(res))
-      return nsnull;
+      return nullptr;
 
     return ToNewUTF8String(val);
   }
   else
-    return nsnull;
+    return nullptr;
 }
 
 //
@@ -313,14 +278,14 @@ nsMimeBaseEmitter::MimeGetStringByID(PRInt32 aID)
 char *
 nsMimeBaseEmitter::LocalizeHeaderName(const char *aHeaderName, const char *aDefaultName)
 {
-  char *retVal = nsnull;
+  char *retVal = nullptr;
 
   // prefer to use translated strings if not for quoting
   if (mFormat != nsMimeOutput::nsMimeMessageQuoting &&
       mFormat != nsMimeOutput::nsMimeMessageBodyQuoting)
   {
     // map name to id and get the translated string
-    PRInt32 id = MapHeaderNameToID(aHeaderName);
+    int32_t id = MapHeaderNameToID(aHeaderName);
     if (id > 0)
       retVal = MimeGetStringByID(id);
   }
@@ -350,17 +315,14 @@ nsMimeBaseEmitter::SetPipe(nsIInputStream * aInputStream, nsIOutputStream *outSt
 // anything to the stream since these may be image data
 // output streams, etc...
 NS_IMETHODIMP
-nsMimeBaseEmitter::Initialize(nsIURI *url, nsIChannel * aChannel, PRInt32 aFormat)
+nsMimeBaseEmitter::Initialize(nsIURI *url, nsIChannel * aChannel, int32_t aFormat)
 {
   // set the url
   mURL = url;
   mChannel = aChannel;
 
   // Create rebuffering object
-  if (mBufferMgr)
-  {
-    delete mBufferMgr;
-  }
+  delete mBufferMgr;
   mBufferMgr = new MimeRebuffer();
 
   // Counters for output stream
@@ -381,11 +343,9 @@ nsMimeBaseEmitter::SetOutputListener(nsIStreamListener *listener)
 NS_IMETHODIMP
 nsMimeBaseEmitter::GetOutputListener(nsIStreamListener **listener)
 {
-  if (listener)
-  {
-    *listener = mOutListener;
-    NS_IF_ADDREF(*listener);
-  }
+  NS_ENSURE_ARG_POINTER(listener);
+
+  NS_IF_ADDREF(*listener = mOutListener);
   return NS_OK;
 }
 
@@ -395,7 +355,7 @@ nsresult
 nsMimeBaseEmitter::StartAttachment(const nsACString &name,
                                    const char *contentType,
                                    const char *url,
-                                   PRBool aIsExternalAttachment)
+                                   bool aIsExternalAttachment)
 {
   // Ok, now we will setup the attachment info
   mCurrentAttachment = (attachmentInfoType *) PR_NEWZAP(attachmentInfoType);
@@ -419,7 +379,7 @@ nsMimeBaseEmitter::EndAttachment()
   if ( (mCurrentAttachment) && (mAttachArray) )
   {
     mAttachArray->AppendElement(mCurrentAttachment);
-    mCurrentAttachment = nsnull;
+    mCurrentAttachment = nullptr;
   }
 
   return NS_OK;
@@ -440,7 +400,9 @@ nsMimeBaseEmitter::AddAttachmentField(const char *field, const char *value)
 NS_IMETHODIMP
 nsMimeBaseEmitter::UtilityWrite(const char *buf)
 {
-  PRUint32    written;
+  NS_ENSURE_ARG_POINTER(buf);
+
+  uint32_t    written;
   Write(nsDependentCString(buf), &written);
   return NS_OK;
 }
@@ -448,7 +410,7 @@ nsMimeBaseEmitter::UtilityWrite(const char *buf)
 NS_IMETHODIMP
 nsMimeBaseEmitter::UtilityWrite(const nsACString &buf)
 {
-  PRUint32    written;
+  uint32_t    written;
   Write(buf, &written);
   return NS_OK;
 }
@@ -456,25 +418,27 @@ nsMimeBaseEmitter::UtilityWrite(const nsACString &buf)
 NS_IMETHODIMP
 nsMimeBaseEmitter::UtilityWriteCRLF(const char *buf)
 {
-  PRUint32    written;
+  NS_ENSURE_ARG_POINTER(buf);
+
+  uint32_t    written;
   Write(nsDependentCString(buf), &written);
   Write(NS_LITERAL_CSTRING(CRLF), &written);
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsMimeBaseEmitter::Write(const nsACString &buf, PRUint32 *amountWritten)
+nsMimeBaseEmitter::Write(const nsACString &buf, uint32_t *amountWritten)
 {
   unsigned int        written = 0;
   nsresult rv = NS_OK;
-  PRUint32            needToWrite;
+  uint32_t            needToWrite;
 
 #ifdef DEBUG_BenB
   // If you want to see libmime output...
   printf("%s", buf);
 #endif
 
-  PR_LOG(gMimeEmitterLogModule, PR_LOG_ALWAYS, (PromiseFlatCString(buf).get()));
+  PR_LOG(gMimeEmitterLogModule, PR_LOG_ALWAYS, ("%s", PromiseFlatCString(buf).get()));
   //
   // Make sure that the buffer we are "pushing" into has enough room
   // for the write operation. If not, we have to buffer, return, and get
@@ -517,17 +481,18 @@ nsMimeBaseEmitter::Write(const nsACString &buf, PRUint32 *amountWritten)
 }
 
 nsresult
-nsMimeBaseEmitter::WriteHelper(const char *buf, PRUint32 count, PRUint32 *countWritten)
+nsMimeBaseEmitter::WriteHelper(const char *buf, uint32_t count, uint32_t *countWritten)
 {
-  nsresult rv;
+  NS_ENSURE_TRUE(mOutStream, NS_ERROR_NOT_INITIALIZED);
 
-  rv = mOutStream->Write(buf, count, countWritten);
+  nsresult rv = mOutStream->Write(buf, count, countWritten);
   if (rv == NS_BASE_STREAM_WOULD_BLOCK) {
     // pipe is full, push contents of pipe to listener...
-    PRUint32 avail;
+    uint64_t avail;
     rv = mInputStream->Available(&avail);
     if (NS_SUCCEEDED(rv) && avail) {
-      mOutListener->OnDataAvailable(mChannel, mURL, mInputStream, 0, avail);
+      mOutListener->OnDataAvailable(mChannel, mURL, mInputStream, 0, 
+                                    NS_MIN(avail, PR_UINT32_MAX));
 
       // try writing again...
       rv = mOutStream->Write(buf, count, countWritten);
@@ -542,12 +507,12 @@ nsMimeBaseEmitter::WriteHelper(const char *buf, PRUint32 count, PRUint32 *countW
 const char *
 nsMimeBaseEmitter::GetHeaderValue(const char  *aHeaderName)
 {
-  PRInt32     i;
-  char        *retVal = nsnull;
+  int32_t     i;
+  char        *retVal = nullptr;
   nsVoidArray *array = mDocHeader? mHeaderArray : mEmbeddedHeaderArray;
 
   if (!array)
-    return nsnull;
+    return nullptr;
 
   for (i = 0; i < array->Count(); i++)
   {
@@ -574,9 +539,11 @@ nsMimeBaseEmitter::GetHeaderValue(const char  *aHeaderName)
 // important for forward and reply operations
 //
 NS_IMETHODIMP
-nsMimeBaseEmitter::StartHeader(PRBool rootMailHeader, PRBool headerOnly, const char *msgID,
+nsMimeBaseEmitter::StartHeader(bool rootMailHeader, bool headerOnly, const char *msgID,
                                const char *outCharset)
 {
+  NS_ENSURE_ARG_POINTER(outCharset);
+
   mDocHeader = rootMailHeader;
 
   // If this is not the mail messages header, then we need to create
@@ -588,8 +555,7 @@ nsMimeBaseEmitter::StartHeader(PRBool rootMailHeader, PRBool headerOnly, const c
       CleanupHeaderArray(mEmbeddedHeaderArray);
 
     mEmbeddedHeaderArray = new nsVoidArray();
-    if (!mEmbeddedHeaderArray)
-      return NS_ERROR_OUT_OF_MEMORY;
+    NS_ENSURE_TRUE(mEmbeddedHeaderArray, NS_ERROR_OUT_OF_MEMORY);
   }
 
   // If the main doc, check on updated character set
@@ -685,7 +651,7 @@ nsMimeBaseEmitter::AddAllHeaders(const nsACString &allheaders)
     if (msgurl)
     {
         nsCOMPtr<nsIMimeHeaders> mimeHeaders = do_CreateInstance(NS_IMIMEHEADERS_CONTRACTID, &rv);
-        NS_ENSURE_SUCCESS(rv,rv);
+        NS_ENSURE_SUCCESS(rv, rv);
         mimeHeaders->Initialize(allheaders.BeginReading(), allheaders.Length());
         msgurl->SetMimeHeaders(mimeHeaders);
     }
@@ -701,7 +667,7 @@ nsMimeBaseEmitter::AddAllHeaders(const nsACString &allheaders)
 nsresult
 nsMimeBaseEmitter::GenerateDateString(const char * dateString,
                                       nsACString &formattedDate,
-                                      PRBool showDateForToday)
+                                      bool showDateForToday)
 {
   nsresult rv = NS_OK;
 
@@ -716,8 +682,8 @@ nsMimeBaseEmitter::GenerateDateString(const char * dateString,
    * We also evaluate the pref original_date which was introduced
    * as makeshift in bug 118899.
    */
-  PRBool displaySenderTimezone = PR_FALSE;
-  PRBool displayOriginalDate = PR_FALSE;
+  bool displaySenderTimezone = false;
+  bool displayOriginalDate = false;
 
   nsCOMPtr<nsIPrefService> prefs = do_GetService(NS_PREFSERVICE_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
@@ -730,10 +696,12 @@ nsMimeBaseEmitter::GenerateDateString(const char * dateString,
   dateFormatPrefs->GetBoolPref("original_date", &displayOriginalDate);
   // migrate old pref to date_senders_timezone
   if (displayOriginalDate && !displaySenderTimezone)
-    dateFormatPrefs->SetBoolPref("date_senders_timezone", PR_TRUE);
+    dateFormatPrefs->SetBoolPref("date_senders_timezone", true);
 
   PRExplodedTime explodedMsgTime;
-  rv = PR_ParseTimeStringToExplodedTime(dateString, PR_FALSE, &explodedMsgTime);
+  // XXX Casting PRStatus to nsresult
+  rv = static_cast<nsresult>(
+    PR_ParseTimeStringToExplodedTime(dateString, false, &explodedMsgTime));
   /**
    * To determine the date format to use, comparison of current and message
    * time has to be made. If displaying in local time, both timestamps have
@@ -767,7 +735,7 @@ nsMimeBaseEmitter::GenerateDateString(const char * dateString,
   nsAutoString formattedDateString;
   if (NS_SUCCEEDED(rv))
   {
-    rv = mDateFormatter->FormatPRExplodedTime(nsnull /* nsILocale* locale */,
+    rv = mDateFormatter->FormatPRExplodedTime(nullptr /* nsILocale* locale */,
                                               dateFormat,
                                               kTimeFormatNoSeconds,
                                               &explodedCompTime,
@@ -778,7 +746,7 @@ nsMimeBaseEmitter::GenerateDateString(const char * dateString,
       if (displaySenderTimezone)
       {
         // offset of local time from UTC in minutes
-        PRInt32 senderoffset = (explodedMsgTime.tm_params.tp_gmt_offset +
+        int32_t senderoffset = (explodedMsgTime.tm_params.tp_gmt_offset +
                                 explodedMsgTime.tm_params.tp_dst_offset) / 60;
         // append offset to date string
         PRUnichar *tzstring =
@@ -799,9 +767,9 @@ nsMimeBaseEmitter::GenerateDateString(const char * dateString,
 char*
 nsMimeBaseEmitter::GetLocalizedDateString(const char * dateString)
 {
-  char *i18nValue = nsnull;
+  char *i18nValue = nullptr;
 
-  PRBool displayOriginalDate = PR_FALSE;
+  bool displayOriginalDate = false;
   nsCOMPtr<nsIPrefBranch> prefBranch(do_GetService(NS_PREFSERVICE_CONTRACTID));
 
   if (prefBranch)
@@ -826,8 +794,8 @@ nsMimeBaseEmitter::GetLocalizedDateString(const char * dateString)
 nsresult
 nsMimeBaseEmitter::WriteHeaderFieldHTML(const char *field, const char *value)
 {
-  char *newValue = nsnull;
-  char *i18nValue = nsnull;
+  char *newValue = nullptr;
+  char *i18nValue = nullptr;
 
   if ( (!field) || (!value) )
     return NS_OK;
@@ -854,7 +822,7 @@ nsMimeBaseEmitter::WriteHeaderFieldHTML(const char *field, const char *value)
 
     // we're going to need a converter to convert
     nsresult rv = mUnicodeConverter->DecodeMimeHeaderToCharPtr(
-      i18nValue, nsnull, PR_FALSE, PR_TRUE, getter_Copies(tValue));
+      i18nValue, nullptr, false, true, getter_Copies(tValue));
     if (NS_SUCCEEDED(rv) && !tValue.IsEmpty())
       newValue = MsgEscapeHTML(tValue.get());
     else
@@ -931,7 +899,7 @@ nsMimeBaseEmitter::WriteHeaderFieldHTMLPrefix(const nsACString &name)
     mHTMLHeaders.Append("</fieldset>");
   }
 
-  mFirstHeaders = PR_FALSE;
+  mFirstHeaders = false;
   return NS_OK;
 }
 
@@ -1022,7 +990,7 @@ nsMimeBaseEmitter::DumpToCC()
 nsresult
 nsMimeBaseEmitter::DumpRestOfHeaders()
 {
-  PRInt32     i;
+  int32_t     i;
   nsVoidArray *array = mDocHeader? mHeaderArray : mEmbeddedHeaderArray;
 
   mHTMLHeaders.Append("<table border=0 cellspacing=0 cellpadding=0 width=\"100%\" class=\"header-part3\">");
@@ -1077,7 +1045,7 @@ nsMimeBaseEmitter::Complete()
   // If we are here and still have data to write, we should try
   // to flush it...if we try and fail, we should probably return
   // an error!
-  PRUint32      written;
+  uint32_t      written;
 
   nsresult rv = NS_OK;
   while ( NS_SUCCEEDED(rv) && (mBufferMgr) && (mBufferMgr->GetSize() > 0))
@@ -1085,13 +1053,13 @@ nsMimeBaseEmitter::Complete()
 
   if (mOutListener)
   {
-    PRUint32 bytesInStream = 0;
+    uint64_t bytesInStream = 0;
     nsresult rv2 = mInputStream->Available(&bytesInStream);
     NS_ASSERTION(NS_SUCCEEDED(rv2), "Available failed");
     if (bytesInStream)
     {
       nsCOMPtr<nsIRequest> request = do_QueryInterface(mChannel);
-      rv2 = mOutListener->OnDataAvailable(request, mURL, mInputStream, 0, bytesInStream);
+      mOutListener->OnDataAvailable(request, mURL, mInputStream, 0, NS_MIN(bytesInStream, PR_UINT32_MAX));
     }
   }
 
@@ -1111,13 +1079,13 @@ nsMimeBaseEmitter::EndHeader(const nsACString &name)
 
 // body handling routines
 NS_IMETHODIMP
-nsMimeBaseEmitter::StartBody(PRBool bodyOnly, const char *msgID, const char *outCharset)
+nsMimeBaseEmitter::StartBody(bool bodyOnly, const char *msgID, const char *outCharset)
 {
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsMimeBaseEmitter::WriteBody(const nsACString &buf, PRUint32 *amountWritten)
+nsMimeBaseEmitter::WriteBody(const nsACString &buf, uint32_t *amountWritten)
 {
   return NS_OK;
 }

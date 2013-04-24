@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode:nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jim Mathies <jmathies@mozilla.com>.
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsParentalControlsServiceWin.h"
 #include "nsString.h"
@@ -74,9 +41,9 @@ MyEventRegister gEventRegister = NULL;
 MyEventUnregister gEventUnregister = NULL;
 
 nsParentalControlsServiceWin::nsParentalControlsServiceWin() :
-  mPC(nsnull)
-, mEnabled(PR_FALSE)
-, mProvider(nsnull)
+  mPC(nullptr)
+, mEnabled(false)
+, mProvider(NULL)
 {
   HRESULT hr;
   CoInitialize(NULL);
@@ -89,7 +56,7 @@ nsParentalControlsServiceWin::nsParentalControlsServiceWin() :
   if (FAILED(mPC->GetUserSettings(NULL, getter_AddRefs(wpcs)))) {
     // Not available on this os or not enabled for this user account or we're running as admin
     mPC->Release();
-    mPC = nsnull;
+    mPC = nullptr;
     return;
   }
 
@@ -104,7 +71,7 @@ nsParentalControlsServiceWin::nsParentalControlsServiceWin() :
       gEventRegister = (MyEventRegister) GetProcAddress(gAdvAPIDLLInst, "EventRegister");
       gEventUnregister = (MyEventUnregister) GetProcAddress(gAdvAPIDLLInst, "EventUnregister");
     }
-    mEnabled = PR_TRUE;
+    mEnabled = true;
   }
 }
 
@@ -123,20 +90,20 @@ nsParentalControlsServiceWin::~nsParentalControlsServiceWin()
 //------------------------------------------------------------------------
 
 NS_IMETHODIMP
-nsParentalControlsServiceWin::GetParentalControlsEnabled(PRBool *aResult)
+nsParentalControlsServiceWin::GetParentalControlsEnabled(bool *aResult)
 {
-  *aResult = PR_FALSE;
+  *aResult = false;
 
   if (mEnabled)
-    *aResult = PR_TRUE;
+    *aResult = true;
 
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsParentalControlsServiceWin::GetBlockFileDownloadsEnabled(PRBool *aResult)
+nsParentalControlsServiceWin::GetBlockFileDownloadsEnabled(bool *aResult)
 {
-  *aResult = PR_FALSE;
+  *aResult = false;
 
   if (!mEnabled)
     return NS_ERROR_NOT_AVAILABLE;
@@ -146,16 +113,16 @@ nsParentalControlsServiceWin::GetBlockFileDownloadsEnabled(PRBool *aResult)
     DWORD settings = 0;
     wpcws->GetSettings(&settings);
     if (settings == WPCFLAG_WEB_SETTING_DOWNLOADSBLOCKED)
-      *aResult = PR_TRUE;
+      *aResult = true;
   }
 
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsParentalControlsServiceWin::GetLoggingEnabled(PRBool *aResult)
+nsParentalControlsServiceWin::GetLoggingEnabled(bool *aResult)
 {
-  *aResult = PR_FALSE;
+  *aResult = false;
 
   if (!mEnabled)
     return NS_ERROR_NOT_AVAILABLE;
@@ -166,7 +133,7 @@ nsParentalControlsServiceWin::GetLoggingEnabled(PRBool *aResult)
     BOOL enabled = FALSE;
     wpcs->IsLoggingRequired(&enabled);
     if (enabled)
-      *aResult = PR_TRUE;
+      *aResult = true;
   }
 
   return NS_OK;
@@ -174,7 +141,7 @@ nsParentalControlsServiceWin::GetLoggingEnabled(PRBool *aResult)
 
 // Post a log event to the system
 NS_IMETHODIMP
-nsParentalControlsServiceWin::Log(PRInt16 aEntryType, PRBool blocked, nsIURI *aSource, nsIFile *aTarget)
+nsParentalControlsServiceWin::Log(int16_t aEntryType, bool blocked, nsIURI *aSource, nsIFile *aTarget)
 {
   if (!mEnabled)
     return NS_ERROR_NOT_AVAILABLE;
@@ -182,7 +149,7 @@ nsParentalControlsServiceWin::Log(PRInt16 aEntryType, PRBool blocked, nsIURI *aS
   NS_ENSURE_ARG_POINTER(aSource);
 
   // Confirm we should be logging
-  PRBool enabled;
+  bool enabled;
   GetLoggingEnabled(&enabled);
   if (!enabled)
     return NS_ERROR_NOT_AVAILABLE;
@@ -211,9 +178,9 @@ nsParentalControlsServiceWin::Log(PRInt16 aEntryType, PRBool blocked, nsIURI *aS
 
 // Override a single URI
 NS_IMETHODIMP
-nsParentalControlsServiceWin::RequestURIOverride(nsIURI *aTarget, nsIInterfaceRequestor *aWindowContext, PRBool *_retval)
+nsParentalControlsServiceWin::RequestURIOverride(nsIURI *aTarget, nsIInterfaceRequestor *aWindowContext, bool *_retval)
 {
-  *_retval = PR_FALSE;
+  *_retval = false;
 
   if (!mEnabled)
     return NS_ERROR_NOT_AVAILABLE;
@@ -225,34 +192,38 @@ nsParentalControlsServiceWin::RequestURIOverride(nsIURI *aTarget, nsIInterfaceRe
   if (spec.IsEmpty())
     return NS_ERROR_INVALID_ARG;
 
-  HWND hWnd = nsnull;
+  HWND hWnd = nullptr;
   // If we have a native window, use its handle instead
   nsCOMPtr<nsIWidget> widget(do_GetInterface(aWindowContext));
   if (widget)
     hWnd = (HWND)widget->GetNativeData(NS_NATIVE_WINDOW);
-  if (hWnd == nsnull)
+  if (hWnd == nullptr)
     hWnd = GetDesktopWindow();
 
+  BOOL ret;
   nsRefPtr<IWPCWebSettings> wpcws;
-  if (SUCCEEDED(mPC->GetWebSettings(NULL, getter_AddRefs(wpcws))))
+  if (SUCCEEDED(mPC->GetWebSettings(NULL, getter_AddRefs(wpcws)))) {
     wpcws->RequestURLOverride(hWnd, NS_ConvertUTF8toUTF16(spec).get(),
-                              0, NULL, _retval);
+                              0, NULL, &ret);
+    *_retval = ret;
+  }
+
 
   return NS_OK;
 }
 
 // Override a web page
 NS_IMETHODIMP
-nsParentalControlsServiceWin::RequestURIOverrides(nsIArray *aTargets, nsIInterfaceRequestor *aWindowContext, PRBool *_retval)
+nsParentalControlsServiceWin::RequestURIOverrides(nsIArray *aTargets, nsIInterfaceRequestor *aWindowContext, bool *_retval)
 {
-  *_retval = PR_FALSE;
+  *_retval = false;
 
   if (!mEnabled)
     return NS_ERROR_NOT_AVAILABLE;
 
   NS_ENSURE_ARG_POINTER(aTargets);
 
-  PRUint32 arrayLength = 0;
+  uint32_t arrayLength = 0;
   aTargets->GetLength(&arrayLength);
   if (!arrayLength)
     return NS_ERROR_INVALID_ARG;
@@ -264,12 +235,12 @@ nsParentalControlsServiceWin::RequestURIOverrides(nsIArray *aTargets, nsIInterfa
     return RequestURIOverride(uri, aWindowContext, _retval);
   }
 
-  HWND hWnd = nsnull;
+  HWND hWnd = nullptr;
   // If we have a native window, use its handle instead
   nsCOMPtr<nsIWidget> widget(do_GetInterface(aWindowContext));
   if (widget)
     hWnd = (HWND)widget->GetNativeData(NS_NATIVE_WINDOW);
-  if (hWnd == nsnull)
+  if (hWnd == nullptr)
     hWnd = GetDesktopWindow();
 
   // The first entry should be the root uri
@@ -283,12 +254,12 @@ nsParentalControlsServiceWin::RequestURIOverrides(nsIArray *aTargets, nsIInterfa
     return NS_ERROR_INVALID_ARG;
 
   // Allocate an array of sub uri
-  PRInt32 count = arrayLength - 1;
+  int32_t count = arrayLength - 1;
   nsAutoArrayPtr<LPCWSTR> arrUrls(new LPCWSTR[count]);
   if (!arrUrls)
     return NS_ERROR_OUT_OF_MEMORY;
 
-  PRUint32 uriIdx = 0, idx;
+  uint32_t uriIdx = 0, idx;
   for (idx = 1; idx < arrayLength; idx++)
   {
     nsCOMPtr<nsIURI> uri = do_QueryElementAt(aTargets, idx);
@@ -308,11 +279,14 @@ nsParentalControlsServiceWin::RequestURIOverrides(nsIArray *aTargets, nsIInterfa
 
   if (!uriIdx)
     return NS_ERROR_INVALID_ARG;
- 
+
+  BOOL ret; 
   nsRefPtr<IWPCWebSettings> wpcws;
-  if (SUCCEEDED(mPC->GetWebSettings(NULL, getter_AddRefs(wpcws))))
+  if (SUCCEEDED(mPC->GetWebSettings(NULL, getter_AddRefs(wpcws)))) {
     wpcws->RequestURLOverride(hWnd, NS_ConvertUTF8toUTF16(rootSpec).get(),
-                             uriIdx, (LPCWSTR*)arrUrls.get(), _retval);
+                             uriIdx, (LPCWSTR*)arrUrls.get(), &ret);
+   *_retval = ret;
+  }
 
   // Free up the allocated strings in our array
   for (idx = 0; idx < uriIdx; idx++)
@@ -325,7 +299,7 @@ nsParentalControlsServiceWin::RequestURIOverrides(nsIArray *aTargets, nsIInterfa
 
 // Sends a file download event to the Vista Event Log 
 void
-nsParentalControlsServiceWin::LogFileDownload(PRBool blocked, nsIURI *aSource, nsIFile *aTarget)
+nsParentalControlsServiceWin::LogFileDownload(bool blocked, nsIURI *aSource, nsIFile *aTarget)
 {
   nsCAutoString curi;
 

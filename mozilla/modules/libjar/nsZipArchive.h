@@ -1,47 +1,12 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Daniel Veditz <dveditz@netscape.com>
- *   Samir Gehani <sgehani@netscape.com>
- *   Mitch Stoltz <mstoltz@netscape.com>
- *   Taras Glek <tglek@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsZipArchive_h_
 #define nsZipArchive_h_
+
+#include "mozilla/Attributes.h"
 
 #define ZIP_TABSIZE   256
 #define ZIP_BUFLEN    (4*1024)      /* Used as output buffer when deflating items to a file */
@@ -54,8 +19,9 @@
 #include "zlib.h"
 #include "zipstruct.h"
 #include "nsAutoPtr.h"
-#include "nsILocalFile.h"
+#include "nsIFile.h"
 #include "mozilla/FileUtils.h"
+#include "mozilla/FileLocation.h"
 
 #if defined(XP_WIN) && defined(_MSC_VER)
 #define MOZ_WIN_MEM_TRY_BEGIN __try {
@@ -100,16 +66,16 @@ class nsZipItem
 public:
   const char* Name() { return ((const char*)central) + ZIPCENTRAL_SIZE; }
 
-  PRUint32 LocalOffset();
-  PRUint32 Size();
-  PRUint32 RealSize();
-  PRUint32 CRC32();
-  PRUint16 Date();
-  PRUint16 Time();
-  PRUint16 Compression();
+  uint32_t LocalOffset();
+  uint32_t Size();
+  uint32_t RealSize();
+  uint32_t CRC32();
+  uint16_t Date();
+  uint16_t Time();
+  uint16_t Compression();
   bool     IsDirectory();
-  PRUint16 Mode();
-  const PRUint8* GetExtraField(PRUint16 aTag, PRUint16 *aBlockSize);
+  uint16_t Mode();
+  const uint8_t* GetExtraField(uint16_t aTag, uint16_t *aBlockSize);
   PRTime   LastModTime();
 
 #ifdef XP_UNIX
@@ -118,7 +84,7 @@ public:
 
   nsZipItem*         next;
   const ZipCentral*  central;
-  PRUint16           nameLength;
+  uint16_t           nameLength;
   bool               isSynthetic;
 };
 
@@ -207,7 +173,7 @@ public:
    *                      will be set to NULL.
    * @return  status code
    */
-  PRInt32 FindInit(const char * aPattern, nsZipFind** aFind);
+  nsresult FindInit(const char * aPattern, nsZipFind** aFind);
 
   /*
    * Gets an undependent handle to the mapped file.
@@ -219,13 +185,31 @@ public:
    * @param   aItem       Pointer to nsZipItem
    * reutrns null when zip file is corrupt.
    */
-  const PRUint8* GetData(nsZipItem* aItem);
+  const uint8_t* GetData(nsZipItem* aItem);
+
+  bool GetComment(nsACString &aComment);
+
+  /**
+   * Gets the amount of memory taken up by the archive's mapping.
+   * @return the size
+   */
+  int64_t SizeOfMapping();
+
+  /*
+   * Refcounting
+   */
+  NS_METHOD_(nsrefcnt) AddRef(void);
+  NS_METHOD_(nsrefcnt) Release(void);
 
 private:
   //--- private members ---
+  nsrefcnt      mRefCnt; /* ref count */
 
   nsZipItem*    mFiles[ZIP_TABSIZE];
   PLArenaPool   mArena;
+
+  const char*   mCommentPtr;
+  uint16_t      mCommentLen;
 
   // Whether we synthesized the directory entries
   bool          mBuiltSynthetics;
@@ -236,14 +220,15 @@ private:
   // logging handle
   mozilla::AutoFDClose mLog;
 
-  //--- private methods ---
-  
-  nsZipArchive& operator=(const nsZipArchive& rhs); // prevent assignments
-  nsZipArchive(const nsZipArchive& rhs);            // prevent copies
 
+private:
+  //--- private methods ---
   nsZipItem*        CreateZipItem();
   nsresult          BuildFileList();
   nsresult          BuildSynthetics();
+
+  nsZipArchive& operator=(const nsZipArchive& rhs) MOZ_DELETE;
+  nsZipArchive(const nsZipArchive& rhs) MOZ_DELETE;
 };
 
 /** 
@@ -254,21 +239,20 @@ private:
 class nsZipFind
 {
 public:
-  nsZipFind(nsZipArchive* aZip, char* aPattern, PRBool regExp);
+  nsZipFind(nsZipArchive* aZip, char* aPattern, bool regExp);
   ~nsZipFind();
 
-  nsresult      FindNext(const char** aResult, PRUint16* aNameLen);
+  nsresult      FindNext(const char** aResult, uint16_t* aNameLen);
 
 private:
-  nsZipArchive* mArchive;
+  nsRefPtr<nsZipArchive> mArchive;
   char*         mPattern;
   nsZipItem*    mItem;
-  PRUint16      mSlot;
-  PRPackedBool  mRegExp;
+  uint16_t      mSlot;
+  bool          mRegExp;
 
-  //-- prevent copies and assignments
-  nsZipFind& operator=(const nsZipFind& rhs);
-  nsZipFind(const nsZipFind& rhs);
+  nsZipFind& operator=(const nsZipFind& rhs) MOZ_DELETE;
+  nsZipFind(const nsZipFind& rhs) MOZ_DELETE;
 };
 
 /** 
@@ -286,7 +270,7 @@ public:
    * @param   aBufSize    Buffer size
    * @param   doCRC       When set to true Read() will check crc
    */
-  nsZipCursor(nsZipItem *aItem, nsZipArchive *aZip, PRUint8* aBuf = NULL, PRUint32 aBufSize = 0, bool doCRC = false);
+  nsZipCursor(nsZipItem *aItem, nsZipArchive *aZip, uint8_t* aBuf = NULL, uint32_t aBufSize = 0, bool doCRC = false);
 
   ~nsZipCursor();
 
@@ -297,14 +281,29 @@ public:
    * @param   aBytesRead  Outparam for number of bytes read.
    * @return  data read or NULL if item is corrupted.
    */
-  PRUint8* Read(PRUint32 *aBytesRead);
+  uint8_t* Read(uint32_t *aBytesRead) {
+    return ReadOrCopy(aBytesRead, false);
+  }
+
+  /**
+   * Performs a copy. It always uses aBuf(passed in constructor).
+   *
+   * @param   aBytesRead  Outparam for number of bytes read.
+   * @return  data read or NULL if item is corrupted.
+   */
+  uint8_t* Copy(uint32_t *aBytesRead) {
+    return ReadOrCopy(aBytesRead, true);
+  }
 
 private:
+  /* Actual implementation for both Read and Copy above */
+  uint8_t* ReadOrCopy(uint32_t *aBytesRead, bool aCopy);
+
   nsZipItem *mItem; 
-  PRUint8  *mBuf; 
-  PRUint32  mBufSize; 
+  uint8_t  *mBuf; 
+  uint32_t  mBufSize; 
   z_stream  mZs;
-  PRUint32 mCRC;
+  uint32_t mCRC;
   bool mDoCRC;
 };
 
@@ -325,15 +324,15 @@ public:
    */
   nsZipItemPtr_base(nsZipArchive *aZip, const char *aEntryName, bool doCRC);
 
-  PRUint32 Length() const {
+  uint32_t Length() const {
     return mReadlen;
   }
 
 protected:
   nsRefPtr<nsZipHandle> mZipHandle;
-  nsAutoArrayPtr<PRUint8> mAutoBuf;
-  PRUint8 *mReturnBuf;
-  PRUint32 mReadlen;
+  nsAutoArrayPtr<uint8_t> mAutoBuf;
+  uint8_t *mReturnBuf;
+  uint32_t mReadlen;
 };
 
 template <class T>
@@ -374,25 +373,28 @@ public:
 
 class nsZipHandle {
 friend class nsZipArchive;
+friend class mozilla::FileLocation;
 public:
-  static nsresult Init(nsILocalFile *file, nsZipHandle **ret NS_OUTPARAM);
+  static nsresult Init(nsIFile *file, nsZipHandle **ret);
   static nsresult Init(nsZipArchive *zip, const char *entry,
-                       nsZipHandle **ret NS_OUTPARAM);
+                       nsZipHandle **ret);
 
   NS_METHOD_(nsrefcnt) AddRef(void);
   NS_METHOD_(nsrefcnt) Release(void);
 
+  int64_t SizeOfMapping();
+
 protected:
-  const PRUint8 * mFileData; /* pointer to mmaped file */
-  PRUint32        mLen;      /* length of file and memory mapped area */
-  nsCOMPtr<nsILocalFile> mFile; /* source file if any, for logging */
+  const uint8_t * mFileData; /* pointer to mmaped file */
+  uint32_t        mLen;      /* length of file and memory mapped area */
+  mozilla::FileLocation mFile; /* source file if any, for logging */
 
 private:
   nsZipHandle();
   ~nsZipHandle();
 
   PRFileMap *                       mMap;    /* nspr datastructure for mmap */
-  nsAutoPtr<nsZipItemPtr<PRUint8> > mBuf;
+  nsAutoPtr<nsZipItemPtr<uint8_t> > mBuf;
   nsrefcnt                          mRefCnt; /* ref count */
 };
 

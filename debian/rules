@@ -1,20 +1,20 @@
 #!/usr/bin/make -f
 
-export BUILD_OFFICIAL=1
+export MOZILLA_OFFICIAL=1
 export INSTALL_SDK=1
 export MAIL_PKG_SHARED=1
 
-DEB_MOZ_NAME=guacharo
+DEB_MOZ_NAME=icedove
 DEB_MOZ_APPLICATION=$(DEB_MOZ_NAME)
 MOZ_APPLICATION=mail
 XUL_VERSION=1.9.1
 MAIN_LDFLAGS := -Wl,--as-needed
 
-ifeq ($(DEB_MOZ_NAME),guacharo)
+ifeq ($(DEB_MOZ_NAME),icedove)
   DEBIAN_DIST := org.debian
   EXTRA_BRANDING_CONFIGURE_FLAGS = --with-branding=${MOZ_APPLICATION}/branding/$(DEB_MOZ_NAME)/
-  TB_ICON = debian/guacharo.xpm
-  DEB_MOZ_NAME_FIRST_UPPER=Guacharo
+  TB_ICON = debian/icedove.xpm
+  DEB_MOZ_NAME_FIRST_UPPER=Icedove
 else
   DEBIAN_DIST := com.ubuntu
   TB_ICON = $(DEB_SRCDIR)/other-licenses/branding/thunderbird/content/icon64.png
@@ -55,9 +55,10 @@ DEB_AUTO_UPDATE_DEBIAN_CONTROL=0
 DEB_MOZ_EXTENSIONS=default
 DEB_DBG_PACKAGES = $(DEB_MOZ_NAME)-dbg
 
-DEB_DH_SHLIBDEPS_ARGS_ALL=-l $(DEB_DESTDIR)usr/lib/$(DEB_MOZ_APPLICATION) -Xlibmozgnome -Xlibnkgnomevfs -Xlibdbusservice
+DEB_DH_SHLIBDEPS_ARGS_ALL=-l $(DEB_DESTDIR)usr/lib/$(DEB_MOZ_APPLICATION) -Xlibmozgnome -Xlibdbusservice
 
 DEB_DH_MAKESHLIBS_ARGS_ALL=-Xlibsystem-pref.so
+DEB_DH_BUILDDEB_ARGS ?= -u-Zxz
 
 # DEB_CONFIGURE_SCRIPT_ENV = \
 # 	MOZ_OBJDIR=@TOPSRCDIR@/$(DEB_BUILDDIR) \
@@ -78,6 +79,7 @@ DEB_CONFIGURE_USER_FLAGS= \
 	--with-system-libevent \
 	--with-system-nspr \
 	--with-system-nss \
+	--with-system-ply \
 	--disable-javaxpcom \
 	--disable-crashreporter \
 	--disable-elf-dynstr-gc \
@@ -88,13 +90,14 @@ DEB_CONFIGURE_USER_FLAGS= \
 	--disable-tests \
 	--disable-mochitest \
 	--disable-updater \
+	--disable-gnomevfs \
 	--enable-pango \
 	--enable-xft \
 	--enable-xinerama \
 	--enable-svg \
 	--enable-svg-renderer=cairo \
-	--enable-gnomevfs \
 	--enable-gnomeui \
+	--enable-gio \
 	--enable-canvas \
 	--enable-crypto \
 	--enable-shared-js \
@@ -102,6 +105,7 @@ DEB_CONFIGURE_USER_FLAGS= \
 	--enable-system-sqlite \
 	--enable-system-ffi \
 	--enable-system-hunspell \
+	--enable-readline \
 	--with-distribution-id=$(DEBIAN_DIST) \
 	--build=$(DEB_BUILD_GNU_TYPE) \
 	--host=$(DEB_HOST_GNU_TYPE) \
@@ -113,6 +117,17 @@ ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
 else
 	DEB_CONFIGURE_USER_FLAGS += --enable-optimize
 endif
+
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+	DEB_CONFIGURE_USER_FLAGS += --enable-debug
+endif
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	DEB_PARALLEL_JOBS ?= $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+else
+	DEB_PARALLEL_JOBS += $(shell getconf _NPROCESSORS_ONLN)
+endif
+MAKEFLAGS += -j$(DEB_PARALLEL_JOBS)
 
 ifneq (,$(filter kfreebsd-% hurd-%,$(DEB_BUILD_ARCH)))
 	DEB_CONFIGURE_USER_FLAGS += --disable-necko-wifi
@@ -128,6 +143,10 @@ endif
 
 ifeq ($(DEB_BUILD_ARCH),armel)
 	DEB_CONFIGURE_USER_FLAGS += --disable-methodjit
+endif
+
+ifeq ($(DEB_BUILD_ARCH),sparc)
+	DEB_CONFIGURE_USER_FLAGS += --enable-optimize=-O1
 endif
 
 subst_files = \
@@ -172,7 +191,7 @@ configure/$(DEB_MOZ_APPLICATION)::
 			if (value != var[2]) { print $$1, "triggered", var[1] "=" value,"instead of",$$2; error=1 } \
 		} \
 	} \
-	END { if (error) { exit 1 }}' debian/guacharo.configopts
+	END { if (error) { exit 1 }}' debian/icedove.configopts
 
 makebuilddir/$(DEB_MOZ_APPLICATION):: debian/stamp-autotools-files-moz
 debian/stamp-autotools-files-moz:
@@ -187,32 +206,32 @@ debian/stamp-autotools-files-moz:
 install/$(DEB_MOZ_APPLICATION)::
 	install -d -m 755 debian/tmp/usr/share/pixmaps
 	install -m 644 $(TB_ICON) debian/tmp/usr/share/pixmaps/$(DEB_MOZ_APPLICATION).xpm
-ifeq ($(DEB_MOZ_NAME),guacharo)
+ifeq ($(DEB_MOZ_NAME),icedove)
 # Install icons
-	install -d -m 755 debian/guacharo/usr/share/icons/hicolor/16x16/apps
-	install -m 644 debian/app-icons/guacharo16.png \
-		debian/guacharo/usr/share/icons/hicolor/16x16/apps/guacharo.png
-	install -d -m 755 debian/guacharo/usr/share/icons/hicolor/32x32/apps
-	install -m 644 debian/app-icons/guacharo32.png \
-		debian/guacharo/usr/share/icons/hicolor/32x32/apps/guacharo.png
-	install -d -m 755 debian/guacharo/usr/share/icons/hicolor/64x64/apps
-	install -m 644 debian/app-icons/guacharo64.png \
-		debian/guacharo/usr/share/icons/hicolor/64x64/apps/guacharo.png
-	install -d -m 755 debian/guacharo/usr/share/icons/hicolor/128x128/apps
-	install -m 644 debian/app-icons/guacharo128.png \
-		debian/guacharo/usr/share/icons/hicolor/128x128/apps/guacharo.png
-	install -d -m 755 debian/guacharo/usr/share/icons/hicolor/scalable/apps
-	install -m 644 debian/app-icons/guacharobig.svg \
-		debian/guacharo/usr/share/icons/hicolor/scalable/apps/guacharo.svg
+	install -d -m 755 debian/icedove/usr/share/icons/hicolor/16x16/apps
+	install -m 644 debian/app-icons/icedove16.png \
+		debian/icedove/usr/share/icons/hicolor/16x16/apps/icedove.png
+	install -d -m 755 debian/icedove/usr/share/icons/hicolor/32x32/apps
+	install -m 644 debian/app-icons/icedove32.png \
+		debian/icedove/usr/share/icons/hicolor/32x32/apps/icedove.png
+	install -d -m 755 debian/icedove/usr/share/icons/hicolor/64x64/apps
+	install -m 644 debian/app-icons/icedove64.png \
+		debian/icedove/usr/share/icons/hicolor/64x64/apps/icedove.png
+	install -d -m 755 debian/icedove/usr/share/icons/hicolor/128x128/apps
+	install -m 644 debian/app-icons/icedove128.png \
+		debian/icedove/usr/share/icons/hicolor/128x128/apps/icedove.png
+	install -d -m 755 debian/icedove/usr/share/icons/hicolor/scalable/apps
+	install -m 644 debian/app-icons/icedovebig.svg \
+		debian/icedove/usr/share/icons/hicolor/scalable/apps/icedove.svg
 endif
 # remove duplicate .so files in dev package
-	rm debian/tmp/usr/lib/guacharo-devel/sdk/lib/libmozalloc.so
-	rm debian/tmp/usr/lib/guacharo-devel/sdk/lib/libmozjs.so
-	rm debian/tmp/usr/lib/guacharo-devel/sdk/lib/libxpcom.so
-	rm debian/tmp/usr/lib/guacharo-devel/sdk/lib/libxul.so
+	rm debian/tmp/usr/lib/icedove-devel/sdk/lib/libmozalloc.so
+	rm debian/tmp/usr/lib/icedove-devel/sdk/lib/libmozjs.so
+	rm debian/tmp/usr/lib/icedove-devel/sdk/lib/libxpcom.so
+	rm debian/tmp/usr/lib/icedove-devel/sdk/lib/libxul.so
 
 install/$(DEB_MOZ_APPLICATION)-dev::
-	find debian/tmp/usr/share/idl/guacharo -type f -name '*.idl' -exec chmod a-x {} \;
+	find debian/tmp/usr/share/idl/icedove -type f -name '*.idl' -exec chmod a-x {} \;
 
 binary-install/$(DEB_MOZ_APPLICATION)::
 	touch debian/$(DEB_MOZ_NAME)$(DEBIAN_TB_DIR)/.autoreg
@@ -228,7 +247,7 @@ common-install-arch::
 		sh -c "set -e; cd debian/calendar-timezones/usr/lib/calendar-timezones/; unzip $(CURDIR)/mozilla/dist/xpi-stage/calendar-timezones.xpi"
 
 binary-predeb/$(DEB_MOZ_APPLICATION)::
-	LD_LIBRARY_PATH=$(DEB_DESTDIR)usr/lib/$(DEB_MOZ_APPLICATION) dpkg-shlibdeps -Tdebian/$(DEB_MOZ_APPLICATION).substvars -dDepends -pgnome $(foreach lib,dbusservice mozgnome nkgnomevfs,debian/$(DEB_MOZ_APPLICATION)/usr/lib/$(DEB_MOZ_APPLICATION)/components/lib$(lib).so)
+	LD_LIBRARY_PATH=$(DEB_DESTDIR)usr/lib/$(DEB_MOZ_APPLICATION) dpkg-shlibdeps -Tdebian/$(DEB_MOZ_APPLICATION).substvars -dDepends -pgnome $(foreach lib,dbusservice mozgnome,debian/$(DEB_MOZ_APPLICATION)/usr/lib/$(DEB_MOZ_APPLICATION)/components/lib$(lib).so)
 
 clean::
-	rm -f debian/stamp-autotools-files-moz debian/stamp-guacharo-branding
+	rm -f debian/stamp-autotools-files-moz debian/stamp-icedove-branding

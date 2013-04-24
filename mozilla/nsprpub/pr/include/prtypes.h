@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Netscape Portable Runtime (NSPR).
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
 ** File:                prtypes.h
@@ -237,6 +205,36 @@
 
 PR_BEGIN_EXTERN_C
 
+/*
+** Starting in NSPR 4.9.5, NSPR's exact-width integer types should match
+** the exact-width integer types defined in <stdint.h>. This allows sloppy
+** code to use PRInt{N} and int{N}_t interchangeably.
+**
+** The 8-bit and 16-bit integer types can only be defined using char and
+** short. All platforms define the 32-bit integer types using int. So only
+** the 64-bit integer types could be defined differently.
+**
+** NSPR's original strategy was to use the "shortest" 64-bit integer type:
+** if long is 64-bit, then prefer it over long long. This strategy is also
+** used by Linux/glibc, FreeBSD, and NetBSD.
+**
+** Other platforms use a different strategy: simply define the 64-bit
+** integer types using long long. We define the PR_ALTERNATE_INT64_TYPEDEF
+** macro on these platforms. Note that PR_ALTERNATE_INT64_TYPEDEF is for
+** internal use by NSPR headers only. Do not define or test this macro in
+** your code.
+**
+** NOTE: NSPR can't use <stdint.h> because C99 requires C++ code to define
+** __STDC_LIMIT_MACROS and __STDC_CONSTANT_MACROS to make all the macros
+** defined in <stdint.h> available. This strange requirement is gone in
+** C11. When most platforms ignore this C99 requirement, NSPR will be able
+** to use <stdint.h>. A patch to do that is in NSPR bug 634793.
+*/
+
+#if defined(__APPLE__) || defined(__ANDROID__) || defined(__OpenBSD__)
+#define PR_ALTERNATE_INT64_TYPEDEF
+#endif
+
 /************************************************************************
 ** TYPES:       PRUint8
 **              PRInt8
@@ -343,24 +341,46 @@ typedef long PRInt32;
 **      architectures and even different compilers have varying support for
 **      64 bit values. The only guaranteed portability requires the use of
 **      the LL_ macros (see prlong.h).
+**
+** MACROS:      PR_INT64
+**              PR_UINT64
+** DESCRIPTION:
+**  The PR_INT64 and PR_UINT64 macros provide a portable way for
+**      specifying 64-bit integer constants. They can only be used if
+**      PRInt64 and PRUint64 are defined as compiler-supported 64-bit
+**      integer types (i.e., if HAVE_LONG_LONG is defined, which is true
+**      for all the supported compilers topday). If PRInt64 and PRUint64
+**      are defined as structs, the LL_INIT macro defined in prlong.h has
+**      to be used.
+**
+** MACROS:      PR_INT64_MAX
+**              PR_INT64_MIN
+**              PR_UINT64_MAX
+** DESCRIPTION:
+**  The maximum and minimum values of a PRInt64 or PRUint64.
 ************************************************************************/
 #ifdef HAVE_LONG_LONG
 /* Keep this in sync with prlong.h. */
-/*
- * On 64-bit Mac OS X, uint64 needs to be defined as unsigned long long to
- * match uint64_t, otherwise our uint64 typedef conflicts with the uint64
- * typedef in cssmconfig.h, which CoreServices.h includes indirectly.
- */
-#if PR_BYTES_PER_LONG == 8 && !defined(__APPLE__)
+#if PR_BYTES_PER_LONG == 8 && !defined(PR_ALTERNATE_INT64_TYPEDEF)
 typedef long PRInt64;
 typedef unsigned long PRUint64;
+#define PR_INT64(x)  x ## L
+#define PR_UINT64(x) x ## UL
 #elif defined(WIN32) && !defined(__GNUC__)
 typedef __int64  PRInt64;
 typedef unsigned __int64 PRUint64;
+#define PR_INT64(x)  x ## i64
+#define PR_UINT64(x) x ## ui64
 #else
 typedef long long PRInt64;
 typedef unsigned long long PRUint64;
+#define PR_INT64(x)  x ## LL
+#define PR_UINT64(x) x ## ULL
 #endif /* PR_BYTES_PER_LONG == 8 */
+
+#define PR_INT64_MAX PR_INT64(0x7fffffffffffffff)
+#define PR_INT64_MIN (-PR_INT64_MAX - 1)
+#define PR_UINT64_MAX PR_UINT64(-1)
 #else  /* !HAVE_LONG_LONG */
 typedef struct {
 #ifdef IS_LITTLE_ENDIAN
@@ -370,6 +390,11 @@ typedef struct {
 #endif
 } PRInt64;
 typedef PRInt64 PRUint64;
+
+#define PR_INT64_MAX (PRInt64){0x7fffffff, 0xffffffff}
+#define PR_INT64_MIN (PRInt64){0xffffffff, 0xffffffff}
+#define PR_UINT64_MAX (PRUint64){0xffffffff, 0xffffffff}
+
 #endif /* !HAVE_LONG_LONG */
 
 /************************************************************************

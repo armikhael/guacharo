@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 
 #ifndef NSRECT_H
@@ -81,13 +49,144 @@ struct NS_GFX nsRect :
   }
 #endif
 
+  // A version of Inflate that caps the values to the nscoord range.
+  // x & y is capped at the minimum value nscoord_MIN and
+  // width & height is capped at the maximum value nscoord_MAX.
+  void SaturatingInflate(const nsMargin& aMargin)
+  {
+#ifdef NS_COORD_IS_FLOAT
+    Inflate(aMargin);
+#else
+    int64_t nx = int64_t(x) - aMargin.left;
+    int64_t w = int64_t(width) + int64_t(aMargin.left) + aMargin.right;
+    if (NS_UNLIKELY(w > nscoord_MAX)) {
+      NS_WARNING("Overflowed nscoord_MAX in conversion to nscoord width");
+      int64_t xdiff = nx - nscoord_MIN / 2;
+      if (xdiff < 0) {
+        // Clamp huge negative x to nscoord_MIN / 2 and try again.
+        nx = nscoord_MIN / 2;
+        w += xdiff;
+      }
+      if (NS_UNLIKELY(w > nscoord_MAX)) {
+        w = nscoord_MAX;
+      }
+    }
+    width = nscoord(w);
+    if (NS_UNLIKELY(nx < nscoord_MIN)) {
+      NS_WARNING("Underflowed nscoord_MIN in conversion to nscoord x");
+      nx = nscoord_MIN;
+    }
+    x = nscoord(nx);
+
+    int64_t ny = int64_t(y) - aMargin.top;
+    int64_t h = int64_t(height) + int64_t(aMargin.top) + aMargin.bottom;
+    if (NS_UNLIKELY(h > nscoord_MAX)) {
+      NS_WARNING("Overflowed nscoord_MAX in conversion to nscoord height");
+      int64_t ydiff = ny - nscoord_MIN / 2;
+      if (ydiff < 0) {
+        // Clamp huge negative y to nscoord_MIN / 2 and try again.
+        ny = nscoord_MIN / 2;
+        h += ydiff;
+      }
+      if (NS_UNLIKELY(h > nscoord_MAX)) {
+        h = nscoord_MAX;
+      }
+    }
+    height = nscoord(h);
+    if (NS_UNLIKELY(ny < nscoord_MIN)) {
+      NS_WARNING("Underflowed nscoord_MIN in conversion to nscoord y");
+      ny = nscoord_MIN;
+    }
+    y = nscoord(ny);
+#endif
+  }
+
+  // We have saturating versions of all the Union methods. These avoid
+  // overflowing nscoord values in the 'width' and 'height' fields by
+  // clamping the width and height values to nscoord_MAX if necessary.
+
+  nsRect SaturatingUnion(const nsRect& aRect) const
+  {
+    if (IsEmpty()) {
+      return aRect;
+    } else if (aRect.IsEmpty()) {
+      return *static_cast<const nsRect*>(this);
+    } else {
+      return SaturatingUnionEdges(aRect);
+    }
+  }
+
+  nsRect SaturatingUnionEdges(const nsRect& aRect) const
+  {
+#ifdef NS_COORD_IS_FLOAT
+    return UnionEdges(aRect);
+#else
+    nsRect result;
+    result.x = NS_MIN(aRect.x, x);
+    int64_t w = NS_MAX(int64_t(aRect.x) + aRect.width, int64_t(x) + width) - result.x;
+    if (NS_UNLIKELY(w > nscoord_MAX)) {
+      NS_WARNING("Overflowed nscoord_MAX in conversion to nscoord width");
+      // Clamp huge negative x to nscoord_MIN / 2 and try again.
+      result.x = NS_MAX(result.x, nscoord_MIN / 2);
+      w = NS_MAX(int64_t(aRect.x) + aRect.width, int64_t(x) + width) - result.x;
+      if (NS_UNLIKELY(w > nscoord_MAX)) {
+        w = nscoord_MAX;
+      }
+    }
+    result.width = nscoord(w);
+
+    result.y = NS_MIN(aRect.y, y);
+    int64_t h = NS_MAX(int64_t(aRect.y) + aRect.height, int64_t(y) + height) - result.y;
+    if (NS_UNLIKELY(h > nscoord_MAX)) {
+      NS_WARNING("Overflowed nscoord_MAX in conversion to nscoord height");
+      // Clamp huge negative y to nscoord_MIN / 2 and try again.
+      result.y = NS_MAX(result.y, nscoord_MIN / 2);
+      h = NS_MAX(int64_t(aRect.y) + aRect.height, int64_t(y) + height) - result.y;
+      if (NS_UNLIKELY(h > nscoord_MAX)) {
+        h = nscoord_MAX;
+      }
+    }
+    result.height = nscoord(h);
+    return result;
+#endif
+  }
+
+#ifndef NS_COORD_IS_FLOAT
+  // Make all nsRect Union methods be saturating.
+  nsRect UnionEdges(const nsRect& aRect) const
+  {
+    return SaturatingUnionEdges(aRect);
+  }
+  void UnionRectEdges(const nsRect& aRect1, const nsRect& aRect2)
+  {
+    *this = aRect1.UnionEdges(aRect2);
+  }
+  nsRect Union(const nsRect& aRect) const
+  {
+    return SaturatingUnion(aRect);
+  }
+  void UnionRect(const nsRect& aRect1, const nsRect& aRect2)
+  {
+    *this = aRect1.Union(aRect2);
+  }
+#endif
+
+  void SaturatingUnionRect(const nsRect& aRect1, const nsRect& aRect2)
+  {
+    *this = aRect1.SaturatingUnion(aRect2);
+  }
+  void SaturatingUnionRectEdges(const nsRect& aRect1, const nsRect& aRect2)
+  {
+    *this = aRect1.SaturatingUnionEdges(aRect2);
+  }
+
   // Converts this rect from aFromAPP, an appunits per pixel ratio, to aToAPP.
   // In the RoundOut version we make the rect the smallest rect containing the
   // unrounded result. In the RoundIn version we make the rect the largest rect
   // contained in the unrounded result.
   // Note: this can turn an empty rectangle into a non-empty rectangle
-  inline nsRect ConvertAppUnitsRoundOut(PRInt32 aFromAPP, PRInt32 aToAPP) const;
-  inline nsRect ConvertAppUnitsRoundIn(PRInt32 aFromAPP, PRInt32 aToAPP) const;
+  inline nsRect ConvertAppUnitsRoundOut(int32_t aFromAPP, int32_t aToAPP) const;
+  inline nsRect ConvertAppUnitsRoundIn(int32_t aFromAPP, int32_t aToAPP) const;
 
   inline nsIntRect ScaleToNearestPixels(float aXScale, float aYScale,
                                         nscoord aAppUnitsPerPixel) const;
@@ -100,11 +199,17 @@ struct NS_GFX nsRect :
   inline nsIntRect ScaleToInsidePixels(float aXScale, float aYScale,
                                        nscoord aAppUnitsPerPixel) const;
   inline nsIntRect ToInsidePixels(nscoord aAppUnitsPerPixel) const;
+
+  // This is here only to keep IPDL-generated code happy. DO NOT USE.
+  bool operator==(const nsRect& aRect) const
+  {
+    return IsEqualEdges(aRect);
+  }
 };
 
 struct NS_GFX nsIntRect :
-  public mozilla::gfx::BaseRect<PRInt32, nsIntRect, nsIntPoint, nsIntSize, nsIntMargin> {
-  typedef mozilla::gfx::BaseRect<PRInt32, nsIntRect, nsIntPoint, nsIntSize, nsIntMargin> Super;
+  public mozilla::gfx::BaseRect<int32_t, nsIntRect, nsIntPoint, nsIntSize, nsIntMargin> {
+  typedef mozilla::gfx::BaseRect<int32_t, nsIntRect, nsIntPoint, nsIntSize, nsIntMargin> Super;
 
   // Constructors
   nsIntRect() : Super()
@@ -116,7 +221,7 @@ struct NS_GFX nsIntRect :
   nsIntRect(const nsIntPoint& aOrigin, const nsIntSize &aSize) : Super(aOrigin, aSize)
   {
   }
-  nsIntRect(PRInt32 aX, PRInt32 aY, PRInt32 aWidth, PRInt32 aHeight) :
+  nsIntRect(int32_t aX, int32_t aY, int32_t aWidth, int32_t aHeight) :
       Super(aX, aY, aWidth, aHeight)
   {
   }
@@ -142,7 +247,7 @@ protected:
  */
 
 inline nsRect
-nsRect::ConvertAppUnitsRoundOut(PRInt32 aFromAPP, PRInt32 aToAPP) const
+nsRect::ConvertAppUnitsRoundOut(int32_t aFromAPP, int32_t aToAPP) const
 {
   if (aFromAPP == aToAPP) {
     return *this;
@@ -160,7 +265,7 @@ nsRect::ConvertAppUnitsRoundOut(PRInt32 aFromAPP, PRInt32 aToAPP) const
 }
 
 inline nsRect
-nsRect::ConvertAppUnitsRoundIn(PRInt32 aFromAPP, PRInt32 aToAPP) const
+nsRect::ConvertAppUnitsRoundIn(int32_t aFromAPP, int32_t aToAPP) const
 {
   if (aFromAPP == aToAPP) {
     return *this;

@@ -1,42 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <tchar.h>
 #include "nscore.h"
+#include "nsOE5File.h"
 #include "wabobject.h"
 
 enum {
@@ -76,23 +45,23 @@ static const SizedSPropTagArray(iemailMax, ptaEmail)=
 };
 
 typedef struct {
-  PRBool    multiLine;
+  bool      multiLine;
   ULONG    tag;
   char *    pLDIF;
 } AddrImportField;
 
 #define  kExtraUserFields  10
 AddrImportField    extraUserFields[kExtraUserFields] = {
-  {PR_TRUE, PR_COMMENT, "description:"},
-  {PR_FALSE, PR_BUSINESS_TELEPHONE_NUMBER, "telephonenumber:"},
-  {PR_FALSE, PR_HOME_TELEPHONE_NUMBER, "homephone:"},
-  {PR_FALSE, PR_COMPANY_NAME, "o:"},
-  {PR_FALSE, PR_TITLE, "title:"},
-  {PR_FALSE, PR_BUSINESS_FAX_NUMBER, "facsimiletelephonenumber:"},
-  {PR_FALSE, PR_LOCALITY, "locality:"},
-  {PR_FALSE, PR_STATE_OR_PROVINCE, "st:"},
-  {PR_TRUE, PR_STREET_ADDRESS, "streetaddress:"},
-  {PR_FALSE, PR_POSTAL_CODE, "postalcode:"}
+  {true, PR_COMMENT, "description:"},
+  {false, PR_BUSINESS_TELEPHONE_NUMBER, "telephonenumber:"},
+  {false, PR_HOME_TELEPHONE_NUMBER, "homephone:"},
+  {false, PR_COMPANY_NAME, "o:"},
+  {false, PR_TITLE, "title:"},
+  {false, PR_BUSINESS_FAX_NUMBER, "facsimiletelephonenumber:"},
+  {false, PR_LOCALITY, "locality:"},
+  {false, PR_STATE_OR_PROVINCE, "st:"},
+  {true, PR_STREET_ADDRESS, "streetaddress:"},
+  {false, PR_POSTAL_CODE, "postalcode:"}
 };
 
 #define  kWhitespace  " \t\b\r\n"
@@ -110,13 +79,13 @@ AddrImportField    extraUserFields[kExtraUserFields] = {
 // pszFileName - FileName of WAB file to open
 //          if no file name is specified, opens the default
 //
-CWAB::CWAB(nsILocalFile *file)
+CWAB::CWAB(nsIFile *file)
 {
     // Here we load the WAB Object and initialize it
     m_pUniBuff = NULL;
   m_uniBuffLen = 0;
 
-  m_bInitialized = PR_FALSE;
+  m_bInitialized = false;
   m_lpAdrBook = NULL;
   m_lpWABObject = NULL;
   m_hinstWAB = NULL;
@@ -134,7 +103,7 @@ CWAB::CWAB(nsILocalFile *file)
         // WAB_DLL_PATH_KEY is defined in wabapi.h
         //
         if (ERROR_SUCCESS == RegOpenKeyEx(HKEY_LOCAL_MACHINE, WAB_DLL_PATH_KEY, 0, KEY_READ, &hKey)) {
-            RegQueryValueEx( hKey, "", NULL, &dwType, (LPBYTE) szWABDllPath, &cbData);
+            RegQueryValueEx(hKey, "", NULL, &dwType, (LPBYTE) szWABDllPath, &cbData);
             if (dwType == REG_EXPAND_SZ) {
                 // Expand the environment variables
                 DWORD bufferSize = ExpandEnvironmentStrings(szWABDllPath, NULL, 0);
@@ -166,7 +135,7 @@ CWAB::CWAB(nsILocalFile *file)
         // if the Registry came up blank, we do a loadlibrary on the wab32.dll
         // WAB_DLL_NAME is defined in wabapi.h
         //
-        m_hinstWAB = LoadLibrary( (lstrlen(szWABDllPath)) ? szWABDllPath : WAB_DLL_NAME );
+        m_hinstWAB = LoadLibrary((lstrlen(szWABDllPath)) ? szWABDllPath : WAB_DLL_NAME);
     }
 
     if(m_hinstWAB)
@@ -181,7 +150,7 @@ CWAB::CWAB(nsILocalFile *file)
             HRESULT hr = E_FAIL;
             WAB_PARAM wp = {0};
             wp.cbSize = sizeof(WAB_PARAM);
-            if (file != nsnull) {
+            if (file != nullptr) {
                 nsCString path;
               file->GetNativePath(path);
               wp.szFileName = (LPTSTR) ToNewCString(path);
@@ -227,7 +196,7 @@ CWAB::~CWAB()
 HRESULT CWAB::IterateWABContents(CWabIterator *pIter, int *pDone)
 {
   if (!m_bInitialized || !m_lpAdrBook)
-    return( E_FAIL);
+    return E_FAIL;
 
   ULONG      ulObjType =   0;
   LPMAPITABLE    lpAB =  NULL;
@@ -248,9 +217,9 @@ HRESULT CWAB::IterateWABContents(CWabIterator *pIter, int *pDone)
 
   // Get the entryid of the root PAB container
   //
-  hr = m_lpAdrBook->GetPAB( &lpcbEID, &lpEID);
+  hr = m_lpAdrBook->GetPAB(&lpcbEID, &lpEID);
 
-  if (HR_FAILED( hr))
+  if (HR_FAILED(hr))
     goto exit;
 
   ulObjType = 0;
@@ -275,13 +244,12 @@ HRESULT CWAB::IterateWABContents(CWabIterator *pIter, int *pDone)
   // Get a contents table of all the contents in the
   // WABs root container
   //
-  hr = lpContainer->GetContentsTable( 0,
-    &lpAB);
+  hr = lpContainer->GetContentsTable(0, &lpAB);
 
   if(HR_FAILED(hr))
     goto exit;
 
-  hr = lpAB->GetRowCount( 0, &rowCount);
+  hr = lpAB->GetRowCount(0, &rowCount);
   if (HR_FAILED(hr))
     rowCount = 100;
   if (rowCount == 0)
@@ -293,7 +261,7 @@ HRESULT CWAB::IterateWABContents(CWabIterator *pIter, int *pDone)
   // The table is gauranteed to set the columns in the order
   // requested
   //
-  hr =lpAB->SetColumns( (LPSPropTagArray)&ptaEid, 0 );
+  hr =lpAB->SetColumns((LPSPropTagArray)&ptaEid, 0);
 
   if(HR_FAILED(hr))
     goto exit;
@@ -301,7 +269,7 @@ HRESULT CWAB::IterateWABContents(CWabIterator *pIter, int *pDone)
 
   // Reset to the beginning of the table
   //
-  hr = lpAB->SeekRow( BOOKMARK_BEGINNING, 0, NULL );
+  hr = lpAB->SeekRow(BOOKMARK_BEGINNING, 0, NULL);
 
   if(HR_FAILED(hr))
     goto exit;
@@ -337,8 +305,8 @@ HRESULT CWAB::IterateWABContents(CWabIterator *pIter, int *pDone)
           // on the listview item representing that object. This enables
           // us to uniquely identify the object later if we need to
           //
-          CStrToUnicode( lpsz, uniStr);
-          keepGoing = pIter->EnumUser( uniStr.get(), lpEID, cbEID);
+          CStrToUnicode(lpsz, uniStr);
+          keepGoing = pIter->EnumUser(uniStr.get(), lpEID, cbEID);
           curCount++;
           if (pDone) {
             *pDone = (curCount * 100) / rowCount;
@@ -347,13 +315,13 @@ HRESULT CWAB::IterateWABContents(CWabIterator *pIter, int *pDone)
           }
         }
       }
-      FreeProws(lpRowAB );
+      FreeProws(lpRowAB);
     }
 
 
-  } while ( SUCCEEDED(hr) && cNumRows && lpRowAB && NS_SUCCEEDED(keepGoing) )  ;
+  } while (SUCCEEDED(hr) && cNumRows && lpRowAB && NS_SUCCEEDED(keepGoing))  ;
 
-  hr = lpAB->SeekRow( BOOKMARK_BEGINNING, 0, NULL );
+  hr = lpAB->SeekRow(BOOKMARK_BEGINNING, 0, NULL);
 
   if(HR_FAILED(hr))
     goto exit;
@@ -398,10 +366,10 @@ HRESULT CWAB::IterateWABContents(CWabIterator *pIter, int *pDone)
 
           // Get a contents table of the dist list
           //
-          hr = distListContainer->GetContentsTable( 0, &distListTable);
+          hr = distListContainer->GetContentsTable(0, &distListTable);
           if (lpAB)
           {
-            hr = distListTable->GetRowCount( 0, &rowCount);
+            hr = distListTable->GetRowCount(0, &rowCount);
             if (HR_FAILED(hr))
               rowCount = 100;
             if (rowCount == 0)
@@ -413,9 +381,9 @@ HRESULT CWAB::IterateWABContents(CWabIterator *pIter, int *pDone)
             // The table is gauranteed to set the columns in the order
             // requested
             //
-            hr = distListTable->SetColumns( (LPSPropTagArray)&ptaEid, 0 );
-            CStrToUnicode( lpsz, uniStr);
-            keepGoing = pIter->EnumList( uniStr.get(), lpEID, cbEID, distListTable);
+            hr = distListTable->SetColumns((LPSPropTagArray)&ptaEid, 0);
+            CStrToUnicode(lpsz, uniStr);
+            keepGoing = pIter->EnumList(uniStr.get(), lpEID, cbEID, distListTable);
             curCount++;
             if (pDone) {
               *pDone = (curCount * 100) / rowCount;
@@ -429,18 +397,18 @@ HRESULT CWAB::IterateWABContents(CWabIterator *pIter, int *pDone)
             distListTable->Release();
         }
       }
-      FreeProws(lpRowAB );
+      FreeProws(lpRowAB);
     }
 
-  } while ( SUCCEEDED(hr) && cNumRows && lpRowAB && NS_SUCCEEDED(keepGoing) )  ;
+  } while (SUCCEEDED(hr) && cNumRows && lpRowAB && NS_SUCCEEDED(keepGoing))  ;
 
 
 exit:
 
-  if ( lpContainer )
+  if (lpContainer)
     lpContainer->Release();
 
-  if ( lpAB )
+  if (lpAB)
     lpAB->Release();
 
   return hr;
@@ -462,55 +430,55 @@ void CWAB::FreeProws(LPSRowSet prows)
 }
 
 
-LPDISTLIST CWAB::GetDistList( ULONG cbEid, LPENTRYID pEid)
+LPDISTLIST CWAB::GetDistList(ULONG cbEid, LPENTRYID pEid)
 {
   if (!m_bInitialized || !m_lpAdrBook)
-    return( NULL);
+    return NULL;
 
   LPDISTLIST  lpDistList = NULL;
   ULONG    ulObjType;
 
-  m_lpAdrBook->OpenEntry( cbEid, pEid, NULL, 0, &ulObjType, (LPUNKNOWN *)&lpDistList);
-  return( lpDistList);
+  m_lpAdrBook->OpenEntry(cbEid, pEid, NULL, 0, &ulObjType, (LPUNKNOWN *)&lpDistList);
+  return lpDistList;
 }
 
-LPSPropValue CWAB::GetListProperty( LPDISTLIST pUser, ULONG tag)
+LPSPropValue CWAB::GetListProperty(LPDISTLIST pUser, ULONG tag)
 {
   if (!pUser)
-    return( NULL);
+    return NULL;
 
-  int  sz = CbNewSPropTagArray( 1);
+  int  sz = CbNewSPropTagArray(1);
   SPropTagArray *pTag = (SPropTagArray *) new char[sz];
   pTag->cValues = 1;
   pTag->aulPropTag[0] = tag;
   LPSPropValue  lpProp = NULL;
   ULONG  cValues = 0;
-  HRESULT hr = pUser->GetProps( pTag, 0, &cValues, &lpProp);
+  HRESULT hr = pUser->GetProps(pTag, 0, &cValues, &lpProp);
   delete [] pTag;
-  if (HR_FAILED( hr) || (cValues != 1)) {
+  if (HR_FAILED(hr) || (cValues != 1)) {
     if (lpProp)
-      m_lpWABObject->FreeBuffer( lpProp);
-    return( NULL);
+      m_lpWABObject->FreeBuffer(lpProp);
+    return NULL;
   }
-  return( lpProp);
+  return lpProp;
 }
 
-LPMAILUSER CWAB::GetUser( ULONG cbEid, LPENTRYID pEid)
+LPMAILUSER CWAB::GetUser(ULONG cbEid, LPENTRYID pEid)
 {
   if (!m_bInitialized || !m_lpAdrBook)
-    return( NULL);
+    return NULL;
 
   LPMAILUSER  lpMailUser = NULL;
   ULONG    ulObjType;
 
-  m_lpAdrBook->OpenEntry( cbEid, pEid, NULL, 0, &ulObjType, (LPUNKNOWN *)&lpMailUser);
-  return( lpMailUser);
+  m_lpAdrBook->OpenEntry(cbEid, pEid, NULL, 0, &ulObjType, (LPUNKNOWN *)&lpMailUser);
+  return lpMailUser;
 }
 
-LPSPropValue CWAB::GetUserProperty( LPMAILUSER pUser, ULONG tag)
+LPSPropValue CWAB::GetUserProperty(LPMAILUSER pUser, ULONG tag)
 {
   if (!pUser)
-    return( NULL);
+    return NULL;
 
   ULONG  uTag = tag;
   /*
@@ -518,42 +486,42 @@ LPSPropValue CWAB::GetUserProperty( LPMAILUSER pUser, ULONG tag)
     international charset.  Windoze bloze.
   */
   /*
-  if (PROP_TYPE( uTag) == PT_STRING8) {
-    uTag = CHANGE_PROP_TYPE( tag, PT_UNICODE);
+  if (PROP_TYPE(uTag) == PT_STRING8) {
+    uTag = CHANGE_PROP_TYPE(tag, PT_UNICODE);
   }
   */
 
-  int  sz = CbNewSPropTagArray( 1);
+  int  sz = CbNewSPropTagArray(1);
   SPropTagArray *pTag = (SPropTagArray *) new char[sz];
   pTag->cValues = 1;
   pTag->aulPropTag[0] = uTag;
   LPSPropValue  lpProp = NULL;
   ULONG  cValues = 0;
-  HRESULT hr = pUser->GetProps( pTag, 0, &cValues, &lpProp);
-  if (HR_FAILED( hr) || (cValues != 1)) {
+  HRESULT hr = pUser->GetProps(pTag, 0, &cValues, &lpProp);
+  if (HR_FAILED(hr) || (cValues != 1)) {
     if (lpProp)
-      m_lpWABObject->FreeBuffer( lpProp);
+      m_lpWABObject->FreeBuffer(lpProp);
     lpProp = NULL;
     if (uTag != tag) {
       pTag->cValues = 1;
       pTag->aulPropTag[0] = tag;
       cValues = 0;
-      hr = pUser->GetProps( pTag, 0, &cValues, &lpProp);
-      if (HR_FAILED( hr) || (cValues != 1)) {
+      hr = pUser->GetProps(pTag, 0, &cValues, &lpProp);
+      if (HR_FAILED(hr) || (cValues != 1)) {
         if (lpProp)
-          m_lpWABObject->FreeBuffer( lpProp);
+          m_lpWABObject->FreeBuffer(lpProp);
         lpProp = NULL;
       }
     }
   }
   delete [] pTag;
-  return( lpProp);
+  return lpProp;
 }
 
-void CWAB::CStrToUnicode( const char *pStr, nsString& result)
+void CWAB::CStrToUnicode(const char *pStr, nsString& result)
 {
   result.Truncate();
-  int wLen = MultiByteToWideChar( CP_ACP, 0, pStr, -1, m_pUniBuff, 0);
+  int wLen = MultiByteToWideChar(CP_ACP, 0, pStr, -1, m_pUniBuff, 0);
   if (wLen >= m_uniBuffLen) {
     if (m_pUniBuff)
       delete [] m_pUniBuff;
@@ -561,46 +529,44 @@ void CWAB::CStrToUnicode( const char *pStr, nsString& result)
     m_uniBuffLen = wLen + 64;
   }
   if (wLen) {
-    MultiByteToWideChar( CP_ACP, 0, pStr, -1, m_pUniBuff, m_uniBuffLen);
+    MultiByteToWideChar(CP_ACP, 0, pStr, -1, m_pUniBuff, m_uniBuffLen);
     result = m_pUniBuff;
   }
 }
 
 // If the value is a string, get it...
-void CWAB::GetValueString( LPSPropValue pVal, nsString& val)
+void CWAB::GetValueString(LPSPropValue pVal, nsString& val)
 {
   val.Truncate();
 
   if (!pVal)
     return;
 
-    switch( PROP_TYPE( pVal->ulPropTag)) {
-  case PT_STRING8: {
-      CStrToUnicode( (const char *) (pVal->Value.lpszA), val);
-    }
-        break;
+  switch(PROP_TYPE(pVal->ulPropTag)) {
+    case PT_STRING8:
+      CStrToUnicode((const char *) (pVal->Value.lpszA), val);
+      break;
     case PT_UNICODE:
       val = (PRUnichar *) (pVal->Value.lpszW);
-    break;
+      break;
     case PT_MV_STRING8: {
       nsString  tmp;
-            ULONG  j;
-            for(j = 0; j < pVal->Value.MVszA.cValues; j++) {
-        CStrToUnicode( (const char *) (pVal->Value.MVszA.lppszA[j]), tmp);
-                val += tmp;
-                val.Append(NS_ConvertASCIItoUTF16(TR_OUTPUT_EOL));
-            }
-        }
-        break;
+      ULONG  j;
+      for(j = 0; j < pVal->Value.MVszA.cValues; j++) {
+        CStrToUnicode((const char *) (pVal->Value.MVszA.lppszA[j]), tmp);
+        val += tmp;
+        val.Append(NS_ConvertASCIItoUTF16(TR_OUTPUT_EOL));
+      }
+      break;
+    }
     case PT_MV_UNICODE: {
-            ULONG  j;
-            for(j = 0; j < pVal->Value.MVszW.cValues; j++) {
-                val += (PRUnichar *) (pVal->Value.MVszW.lppszW[j]);
-                val.Append(NS_ConvertASCIItoUTF16(TR_OUTPUT_EOL));
-            }
-        }
-        break;
-
+      ULONG  j;
+      for(j = 0; j < pVal->Value.MVszW.cValues; j++) {
+        val += (PRUnichar *) (pVal->Value.MVszW.lppszW[j]);
+        val.Append(NS_ConvertASCIItoUTF16(TR_OUTPUT_EOL));
+      }
+      break;
+    }
     case PT_I2:
     case PT_LONG:
     case PT_R4:
@@ -611,47 +577,90 @@ void CWAB::GetValueString( LPSPropValue pVal, nsString& val)
             wsprintf(sz,"%d", pVal->Value.l);
             val = sz;
       */
-        }
-        break;
-
-    case PT_BINARY:
-    break;
-
-    default:
-        break;
+      break;
     }
 
-  val.Trim( kWhitespace, PR_TRUE, PR_TRUE);
+    case PT_BINARY:
+      break;
+
+    default:
+      break;
+  }
+
+  val.Trim(kWhitespace, true, true);
 }
 
 
+void CWAB::GetValueTime(LPSPropValue pVal, PRTime& val)
+{
+  if (!pVal)
+    return;
 
+  if (PROP_TYPE(pVal->ulPropTag) != PT_SYSTIME)
+    return;
 
+  nsOE5File::FileTimeToPRTime(&pVal->Value.ft, &val);
+}
+
+bool CWAB::IsAvailable()
+{
+  if (!m_bInitialized || !m_lpAdrBook)
+    return false;
+
+  ULONG lpcbEID = 0;
+  LPENTRYID lpEID = NULL;
+  HRESULT hr = m_lpAdrBook->GetPAB(&lpcbEID, &lpEID);
+  if (HR_FAILED(hr))
+    return false;
+
+  ULONG ulObjType = 0;
+  LPABCONT lpContainer = NULL;
+  hr = m_lpAdrBook->OpenEntry(lpcbEID,
+                              (LPENTRYID)lpEID,
+                              NULL,
+                              0,
+                              &ulObjType,
+                              (LPUNKNOWN *)&lpContainer);
+  m_lpWABObject->FreeBuffer(lpEID);
+
+  LPMAPITABLE lpAB = NULL;
+  hr = lpContainer->GetContentsTable(0, &lpAB);
+  if(HR_FAILED(hr)) {
+    lpContainer->Release();
+    return false;
+  }
+
+  ULONG rowCount = 0;
+  hr = lpAB->GetRowCount(0, &rowCount);
+  lpContainer->Release();
+  lpAB->Release();
+  return (rowCount != 0);
+}
 
 /*
-BOOL CWabIterateProcess::SanitizeMultiLine( CString& val)
+BOOL CWabIterateProcess::SanitizeMultiLine(CString& val)
 {
   val.TrimLeft();
   val.TrimRight();
-  int idx = val.FindOneOf( "\x0D\x0A");
+  int idx = val.FindOneOf("\x0D\x0A");
   if (idx == -1)
-    return( FALSE);
+    return FALSE;
 
   // needs encoding
-  U32 bufSz = UMimeEncode::GetBufferSize( val.GetLength());
+  U32 bufSz = UMimeEncode::GetBufferSize(val.GetLength());
   P_U8 pBuf = new U8[bufSz];
-  U32 len = UMimeEncode::ConvertBuffer( (PC_U8)((PC_S8)val), val.GetLength(), pBuf, 66, 52, "\x0D\x0A ");
+  U32 len = UMimeEncode::ConvertBuffer((PC_U8)((PC_S8)val), val.GetLength(), pBuf, 66, 52, "\x0D\x0A ");
   pBuf[len] = 0;
   val = pBuf;
   delete pBuf;
-  return( TRUE);
+  return TRUE;
 }
 
-BOOL CWabIterateProcess::EnumUser( LPCTSTR pName, LPENTRYID pEid, ULONG cbEid)
+BOOL CWabIterateProcess::EnumUser(LPCTSTR pName, LPENTRYID pEid, ULONG cbEid)
 {
-  TRACE1( "User: %s\n", pName);
+  TRACE1("User: %s\n", pName);
 
-  LPMAILUSER  pUser = m_pWab->GetUser( cbEid, pEid);
+  LPMAILUSER  pUser = m_pWab->GetUser(cbEid, pEid);
 
   // Get the "required" strings first
   CString    lastName;
@@ -661,39 +670,39 @@ BOOL CWabIterateProcess::EnumUser( LPCTSTR pName, LPENTRYID pEid, ULONG cbEid)
   CString    middleName;
 
   if (!pUser) {
-    UDialogs::ErrMessage1( IDS_ENTRY_ERROR, pName);
-    return( FALSE);
+    UDialogs::ErrMessage1(IDS_ENTRY_ERROR, pName);
+    return FALSE;
   }
 
-  LPSPropValue  pProp = m_pWab->GetUserProperty( pUser, PR_EMAIL_ADDRESS);
+  LPSPropValue  pProp = m_pWab->GetUserProperty(pUser, PR_EMAIL_ADDRESS);
   if (pProp) {
-    m_pWab->GetValueString( pProp, eMail);
-    SanitizeValue( eMail);
-    m_pWab->FreeProperty( pProp);
+    m_pWab->GetValueString(pProp, eMail);
+    SanitizeValue(eMail);
+    m_pWab->FreeProperty(pProp);
   }
-  pProp = m_pWab->GetUserProperty( pUser, PR_GIVEN_NAME);
+  pProp = m_pWab->GetUserProperty(pUser, PR_GIVEN_NAME);
   if (pProp) {
-    m_pWab->GetValueString( pProp, firstName);
-    SanitizeValue( firstName);
-    m_pWab->FreeProperty( pProp);
+    m_pWab->GetValueString(pProp, firstName);
+    SanitizeValue(firstName);
+    m_pWab->FreeProperty(pProp);
   }
-  pProp = m_pWab->GetUserProperty( pUser, PR_SURNAME);
+  pProp = m_pWab->GetUserProperty(pUser, PR_SURNAME);
   if (pProp) {
-    m_pWab->GetValueString( pProp, lastName);
-    SanitizeValue( lastName);
-    m_pWab->FreeProperty( pProp);
+    m_pWab->GetValueString(pProp, lastName);
+    SanitizeValue(lastName);
+    m_pWab->FreeProperty(pProp);
   }
-  pProp = m_pWab->GetUserProperty( pUser, PR_MIDDLE_NAME);
+  pProp = m_pWab->GetUserProperty(pUser, PR_MIDDLE_NAME);
   if (pProp) {
-    m_pWab->GetValueString( pProp, middleName);
-    SanitizeValue( middleName);
-    m_pWab->FreeProperty( pProp);
+    m_pWab->GetValueString(pProp, middleName);
+    SanitizeValue(middleName);
+    m_pWab->FreeProperty(pProp);
   }
-  pProp = m_pWab->GetUserProperty( pUser, PR_NICKNAME);
+  pProp = m_pWab->GetUserProperty(pUser, PR_NICKNAME);
   if (pProp) {
-    m_pWab->GetValueString( pProp, nickName);
-    SanitizeValue( nickName);
-    m_pWab->FreeProperty( pProp);
+    m_pWab->GetValueString(pProp, nickName);
+    SanitizeValue(nickName);
+    m_pWab->FreeProperty(pProp);
   }
   if (nickName.IsEmpty())
     nickName = pName;
@@ -718,7 +727,7 @@ BOOL CWabIterateProcess::EnumUser( LPCTSTR pName, LPENTRYID pEid, ULONG cbEid)
 
   CString    line;
   CString    header;
-  line.LoadString( IDS_LDIF_DN_START);
+  line.LoadString(IDS_LDIF_DN_START);
   line += firstName;
   if (!middleName.IsEmpty()) {
     line += ' ';
@@ -728,13 +737,13 @@ BOOL CWabIterateProcess::EnumUser( LPCTSTR pName, LPENTRYID pEid, ULONG cbEid)
     line += ' ';
     line += lastName;
   }
-  header.LoadString( IDS_LDIF_DN_MIDDLE);
+  header.LoadString(IDS_LDIF_DN_MIDDLE);
   line += header;
   line += eMail;
-  result = result && m_out.WriteStr( line);
+  result = result && m_out.WriteStr(line);
   result = result && m_out.WriteEol();
 
-  line.LoadString( IDS_FIELD_LDIF_FULLNAME);
+  line.LoadString(IDS_FIELD_LDIF_FULLNAME);
   line += ' ';
   line += firstName;
   if (!middleName.IsEmpty()) {
@@ -745,40 +754,40 @@ BOOL CWabIterateProcess::EnumUser( LPCTSTR pName, LPENTRYID pEid, ULONG cbEid)
     line += ' ';
     line += lastName;
   }
-  result = result && m_out.WriteStr( line);
+  result = result && m_out.WriteStr(line);
   result = result && m_out.WriteEol();
 
 
-  line.LoadString( IDS_FIELD_LDIF_GIVENNAME);
+  line.LoadString(IDS_FIELD_LDIF_GIVENNAME);
   line += ' ';
   line += firstName;
-  result = result && m_out.WriteStr( line);
+  result = result && m_out.WriteStr(line);
   result = result && m_out.WriteEol();
 
   if (!lastName.IsEmpty()) {
-    line.LoadString( IDS_FIELD_LDIF_LASTNAME);
+    line.LoadString(IDS_FIELD_LDIF_LASTNAME);
     if (!middleName.IsEmpty()) {
       line += ' ';
       line += middleName;
     }
     line += ' ';
     line += lastName;
-    result = result && m_out.WriteStr( line);
+    result = result && m_out.WriteStr(line);
     result = result && m_out.WriteEol();
   }
 
-  result = result && m_out.WriteStr( kLDIFPerson);
+  result = result && m_out.WriteStr(kLDIFPerson);
 
-  line.LoadString( IDS_FIELD_LDIF_EMAIL);
+  line.LoadString(IDS_FIELD_LDIF_EMAIL);
   line += ' ';
   line += eMail;
-  result = result && m_out.WriteStr( line);
+  result = result && m_out.WriteStr(line);
   result = result && m_out.WriteEol();
 
-  line.LoadString( IDS_FIELD_LDIF_NICKNAME);
+  line.LoadString(IDS_FIELD_LDIF_NICKNAME);
   line += ' ';
   line += nickName;
-  result = result && m_out.WriteStr( line);
+  result = result && m_out.WriteStr(line);
   result = result && m_out.WriteEol();
 
   // Do all of the extra fields!
@@ -786,16 +795,16 @@ BOOL CWabIterateProcess::EnumUser( LPCTSTR pName, LPENTRYID pEid, ULONG cbEid)
   BOOL  encoded = FALSE;
   for (int i = 0; i < kExtraUserFields; i++) {
     value.Empty();
-    pProp = m_pWab->GetUserProperty( pUser, extraUserFields[i].tag);
+    pProp = m_pWab->GetUserProperty(pUser, extraUserFields[i].tag);
     if (pProp) {
-      m_pWab->GetValueString( pProp, value);
-      m_pWab->FreeProperty( pProp);
+      m_pWab->GetValueString(pProp, value);
+      m_pWab->FreeProperty(pProp);
     }
     if (extraUserFields[i].multiLine) {
-      encoded = SanitizeMultiLine( value);
+      encoded = SanitizeMultiLine(value);
     }
     else
-      SanitizeValue( value);
+      SanitizeValue(value);
     if (!value.IsEmpty()) {
       line = extraUserFields[i].pLDIF;
       if (encoded) {
@@ -805,21 +814,21 @@ BOOL CWabIterateProcess::EnumUser( LPCTSTR pName, LPENTRYID pEid, ULONG cbEid)
       else
         line += ' ';
       line += value;
-      result = result && m_out.WriteStr( line);
+      result = result && m_out.WriteStr(line);
       result = result && m_out.WriteEol();
     }
   }
 
-  m_pWab->ReleaseUser( pUser);
+  m_pWab->ReleaseUser(pUser);
 
   if (!result) {
-    UDialogs::ErrMessage0( IDS_ADDRESS_SAVE_ERROR);
+    UDialogs::ErrMessage0(IDS_ADDRESS_SAVE_ERROR);
   }
 
   m_totalDone += kValuePerUser;
   m_recordsDone++;
 
-  return( result);
+  return result;
 }
 */
 
@@ -827,32 +836,32 @@ BOOL CWabIterateProcess::EnumUser( LPCTSTR pName, LPENTRYID pEid, ULONG cbEid)
 
 
 /*
-BOOL CWabIterateProcess::EnumList( LPCTSTR pName, LPENTRYID pEid, ULONG cbEid)
+BOOL CWabIterateProcess::EnumList(LPCTSTR pName, LPENTRYID pEid, ULONG cbEid)
 {
-  TRACE1( "List: %s\n", pName);
+  TRACE1("List: %s\n", pName);
 
-  LPDISTLIST    pList = m_pWab->GetDistList( cbEid, pEid);
+  LPDISTLIST    pList = m_pWab->GetDistList(cbEid, pEid);
   if (!pList) {
-    UDialogs::ErrMessage1( IDS_ENTRY_ERROR, pName);
-    return( FALSE);
+    UDialogs::ErrMessage1(IDS_ENTRY_ERROR, pName);
+    return FALSE;
   }
 
   // Find out if this is just a regular entry or a true list...
   CString      eMail;
-  LPSPropValue  pProp = m_pWab->GetListProperty( pList, PR_EMAIL_ADDRESS);
+  LPSPropValue  pProp = m_pWab->GetListProperty(pList, PR_EMAIL_ADDRESS);
   if (pProp) {
-    m_pWab->GetValueString( pProp, eMail);
-    SanitizeValue( eMail);
-    m_pWab->FreeProperty( pProp);
+    m_pWab->GetValueString(pProp, eMail);
+    SanitizeValue(eMail);
+    m_pWab->FreeProperty(pProp);
     // Treat this like a regular entry...
     if (!eMail.IsEmpty()) {
-      m_pWab->ReleaseDistList( pList);
-      return( WriteListUserEntry( pName, eMail));
+      m_pWab->ReleaseDistList(pList);
+      return WriteListUserEntry(pName, eMail);
     }
   }
 
   // This may very well be a list, find the entries...
-  m_pListTable = OpenDistList( pList);
+  m_pListTable = OpenDistList(pList);
   if (m_pListTable) {
     m_pList = pList;
     m_listName = pName;
@@ -861,15 +870,15 @@ BOOL CWabIterateProcess::EnumList( LPCTSTR pName, LPENTRYID pEid, ULONG cbEid)
     m_state = kEnumListState;
   }
   else {
-    m_pWab->ReleaseDistList( pList);
+    m_pWab->ReleaseDistList(pList);
     m_recordsDone++;
     m_totalDone += kValuePerUser;
   }
 
-  return( TRUE);
+  return TRUE;
 }
 
-BOOL CWabIterateProcess::EnumNextListUser( BOOL *pDone)
+BOOL CWabIterateProcess::EnumNextListUser(BOOL *pDone)
 {
   HRESULT      hr;
   int        cNumRows = 0;
@@ -877,13 +886,13 @@ BOOL CWabIterateProcess::EnumNextListUser( BOOL *pDone)
   BOOL      keepGoing = TRUE;
 
   if (!m_pListTable)
-    return( FALSE);
+    return FALSE;
 
-  hr = m_pListTable->QueryRows( 1, 0, &lpRowAB);
+  hr = m_pListTable->QueryRows(1, 0, &lpRowAB);
 
   if(HR_FAILED(hr)) {
-    UDialogs::ErrMessage0( IDS_ERROR_READING_WAB);
-    return( FALSE);
+    UDialogs::ErrMessage0(IDS_ERROR_READING_WAB);
+    return FALSE;
   }
 
   if(lpRowAB) {
@@ -894,13 +903,13 @@ BOOL CWabIterateProcess::EnumNextListUser( BOOL *pDone)
       LPENTRYID lpEID = (LPENTRYID) lpRowAB->aRow[0].lpProps[ieidPR_ENTRYID].Value.bin.lpb;
       ULONG cbEID = lpRowAB->aRow[0].lpProps[ieidPR_ENTRYID].Value.bin.cb;
             if(lpRowAB->aRow[0].lpProps[ieidPR_OBJECT_TYPE].Value.l == MAPI_DISTLIST) {
-        keepGoing = HandleListList( lpsz, lpEID, cbEID);
+        keepGoing = HandleListList(lpsz, lpEID, cbEID);
         }
       else if (lpRowAB->aRow[0].lpProps[ieidPR_OBJECT_TYPE].Value.l == MAPI_MAILUSER) {
-        keepGoing = HandleListUser( lpsz, lpEID, cbEID);
+        keepGoing = HandleListUser(lpsz, lpEID, cbEID);
       }
     }
-    m_pWab->FreeProws( lpRowAB);
+    m_pWab->FreeProws(lpRowAB);
    }
 
   if (!cNumRows || !lpRowAB) {
@@ -908,56 +917,56 @@ BOOL CWabIterateProcess::EnumNextListUser( BOOL *pDone)
     m_pListTable->Release();
     m_pListTable = NULL;
     if (m_pList)
-      m_pWab->ReleaseDistList( m_pList);
+      m_pWab->ReleaseDistList(m_pList);
     m_pList = NULL;
     if (m_listDone < kValuePerUser)
       m_totalDone += (kValuePerUser - m_listDone);
     m_recordsDone++;
-    return( keepGoing);
+    return keepGoing;
   }
 
   if (!keepGoing)
-    return( FALSE);
+    return FALSE;
 
   if (m_listDone < kValuePerUser) {
     m_listDone++;
     m_totalDone++;
   }
 
-  return( TRUE);
+  return TRUE;
 }
 
-BOOL CWabIterateProcess::HandleListList( LPCTSTR pName, LPENTRYID lpEid, ULONG cbEid)
+BOOL CWabIterateProcess::HandleListList(LPCTSTR pName, LPENTRYID lpEid, ULONG cbEid)
 {
   BOOL      result;
-  LPDISTLIST    pList = m_pWab->GetDistList( cbEid, lpEid);
+  LPDISTLIST    pList = m_pWab->GetDistList(cbEid, lpEid);
   if (!pList) {
-    UDialogs::ErrMessage1( IDS_ENTRY_ERROR, pName);
-    return( FALSE);
+    UDialogs::ErrMessage1(IDS_ENTRY_ERROR, pName);
+    return FALSE;
   }
 
   CString      eMail;
-  LPSPropValue  pProp = m_pWab->GetListProperty( pList, PR_EMAIL_ADDRESS);
+  LPSPropValue  pProp = m_pWab->GetListProperty(pList, PR_EMAIL_ADDRESS);
   if (pProp) {
-    m_pWab->GetValueString( pProp, eMail);
-    SanitizeValue( eMail);
-    m_pWab->FreeProperty( pProp);
+    m_pWab->GetValueString(pProp, eMail);
+    SanitizeValue(eMail);
+    m_pWab->FreeProperty(pProp);
     // Treat this like a regular entry...
     if (!eMail.IsEmpty()) {
       // write out a member based on pName and eMail
-      result = WriteGroupMember( pName, eMail);
-      m_pWab->ReleaseDistList( pList);
-      return( result);
+      result = WriteGroupMember(pName, eMail);
+      m_pWab->ReleaseDistList(pList);
+      return result;
     }
   }
 
   // iterate the list and add each member to the top level list
-  LPMAPITABLE  pTable = OpenDistList( pList);
+  LPMAPITABLE  pTable = OpenDistList(pList);
   if (!pTable) {
-    TRACE0( "Error opening table for list\n");
-    m_pWab->ReleaseDistList( pList);
-    UDialogs::ErrMessage1( IDS_ENTRY_ERROR, pName);
-    return( FALSE);
+    TRACE0("Error opening table for list\n");
+    m_pWab->ReleaseDistList(pList);
+    UDialogs::ErrMessage1(IDS_ENTRY_ERROR, pName);
+    return FALSE;
   }
 
   int        cNumRows = 0;
@@ -966,13 +975,13 @@ BOOL CWabIterateProcess::HandleListList( LPCTSTR pName, LPENTRYID lpEid, ULONG c
   BOOL      keepGoing = TRUE;
 
   do {
-    hr = pTable->QueryRows( 1, 0, &lpRowAB);
+    hr = pTable->QueryRows(1, 0, &lpRowAB);
 
     if(HR_FAILED(hr)) {
-      UDialogs::ErrMessage0( IDS_ERROR_READING_WAB);
+      UDialogs::ErrMessage0(IDS_ERROR_READING_WAB);
       pTable->Release();
-      m_pWab->ReleaseDistList( pList);
-      return( FALSE);
+      m_pWab->ReleaseDistList(pList);
+      return FALSE;
     }
 
     if(lpRowAB) {
@@ -983,26 +992,26 @@ BOOL CWabIterateProcess::HandleListList( LPCTSTR pName, LPENTRYID lpEid, ULONG c
         LPENTRYID lpEID = (LPENTRYID) lpRowAB->aRow[0].lpProps[ieidPR_ENTRYID].Value.bin.lpb;
         ULONG cbEID = lpRowAB->aRow[0].lpProps[ieidPR_ENTRYID].Value.bin.cb;
         if(lpRowAB->aRow[0].lpProps[ieidPR_OBJECT_TYPE].Value.l == MAPI_DISTLIST) {
-          keepGoing = HandleListList( lpsz, lpEID, cbEID);
+          keepGoing = HandleListList(lpsz, lpEID, cbEID);
         }
         else if (lpRowAB->aRow[0].lpProps[ieidPR_OBJECT_TYPE].Value.l == MAPI_MAILUSER) {
-          keepGoing = HandleListUser( lpsz, lpEID, cbEID);
+          keepGoing = HandleListUser(lpsz, lpEID, cbEID);
         }
       }
-      m_pWab->FreeProws( lpRowAB);
+      m_pWab->FreeProws(lpRowAB);
      }
   }
   while (keepGoing && cNumRows && lpRowAB);
 
   pTable->Release();
-  m_pWab->ReleaseDistList( pList);
-  return( keepGoing);
+  m_pWab->ReleaseDistList(pList);
+  return keepGoing;
 }
 
-BOOL CWabIterateProcess::HandleListUser( LPCTSTR pName, LPENTRYID lpEid, ULONG cbEid)
+BOOL CWabIterateProcess::HandleListUser(LPCTSTR pName, LPENTRYID lpEid, ULONG cbEid)
 {
   // Get the basic properties for building the member line
-  LPMAILUSER  pUser = m_pWab->GetUser( cbEid, lpEid);
+  LPMAILUSER  pUser = m_pWab->GetUser(cbEid, lpEid);
 
   // Get the "required" strings first
   CString    lastName;
@@ -1012,39 +1021,39 @@ BOOL CWabIterateProcess::HandleListUser( LPCTSTR pName, LPENTRYID lpEid, ULONG c
   CString    middleName;
 
   if (!pUser) {
-    UDialogs::ErrMessage1( IDS_ENTRY_ERROR, pName);
-    return( FALSE);
+    UDialogs::ErrMessage1(IDS_ENTRY_ERROR, pName);
+    return FALSE;
   }
 
-  LPSPropValue  pProp = m_pWab->GetUserProperty( pUser, PR_EMAIL_ADDRESS);
+  LPSPropValue  pProp = m_pWab->GetUserProperty(pUser, PR_EMAIL_ADDRESS);
   if (pProp) {
-    m_pWab->GetValueString( pProp, eMail);
-    SanitizeValue( eMail);
-    m_pWab->FreeProperty( pProp);
+    m_pWab->GetValueString(pProp, eMail);
+    SanitizeValue(eMail);
+    m_pWab->FreeProperty(pProp);
   }
-  pProp = m_pWab->GetUserProperty( pUser, PR_GIVEN_NAME);
+  pProp = m_pWab->GetUserProperty(pUser, PR_GIVEN_NAME);
   if (pProp) {
-    m_pWab->GetValueString( pProp, firstName);
-    SanitizeValue( firstName);
-    m_pWab->FreeProperty( pProp);
+    m_pWab->GetValueString(pProp, firstName);
+    SanitizeValue(firstName);
+    m_pWab->FreeProperty(pProp);
   }
-  pProp = m_pWab->GetUserProperty( pUser, PR_SURNAME);
+  pProp = m_pWab->GetUserProperty(pUser, PR_SURNAME);
   if (pProp) {
-    m_pWab->GetValueString( pProp, lastName);
-    SanitizeValue( lastName);
-    m_pWab->FreeProperty( pProp);
+    m_pWab->GetValueString(pProp, lastName);
+    SanitizeValue(lastName);
+    m_pWab->FreeProperty(pProp);
   }
-  pProp = m_pWab->GetUserProperty( pUser, PR_MIDDLE_NAME);
+  pProp = m_pWab->GetUserProperty(pUser, PR_MIDDLE_NAME);
   if (pProp) {
-    m_pWab->GetValueString( pProp, middleName);
-    SanitizeValue( middleName);
-    m_pWab->FreeProperty( pProp);
+    m_pWab->GetValueString(pProp, middleName);
+    SanitizeValue(middleName);
+    m_pWab->FreeProperty(pProp);
   }
-  pProp = m_pWab->GetUserProperty( pUser, PR_NICKNAME);
+  pProp = m_pWab->GetUserProperty(pUser, PR_NICKNAME);
   if (pProp) {
-    m_pWab->GetValueString( pProp, nickName);
-    SanitizeValue( nickName);
-    m_pWab->FreeProperty( pProp);
+    m_pWab->GetValueString(pProp, nickName);
+    SanitizeValue(nickName);
+    m_pWab->FreeProperty(pProp);
   }
   if (nickName.IsEmpty())
     nickName = pName;
@@ -1059,7 +1068,7 @@ BOOL CWabIterateProcess::HandleListUser( LPCTSTR pName, LPENTRYID lpEid, ULONG c
   if (eMail.IsEmpty())
     eMail = nickName;
 
-  m_pWab->ReleaseUser( pUser);
+  m_pWab->ReleaseUser(pUser);
 
   CString  name = firstName;
   if (!middleName.IsEmpty()) {
@@ -1070,10 +1079,10 @@ BOOL CWabIterateProcess::HandleListUser( LPCTSTR pName, LPENTRYID lpEid, ULONG c
     name += ' ';
     name += lastName;
   }
-  return( WriteGroupMember( name, eMail));
+  return WriteGroupMember(name, eMail);
 }
 
-BOOL CWabIterateProcess::WriteGroupMember( const char *pName, const char *pEmail)
+BOOL CWabIterateProcess::WriteGroupMember(const char *pName, const char *pEmail)
 {
   CString    middle;
   CString    line;
@@ -1085,30 +1094,30 @@ BOOL CWabIterateProcess::WriteGroupMember( const char *pName, const char *pEmail
       result = m_out.WriteEol();
     else
       result = TRUE;
-    line.LoadString( IDS_LDIF_DN_START);
+    line.LoadString(IDS_LDIF_DN_START);
     line += m_listName;
     line += TR_OUTPUT_EOL;
-    middle.LoadString( IDS_FIELD_LDIF_FULLNAME);
+    middle.LoadString(IDS_FIELD_LDIF_FULLNAME);
     line += middle;
     line += m_listName;
     line += TR_OUTPUT_EOL;
-    if (!result || !m_out.WriteStr( line) || !m_out.WriteStr( kLDIFGroup)) {
-      UDialogs::ErrMessage0( IDS_ADDRESS_SAVE_ERROR);
-      return( FALSE);
+    if (!result || !m_out.WriteStr(line) || !m_out.WriteStr(kLDIFGroup)) {
+      UDialogs::ErrMessage0(IDS_ADDRESS_SAVE_ERROR);
+      return FALSE;
     }
     m_listHeaderDone = TRUE;
   }
 
 
-  line.LoadString( IDS_FIELD_LDIF_MEMBER_START);
+  line.LoadString(IDS_FIELD_LDIF_MEMBER_START);
   line += pName;
-  middle.LoadString( IDS_LDIF_DN_MIDDLE);
+  middle.LoadString(IDS_LDIF_DN_MIDDLE);
   line += middle;
   line += pEmail;
   line += TR_OUTPUT_EOL;
-  if (!m_out.WriteStr( line)) {
-    UDialogs::ErrMessage0( IDS_ADDRESS_SAVE_ERROR);
-    return( FALSE);
+  if (!m_out.WriteStr(line)) {
+    UDialogs::ErrMessage0(IDS_ADDRESS_SAVE_ERROR);
+    return FALSE;
   }
 
   if (m_listDone < kValuePerUser) {
@@ -1116,7 +1125,7 @@ BOOL CWabIterateProcess::WriteGroupMember( const char *pName, const char *pEmail
     m_totalDone++;
   }
 
-  return( TRUE);
+  return TRUE;
 }
 */
 

@@ -2,8 +2,8 @@
    http://creativecommons.org/publicdomain/zero/1.0/ */
 
 // Tests sqlite_sta1 table exists, it should be created by analyze.
-// Note that this version of SQLite puts null rows for empty tables, while next
-// versions will just omit the rows.
+// Since the bookmark roots are created when the DB is created (bug 704855),
+// the table will contain data.
 
 function run_test() {
   do_test_pending();
@@ -21,7 +21,7 @@ function run_test() {
     },
     handleCompletion: function(aReason) {
       do_check_true(this._gotResult);
-      do_test_finished();
+       do_test_finished();
     }
   });
   stmt.finalize();

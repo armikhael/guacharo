@@ -1,41 +1,9 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  * vim: sw=2 ts=8 et :
  */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla IPC.
- *
- * The Initial Developer of the Original Code is
- *   The Mozilla Foundation
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef mozilla_ipc_SharedMemorySysV_h
 #define mozilla_ipc_SharedMemorySysV_h
@@ -74,13 +42,13 @@ public:
 
   SharedMemorySysV() :
     mHandle(-1),
-    mData(nsnull)
+    mData(nullptr)
   {
   }
 
   SharedMemorySysV(Handle aHandle) :
     mHandle(aHandle),
-    mData(nsnull)
+    mData(nullptr)
   {
   }
 
@@ -88,11 +56,10 @@ public:
   {
     shmdt(mData);
     mHandle = -1;
-    mData = nsnull;
+    mData = nullptr;
   }
 
-  NS_OVERRIDE
-  virtual bool Create(size_t aNbytes)
+  virtual bool Create(size_t aNbytes) MOZ_OVERRIDE
   {
     int id = shmget(IPC_PRIVATE, aNbytes, IPC_CREAT | 0600);
     if (id == -1)
@@ -105,8 +72,7 @@ public:
     return Map(aNbytes);
   }
 
-  NS_OVERRIDE
-  virtual bool Map(size_t nBytes)
+  virtual bool Map(size_t nBytes) MOZ_OVERRIDE
   {
     // already mapped
     if (mData)
@@ -115,7 +81,7 @@ public:
     if (!IsHandleValid(mHandle))
       return false;
 
-    void* mem = shmat(mHandle, nsnull, 0);
+    void* mem = shmat(mHandle, nullptr, 0);
     if (mem == (void*) -1) {
       char warning[256];
       snprintf(warning, sizeof(warning)-1,
@@ -132,7 +98,7 @@ public:
 
     mData = mem;
 
-#ifdef NS_DEBUG
+#ifdef DEBUG
     struct shmid_ds info;
     if (shmctl(mHandle, IPC_STAT, &info) < 0)
       return false;
@@ -145,14 +111,12 @@ public:
     return true;
   }
 
-  NS_OVERRIDE
-  virtual void* memory() const
+  virtual void* memory() const MOZ_OVERRIDE
   {
     return mData;
   }
 
-  NS_OVERRIDE
-  virtual SharedMemoryType Type() const
+  virtual SharedMemoryType Type() const MOZ_OVERRIDE
   {
     return TYPE_SYSV;
   }

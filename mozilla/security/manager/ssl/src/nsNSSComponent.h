@@ -1,45 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Hubbie Shaw
- *   Doug Turner <dougt@netscape.com>
- *   Brian Ryner <bryner@brianryner.com>
- *   Kai Engert <kaie@netscape.com>
- *   Kai Engert <kengert@redhat.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef _nsNSSComponent_h_
 #define _nsNSSComponent_h_
@@ -106,7 +69,7 @@ enum EnsureNSSOperator
   nssEnsureOnChromeOnly = 101
 };
 
-extern PRBool EnsureNSSInitialized(EnsureNSSOperator op);
+extern bool EnsureNSSInitialized(EnsureNSSOperator op);
 
 //--------------------------------------------
 // Now we need a content listener to register 
@@ -114,10 +77,10 @@ extern PRBool EnsureNSSInitialized(EnsureNSSOperator op);
 class PSMContentDownloader : public nsIStreamListener
 {
 public:
-  PSMContentDownloader() {NS_ASSERTION(PR_FALSE, "don't use this constructor."); }
-  PSMContentDownloader(PRUint32 type);
+  PSMContentDownloader() {NS_ASSERTION(false, "don't use this constructor."); }
+  PSMContentDownloader(uint32_t type);
   virtual ~PSMContentDownloader();
-  void setSilentDownload(PRBool flag);
+  void setSilentDownload(bool flag);
   void setCrlAutodownloadKey(nsAutoString key);
 
   NS_DECL_ISUPPORTS
@@ -133,10 +96,10 @@ public:
 
 protected:
   char* mByteData;
-  PRInt32 mBufferOffset;
-  PRInt32 mBufferSize;
-  PRUint32 mType;
-  PRBool mDoSilentDownload;
+  int32_t mBufferOffset;
+  int32_t mBufferSize;
+  uint32_t mType;
+  bool mDoSilentDownload;
   nsString mCrlAutoDownloadKey;
   nsCOMPtr<nsIURI> mURI;
   nsresult handleContentDownloadError(nsresult errCode);
@@ -148,18 +111,20 @@ class NS_NO_VTABLE nsINSSComponent : public nsISupports {
  public:
   NS_DECLARE_STATIC_IID_ACCESSOR(NS_INSSCOMPONENT_IID)
 
+  NS_IMETHOD ShowAlertFromStringBundle(const char * messageID) = 0;
+
   NS_IMETHOD GetPIPNSSBundleString(const char *name,
                                    nsAString &outString) = 0;
   NS_IMETHOD PIPBundleFormatStringFromName(const char *name,
                                            const PRUnichar **params,
-                                           PRUint32 numParams,
+                                           uint32_t numParams,
                                            nsAString &outString) = 0;
 
   NS_IMETHOD GetNSSBundleString(const char *name,
                                 nsAString &outString) = 0;
   NS_IMETHOD NSSBundleFormatStringFromName(const char *name,
                                            const PRUnichar **params,
-                                           PRUint32 numParams,
+                                           uint32_t numParams,
                                            nsAString &outString) = 0;
 
   // This method will just disable OCSP in NSS, it will not
@@ -192,7 +157,7 @@ class NS_NO_VTABLE nsINSSComponent : public nsISupports {
 
   NS_IMETHOD EnsureIdentityInfoLoaded() = 0;
 
-  NS_IMETHOD IsNSSInitialized(PRBool *initialized) = 0;
+  NS_IMETHOD IsNSSInitialized(bool *initialized) = 0;
 
   NS_IMETHOD GetDefaultCERTValInParam(nsRefPtr<nsCERTValInParamWrapper> &out) = 0;
   NS_IMETHOD GetDefaultCERTValInParamLocalOnly(nsRefPtr<nsCERTValInParamWrapper> &out) = 0;
@@ -212,7 +177,7 @@ private:
   ~nsCryptoHash();
 
   HASHContext* mHashContext;
-  PRBool mInitialized;
+  bool mInitialized;
 
   virtual void virtualDestroyNSSReference();
   void destructorSafeDestroyNSSReference();
@@ -235,7 +200,6 @@ private:
 };
 
 class nsNSSShutDownList;
-class nsSSLThread;
 class nsCertVerificationThread;
 
 // Implementation of the PSM component interface.
@@ -262,17 +226,21 @@ public:
 
   NS_METHOD Init();
 
+  static nsresult GetNewPrompter(nsIPrompt ** result);
+  static nsresult ShowAlertWithConstructedString(const nsString & message);
+  NS_IMETHOD ShowAlertFromStringBundle(const char * messageID);
+
   NS_IMETHOD GetPIPNSSBundleString(const char *name,
                                    nsAString &outString);
   NS_IMETHOD PIPBundleFormatStringFromName(const char *name,
                                            const PRUnichar **params,
-                                           PRUint32 numParams,
+                                           uint32_t numParams,
                                            nsAString &outString);
   NS_IMETHOD GetNSSBundleString(const char *name,
                                nsAString &outString);
   NS_IMETHOD NSSBundleFormatStringFromName(const char *name,
                                            const PRUnichar **params,
-                                           PRUint32 numParams,
+                                           uint32_t numParams,
                                            nsAString &outString);
   NS_IMETHOD SkipOcsp();
   NS_IMETHOD SkipOcspOff();
@@ -283,7 +251,6 @@ public:
   NS_IMETHOD LogoutAuthenticatedPK11();
   NS_IMETHOD DownloadCRLDirectly(nsAutoString, nsAutoString);
   NS_IMETHOD RememberCert(CERTCertificate *cert);
-  static nsresult GetNSSCipherIDFromPrefString(const nsACString &aPrefString, PRUint16 &aCipherId);
 
   NS_IMETHOD LaunchSmartCardThread(SECMODModule *module);
   NS_IMETHOD ShutdownSmartCardThread(SECMODModule *module);
@@ -291,27 +258,19 @@ public:
   NS_IMETHOD DispatchEvent(const nsAString &eventType, const nsAString &token);
   NS_IMETHOD GetClientAuthRememberService(nsClientAuthRememberService **cars);
   NS_IMETHOD EnsureIdentityInfoLoaded();
-  NS_IMETHOD IsNSSInitialized(PRBool *initialized);
+  NS_IMETHOD IsNSSInitialized(bool *initialized);
 
   NS_IMETHOD GetDefaultCERTValInParam(nsRefPtr<nsCERTValInParamWrapper> &out);
   NS_IMETHOD GetDefaultCERTValInParamLocalOnly(nsRefPtr<nsCERTValInParamWrapper> &out);
 private:
 
-  nsresult InitializeNSS(PRBool showWarningBox);
+  nsresult InitializeNSS(bool showWarningBox);
   nsresult ShutdownNSS();
 
 #ifdef XP_MACOSX
   void TryCFM2MachOMigration(nsIFile *cfmPath, nsIFile *machoPath);
 #endif
   
-  enum AlertIdentifier {
-    ai_nss_init_problem, 
-    ai_sockets_still_active, 
-    ai_crypto_ui_active,
-    ai_incomplete_logout
-  };
-  
-  void ShowAlert(AlertIdentifier ai);
   void InstallLoadableRoots();
   void UnloadLoadableRoots();
   void LaunchSmartCardThreads();
@@ -344,23 +303,22 @@ private:
   nsCOMPtr<nsIURIContentListener> mPSMContentListener;
   nsCOMPtr<nsIPrefBranch> mPrefBranch;
   nsCOMPtr<nsITimer> mTimer;
-  PRBool mNSSInitialized;
-  PRBool mObserversRegistered;
+  bool mNSSInitialized;
+  bool mObserversRegistered;
   PLHashTable *hashTableCerts;
   nsAutoString mDownloadURL;
   nsAutoString mCrlUpdateKey;
   Mutex mCrlTimerLock;
   nsHashtable *crlsScheduledForDownload;
-  PRBool crlDownloadTimerOn;
-  PRBool mUpdateTimerInitialized;
+  bool crlDownloadTimerOn;
+  bool mUpdateTimerInitialized;
   static int mInstanceCount;
   nsNSSShutDownList *mShutdownObjectList;
   SmartCardThreadList *mThreadList;
-  PRBool mIsNetworkDown;
+  bool mIsNetworkDown;
 
   void deleteBackgroundThreads();
   void createBackgroundThreads();
-  nsSSLThread *mSSLThread;
   nsCertVerificationThread *mCertVerificationThread;
 
   nsNSSHttpInterface mHttpForNSS;
@@ -372,7 +330,7 @@ private:
   PRCallOnceType mIdentityInfoCallOnce;
 
 public:
-  static PRBool globalConstFlagUsePKIXVerification;
+  static bool globalConstFlagUsePKIXVerification;
 };
 
 class PSMContentListener : public nsIURIContentListener,
@@ -392,9 +350,9 @@ private:
 class nsNSSErrors
 {
 public:
-  static const char *getDefaultErrorStringName(PRInt32 err);
-  static const char *getOverrideErrorStringName(PRInt32 aErrorCode);
-  static nsresult getErrorMessageFromCode(PRInt32 err,
+  static const char *getDefaultErrorStringName(PRErrorCode err);
+  static const char *getOverrideErrorStringName(PRErrorCode aErrorCode);
+  static nsresult getErrorMessageFromCode(PRErrorCode err,
                                           nsINSSComponent *component,
                                           nsString &returnedMessage);
 };
@@ -402,10 +360,10 @@ public:
 class nsPSMInitPanic
 {
 private:
-  static PRBool isPanic;
+  static bool isPanic;
 public:
-  static void SetPanic() {isPanic = PR_TRUE;}
-  static PRBool GetPanic() {return isPanic;}
+  static void SetPanic() {isPanic = true;}
+  static bool GetPanic() {return isPanic;}
 };
 
 #endif // _nsNSSComponent_h_

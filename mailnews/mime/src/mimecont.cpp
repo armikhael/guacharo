@@ -1,39 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #include "prmem.h"
 #include "plstr.h"
 #include "prlog.h"
@@ -48,13 +16,13 @@ MimeDefClass(MimeContainer, MimeContainerClass,
 static int MimeContainer_initialize (MimeObject *);
 static void MimeContainer_finalize (MimeObject *);
 static int MimeContainer_add_child (MimeObject *, MimeObject *);
-static int MimeContainer_parse_eof (MimeObject *, PRBool);
-static int MimeContainer_parse_end (MimeObject *, PRBool);
-static PRBool MimeContainer_displayable_inline_p (MimeObjectClass *clazz,
+static int MimeContainer_parse_eof (MimeObject *, bool);
+static int MimeContainer_parse_end (MimeObject *, bool);
+static bool MimeContainer_displayable_inline_p (MimeObjectClass *clazz,
                            MimeHeaders *hdrs);
 
 #if defined(DEBUG) && defined(XP_UNIX)
-static int MimeContainer_debug_print (MimeObject *, PRFileDesc *, PRInt32 depth);
+static int MimeContainer_debug_print (MimeObject *, PRFileDesc *, int32_t depth);
 #endif
 
 static int
@@ -95,9 +63,9 @@ MimeContainer_finalize (MimeObject *object)
    in forward order (0-N) but are destroyed in backward order (N-0)
    */
   if (!object->closed_p)
-  object->clazz->parse_eof (object, PR_FALSE);
+  object->clazz->parse_eof (object, false);
   if (!object->parsed_p)
-  object->clazz->parse_end (object, PR_FALSE);
+  object->clazz->parse_end (object, false);
 
   if (cont->children)
   {
@@ -116,7 +84,7 @@ MimeContainer_finalize (MimeObject *object)
 }
 
 static int
-MimeContainer_parse_eof (MimeObject *object, PRBool abort_p)
+MimeContainer_parse_eof (MimeObject *object, bool abort_p)
 {
   MimeContainer *cont = (MimeContainer *) object;
   int status;
@@ -146,7 +114,7 @@ MimeContainer_parse_eof (MimeObject *object, PRBool abort_p)
 }
 
 static int
-MimeContainer_parse_end (MimeObject *object, PRBool abort_p)
+MimeContainer_parse_end (MimeObject *object, bool abort_p)
 {
   MimeContainer *cont = (MimeContainer *) object;
   int status;
@@ -203,16 +171,16 @@ MimeContainer_add_child (MimeObject *parent, MimeObject *child)
   return 0;
 }
 
-static PRBool
+static bool
 MimeContainer_displayable_inline_p (MimeObjectClass *clazz, MimeHeaders *hdrs)
 {
-  return PR_TRUE;
+  return true;
 }
 
 
 #if defined(DEBUG) && defined(XP_UNIX)
 static int
-MimeContainer_debug_print (MimeObject *obj, PRFileDesc *stream, PRInt32 depth)
+MimeContainer_debug_print (MimeObject *obj, PRFileDesc *stream, int32_t depth)
 {
   MimeContainer *cont = (MimeContainer *) obj;
   int i;
@@ -224,7 +192,7 @@ MimeContainer_debug_print (MimeObject *obj, PRFileDesc *stream, PRInt32 depth)
       obj->clazz->class_name,
       addr ? addr : "???",
       cont->nchildren, (cont->nchildren == 1 ? "" : "s"),
-      (PRUint32) cont);
+      (uint32_t) cont);
   */
   PR_FREEIF(addr);
 

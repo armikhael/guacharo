@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsMsgRDFDataSource.h"
 #include "nsRDFCID.h"
@@ -44,12 +12,13 @@
 #include "nsIObserverService.h"
 #include "nsServiceManagerUtils.h"
 #include "nsMsgUtils.h"
+#include "mozilla/Services.h"
 
 static NS_DEFINE_CID(kRDFServiceCID, NS_RDFSERVICE_CID);
 
 nsMsgRDFDataSource::nsMsgRDFDataSource():
-    m_shuttingDown(PR_FALSE),
-    mInitialized(PR_FALSE)
+    m_shuttingDown(false),
+    mInitialized(false)
 {
 }
 
@@ -70,25 +39,26 @@ nsMsgRDFDataSource::Init()
 
   nsresult rv;
   /* Add an observer to XPCOM shutdown */
-  nsCOMPtr<nsIObserverService> obs = do_GetService("@mozilla.org/observer-service;1", &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
-  rv = obs->AddObserver(static_cast<nsIObserver*>(this), NS_XPCOM_SHUTDOWN_OBSERVER_ID, PR_TRUE);
+  nsCOMPtr<nsIObserverService> obs =
+    mozilla::services::GetObserverService();
+  NS_ENSURE_TRUE(obs, NS_ERROR_UNEXPECTED);
+  rv = obs->AddObserver(static_cast<nsIObserver*>(this), NS_XPCOM_SHUTDOWN_OBSERVER_ID, true);
   NS_ENSURE_SUCCESS(rv, rv);
 
   getRDFService();
 
-  mInitialized=PR_TRUE;
+  mInitialized=true;
   return rv;
 }
 
 void nsMsgRDFDataSource::Cleanup()
 {
-  mRDFService = nsnull;
+  mRDFService = nullptr;
 
   // release the window
-  mWindow = nsnull;
+  mWindow = nullptr;
 
-  mInitialized = PR_FALSE;
+  mInitialized = false;
 }
 
 NS_IMPL_CYCLE_COLLECTION_CLASS(nsMsgRDFDataSource)
@@ -127,7 +97,7 @@ nsMsgRDFDataSource::GetURI(char * *aURI)
 
 /* nsIRDFResource GetSource (in nsIRDFResource aProperty, in nsIRDFNode aTarget, in boolean aTruthValue); */
 NS_IMETHODIMP
-nsMsgRDFDataSource::GetSource(nsIRDFResource *aProperty, nsIRDFNode *aTarget, PRBool aTruthValue, nsIRDFResource **_retval)
+nsMsgRDFDataSource::GetSource(nsIRDFResource *aProperty, nsIRDFNode *aTarget, bool aTruthValue, nsIRDFResource **_retval)
 {
     return NS_RDF_NO_VALUE;
 }
@@ -135,7 +105,7 @@ nsMsgRDFDataSource::GetSource(nsIRDFResource *aProperty, nsIRDFNode *aTarget, PR
 
 /* nsISimpleEnumerator GetSources (in nsIRDFResource aProperty, in nsIRDFNode aTarget, in boolean aTruthValue); */
 NS_IMETHODIMP
-nsMsgRDFDataSource::GetSources(nsIRDFResource *aProperty, nsIRDFNode *aTarget, PRBool aTruthValue, nsISimpleEnumerator **_retval)
+nsMsgRDFDataSource::GetSources(nsIRDFResource *aProperty, nsIRDFNode *aTarget, bool aTruthValue, nsISimpleEnumerator **_retval)
 {
     return NS_RDF_NO_VALUE;
 }
@@ -143,7 +113,7 @@ nsMsgRDFDataSource::GetSources(nsIRDFResource *aProperty, nsIRDFNode *aTarget, P
 
 /* nsIRDFNode GetTarget (in nsIRDFResource aSource, in nsIRDFResource aProperty, in boolean aTruthValue); */
 NS_IMETHODIMP
-nsMsgRDFDataSource::GetTarget(nsIRDFResource *aSource, nsIRDFResource *aProperty, PRBool aTruthValue, nsIRDFNode **_retval)
+nsMsgRDFDataSource::GetTarget(nsIRDFResource *aSource, nsIRDFResource *aProperty, bool aTruthValue, nsIRDFNode **_retval)
 {
     return NS_RDF_NO_VALUE;
 }
@@ -151,7 +121,7 @@ nsMsgRDFDataSource::GetTarget(nsIRDFResource *aSource, nsIRDFResource *aProperty
 
 /* nsISimpleEnumerator GetTargets (in nsIRDFResource aSource, in nsIRDFResource aProperty, in boolean aTruthValue); */
 NS_IMETHODIMP
-nsMsgRDFDataSource::GetTargets(nsIRDFResource *aSource, nsIRDFResource *aProperty, PRBool aTruthValue, nsISimpleEnumerator **_retval)
+nsMsgRDFDataSource::GetTargets(nsIRDFResource *aSource, nsIRDFResource *aProperty, bool aTruthValue, nsISimpleEnumerator **_retval)
 {
     return NS_RDF_NO_VALUE;
 }
@@ -159,7 +129,7 @@ nsMsgRDFDataSource::GetTargets(nsIRDFResource *aSource, nsIRDFResource *aPropert
 
 /* void Assert (in nsIRDFResource aSource, in nsIRDFResource aProperty, in nsIRDFNode aTarget, in boolean aTruthValue); */
 NS_IMETHODIMP
-nsMsgRDFDataSource::Assert(nsIRDFResource *aSource, nsIRDFResource *aProperty, nsIRDFNode *aTarget, PRBool aTruthValue)
+nsMsgRDFDataSource::Assert(nsIRDFResource *aSource, nsIRDFResource *aProperty, nsIRDFNode *aTarget, bool aTruthValue)
 {
     return NS_RDF_NO_VALUE;
 }
@@ -194,9 +164,9 @@ nsMsgRDFDataSource::Move(nsIRDFResource *aOldSource,
 
 /* boolean HasAssertion (in nsIRDFResource aSource, in nsIRDFResource aProperty, in nsIRDFNode aTarget, in boolean aTruthValue); */
 NS_IMETHODIMP
-nsMsgRDFDataSource::HasAssertion(nsIRDFResource *aSource, nsIRDFResource *aProperty, nsIRDFNode *aTarget, PRBool aTruthValue, PRBool *_retval)
+nsMsgRDFDataSource::HasAssertion(nsIRDFResource *aSource, nsIRDFResource *aProperty, nsIRDFNode *aTarget, bool aTruthValue, bool *_retval)
 {
-    *_retval = PR_FALSE;
+    *_retval = false;
     return NS_OK;
 }
 
@@ -222,16 +192,16 @@ nsMsgRDFDataSource::RemoveObserver(nsIRDFObserver *aObserver)
 }
 
 NS_IMETHODIMP
-nsMsgRDFDataSource::HasArcIn(nsIRDFNode *aNode, nsIRDFResource *aArc, PRBool *result)
+nsMsgRDFDataSource::HasArcIn(nsIRDFNode *aNode, nsIRDFResource *aArc, bool *result)
 {
-  *result = PR_FALSE;
+  *result = false;
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsMsgRDFDataSource::HasArcOut(nsIRDFResource *aSource, nsIRDFResource *aArc, PRBool *result)
+nsMsgRDFDataSource::HasArcOut(nsIRDFResource *aSource, nsIRDFResource *aArc, bool *result)
 {
-  *result = PR_FALSE;
+  *result = false;
   return NS_OK;
 }
 
@@ -269,7 +239,7 @@ nsMsgRDFDataSource::GetAllCmds(nsIRDFResource *aSource, nsISimpleEnumerator **_r
 
 /* boolean IsCommandEnabled (in nsISupportsArray aSources, in nsIRDFResource aCommand, in nsISupportsArray aArguments); */
 NS_IMETHODIMP
-nsMsgRDFDataSource::IsCommandEnabled(nsISupportsArray *aSources, nsIRDFResource *aCommand, nsISupportsArray *aArguments, PRBool *_retval)
+nsMsgRDFDataSource::IsCommandEnabled(nsISupportsArray *aSources, nsIRDFResource *aCommand, nsISupportsArray *aArguments, bool *_retval)
 {
     return NS_RDF_NO_VALUE;
 }
@@ -302,7 +272,7 @@ NS_IMETHODIMP
 nsMsgRDFDataSource::Observe(nsISupports *aSubject, const char *aTopic, const PRUnichar *someData )
 {
   if (!strcmp(aTopic, NS_XPCOM_SHUTDOWN_OBSERVER_ID)) {
-    m_shuttingDown = PR_TRUE;
+    m_shuttingDown = true;
     Cleanup();
   }
   return NS_OK;
@@ -332,7 +302,7 @@ nsMsgRDFDataSource::getRDFService()
     if (!mRDFService && !m_shuttingDown) {
         nsresult rv;
         mRDFService = do_GetService(kRDFServiceCID, &rv);
-        if (NS_FAILED(rv)) return nsnull;
+        if (NS_FAILED(rv)) return nullptr;
     }
 
     return mRDFService;
@@ -341,10 +311,10 @@ nsMsgRDFDataSource::getRDFService()
 nsresult nsMsgRDFDataSource::NotifyPropertyChanged(nsIRDFResource *resource,
                                                    nsIRDFResource *propertyResource,
                                                    nsIRDFNode *newNode,
-                                                   nsIRDFNode *oldNode /* = nsnull */)
+                                                   nsIRDFNode *oldNode /* = nullptr */)
 {
 
-  NotifyObservers(resource, propertyResource, newNode, oldNode, PR_FALSE, PR_TRUE);
+  NotifyObservers(resource, propertyResource, newNode, oldNode, false, true);
   return NS_OK;
 
 }
@@ -353,7 +323,7 @@ nsresult nsMsgRDFDataSource::NotifyObservers(nsIRDFResource *subject,
                                                 nsIRDFResource *property,
                                                 nsIRDFNode *newObject,
                                                 nsIRDFNode *oldObject,
-                                                PRBool assert, PRBool change)
+                                                bool assert, bool change)
 {
   NS_ASSERTION(!(change && assert),
                "Can't change and assert at the same time!\n");
@@ -367,7 +337,7 @@ nsresult nsMsgRDFDataSource::NotifyObservers(nsIRDFResource *subject,
   return NS_OK;
 }
 
-PRBool
+bool
 nsMsgRDFDataSource::assertEnumFunc(nsIRDFObserver *aObserver, void *aData)
 {
   nsMsgRDFNotification *note = (nsMsgRDFNotification *)aData;
@@ -375,10 +345,10 @@ nsMsgRDFDataSource::assertEnumFunc(nsIRDFObserver *aObserver, void *aData)
                      note->subject,
                      note->property,
                      note->newObject);
-  return PR_TRUE;
+  return true;
 }
 
-PRBool
+bool
 nsMsgRDFDataSource::unassertEnumFunc(nsIRDFObserver *aObserver, void *aData)
 {
   nsMsgRDFNotification* note = (nsMsgRDFNotification *)aData;
@@ -386,10 +356,10 @@ nsMsgRDFDataSource::unassertEnumFunc(nsIRDFObserver *aObserver, void *aData)
                        note->subject,
                        note->property,
                        note->newObject);
-  return PR_TRUE;
+  return true;
 }
 
-PRBool
+bool
 nsMsgRDFDataSource::changeEnumFunc(nsIRDFObserver *aObserver, void *aData)
 {
   nsMsgRDFNotification* note = (nsMsgRDFNotification *)aData;
@@ -397,7 +367,7 @@ nsMsgRDFDataSource::changeEnumFunc(nsIRDFObserver *aObserver, void *aData)
                      note->subject,
                      note->property,
                      note->oldObject, note->newObject);
-  return PR_TRUE;
+  return true;
 }
 nsresult
 nsMsgRDFDataSource::GetTransactionManager(nsISupportsArray *aSources, nsITransactionManager **aTransactionManager)
@@ -405,12 +375,12 @@ nsMsgRDFDataSource::GetTransactionManager(nsISupportsArray *aSources, nsITransac
   if(!aTransactionManager)
     return NS_ERROR_NULL_POINTER;
 
-  *aTransactionManager = nsnull;
+  *aTransactionManager = nullptr;
   nsresult rv = NS_OK;
 
   nsCOMPtr<nsITransactionManager> transactionManager;
 
-  PRUint32 cnt;
+  uint32_t cnt;
 
   rv = aSources->Count(&cnt);
   if (NS_FAILED(rv)) return rv;

@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Seth Spitzer <sspitzer@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 top.MAX_RECIPIENTS = 1;
 var inputElementType = "";
@@ -41,8 +8,6 @@ var inputElementType = "";
 var gListCard;
 var gEditList;
 var oldListName = "";
-var gPromptService = Components.classes["@mozilla.org/embedcomp/prompt-service;1"].getService(Components.interfaces.nsIPromptService);
-var gHeaderParser = Components.classes["@mozilla.org/messenger/headerparser;1"].getService(Components.interfaces.nsIMsgHeaderParser);
 var gLoadListeners = [];
 var gSaveListeners = [];
 
@@ -53,6 +18,13 @@ try
 }
 catch (e)
 {
+}
+
+// Returns the load context for the current window
+function getLoadContext() {
+  return window.QueryInterface(Components.interfaces.nsIInterfaceRequestor)
+               .getInterface(Components.interfaces.nsIWebNavigation)
+               .QueryInterface(Components.interfaces.nsILoadContext);
 }
 
 function handleKeyPress(element, event)
@@ -66,12 +38,9 @@ function handleKeyPress(element, event)
 
 function mailingListExists(listname)
 {
-  var addressbook = Components.classes["@mozilla.org/abmanager;1"]
-                              .getService(Components.interfaces.nsIAbManager);
-
-  if (addressbook.mailListNameExists(listname))
+  if (MailServices.ab.mailListNameExists(listname))
   {
-    gPromptService.alert(window, 
+    Services.prompt.alert(window,
       gAddressBookBundle.getString("mailListNameExistsTitle"),
       gAddressBookBundle.getString("mailListNameExistsMessage"));
     return true;
@@ -118,7 +87,7 @@ function GetListValue(mailList, doAdd)
   {
 
     fieldValue = inputField.value;
-    
+
     if (doAdd || (!doAdd && pos >= oldTotal))
       cardproperty = Components.classes["@mozilla.org/addressbook/cardproperty;1"].createInstance();
     else
@@ -146,7 +115,7 @@ function GetListValue(mailList, doAdd)
         var addresses = {};
         var names = {};
         var fullNames = {};
-        var numAddresses = gHeaderParser.parseHeadersWithArray(fieldValue, addresses, names, fullNames);
+        var numAddresses = MailServices.headerParser.parseHeadersWithArray(fieldValue, addresses, names, fullNames);
         for (var j = 0; j < numAddresses; j++)
         {
           if (j > 0)
@@ -301,8 +270,8 @@ function OnLoadEditList()
       for ( var i = 0;  i < total; i++ )
       {
         var card = gEditList.addressLists.queryElementAt(i, Components.interfaces.nsIAbCard);
-        var address = gHeaderParser.makeFullAddress(card.displayName,
-                                                    card.primaryEmail);
+        let address = MailServices.headerParser.makeFullAddress(card.displayName,
+                                                                card.primaryEmail);
         SetInputValue(address, newListBoxNode, templateNode);
       }
       var parent = listbox.parentNode;
@@ -540,6 +509,7 @@ function DropOnAddressListTree(event)
 
   try {
    trans = Components.classes["@mozilla.org/widget/transferable;1"].createInstance(Components.interfaces.nsITransferable);
+   trans.init(getLoadContext());
    trans.addDataFlavor("text/x-moz-address");
   }
   catch (ex) {
@@ -630,4 +600,3 @@ function NotifySaveListeners(aMailingList)
   for (let i = 0; i < gSaveListeners.length; i++)
     gSaveListeners[i](aMailingList, document);
 }
-

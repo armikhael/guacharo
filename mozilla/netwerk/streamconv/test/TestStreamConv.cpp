@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsIServiceManager.h"
 #include "nsIComponentManager.h"
@@ -47,6 +15,7 @@
 #include "nsCOMPtr.h"
 #include "nsNetUtil.h"
 #include "nsThreadUtils.h"
+#include "mozilla/Attributes.h"
 
 #include "nspr.h"
 
@@ -81,7 +50,7 @@ static NS_DEFINE_CID(kStreamConverterServiceCID, NS_STREAMCONVERTERSERVICE_CID);
 //   receives the fully converted data, although it doesn't do anything with
 //   the data.
 ////////////////////////////////////////////////////////////////////////
-class EndListener : public nsIStreamListener {
+class EndListener MOZ_FINAL : public nsIStreamListener {
 public:
     // nsISupports declaration
     NS_DECL_ISUPPORTS
@@ -90,12 +59,14 @@ public:
 
     // nsIStreamListener method
     NS_IMETHOD OnDataAvailable(nsIRequest* request, nsISupports *ctxt, nsIInputStream *inStr, 
-                               PRUint32 sourceOffset, PRUint32 count)
+                               uint32_t sourceOffset, uint32_t count)
     {
         nsresult rv;
-        PRUint32 read, len;
-        rv = inStr->Available(&len);
+        uint32_t read;
+        uint64_t len64;
+        rv = inStr->Available(&len64);
         if (NS_FAILED(rv)) return rv;
+        uint32_t len = (uint32_t)NS_MIN(len64, (uint64_t)(PR_UINT32_MAX - 1));
 
         char *buffer = (char*)nsMemory::Alloc(len + 1);
         if (!buffer) return NS_ERROR_OUT_OF_MEMORY;
@@ -103,7 +74,8 @@ public:
         rv = inStr->Read(buffer, len, &read);
         buffer[len] = '\0';
         if (NS_SUCCEEDED(rv)) {
-            printf("CONTEXT %p: Received %u bytes and the following data: \n %s\n\n", ctxt, read, buffer);
+            printf("CONTEXT %p: Received %u bytes and the following data: \n %s\n\n",
+                   static_cast<void*>(ctxt), read, buffer);
         }
         nsMemory::Free(buffer);
 
@@ -125,7 +97,12 @@ NS_IMPL_ISUPPORTS2(EndListener,
 // EndListener END
 ////////////////////////////////////////////////////////////////////////
 
-
+static uint32_t 
+saturated(uint64_t aValue)
+{
+    return (uint32_t)NS_MIN(aValue, (uint64_t)PR_UINT32_MAX);
+}
+ 
 nsresult SendData(const char * aData, nsIStreamListener* aListener, nsIRequest* request) {
     nsresult rv;
 
@@ -136,10 +113,20 @@ nsresult SendData(const char * aData, nsIStreamListener* aListener, nsIRequest* 
     rv = dataStream->SetData(aData, strlen(aData));
     NS_ENSURE_SUCCESS(rv, rv);
 
-    PRUint32 avail;
+    uint64_t avail = 0;
     dataStream->Available(&avail);
 
-    return aListener->OnDataAvailable(request, nsnull, dataStream, 0, avail);
+    uint64_t offset = 0;
+    while (avail > 0) {
+        uint32_t count = saturated(avail);
+        rv = aListener->OnDataAvailable(request, nullptr, dataStream,
+                                        saturated(offset), count);
+        if (NS_FAILED(rv)) return rv;
+
+        offset += count;
+        avail -= count;
+    }
+    return NS_OK;
 }
 #define SEND_DATA(x) SendData(x, converterListener, request)
 
@@ -185,7 +172,7 @@ main(int argc, char* argv[])
         XRE_AddStaticComponent(&kTestModule);
 
         nsCOMPtr<nsIServiceManager> servMan;
-        NS_InitXPCOM2(getter_AddRefs(servMan), nsnull, nsnull);
+        NS_InitXPCOM2(getter_AddRefs(servMan), nullptr, nullptr);
     
         nsCOMPtr<nsIThread> thread = do_GetCurrentThread();
 
@@ -218,7 +205,7 @@ main(int argc, char* argv[])
 
         rv = NS_NewInputStreamChannel(getter_AddRefs(channel),
                                       dummyURI,
-                                      nsnull,   // inStr
+                                      nullptr,   // inStr
                                       "text/plain", // content-type
                                       -1);      // XXX fix contentLength
         if (NS_FAILED(rv)) return rv;
@@ -237,9 +224,9 @@ main(int argc, char* argv[])
         // setup a listener to push the data into. This listener sits inbetween the
         // unconverted data of fromType, and the final listener in the chain (in this case
         // the dataReceiver.
-        nsIStreamListener *converterListener = nsnull;
+        nsIStreamListener *converterListener = nullptr;
         rv = StreamConvService->AsyncConvertData(fromStr, toStr,
-                                                 dataReceiver, nsnull, &converterListener);
+                                                 dataReceiver, nullptr, &converterListener);
         if (NS_FAILED(rv)) return rv;
         NS_RELEASE(dataReceiver);
 
@@ -247,7 +234,7 @@ main(int argc, char* argv[])
         // that will receive the converted data. Let's mimic On*() calls and get the conversion
         // going. Typically these On*() calls would be made inside their respective wrappers On*()
         // methods.
-        rv = converterListener->OnStartRequest(request, nsnull);
+        rv = converterListener->OnStartRequest(request, nullptr);
         if (NS_FAILED(rv)) return rv;
 
         rv = SEND_DATA("aaa");
@@ -257,7 +244,7 @@ main(int argc, char* argv[])
         if (NS_FAILED(rv)) return rv;
 
         // Finish the request.
-        rv = converterListener->OnStopRequest(request, nsnull, rv);
+        rv = converterListener->OnStopRequest(request, nullptr, rv);
         if (NS_FAILED(rv)) return rv;
 
         NS_RELEASE(converterListener);
@@ -265,7 +252,7 @@ main(int argc, char* argv[])
         // SYNCHRONOUS conversion
         nsCOMPtr<nsIInputStream> convertedData;
         rv = StreamConvService->Convert(inputData, fromStr, toStr,
-                                        nsnull, getter_AddRefs(convertedData));
+                                        nullptr, getter_AddRefs(convertedData));
         if (NS_FAILED(rv)) return rv;
 #endif
 
@@ -276,6 +263,6 @@ main(int argc, char* argv[])
         }
     } // this scopes the nsCOMPtrs
     // no nsCOMPtrs are allowed to be alive when you call NS_ShutdownXPCOM
-    NS_ShutdownXPCOM(nsnull);
+    NS_ShutdownXPCOM(nullptr);
     return rv;
 }

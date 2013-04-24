@@ -1,18 +1,13 @@
-guacharo for Debian - source package notes
------------------------------------------
+== Importing a new upstream tarball ==
 
-The upstream thunderbird tarball was repacked as follows:
+After downlading the sources debian/repack.py is used 
+to repackage the tarball
 
-  - use uscan to get the last thunderbird version from mozilla.org
-  - extract bzip2 tarball (thunderbird-[version].source.tar.bz2)
+    python icedove/debian/repack.py -p icedove -u 16.0.1 \
+           thunderbird-16.0.1.source.tar.bz2
+    cd icedove
+    git-import-orig ../icedove_16.0.1.orig.tar.bz2
+    
+Alternatively uscan should do the right thing:
 
-  - without GIT:
-    * jump into comm-1.9.1 and run debian/remove.nonfree
-    * copy all files from comm-1.9.1 into build directory
-
-  - with GIT:
-    * import comm-1.9.1 into branch 'upstream'
-    * merge upstream into dfsg-upstream
-    * merge dfsg-upstream into master
-
- -- Christoph Goehre <chris@sigxcpu.org>  Fri, 08 Jan 2010 10:13:56 +0100
+    git-import-orig --uscan

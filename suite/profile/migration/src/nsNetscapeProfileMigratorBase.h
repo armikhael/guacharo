@@ -1,44 +1,12 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is The Browser Profile Migrator.
- *
- * The Initial Developer of the Original Code is Ben Goodger.
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Ben Goodger <ben@bengoodger.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef netscapeprofilemigratorbase___h___
 #define netscapeprofilemigratorbase___h___
 
-#include "nsILocalFile.h"
+#include "nsIFile.h"
 #include "nsIMutableArray.h"
 #include "nsStringAPI.h"
 #include "nsTArray.h"
@@ -70,10 +38,10 @@ struct fileTransactionEntry {
 #define F(a) nsNetscapeProfileMigratorBase::a
 
 #define MAKEPREFTRANSFORM(pref, newpref, getmethod, setmethod) \
-  { pref, newpref, F(Get##getmethod), F(Set##setmethod), PR_FALSE, { -1 } }
+  { pref, newpref, F(Get##getmethod), F(Set##setmethod), false, { -1 } }
 
 #define MAKESAMETYPEPREFTRANSFORM(pref, method) \
-  { pref, 0, F(Get##method), F(Set##method), PR_FALSE, { -1 } }
+  { pref, 0, F(Get##method), F(Set##method), false, { -1 } }
 
 class nsNetscapeProfileMigratorBase : public nsISuiteProfileMigrator,
                                       public nsITimerCallback
@@ -93,29 +61,29 @@ public:
     const char*   targetPrefName;
     prefConverter prefGetterFunc;
     prefConverter prefSetterFunc;
-    PRBool        prefHasValue;
+    bool          prefHasValue;
     union {
-      PRInt32     intValue;
-      PRBool      boolValue;
+      int32_t     intValue;
+      bool        boolValue;
       char*       stringValue;
     };
   };
 
   struct PrefBranchStruct {
     char*         prefName;
-    PRInt32       type;
+    int32_t       type;
     union {
       char*       stringValue;
-      PRInt32     intValue;
-      PRBool      boolValue;
+      int32_t     intValue;
+      bool        boolValue;
     };
   };
 
   typedef nsTArray<PrefBranchStruct*> PBStructArray;
 
   // nsISuiteProfileMigrator methods
-  NS_IMETHOD GetSourceExists(PRBool* aSourceExists);
-  NS_IMETHOD GetSourceHasMultipleProfiles(PRBool* aSourceHasMultipleProfiles);
+  NS_IMETHOD GetSourceExists(bool* aSourceExists);
+  NS_IMETHOD GetSourceHasMultipleProfiles(bool* aSourceHasMultipleProfiles);
   NS_IMETHOD GetSourceProfiles(nsIArray** aResult);
 
   // Pref Transform Methods
@@ -136,14 +104,11 @@ protected:
 
   // General Utility Methods
   nsresult GetSourceProfile(const PRUnichar* aProfile);
-  nsresult GetProfileDataFromProfilesIni(nsILocalFile* aDataDir,
+  nsresult GetProfileDataFromProfilesIni(nsIFile* aDataDir,
                                          nsIMutableArray* aProfileNames,
                                          nsIMutableArray* aProfileLocations);
-  nsresult GetProfileDataFromRegistry(nsILocalFile* aRegistryFile,
-                                      nsIMutableArray* aProfileNames,
-                                      nsIMutableArray* aProfileLocations);
   nsresult GetFileValue(nsIPrefBranch* aPrefBranch, const char* aRelPrefName,
-                        const char* aPrefName, nsILocalFile** aReturnFile);
+                        const char* aPrefName, nsIFile** aReturnFile);
   nsresult CopyFile(const char* aSourceFileName,
                     const char* aTargetFileName);
   nsresult RecursiveCopy(nsIFile* srcDir, nsIFile* destDir);
@@ -153,25 +118,25 @@ protected:
                    PBStructArray &aPrefs);
 
   // Generic Import Functions
-  nsresult CopyCookies(PRBool aReplace);
-  nsresult CopyPasswords(PRBool aReplace);
+  nsresult CopyCookies(bool aReplace);
+  nsresult CopyPasswords(bool aReplace);
   nsresult CopyUserSheet(const char* aFileName);
-  nsresult GetSignonFileName(PRBool aReplace, char** aFileName);
+  nsresult GetSignonFileName(bool aReplace, char** aFileName);
 
   // Browser Import Functions
-  nsresult CopyBookmarks(PRBool aReplace);
-  nsresult CopyOtherData(PRBool aReplace);
+  nsresult CopyBookmarks(bool aReplace);
+  nsresult CopyOtherData(bool aReplace);
   nsresult ImportNetscapeBookmarks(const char* aBookmarksFileName,
                                    const char* aImportSourceNameKey);
-  PRBool GetSourceHasHomePageURL();
-  nsresult CopyHomePageData(PRBool aReplace);
+  bool GetSourceHasHomePageURL();
+  nsresult CopyHomePageData(bool aReplace);
 
   // Mail Import Functions
   nsresult CopyAddressBookDirectories(PBStructArray &aLdapServers,
                                       nsIPrefService* aPrefService);
   nsresult CopySignatureFiles(PBStructArray &aIdentities,
                               nsIPrefService* aPrefService);
-  nsresult CopyJunkTraining(PRBool aReplace);
+  nsresult CopyJunkTraining(bool aReplace);
   nsresult CopyMailFolderPrefs(PBStructArray &aMailServers,
                                nsIPrefService* aPrefService);
   void CopyMailFolders();
@@ -179,17 +144,17 @@ protected:
   void EndCopyFolders();
 
   // Source & Target profiles
-  nsCOMPtr<nsILocalFile> mSourceProfile;
+  nsCOMPtr<nsIFile> mSourceProfile;
   nsCOMPtr<nsIFile> mTargetProfile;
 
   // list of src/destination files we still have to copy into the new profile
   // directory
   nsTArray<fileTransactionEntry> mFileCopyTransactions;
-  PRUint32 mFileCopyTransactionIndex;
+  uint32_t mFileCopyTransactionIndex;
 
   nsCOMPtr<nsIObserverService> mObserverService;
-  PRInt64 mMaxProgress;
-  PRInt64 mCurrentProgress;
+  int64_t mMaxProgress;
+  int64_t mCurrentProgress;
 
   nsCOMPtr<nsIMutableArray> mProfileNames;
   nsCOMPtr<nsIMutableArray> mProfileLocations;

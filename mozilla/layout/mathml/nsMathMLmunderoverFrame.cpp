@@ -1,43 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla MathML Project.
- *
- * The Initial Developer of the Original Code is
- * The University Of Queensland.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Roger B. Sidje <rbs@maths.uq.edu.au>
- *   David J. Fiddes <D.J.Fiddes@hw.ac.uk>
- *   Shyjan Mahamud <mahamud@cs.cmu.edu>
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 
 #include "nsCOMPtr.h"
@@ -72,9 +36,9 @@ nsMathMLmunderoverFrame::~nsMathMLmunderoverFrame()
 }
 
 NS_IMETHODIMP
-nsMathMLmunderoverFrame::AttributeChanged(PRInt32         aNameSpaceID,
+nsMathMLmunderoverFrame::AttributeChanged(int32_t         aNameSpaceID,
                                           nsIAtom*        aAttribute,
-                                          PRInt32         aModType)
+                                          int32_t         aModType)
 {
   if (nsGkAtoms::accent_ == aAttribute ||
       nsGkAtoms::accentunder_ == aAttribute) {
@@ -88,8 +52,8 @@ nsMathMLmunderoverFrame::AttributeChanged(PRInt32         aNameSpaceID,
 }
 
 NS_IMETHODIMP
-nsMathMLmunderoverFrame::UpdatePresentationData(PRUint32        aFlagsValues,
-                                                PRUint32        aFlagsToUpdate)
+nsMathMLmunderoverFrame::UpdatePresentationData(uint32_t        aFlagsValues,
+                                                uint32_t        aFlagsToUpdate)
 {
   nsMathMLContainerFrame::UpdatePresentationData(aFlagsValues, aFlagsToUpdate);
   // disable the stretch-all flag if we are going to act like a subscript-superscript pair
@@ -104,10 +68,10 @@ nsMathMLmunderoverFrame::UpdatePresentationData(PRUint32        aFlagsValues,
 }
 
 NS_IMETHODIMP
-nsMathMLmunderoverFrame::UpdatePresentationDataFromChildAt(PRInt32         aFirstIndex,
-                                                           PRInt32         aLastIndex,
-                                                           PRUint32        aFlagsValues,
-                                                           PRUint32        aFlagsToUpdate)
+nsMathMLmunderoverFrame::UpdatePresentationDataFromChildAt(int32_t         aFirstIndex,
+                                                           int32_t         aLastIndex,
+                                                           uint32_t        aFlagsValues,
+                                                           uint32_t        aFlagsToUpdate)
 {
   // munderover is special... The REC says:
   // Within underscript, <munder> always sets displaystyle to "false", 
@@ -124,7 +88,7 @@ nsMathMLmunderoverFrame::UpdatePresentationDataFromChildAt(PRInt32         aFirs
   //    can change in the <mo> deep down the embellished hierarchy
 
   // Do #1 here, prevent displaystyle to be changed in the underscript & overscript
-  PRInt32 index = 0;
+  int32_t index = 0;
   nsIFrame* childFrame = mFrames.FirstChild();
   while (childFrame) {
     if ((index >= aFirstIndex) &&
@@ -190,8 +154,8 @@ XXX The winner is the outermost setting in conflicting settings like these:
   of accentunder depending on underscript.
   */
 
-  nsIFrame* overscriptFrame = nsnull;
-  nsIFrame* underscriptFrame = nsnull;
+  nsIFrame* overscriptFrame = nullptr;
+  nsIFrame* underscriptFrame = nullptr;
   nsIFrame* baseFrame = mFrames.FirstChild();
   nsIAtom* tag = mContent->Tag();
 
@@ -262,7 +226,7 @@ XXX The winner is the outermost setting in conflicting settings like these:
     }
   }
 
-  PRBool subsupDisplay =
+  bool subsupDisplay =
     NS_MATHML_EMBELLISH_IS_MOVABLELIMITS(mEmbellishData.flags) &&
     !NS_MATHML_IS_DISPLAYSTYLE(mPresentationData.flags);
 
@@ -293,7 +257,7 @@ XXX The winner is the outermost setting in conflicting settings like these:
   */
   if (tag == nsGkAtoms::mover_ ||
       tag == nsGkAtoms::munderover_) {
-    PRUint32 compress = NS_MATHML_EMBELLISH_IS_ACCENTOVER(mEmbellishData.flags)
+    uint32_t compress = NS_MATHML_EMBELLISH_IS_ACCENTOVER(mEmbellishData.flags)
       ? NS_MATHML_COMPRESSED : 0;
     SetIncrementScriptLevel(tag == nsGkAtoms::mover_ ? 1 : 2,
                             !NS_MATHML_EMBELLISH_IS_ACCENTOVER(mEmbellishData.flags) || subsupDisplay);
@@ -336,7 +300,7 @@ i.e.,:
 
 /* virtual */ nsresult
 nsMathMLmunderoverFrame::Place(nsRenderingContext& aRenderingContext,
-                               PRBool               aPlaceOrigin,
+                               bool                 aPlaceOrigin,
                                nsHTMLReflowMetrics& aDesiredSize)
 {
   nsIAtom* tag = mContent->Tag();
@@ -377,8 +341,8 @@ nsMathMLmunderoverFrame::Place(nsRenderingContext& aRenderingContext,
   nsHTMLReflowMetrics baseSize;
   nsHTMLReflowMetrics underSize;
   nsHTMLReflowMetrics overSize;
-  nsIFrame* overFrame = nsnull;
-  nsIFrame* underFrame = nsnull;
+  nsIFrame* overFrame = nullptr;
+  nsIFrame* underFrame = nullptr;
   nsIFrame* baseFrame = mFrames.FirstChild();
   underSize.ascent = 0; 
   overSize.ascent = 0;
@@ -529,7 +493,22 @@ nsMathMLmunderoverFrame::Place(nsRenderingContext& aRenderingContext,
     overDelta2 = 0;
   }
 
-  nscoord dxBase, dxOver = 0, dxUnder = 0;
+  nscoord dxBase = 0, dxOver = 0, dxUnder = 0;
+  nsAutoString valueAlign;
+  enum {
+    center,
+    left,
+    right
+  } alignPosition = center;
+
+  if (GetAttribute(mContent, mPresentationData.mstyle, nsGkAtoms::align,
+                   valueAlign)) {
+    if (valueAlign.EqualsLiteral("left")) {
+      alignPosition = left;
+    } else if (valueAlign.EqualsLiteral("right")) {
+      alignPosition = right;
+    }
+  }
 
   //////////
   // pass 1, do what <mover> does: attach the overscript on the base
@@ -545,13 +524,24 @@ nsMathMLmunderoverFrame::Place(nsRenderingContext& aRenderingContext,
 
   if (NS_MATHML_EMBELLISH_IS_ACCENTOVER(mEmbellishData.flags)) {
     mBoundingMetrics.width = bmBase.width; 
-    dxOver += correction + (mBoundingMetrics.width - overWidth)/2;
+    if (alignPosition == center) {
+      dxOver += correction;
+    }
   }
   else {
     mBoundingMetrics.width = NS_MAX(bmBase.width, overWidth);
-    dxOver += correction/2 + (mBoundingMetrics.width - overWidth)/2;
+    if (alignPosition == center) {
+      dxOver += correction/2;
+    }
   }
-  dxBase = (mBoundingMetrics.width - bmBase.width)/2;
+  
+  if (alignPosition == center) {
+    dxOver += (mBoundingMetrics.width - overWidth)/2;
+    dxBase = (mBoundingMetrics.width - bmBase.width)/2;
+  } else if (alignPosition == right) {
+    dxOver += mBoundingMetrics.width - overWidth;
+    dxBase = mBoundingMetrics.width - bmBase.width;
+  }
 
   mBoundingMetrics.ascent = 
     bmBase.ascent + overDelta1 + bmOver.ascent + bmOver.descent;
@@ -574,8 +564,6 @@ nsMathMLmunderoverFrame::Place(nsRenderingContext& aRenderingContext,
            overSize.ascent + bmOver.descent + overDelta1 + bmBase.ascent);
   ascentAnonymousBase = NS_MAX(ascentAnonymousBase, baseSize.ascent);
 
-  GetItalicCorrection(bmAnonymousBase, correction);
-
   // Width of non-spacing marks is zero so use left and right bearing.
   nscoord underWidth = bmUnder.width;
   if (!underWidth) {
@@ -584,13 +572,19 @@ nsMathMLmunderoverFrame::Place(nsRenderingContext& aRenderingContext,
   }
 
   nscoord maxWidth = NS_MAX(bmAnonymousBase.width, underWidth);
-  if (NS_MATHML_EMBELLISH_IS_ACCENTUNDER(mEmbellishData.flags)) {
-    dxUnder += (maxWidth - underWidth)/2;;
+  if (alignPosition == center &&
+      !NS_MATHML_EMBELLISH_IS_ACCENTUNDER(mEmbellishData.flags)) {
+    GetItalicCorrection(bmAnonymousBase, correction);
+    dxUnder += -correction/2;
   }
-  else {
-    dxUnder += -correction/2 + (maxWidth - underWidth)/2;
+  nscoord dxAnonymousBase = 0;
+  if (alignPosition == center) {
+    dxUnder += (maxWidth - underWidth)/2;
+    dxAnonymousBase = (maxWidth - bmAnonymousBase.width)/2;
+  } else if (alignPosition == right) {
+    dxUnder += maxWidth - underWidth;
+    dxAnonymousBase = maxWidth - bmAnonymousBase.width;
   }
-  nscoord dxAnonymousBase = (maxWidth - bmAnonymousBase.width)/2;
 
   // adjust the offsets of the real base and overscript since their
   // final offsets should be relative to us...
@@ -627,16 +621,16 @@ nsMathMLmunderoverFrame::Place(nsRenderingContext& aRenderingContext,
     if (overFrame) {
       dy = aDesiredSize.ascent - mBoundingMetrics.ascent + bmOver.ascent 
         - overSize.ascent;
-      FinishReflowChild (overFrame, PresContext(), nsnull, overSize, dxOver, dy, 0);
+      FinishReflowChild (overFrame, PresContext(), nullptr, overSize, dxOver, dy, 0);
     }
     // place base
     dy = aDesiredSize.ascent - baseSize.ascent;
-    FinishReflowChild (baseFrame, PresContext(), nsnull, baseSize, dxBase, dy, 0);
+    FinishReflowChild (baseFrame, PresContext(), nullptr, baseSize, dxBase, dy, 0);
     // place underscript
     if (underFrame) {
       dy = aDesiredSize.ascent + mBoundingMetrics.descent - bmUnder.descent 
         - underSize.ascent;
-      FinishReflowChild (underFrame, PresContext(), nsnull, underSize,
+      FinishReflowChild (underFrame, PresContext(), nullptr, underSize,
                          dxUnder, dy, 0);
     }
   }

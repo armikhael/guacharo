@@ -58,7 +58,7 @@ msll.prototype = {
                             "DATA"]);
 
       // Compare data file to what the server received
-      do_check_eq(originalData, server._handler.post);
+      do_check_eq(originalData, server._daemon.post);
 
       // check there's still one message left in the folder
       do_check_eq(gMsgSendLater.getUnsentMessagesFolder(null)
@@ -79,11 +79,8 @@ msll.prototype = {
 
 
 function run_test() {
-  var prefSvc = Components.classes["@mozilla.org/preferences-service;1"]
-    .getService(Components.interfaces.nsIPrefBranch);
-
   // The point of this test - send in background.
-  prefSvc.setBoolPref("mailnews.sendInBackground", true);
+  Services.prefs.setBoolPref("mailnews.sendInBackground", true);
 
   // Ensure we have a local mail account, an normal account and appropriate
   // servers and identities.

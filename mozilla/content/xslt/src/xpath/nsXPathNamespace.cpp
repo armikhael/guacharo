@@ -1,43 +1,10 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is TransforMiiX XSLT processor code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Peter Van der Beken <peterv@propagandism.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsXPathNamespace.h"
-#include "nsIDOMClassInfo.h"
+#include "nsDOMClassInfoID.h"
 
 NS_IMPL_ADDREF(nsXPathNamespace)
 NS_IMPL_RELEASE(nsXPathNamespace)
@@ -68,7 +35,7 @@ NS_IMETHODIMP nsXPathNamespace::SetNodeValue(const nsAString & aNodeValue)
 }
 
 /* readonly attribute unsigned short nodeType; */
-NS_IMETHODIMP nsXPathNamespace::GetNodeType(PRUint16 *aNodeType)
+NS_IMETHODIMP nsXPathNamespace::GetNodeType(uint16_t *aNodeType)
 {
     *aNodeType = XPATH_NAMESPACE_NODE;
     return NS_OK;
@@ -147,13 +114,13 @@ NS_IMETHODIMP nsXPathNamespace::AppendChild(nsIDOMNode *newChild, nsIDOMNode **a
 }
 
 /* boolean hasChildNodes (); */
-NS_IMETHODIMP nsXPathNamespace::HasChildNodes(PRBool *aResult)
+NS_IMETHODIMP nsXPathNamespace::HasChildNodes(bool *aResult)
 {
     return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 /* nsIDOMNode cloneNode (in boolean deep); */
-NS_IMETHODIMP nsXPathNamespace::CloneNode(PRBool deep, nsIDOMNode **aResult)
+NS_IMETHODIMP nsXPathNamespace::CloneNode(bool deep, uint8_t aOptionalArgc, nsIDOMNode **aResult)
 {
     return NS_ERROR_NOT_IMPLEMENTED;
 }
@@ -165,7 +132,7 @@ NS_IMETHODIMP nsXPathNamespace::Normalize()
 }
 
 /* boolean isSupported (in DOMString feature, in DOMString version); */
-NS_IMETHODIMP nsXPathNamespace::IsSupported(const nsAString & feature, const nsAString & version, PRBool *aResult)
+NS_IMETHODIMP nsXPathNamespace::IsSupported(const nsAString & feature, const nsAString & version, bool *aResult)
 {
     return NS_ERROR_NOT_IMPLEMENTED;
 }
@@ -193,7 +160,7 @@ NS_IMETHODIMP nsXPathNamespace::GetLocalName(nsAString & aLocalName)
 }
 
 /* boolean hasAttributes (); */
-NS_IMETHODIMP nsXPathNamespace::HasAttributes(PRBool *aResult)
+NS_IMETHODIMP nsXPathNamespace::HasAttributes(bool *aResult)
 {
     return NS_ERROR_NOT_IMPLEMENTED;
 }

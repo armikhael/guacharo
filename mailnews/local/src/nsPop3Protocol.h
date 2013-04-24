@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsPop3Protocol_h__
 #define nsPop3Protocol_h__
@@ -70,7 +38,7 @@ and change the POP3_QUIT_RESPONSE state to flush the newly committed deletes. */
 /*
  * Cannot have the following line uncommented. It is defined.
  * #ifdef POP_ALWAYS_USE_UIDL_FOR_DUPLICATES will always be evaluated
- * as PR_TRUE.
+ * as true.
  *
 #define POP_ALWAYS_USE_UIDL_FOR_DUPLICATES 0
  *
@@ -197,7 +165,7 @@ enum Pop3StatesEnum {
 typedef struct Pop3UidlEntry { /* information about this message */
     char* uidl;
     char  status; // KEEP=='k', DELETE='d' TOO_BIG='b' FETCH_BODY='f'
-    PRUint32 dateReceived; // time message received, used for aging
+    uint32_t dateReceived; // time message received, used for aging
 } Pop3UidlEntry;
 
 typedef struct Pop3UidlHost {
@@ -209,52 +177,52 @@ typedef struct Pop3UidlHost {
 } Pop3UidlHost;
 
 typedef struct Pop3MsgInfo {
-    PRInt32 msgnum;
-    PRInt32 size;
+    int32_t msgnum;
+    int32_t size;
     char* uidl;
 } Pop3MsgInfo;
 
 typedef struct _Pop3ConData {
-    PRBool leave_on_server;     /* Whether we're supposed to leave messages
+    bool leave_on_server;     /* Whether we're supposed to leave messages
                                    on server. */
-    PRBool headers_only;        /* Whether to just fetch headers on initial
+    bool headers_only;        /* Whether to just fetch headers on initial
                                    downloads. */
-    PRInt32 size_limit;         /* Leave messages bigger than this on the
+    int32_t size_limit;         /* Leave messages bigger than this on the
                                    server and only download a partial
                                    message. */
-    PRUint32 capability_flags; /* What capability this server has? */
+    uint32_t capability_flags; /* What capability this server has? */
 
     Pop3StatesEnum next_state;  /* the next state or action to be taken */
     Pop3StatesEnum next_state_after_response;
-    PRBool pause_for_read;       /* Pause now for next read? */
+    bool pause_for_read;       /* Pause now for next read? */
 
-    PRBool command_succeeded;   /* did the last command succeed? */
-    PRBool list_done;    /* did we get the complete list of msgIDs? */
-    PRInt32 first_msg;
+    bool command_succeeded;   /* did the last command succeed? */
+    bool list_done;    /* did we get the complete list of msgIDs? */
+    int32_t first_msg;
 
-    PRUint32 obuffer_size;
-    PRUint32 obuffer_fp;
+    uint32_t obuffer_size;
+    uint32_t obuffer_fp;
 
-    PRInt32  really_new_messages;
-    PRInt32  real_new_counter;
-    PRInt32 number_of_messages;
+    int32_t  really_new_messages;
+    int32_t  real_new_counter;
+    int32_t number_of_messages;
     Pop3MsgInfo  *msg_info;      /* Message sizes and uidls (used only if we
                                    are playing games that involve leaving
                                    messages on the server). */
-    PRInt32 last_accessed_msg;
-    PRInt32 cur_msg_size;
-    PRBool truncating_cur_msg;  /* are we using top and uidl? */
-    PRBool msg_del_started;     /* True if MSG_BeginMailDel...
+    int32_t last_accessed_msg;
+    int32_t cur_msg_size;
+    bool truncating_cur_msg;  /* are we using top and uidl? */
+    bool msg_del_started;     /* True if MSG_BeginMailDel...
                                  * called
                                  */
-    PRBool only_check_for_new_mail;
+    bool only_check_for_new_mail;
     nsMsgBiffState biffstate;     /* If just checking for, what the answer is. */
 
-    PRBool verify_logon;        /* true if we're just seeing if we can logon */
+    bool verify_logon;        /* true if we're just seeing if we can logon */
 
     void *msg_closure;
 
-    PRBool graph_progress_bytes_p; /* whether we should display info about
+    bool graph_progress_bytes_p; /* whether we should display info about
                                       the bytes transferred (usually we
                                       display info about the number of
                                       messages instead.) */
@@ -263,12 +231,12 @@ typedef struct _Pop3ConData {
     PLHashTable *newuidl;
     char *only_uidl;              /* If non-NULL, then load only this UIDL. */
 
-    PRBool get_url;
-    PRBool seenFromHeader;
-    PRInt32 parsed_bytes;
-    PRInt32 pop3_size;
-    PRBool dot_fix;
-    PRBool assumed_end;
+    bool get_url;
+    bool seenFromHeader;
+    int32_t parsed_bytes;
+    int32_t pop3_size;
+    bool dot_fix;
+    bool assumed_end;
     nsresult urlStatus;
 } Pop3ConData;
 
@@ -294,7 +262,7 @@ public:
   NS_DECL_NSIMSGASYNCPROMPTLISTENER
 
   nsresult Initialize(nsIURI * aURL);
-  virtual nsresult LoadUrl(nsIURI *aURL, nsISupports * aConsumer = nsnull);
+  virtual nsresult LoadUrl(nsIURI *aURL, nsISupports * aConsumer = nullptr);
   void Cleanup();
 
   const char* GetUsername() { return m_username.get(); }
@@ -302,15 +270,15 @@ public:
 
   nsresult StartGetAsyncPassword(Pop3StatesEnum aNextState);
 
-  NS_IMETHOD OnTransportStatus(nsITransport *transport, nsresult status, PRUint64 progress, PRUint64 progressMax);
+  NS_IMETHOD OnTransportStatus(nsITransport *transport, nsresult status, uint64_t progress, uint64_t progressMax);
   NS_IMETHOD OnStopRequest(nsIRequest *request, nsISupports * aContext, nsresult aStatus);
   NS_IMETHOD Cancel(nsresult status);
 
   static void MarkMsgInHashTable(PLHashTable *hashTable, const Pop3UidlEntry *uidl,
-                                  PRBool *changed);
+                                  bool *changed);
 
   static nsresult MarkMsgForHost(const char *hostName, const char *userName,
-                                      nsILocalFile *mailDirectory,
+                                      nsIFile *mailDirectory,
                                       nsVoidArray  &UIDLArray);
 private:
   nsCString m_ApopTimestamp;
@@ -326,24 +294,24 @@ private:
   nsCString m_passwordResult;
 
   // progress state information
-  void UpdateProgressPercent (PRUint32 totalDone, PRUint32 total);
+  void UpdateProgressPercent (uint32_t totalDone, uint32_t total);
   void UpdateStatus(const nsString &aStatusName);
   void UpdateStatusWithString(const PRUnichar * aString);
   nsresult FormatCounterString(const nsString &stringName,
-                               PRUint32 count1,
-                               PRUint32 count2,
+                               uint32_t count1,
+                               uint32_t count2,
                                nsString &resultString);
 
-  PRInt32  m_bytesInMsgReceived;
-  PRInt32  m_totalFolderSize;
-  PRInt32  m_totalDownloadSize; /* Number of bytes we're going to
+  int32_t  m_bytesInMsgReceived;
+  int32_t  m_totalFolderSize;
+  int32_t  m_totalDownloadSize; /* Number of bytes we're going to
                                     download.  Might be much less
                                     than the total_folder_size. */
-  PRInt32 m_totalBytesReceived; // total # bytes received for the connection
+  int32_t m_totalBytesReceived; // total # bytes received for the connection
 
   virtual nsresult ProcessProtocolState(nsIURI * url, nsIInputStream * inputStream,
-                                        PRUint32 sourceOffset, PRUint32 length);
-  virtual PRInt32 SendData(nsIURI * aURL, const char * dataBuffer, PRBool aSuppressLogging = PR_FALSE);
+                                        uint32_t sourceOffset, uint32_t length);
+  virtual nsresult SendData(const char * dataBuffer, bool aSuppressLogging = false);
 
   virtual const char* GetType() {return "pop3";}
 
@@ -356,76 +324,76 @@ private:
   void FreeMsgInfo();
   void Abort();
 
-  PRBool m_tlsEnabled;
-  PRInt32 m_socketType;
-  PRBool m_password_already_sent;
-  PRBool m_needToRerunUrl;
+  bool m_tlsEnabled;
+  int32_t m_socketType;
+  bool m_password_already_sent;
+  bool m_needToRerunUrl;
 
-  void SetCapFlag(PRUint32 flag);
-  void ClearCapFlag(PRUint32 flag);
-  PRBool TestCapFlag(PRUint32 flag);
-  PRUint32 GetCapFlags();
+  void SetCapFlag(uint32_t flag);
+  void ClearCapFlag(uint32_t flag);
+  bool TestCapFlag(uint32_t flag);
+  uint32_t GetCapFlags();
 
-  void    InitPrefAuthMethods(PRInt32 authMethodPrefValue);
+  void    InitPrefAuthMethods(int32_t authMethodPrefValue);
   nsresult ChooseAuthMethod();
-  void    MarkAuthMethodAsFailed(PRInt32 failedAuthMethod);
+  void    MarkAuthMethodAsFailed(int32_t failedAuthMethod);
   void    ResetAuthMethods();
-  PRInt32 m_prefAuthMethods; // set of capability flags for auth methods
-  PRInt32 m_failedAuthMethods; // ditto
-  PRInt32 m_currentAuthMethod; // exactly one capability flag, or 0
+  int32_t m_prefAuthMethods; // set of capability flags for auth methods
+  int32_t m_failedAuthMethods; // ditto
+  int32_t m_currentAuthMethod; // exactly one capability flag, or 0
 
-  PRInt32 m_listpos;
+  int32_t m_listpos;
 
-  nsresult HandleLine(char *line, PRUint32 line_length);
+  nsresult HandleLine(char *line, uint32_t line_length);
 
   nsresult GetApopTimestamp();
 
   //////////////////////////////////////////////////////////////////////////////////////////
       // Begin Pop3 protocol state handlers
       //////////////////////////////////////////////////////////////////////////////////////////
-  PRInt32 WaitForStartOfConnectionResponse(nsIInputStream* inputStream,
-                                           PRUint32 length);
-  PRInt32 WaitForResponse(nsIInputStream* inputStream,
-                          PRUint32 length);
-  PRInt32 Error(PRInt32 err_code);
-  PRInt32 SendAuth();
-  PRInt32 AuthResponse(nsIInputStream* inputStream, PRUint32 length);
-  PRInt32 SendCapa();
-  PRInt32 CapaResponse(nsIInputStream* inputStream, PRUint32 length);
-  PRInt32 SendTLSResponse();
-  PRInt32 ProcessAuth();
-  PRInt32 NextAuthStep();
-  PRInt32 AuthLogin();
-  PRInt32 AuthLoginResponse();
-  PRInt32 AuthNtlm();
-  PRInt32 AuthNtlmResponse();
-  PRInt32 AuthGSSAPI();
-  PRInt32 AuthGSSAPIResponse(PRBool first);
-  PRInt32 SendUsername();
-  PRInt32 SendPassword();
-  PRInt32 SendStatOrGurl(PRBool sendStat);
-  PRInt32 SendStat();
-  PRInt32 GetStat();
-  PRInt32 SendGurl();
-  PRInt32 GurlResponse();
-  PRInt32 SendList();
-  PRInt32 GetList(nsIInputStream* inputStream, PRUint32 length);
-  PRInt32 HandleNoUidListAvailable();
-  PRInt32 SendXtndXlstMsgid();
-  PRInt32 GetXtndXlstMsgid(nsIInputStream* inputStream, PRUint32 length);
-  PRInt32 SendUidlList();
-  PRInt32 GetUidlList(nsIInputStream* inputStream, PRUint32 length);
-  PRInt32 GetMsg();
-  PRInt32 SendTop();
-  PRInt32 SendXsender();
-  PRInt32 XsenderResponse();
-  PRInt32 SendRetr();
+  int32_t WaitForStartOfConnectionResponse(nsIInputStream* inputStream,
+                                           uint32_t length);
+  int32_t WaitForResponse(nsIInputStream* inputStream,
+                          uint32_t length);
+  int32_t Error(int32_t err_code);
+  int32_t SendAuth();
+  int32_t AuthResponse(nsIInputStream* inputStream, uint32_t length);
+  int32_t SendCapa();
+  int32_t CapaResponse(nsIInputStream* inputStream, uint32_t length);
+  int32_t SendTLSResponse();
+  int32_t ProcessAuth();
+  int32_t NextAuthStep();
+  int32_t AuthLogin();
+  int32_t AuthLoginResponse();
+  int32_t AuthNtlm();
+  int32_t AuthNtlmResponse();
+  int32_t AuthGSSAPI();
+  int32_t AuthGSSAPIResponse(bool first);
+  int32_t SendUsername();
+  int32_t SendPassword();
+  int32_t SendStatOrGurl(bool sendStat);
+  int32_t SendStat();
+  int32_t GetStat();
+  int32_t SendGurl();
+  int32_t GurlResponse();
+  int32_t SendList();
+  int32_t GetList(nsIInputStream* inputStream, uint32_t length);
+  int32_t HandleNoUidListAvailable();
+  int32_t SendXtndXlstMsgid();
+  int32_t GetXtndXlstMsgid(nsIInputStream* inputStream, uint32_t length);
+  int32_t SendUidlList();
+  int32_t GetUidlList(nsIInputStream* inputStream, uint32_t length);
+  int32_t GetMsg();
+  int32_t SendTop();
+  int32_t SendXsender();
+  int32_t XsenderResponse();
+  int32_t SendRetr();
 
-  PRInt32 RetrResponse(nsIInputStream* inputStream, PRUint32 length);
-  PRInt32 TopResponse(nsIInputStream* inputStream, PRUint32 length);
-  PRInt32 SendDele();
-  PRInt32 DeleResponse();
-  PRInt32 CommitState(PRBool remove_last_entry);
+  int32_t RetrResponse(nsIInputStream* inputStream, uint32_t length);
+  int32_t TopResponse(nsIInputStream* inputStream, uint32_t length);
+  int32_t SendDele();
+  int32_t DeleResponse();
+  int32_t CommitState(bool remove_last_entry);
 
   Pop3StatesEnum GetNextPasswordObtainState();
   nsresult RerunUrl();

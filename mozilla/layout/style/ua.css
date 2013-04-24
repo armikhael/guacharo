@@ -1,44 +1,12 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Mats Palmgren <matspal@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 @import url(resource://gre-resources/html.css);
 @import url(chrome://global/content/xul.css);
 
 @namespace parsererror url(http://www.mozilla.org/newlayout/xml/parsererror.xml);
+@namespace xul url(http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul);
 
 /* magic -- some of these rules are important to keep pages from overriding
             them
@@ -58,7 +26,7 @@
 
 *|*::-moz-table-outer {
   display: inherit !important; /* table or inline-table */
-  margin: 0 ! important;
+  margin: inherit ! important;
   padding: 0 ! important;
   border: none ! important;
   float: inherit;
@@ -73,6 +41,11 @@
   page-break-after: inherit;
   vertical-align: inherit; /* needed for inline-table */
   line-height: inherit; /* needed for vertical-align on inline-table */
+  /* Bug 722777 */
+  -moz-transform: inherit;
+  -moz-transform-origin: inherit;
+  /* Bug 724750 */
+  -moz-backface-visibility: inherit;
 }
 
 *|*::-moz-table-row {
@@ -143,6 +116,7 @@
   position: static ! important;
   float: none ! important;
   -moz-box-ordinal-group: inherit !important;
+  text-overflow: inherit;
 }
 
 *|*::-moz-scrolled-content, *|*::-moz-scrolled-canvas,
@@ -189,6 +163,12 @@
   /* Carry through our parent's height so that %-height children get
   their heights set */
   height: 100%;
+}
+
+*|*::-moz-anonymous-flex-item {
+  /* Anonymous blocks that wrap contiguous runs of inline non-replaced
+   * content inside of a flex container. */
+  display: block;
 }
 
 *|*::-moz-page-sequence, *|*::-moz-scrolled-page-sequence {
@@ -238,6 +218,30 @@
     cursor: default !important;
   }
 
+}
+
+*|*:not(:root):-moz-full-screen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 2147483647 !important;
+  background: black;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  min-height: 0 !important;
+  max-height: none !important;
+}
+
+/* If there is a full-screen element that is not the root then
+   we should hide the viewport scrollbar. We exclude the chrome
+   document to prevent reframing of contained plugins. */
+:not(xul|*):root:-moz-full-screen-ancestor {
+  overflow: hidden !important;
 }
 
 /* XML parse error reporting */

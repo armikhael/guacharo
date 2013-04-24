@@ -1,42 +1,7 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the News&Blog Feed Downloader
- *
- * The Initial Developer of the Original Code is
- * The Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Myk Melez <myk@mozilla.org) (Original Author)
- *  David Bienvenu <bienvenu@nventure.com> 
- *  Ian Neal <iann_bugzilla@blueyonder.co.uk>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://gre/modules/XPCOMUtils.jsm");
 
@@ -44,70 +9,129 @@ var gExternalScriptsLoaded = false;
 
 var nsNewsBlogFeedDownloader =
 {
-  downloadFeed: function(aUrl, aFolder, aQuickMode, aTitle, aUrlListener, aMsgWindow)
+  downloadFeed: function(aA, aFolder, aB, aC, aUrlListener, aMsgWindow)
   {
-    const Ci = Components.interfaces;
-    
     if (!gExternalScriptsLoaded)
       loadScripts();
 
-    // we don't yet support the ability to check for new articles while we are in the middle of 
-    // subscribing to a feed. For now, abort the check for new feeds. 
-    if (progressNotifier.mSubscribeMode)
+    // We don't yet support the ability to check for new articles while we are
+    // in the middle of subscribing to a feed. For now, abort the check for
+    // new feeds.
+    if (FeedUtils.progressNotifier.mSubscribeMode)
     {
-      debug('Aborting RSS New Mail Check. Feed subscription in progress\n');
+      FeedUtils.log.warn("downloadFeed: Aborting RSS New Mail Check. " +
+                         "Feed subscription in progress\n");
       return;
     }
-    // if folder seems to have lost its feeds, look in DS for feeds.
-    if (!aUrl.length)
-    {
-      var ds = getSubscriptionsDS(aFolder.server);
-      var enumerator = ds.GetSources(FZ_DESTFOLDER, aFolder, true);
-      var concatenatedUris = "";
-      while (enumerator.hasMoreElements())
-      {
-        var containerArc = enumerator.getNext();
-        var uri = containerArc.QueryInterface(Ci.nsIRDFResource).Value;
-        if (concatenatedUris.length > 0)
-          concatenatedUris += "|";
-        concatenatedUris += uri;
-      }
-      if (concatenatedUris.length > 0)
-      {
-        aUrl = concatenatedUris;
-        try
-        {
-          var msgdb = aFolder.msgDatabase;
-          var folderInfo = msgdb.dBFolderInfo;
-          folderInfo.setCharProperty("feedUrl", concatenatedUris);
+
+    let allFolders = Cc["@mozilla.org/supports-array;1"].
+                     createInstance(Ci.nsISupportsArray);
+    if (!aFolder.isServer)
+      // Add the base folder; it does not get added by ListDescendents.  Do not
+      // add the account folder as it doesn't have the feedUrl property or even
+      // a msgDatabase necessarily.
+      allFolders.AppendElement(aFolder);
+
+    aFolder.ListDescendents(allFolders);
+    let numFolders = allFolders.Count();
+    let trashFolder =
+        aFolder.rootFolder.getFolderWithFlags(Ci.nsMsgFolderFlags.Trash);
+
+    function feeder() {
+      let folder;
+      for (let i = 0; i < numFolders; i++) {
+        folder = allFolders.GetElementAt(i).QueryInterface(Ci.nsIMsgFolder);
+        FeedUtils.log.debug("downloadFeed: START x/# foldername:uri - " +
+                            (i+1) + "/" + numFolders + " " +
+                            folder.name + ":" + folder.URI);
+
+        // Ensure msgDatabase for the folder is open for new message processing.
+        let msgDb;
+        try {
+          msgDb = folder.msgDatabase;
         }
-        catch (ex) {dump(ex);}
+        catch (ex) {}
+        if (!msgDb) {
+          // Force a reparse.  After the async reparse the folder will be ready
+          // for the next cycle; don't bother with a listener.  Continue with
+          // the next folder, as attempting to add a message to a folder with
+          // an unavailable msgDatabase will throw later.
+          FeedUtils.log.debug("downloadFeed: rebuild msgDatabase for " +
+                              folder.name + " - " + folder.filePath.path);
+          try
+          {
+            // Ignore error returns.
+            folder.QueryInterface(Ci.nsIMsgLocalMailFolder).
+                   getDatabaseWithReparse(null, null);
+          }
+          catch (ex) {}
+          continue;
+        }
+
+        let feedUrlArray = FeedUtils.getFeedUrlsInFolder(folder);
+        // Continue if there are no feedUrls for the folder in the feeds
+        // database.  All folders in Trash are now unsubscribed, so perhaps
+        // we may not want to check that here each biff each folder.
+        if (!feedUrlArray ||
+            (aFolder.isServer && trashFolder && trashFolder.isAncestorOf(folder)))
+          continue;
+
+        FeedUtils.log.debug("downloadFeed: CONTINUE foldername:urlArray - " +
+                            folder.name + ":" + feedUrlArray);
+
+        FeedUtils.progressNotifier.init(aMsgWindow, false);
+
+        // We need to kick off a download for each feed.
+        let id, feed;
+        for (let url in feedUrlArray)
+        {
+          if (feedUrlArray[url])
+          {
+            id = FeedUtils.rdf.GetResource(feedUrlArray[url]);
+            feed = new Feed(id, folder.server);
+            feed.folder = folder;
+            // Bump our pending feed download count.
+            FeedUtils.progressNotifier.mNumPendingFeedDownloads++;
+            feed.download(true, FeedUtils.progressNotifier);
+            FeedUtils.log.debug("downloadFeed: DOWNLOAD feed url - " +
+                                feedUrlArray[url]);
+          }
+
+          Services.tm.mainThread.dispatch(function() {
+            try {
+              getFeed.next();
+            }
+            catch (ex) {
+              if (ex instanceof StopIteration)
+                // Finished with all feeds in base folder and its subfolders.
+                FeedUtils.log.debug("downloadFeed: Finished with folder - " +
+                                    aFolder.name);
+              else
+              {
+                FeedUtils.log.error("downloadFeed: error - " + ex);
+                FeedUtils.progressNotifier.downloaded({name: folder.name}, 0);
+              }
+            }
+          }, Ci.nsIThread.DISPATCH_NORMAL);
+
+          yield;
+        }
       }
     }
 
-    // Return if there is still nothing in aUrl or the folder is in Trash.
-    if (!aUrl.length ||
-        aFolder.isSpecialFolder(Ci.nsMsgFolderFlags.Trash, true))
-      return;
-
-    // Maybe just pull all these args out of the aFolder DB,
-    // instead of passing them in...
-    var rdf = Components.classes["@mozilla.org/rdf/rdf-service;1"]
-                        .getService(Ci.nsIRDFService);
-    progressNotifier.init(aMsgWindow, false);
-
-    // aUrl may be a delimited list of feeds for a particular folder.
-    // We need to kick off a download for each feed.
-    var feedUrlArray = aUrl.split("|");
-    for (var url in feedUrlArray)
-    {
-      if (feedUrlArray[url])
+    let getFeed = feeder();
+    try {
+      getFeed.next();
+    }
+    catch (ex) {
+      if (ex instanceof StopIteration)
+        // Nothing to do.
+        FeedUtils.log.debug("downloadFeed: Nothing to do in folder - " +
+                            aFolder.name);
+      else
       {
-        var id = rdf.GetResource(feedUrlArray[url]);
-        var feed = new Feed(id, aFolder.server);
-        feed.folder = aFolder;
-        gNumPendingFeedDownloads++; // bump our pending feed download count
-        feed.download(true, progressNotifier);
+        FeedUtils.log.error("downloadFeed: error - " + ex);
+        FeedUtils.progressNotifier.downloaded({name: aFolder.name}, 0);
       }
     }
   },
@@ -117,75 +141,30 @@ var nsNewsBlogFeedDownloader =
     if (!gExternalScriptsLoaded)
       loadScripts();
 
-    // we don't support the ability to subscribe to several feeds at once yet...
-    // for now, abort the subscription if we are already in the middle of subscribing to a feed
-    // via drag and drop.
-    if (gNumPendingFeedDownloads)
+    // We don't support the ability to subscribe to several feeds at once yet.
+    // For now, abort the subscription if we are already in the middle of
+    // subscribing to a feed via drag and drop.
+    if (FeedUtils.progressNotifier.mNumPendingFeedDownloads)
     {
-      debug('Aborting RSS subscription. Feed downloads already in progress\n');
+      FeedUtils.log.warn("subscribeToFeed: Aborting RSS subscription. " +
+                         "Feed downloads already in progress\n");
       return;
     }
 
-    // if aFolder is null, then use the root folder for the first RSS account
+    // If aFolder is null, then use the root folder for the first RSS account.
     if (!aFolder)
-    {
-      var accountManager =
-        Components.classes["@mozilla.org/messenger/account-manager;1"]
-                  .getService(Components.interfaces.nsIMsgAccountManager);
-      var allServers = accountManager.allServers;
-      for (var i = 0; i < allServers.Count() && !aFolder; i++)
-      {
-        var currentServer = allServers.QueryElementAt(i, Components.interfaces.nsIMsgIncomingServer);
-        if (currentServer && currentServer.type == 'rss')
-          aFolder = currentServer.rootFolder;      
-      }
-    }
+      aFolder = FeedUtils.getAllRssServerRootFolders()[0];
 
-    // If the user has no RSS account yet, create one; also check then if
-    // the "Local Folders" exist yet and create if necessary
+    // If the user has no Feeds account yet, create one.
     if (!aFolder)
-    {
-      var acctMgr = Components.classes["@mozilla.org/messenger/account-manager;1"]
-                              .getService(Components.interfaces.nsIMsgAccountManager);
-
-      var server = acctMgr.createIncomingServer("nobody", "Feeds", "rss");
-
-      server.biffMinutes = 100;
-      server.prettyName = GetNewsBlogStringBundle().GetStringFromName("feeds-accountname");
-      server.valid = true;
-      var account = acctMgr.createAccount();
-      account.incomingServer = server;
-
-      aFolder = account.incomingServer.rootFolder;
-
-      // Create "Local Folders" if none exist yet as it's guaranteed that those
-      // exist when any account exists
-      var localFolders = null;
-      try  {
-        localFolders = acctMgr.localFoldersServer;
-      } catch (ex) {
-      }
-
-      if (!localFolders)
-        acctMgr.createLocalMailAccount();
-
-      // Save new accounts in case of a crash
-      try {
-        acctMgr.saveAccountInfo();
-      } catch (ex) {
-      }
-    }
+      aFolder = FeedUtils.createRssAccount().incomingServer.rootFolder;
 
     if (!aMsgWindow)
     {
-      var wmed = Components.classes["@mozilla.org/appshell/window-mediator;1"]
-                           .getService(Components.interfaces.nsIWindowMediator);
-
-      var wlist = wmed.getEnumerator("mail:3pane");
+      let wlist = Services.wm.getEnumerator("mail:3pane");
       if (wlist.hasMoreElements())
       {
-        var win = wlist.getNext()
-                       .QueryInterface(Components.interfaces.nsIDOMWindow);
+        let win = wlist.getNext().QueryInterface(Ci.nsIDOMWindow);
         win.focus();
         aMsgWindow = win.msgWindow;
       }
@@ -193,13 +172,11 @@ var nsNewsBlogFeedDownloader =
       {
         // If there are no open windows, open one, pass it the URL, and
         // during opening it will subscribe to the feed.
-        var ww = Components.classes["@mozilla.org/embedcomp/window-watcher;1"]
-                           .getService(Components.interfaces.nsIWindowWatcher);
-        var arg = Components.classes["@mozilla.org/supports-string;1"]
-                            .createInstance(Components.interfaces.nsISupportsString);
+        let arg = Cc["@mozilla.org/supports-string;1"].
+                  createInstance(Ci.nsISupportsString);
         arg.data = aUrl;
-        ww.openWindow(null, "chrome://messenger/content/", "_blank",
-                      "chrome,dialog=no,all", arg);
+        Services.ww.openWindow(null, "chrome://messenger/content/",
+                               "_blank", "chrome,dialog=no,all", arg);
         return;
       }
     }
@@ -211,26 +188,27 @@ var nsNewsBlogFeedDownloader =
     aUrl = aUrl.replace(/^feed:\x2f\x2f/i, "http://");
     aUrl = aUrl.replace(/^feed:/i, "");
 
-    // make sure we aren't already subscribed to this feed before we attempt to subscribe to it.
-    if (feedAlreadyExists(aUrl, aFolder.server))
+    // Make sure we aren't already subscribed to this feed before we attempt
+    // to subscribe to it.
+    if (FeedUtils.feedAlreadyExists(aUrl, aFolder.server))
     {
-      aMsgWindow.statusFeedback.showStatusString(GetNewsBlogStringBundle().GetStringFromName('subscribe-feedAlreadySubscribed'));     
+      aMsgWindow.statusFeedback.showStatusString(
+        FeedUtils.strings.GetStringFromName("subscribe-feedAlreadySubscribed"));
       return;
     }
 
-    var rdf = Components.classes["@mozilla.org/rdf/rdf-service;1"]
-              .getService(Components.interfaces.nsIRDFService);
-    
-    var itemResource = rdf.GetResource(aUrl);
-    var feed = new Feed(itemResource, aFolder.server);
-    feed.quickMode = feed.server.getBoolValue('quickMode');
+    let itemResource = FeedUtils.rdf.GetResource(aUrl);
+    let feed = new Feed(itemResource, aFolder.server);
+    feed.quickMode = feed.server.getBoolValue("quickMode");
 
-    if (!aFolder.isServer) // if the root server, create a new folder for the feed
-      feed.folder = aFolder; // user must want us to add this subscription url to an existing RSS folder.
+    // If the root server, create a new folder for the feed.  The user must
+    // want us to add this subscription url to an existing RSS folder.
+    if (!aFolder.isServer)
+      feed.folder = aFolder;
 
-    progressNotifier.init(aMsgWindow, true);
-    gNumPendingFeedDownloads++;
-    feed.download(true, progressNotifier);
+    FeedUtils.progressNotifier.init(aMsgWindow, true);
+    FeedUtils.progressNotifier.mNumPendingFeedDownloads++;
+    feed.download(true, FeedUtils.progressNotifier);
   },
 
   updateSubscriptionsDS: function(aFolder, aUnsubscribe)
@@ -238,41 +216,49 @@ var nsNewsBlogFeedDownloader =
     if (!gExternalScriptsLoaded)
       loadScripts();
 
-    // an rss folder was just renamed...we need to update our feed data source
-    var msgdb = aFolder.QueryInterface(Components.interfaces.nsIMsgFolder)
-                       .msgDatabase;
-    var folderInfo = msgdb.dBFolderInfo;
-    var feedUrlArray = folderInfo.getCharProperty("feedUrl").split("|");
+    FeedUtils.log.debug("updateSubscriptionsDS: folder changed, name:unsubscribe - " +
+                        aFolder.filePath.path + ":" + aUnsubscribe);
 
-    var rdf = Components.classes["@mozilla.org/rdf/rdf-service;1"].getService(Components.interfaces.nsIRDFService);
-    var ds = getSubscriptionsDS(aFolder.server);
+    // An rss folder was just changed, get the folder's feedUrls and update
+    // our feed data source.
+    let feedUrlArray = FeedUtils.getFeedUrlsInFolder(aFolder);
+    if (!feedUrlArray)
+      // No feedUrls in this folder.
+      return;
 
-    for (var url in feedUrlArray)
+    let newFeedUrl, id, resource, node;
+    let ds = FeedUtils.getSubscriptionsDS(aFolder.server);
+    let trashFolder =
+        aFolder.rootFolder.getFolderWithFlags(Ci.nsMsgFolderFlags.Trash);
+    for (let url in feedUrlArray)
     {
-      var newFeedUrl = feedUrlArray[url];
+      newFeedUrl = feedUrlArray[url];
       if (newFeedUrl)
       {
-        var id = rdf.GetResource(newFeedUrl);
-        // We need to check and see if the folder is a child of the trash...
-        // if it is, then we can treat this as an unsubscribe action.
-        if (aUnsubscribe)
+        FeedUtils.log.debug("updateSubscriptionsDS: processing url - " +
+                            newFeedUrl);
+
+        id = FeedUtils.rdf.GetResource(newFeedUrl);
+        // If explicit delete or move to trash, unsubscribe.
+        if (aUnsubscribe ||
+            (trashFolder && trashFolder.isAncestorOf(aFolder)))
         {
-          deleteFeed(id, aFolder.server);
+          FeedUtils.deleteFeed(id, aFolder.server, aFolder);
         }
         else
         {
-          var resource = rdf.GetResource(aFolder.URI);
-          // get the node for the current folder URI
-          var node = ds.GetTarget(id, FZ_DESTFOLDER, true);
+          resource = FeedUtils.rdf.GetResource(aFolder.URI);
+          // Get the node for the current folder URI.
+          node = ds.GetTarget(id, FeedUtils.FZ_DESTFOLDER, true);
           if (node)
-            ds.Change(id, FZ_DESTFOLDER, node, resource);
+            ds.Change(id, FeedUtils.FZ_DESTFOLDER, node, resource);
           else
-            addFeed(newFeedUrl, resource.name, resource);
+            FeedUtils.addFeed(newFeedUrl, resource.name, resource);
         }
       }
     } // for each feed url in the folder property
 
-    ds.QueryInterface(Components.interfaces.nsIRDFRemoteDataSource).Flush(); // flush any changes
+    ds.QueryInterface(Ci.nsIRDFRemoteDataSource).Flush();
   },
 
   QueryInterface: function(aIID)
@@ -285,8 +271,8 @@ var nsNewsBlogFeedDownloader =
   }
 }
 
-var nsNewsBlogAcctMgrExtension = 
-{ 
+var nsNewsBlogAcctMgrExtension =
+{
   name: "newsblog",
   chromePackageName: "messenger-newsblog",
   showPanel: function (server)
@@ -300,12 +286,10 @@ var nsNewsBlogAcctMgrExtension =
       return this;
 
     throw Components.results.NS_ERROR_NO_INTERFACE;
-  }  
+  }
 }
 
-function FeedDownloader()
-{
-}
+function FeedDownloader() {}
 
 FeedDownloader.prototype =
 {
@@ -326,9 +310,7 @@ FeedDownloader.prototype =
   } // factory
 }; // feed downloader
 
-function AcctMgrExtension()
-{
-}
+function AcctMgrExtension() {}
 
 AcctMgrExtension.prototype =
 {
@@ -354,149 +336,15 @@ var NSGetFactory = XPCOMUtils.generateNSGetFactory(components);
 
 function loadScripts()
 {
-  var scriptLoader =  Components.classes["@mozilla.org/moz/jssubscript-loader;1"]
+  var scriptLoader = Components.classes["@mozilla.org/moz/jssubscript-loader;1"]
                      .getService(Components.interfaces.mozIJSSubScriptLoader);
   if (scriptLoader)
-  { 
+  {
     scriptLoader.loadSubScript("chrome://messenger-newsblog/content/Feed.js");
     scriptLoader.loadSubScript("chrome://messenger-newsblog/content/FeedItem.js");
     scriptLoader.loadSubScript("chrome://messenger-newsblog/content/feed-parser.js");
-    scriptLoader.loadSubScript("chrome://messenger-newsblog/content/file-utils.js");
     scriptLoader.loadSubScript("chrome://messenger-newsblog/content/utils.js");
   }
 
   gExternalScriptsLoaded = true;
-}
-
-// Progress glue code. Acts as a go between the RSS back end and the mail window front end
-// determined by the aMsgWindow parameter passed into nsINewsBlogFeedDownloader.
-// gNumPendingFeedDownloads: keeps track of the total number of feeds we have been asked to download
-//                           this number may not reflect the # of entries in our mFeeds array because not all
-//                           feeds may have reported in for the first time...
-var gNumPendingFeedDownloads = 0;
-
-var progressNotifier = {
-  mSubscribeMode: false,
-  mMsgWindow: null, 
-  mStatusFeedback: null,
-  mFeeds: {},
-
-  init: function(aMsgWindow, aSubscribeMode)
-  {
-    if (!gNumPendingFeedDownloads) // if we aren't already in the middle of downloading feed items...
-    {
-      this.mStatusFeedback = aMsgWindow ? aMsgWindow.statusFeedback : null;
-      this.mSubscribeMode = aSubscribeMode;
-      this.mMsgWindow = aMsgWindow;
-
-      if (this.mStatusFeedback)
-      {
-        this.mStatusFeedback.startMeteors();
-        this.mStatusFeedback.showStatusString(aSubscribeMode ?
-          GetNewsBlogStringBundle().GetStringFromName('subscribe-validating-feed') :
-          GetNewsBlogStringBundle().GetStringFromName('newsblog-getNewMsgsCheck'));
-      }
-    }
-  },
-
-  downloaded: function(feed, aErrorCode)
-  {
-    if (this.mSubscribeMode && aErrorCode == kNewsBlogSuccess)
-    {
-      // if we get here...we should always have a folder by now...either
-      // in feed.folder or FeedItems created the folder for us....
-      updateFolderFeedUrl(feed.folder, feed.url, false);        
-      addFeed(feed.url, feed.name, feed.folder); // add feed just adds the feed to the subscription UI and flushes the datasource
-      
-      // Nice touch: select the folder that now contains the newly subscribed feed...this is particularly nice 
-      // if we just finished subscribing to a feed URL that the operating system gave us.
-      this.mMsgWindow.windowCommands.selectFolder(feed.folder.URI);
-    } 
-    else if (feed.folder)
-      feed.folder.msgDatabase = null;
-
-    if (this.mStatusFeedback)
-    {
-      var newsBlogBundle = GetNewsBlogStringBundle();
-      if (aErrorCode == kNewsBlogNoNewItems)
-        this.mStatusFeedback.showStatusString(newsBlogBundle.GetStringFromName("newsblog-noNewArticlesForFeed"));
-      else if (aErrorCode == kNewsBlogInvalidFeed)
-        this.mStatusFeedback.showStatusString(
-          newsBlogBundle.formatStringFromName("newsblog-feedNotValid", [feed.url], 1));
-      else if (aErrorCode == kNewsBlogRequestFailure)
-        this.mStatusFeedback.showStatusString(newsBlogBundle.formatStringFromName("newsblog-networkError",
-                                              [feed.url], 1));                                           
-      this.mStatusFeedback.stopMeteors();
-    }
-
-    if (!--gNumPendingFeedDownloads)
-    {
-      this.mFeeds = {};
-
-      this.mSubscribeMode = false;
-
-      // should we do this on a timer so the text sticks around for a little while? 
-      // It doesnt look like we do it on a timer for newsgroups so we'll follow that model.
-      if (aErrorCode == kNewsBlogSuccess && this.mStatusFeedback) // don't clear the status text if we just dumped an error to the status bar!
-        this.mStatusFeedback.showStatusString("");
-    }
-  },
-
-  // this gets called after the RSS parser finishes storing a feed item to disk
-  // aCurrentFeedItems is an integer corresponding to how many feed items have been downloaded so far
-  // aMaxFeedItems is an integer corresponding to the total number of feed items to download
-  onFeedItemStored: function (feed, aCurrentFeedItems, aMaxFeedItems)
-  { 
-    // we currently don't do anything here. Eventually we may add
-    // status text about the number of new feed articles received.
-
-    if (this.mSubscribeMode && this.mStatusFeedback) // if we are subscribing to a feed, show feed download progress
-    {
-      this.mStatusFeedback.showStatusString(
-        GetNewsBlogStringBundle().formatStringFromName("subscribe-gettingFeedItems",
-                                                       [aCurrentFeedItems, aMaxFeedItems], 2));
-      this.onProgress(feed, aCurrentFeedItems, aMaxFeedItems);
-    }
-  },
-
-  onProgress: function(feed, aProgress, aProgressMax)
-  {
-    if (feed.url in this.mFeeds) // have we already seen this feed?
-      this.mFeeds[feed.url].currentProgress = aProgress;
-    else
-      this.mFeeds[feed.url] = {currentProgress: aProgress, maxProgress: aProgressMax};
-    
-    this.updateProgressBar();     
-  },
-
-  updateProgressBar: function()
-  {
-    var currentProgress = 0;
-    var maxProgress = 0;
-    for (index in this.mFeeds)
-    {
-      currentProgress += this.mFeeds[index].currentProgress;
-      maxProgress += this.mFeeds[index].maxProgress;
-    }
-
-    // if we start seeing weird "jumping" behavior where the progress bar goes below a threshold then above it again,
-    // then we can factor a fudge factor here based on the number of feeds that have not reported yet and the avg
-    // progress we've already received for existing feeds. Fortunately the progressmeter is on a timer
-    // and only updates every so often. For the most part all of our request have initial progress
-    // before the UI actually picks up a progress value. 
-
-    if (this.mStatusFeedback)
-    {
-      var progress = (currentProgress * 100) / maxProgress;
-      this.mStatusFeedback.showProgress(progress);
-    }
-  }
-}
-
-function GetNewsBlogStringBundle(name)
-{
-  var strBundleService = Components.classes["@mozilla.org/intl/stringbundle;1"].getService(); 
-  strBundleService = strBundleService.QueryInterface(Components.interfaces.nsIStringBundleService);
-  var strBundle = strBundleService.createBundle("chrome://messenger-newsblog/locale/newsblog.properties"); 
-  return strBundle;
 }

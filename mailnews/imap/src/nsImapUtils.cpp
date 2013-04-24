@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"
 #include "nsImapUtils.h"
@@ -66,12 +33,12 @@ nsImapURI2FullName(const char* rootURI, const char* hostName, const char* uriStr
       return NS_ERROR_FAILURE;
     fullName = Substring(uri, strlen(rootURI));
     uri = fullName;
-    PRInt32 hostStart = uri.Find(hostName);
+    int32_t hostStart = uri.Find(hostName);
     if (hostStart <= 0) 
       return NS_ERROR_FAILURE;
     fullName = Substring(uri, hostStart);
     uri = fullName;
-    PRInt32 hostEnd = uri.FindChar('/');
+    int32_t hostEnd = uri.FindChar('/');
     if (hostEnd <= 0) 
       return NS_ERROR_FAILURE;
     fullName = Substring(uri, hostEnd + 1);
@@ -82,13 +49,13 @@ nsImapURI2FullName(const char* rootURI, const char* hostName, const char* uriStr
 }
 
 /* parses ImapMessageURI */
-nsresult nsParseImapMessageURI(const char* uri, nsCString& folderURI, PRUint32 *key, char **part)
+nsresult nsParseImapMessageURI(const char* uri, nsCString& folderURI, uint32_t *key, char **part)
 {
   if(!key)
     return NS_ERROR_NULL_POINTER;
 
   nsCAutoString uriStr(uri);
-  PRInt32 folderEnd = -1;
+  int32_t folderEnd = -1;
   // imap-message uri's can have imap:// url strings tacked on the end,
   // e.g., when opening/saving attachments. We don't want to look for '#'
   // in that part of the uri, if the attachment name contains '#',
@@ -96,20 +63,20 @@ nsresult nsParseImapMessageURI(const char* uri, nsCString& folderURI, PRUint32 *
   if (StringBeginsWith(uriStr, NS_LITERAL_CSTRING("imap-message")))
     folderEnd = uriStr.Find("imap://");
 
-  PRInt32 keySeparator = MsgRFindChar(uriStr, '#', folderEnd);
+  int32_t keySeparator = MsgRFindChar(uriStr, '#', folderEnd);
   if(keySeparator != -1)
   {
-    PRInt32 keyEndSeparator = MsgFindCharInSet(uriStr, "/?&", keySeparator);
+    int32_t keyEndSeparator = MsgFindCharInSet(uriStr, "/?&", keySeparator);
     nsAutoString folderPath;
     folderURI = StringHead(uriStr, keySeparator);
     folderURI.Cut(4, 8); // cut out the _message part of imap-message:
     // folder uri's don't have fully escaped usernames.
-    PRInt32 atPos = folderURI.FindChar('@');
+    int32_t atPos = folderURI.FindChar('@');
     if (atPos != -1)
     {
       nsCString unescapedName, escapedName;
-      PRInt32 userNamePos = folderURI.Find("//") + 2;
-      PRUint32 origUserNameLen = atPos - userNamePos;
+      int32_t userNamePos = folderURI.Find("//") + 2;
+      uint32_t origUserNameLen = atPos - userNamePos;
       if (NS_SUCCEEDED(MsgUnescapeString(Substring(folderURI, userNamePos,
                                                    origUserNameLen),
                                          0, unescapedName)))
@@ -126,11 +93,11 @@ nsresult nsParseImapMessageURI(const char* uri, nsCString& folderURI, PRUint32 *
     else
       keyStr = Substring(uriStr, keySeparator + 1);
 
-    *key = strtoul(keyStr.get(), nsnull, 10);
+    *key = strtoul(keyStr.get(), nullptr, 10);
 
     if (part && keyEndSeparator != -1)
     {
-      PRInt32 partPos = MsgFind(uriStr, "part=", PR_FALSE, keyEndSeparator);
+      int32_t partPos = MsgFind(uriStr, "part=", false, keyEndSeparator);
       if (partPos != -1)
       {
         *part = ToNewCString(Substring(uriStr, keyEndSeparator));
@@ -140,7 +107,7 @@ nsresult nsParseImapMessageURI(const char* uri, nsCString& folderURI, PRUint32 *
   return NS_OK;
 }
 
-nsresult nsBuildImapMessageURI(const char *baseURI, PRUint32 key, nsCString& uri)
+nsresult nsBuildImapMessageURI(const char *baseURI, uint32_t key, nsCString& uri)
 {
   uri.Append(baseURI);
   uri.Append('#');
@@ -176,29 +143,29 @@ nsImapMailboxSpec::nsImapMailboxSpec()
   
   mHierarchySeparator = '\0';
   
-  mFolderSelected = PR_FALSE;
-  mDiscoveredFromLsub = PR_FALSE;
+  mFolderSelected = false;
+  mDiscoveredFromLsub = false;
   
-  mOnlineVerified = PR_FALSE;
-  mNamespaceForFolder = nsnull;
+  mOnlineVerified = false;
+  mNamespaceForFolder = nullptr;
 }
 
 nsImapMailboxSpec::~nsImapMailboxSpec()
 {
 }
 
-NS_IMPL_GETSET(nsImapMailboxSpec, Folder_UIDVALIDITY, PRInt32, mFolder_UIDVALIDITY)
-NS_IMPL_GETSET(nsImapMailboxSpec, HighestModSeq, PRUint64, mHighestModSeq)
-NS_IMPL_GETSET(nsImapMailboxSpec, NumMessages, PRInt32, mNumOfMessages)
-NS_IMPL_GETSET(nsImapMailboxSpec, NumUnseenMessages, PRInt32, mNumOfUnseenMessages)
-NS_IMPL_GETSET(nsImapMailboxSpec, NumRecentMessages, PRInt32, mNumOfRecentMessages)
-NS_IMPL_GETSET(nsImapMailboxSpec, NextUID, PRInt32, mNextUID)
+NS_IMPL_GETSET(nsImapMailboxSpec, Folder_UIDVALIDITY, int32_t, mFolder_UIDVALIDITY)
+NS_IMPL_GETSET(nsImapMailboxSpec, HighestModSeq, uint64_t, mHighestModSeq)
+NS_IMPL_GETSET(nsImapMailboxSpec, NumMessages, int32_t, mNumOfMessages)
+NS_IMPL_GETSET(nsImapMailboxSpec, NumUnseenMessages, int32_t, mNumOfUnseenMessages)
+NS_IMPL_GETSET(nsImapMailboxSpec, NumRecentMessages, int32_t, mNumOfRecentMessages)
+NS_IMPL_GETSET(nsImapMailboxSpec, NextUID, int32_t, mNextUID)
 NS_IMPL_GETSET(nsImapMailboxSpec, HierarchyDelimiter, char, mHierarchySeparator)
-NS_IMPL_GETSET(nsImapMailboxSpec, FolderSelected, PRBool, mFolderSelected)
-NS_IMPL_GETSET(nsImapMailboxSpec, DiscoveredFromLsub, PRBool, mDiscoveredFromLsub)
-NS_IMPL_GETSET(nsImapMailboxSpec, OnlineVerified, PRBool, mOnlineVerified)
-NS_IMPL_GETSET(nsImapMailboxSpec, SupportedUserFlags, PRUint32, mSupportedUserFlags)
-NS_IMPL_GETSET(nsImapMailboxSpec, Box_flags, PRUint32, mBoxFlags)
+NS_IMPL_GETSET(nsImapMailboxSpec, FolderSelected, bool, mFolderSelected)
+NS_IMPL_GETSET(nsImapMailboxSpec, DiscoveredFromLsub, bool, mDiscoveredFromLsub)
+NS_IMPL_GETSET(nsImapMailboxSpec, OnlineVerified, bool, mOnlineVerified)
+NS_IMPL_GETSET(nsImapMailboxSpec, SupportedUserFlags, uint32_t, mSupportedUserFlags)
+NS_IMPL_GETSET(nsImapMailboxSpec, Box_flags, uint32_t, mBoxFlags)
 NS_IMPL_GETSET(nsImapMailboxSpec, NamespaceForFolder, nsIMAPNamespace *, mNamespaceForFolder)
 
 NS_IMETHODIMP nsImapMailboxSpec::GetAllocatedPathName(nsACString &aAllocatedPathName)
@@ -280,24 +247,24 @@ nsImapMailboxSpec& nsImapMailboxSpec::operator= (const nsImapMailboxSpec& aCopy)
 
 // use the flagState to determine if the gaps in the msgUids correspond to gaps in the mailbox,
 // in which case we can still use ranges. If flagState is null, we won't do this.
-void AllocateImapUidString(PRUint32 *msgUids, PRUint32 &msgCount, 
+void AllocateImapUidString(uint32_t *msgUids, uint32_t &msgCount, 
                            nsImapFlagAndUidState *flagState, nsCString &returnString)
 {
-  PRUint32 startSequence = (msgCount > 0) ? msgUids[0] : 0xFFFFFFFF;
-  PRUint32 curSequenceEnd = startSequence;
-  PRUint32 total = msgCount;
-  PRInt32  curFlagStateIndex = -1;
+  uint32_t startSequence = (msgCount > 0) ? msgUids[0] : 0xFFFFFFFF;
+  uint32_t curSequenceEnd = startSequence;
+  uint32_t total = msgCount;
+  int32_t  curFlagStateIndex = -1;
 
   // a partial fetch flag state doesn't help us, so don't use it.
   if (flagState && flagState->GetPartialUIDFetch())
-    flagState = nsnull;
+    flagState = nullptr;
 
   
-  for (PRUint32 keyIndex = 0; keyIndex < total; keyIndex++)
+  for (uint32_t keyIndex = 0; keyIndex < total; keyIndex++)
   {
-    PRUint32 curKey = msgUids[keyIndex];
-    PRUint32 nextKey = (keyIndex + 1 < total) ? msgUids[keyIndex + 1] : 0xFFFFFFFF;
-    PRBool lastKey = (nextKey == 0xFFFFFFFF);
+    uint32_t curKey = msgUids[keyIndex];
+    uint32_t nextKey = (keyIndex + 1 < total) ? msgUids[keyIndex + 1] : 0xFFFFFFFF;
+    bool lastKey = (nextKey == 0xFFFFFFFF);
 
     if (lastKey)
       curSequenceEnd = curKey;
@@ -314,7 +281,7 @@ void AllocateImapUidString(PRUint32 *msgUids, PRUint32 &msgCount,
       {
         if (curFlagStateIndex == -1)
         {
-          PRBool foundIt;
+          bool foundIt;
           flagState->GetMessageFlagsFromUID(curSequenceEnd, &foundIt, &curFlagStateIndex);
           if (!foundIt)
           {
@@ -327,7 +294,7 @@ void AllocateImapUidString(PRUint32 *msgUids, PRUint32 &msgCount,
           }
         }
         curFlagStateIndex++;
-        PRUint32 nextUidInFlagState;
+        uint32_t nextUidInFlagState;
         nsresult rv = flagState->GetUidOfMessage(curFlagStateIndex, &nextUidInFlagState);
         if (NS_SUCCEEDED(rv) && nextUidInFlagState == nextKey)
         {
@@ -338,9 +305,9 @@ void AllocateImapUidString(PRUint32 *msgUids, PRUint32 &msgCount,
     }
     if (curSequenceEnd > startSequence)
     {
-      returnString.AppendInt((PRInt64) startSequence);
+      returnString.AppendInt((int64_t) startSequence);
       returnString += ':';
-      returnString.AppendInt((PRInt64) curSequenceEnd);
+      returnString.AppendInt((int64_t) curSequenceEnd);
       startSequence = nextKey;
       curSequenceEnd = startSequence;
       curFlagStateIndex = -1;
@@ -349,7 +316,7 @@ void AllocateImapUidString(PRUint32 *msgUids, PRUint32 &msgCount,
     {
       startSequence = nextKey;
       curSequenceEnd = startSequence;
-      returnString.AppendInt((PRInt64) msgUids[keyIndex]);
+      returnString.AppendInt((int64_t) msgUids[keyIndex]);
       curFlagStateIndex = -1;
     }
     // check if we've generated too long a string - if there's no flag state,
@@ -371,9 +338,9 @@ void ParseUidString(const char *uidString, nsTArray<nsMsgKey> &keys)
 {
   // This is in the form <id>,<id>, or <id1>:<id2>
   char curChar = *uidString;
-  PRBool isRange = PR_FALSE;
-  PRUint32 curToken;
-  PRUint32 saveStartToken = 0;
+  bool isRange = false;
+  uint32_t curToken;
+  uint32_t saveStartToken = 0;
 
   for (const char *curCharPtr = uidString; curChar && *curCharPtr;)
   {
@@ -384,7 +351,7 @@ void ParseUidString(const char *uidString, nsTArray<nsMsgKey> &keys)
 
     // we don't need to null terminate currentKeyToken because strtoul
     // stops at non-numeric chars.
-    curToken = strtoul(currentKeyToken, nsnull, 10);
+    curToken = strtoul(currentKeyToken, nullptr, 10);
     if (isRange)
     {
       while (saveStartToken < curToken)
@@ -397,7 +364,7 @@ void ParseUidString(const char *uidString, nsTArray<nsMsgKey> &keys)
   }
 }
 
-void AppendUid(nsCString &msgIds, PRUint32 uid)
+void AppendUid(nsCString &msgIds, uint32_t uid)
 {
   char buf[20];
   PR_snprintf(buf, sizeof(buf), "%u", uid);

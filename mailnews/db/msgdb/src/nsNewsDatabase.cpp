@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Seth Spitzer <sspitzer@netscape.com>
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"
 #include "nsNewsDatabase.h"
@@ -49,7 +15,7 @@
 
 nsNewsDatabase::nsNewsDatabase()
 {
-  m_readSet = nsnull;
+  m_readSet = nullptr;
 }
 
 nsNewsDatabase::~nsNewsDatabase()
@@ -62,7 +28,7 @@ NS_IMPL_RELEASE_INHERITED(nsNewsDatabase, nsMsgDatabase)
 NS_IMETHODIMP nsNewsDatabase::QueryInterface(REFNSIID aIID, void** aInstancePtr)
 {
   if (!aInstancePtr) return NS_ERROR_NULL_POINTER;
-  *aInstancePtr = nsnull;
+  *aInstancePtr = nullptr;
 
   if (aIID.Equals(NS_GET_IID(nsINewsDatabase)))
   {
@@ -78,7 +44,7 @@ NS_IMETHODIMP nsNewsDatabase::QueryInterface(REFNSIID aIID, void** aInstancePtr)
   return nsMsgDatabase::QueryInterface(aIID, aInstancePtr);
 }
 
-nsresult nsNewsDatabase::Close(PRBool forceCommit)
+nsresult nsNewsDatabase::Close(bool forceCommit)
 {
   return nsMsgDatabase::Close(forceCommit);
 }
@@ -102,12 +68,12 @@ nsresult nsNewsDatabase::Commit(nsMsgDBCommit commitType)
 }
 
 
-PRUint32 nsNewsDatabase::GetCurVersion()
+uint32_t nsNewsDatabase::GetCurVersion()
 {
   return kMsgDBVersion;
 }
 
-NS_IMETHODIMP nsNewsDatabase::IsRead(nsMsgKey key, PRBool *pRead)
+NS_IMETHODIMP nsNewsDatabase::IsRead(nsMsgKey key, bool *pRead)
 {
   NS_ASSERTION(pRead, "null out param in IsRead");
   if (!pRead) return NS_ERROR_NULL_POINTER;
@@ -118,7 +84,7 @@ NS_IMETHODIMP nsNewsDatabase::IsRead(nsMsgKey key, PRBool *pRead)
   return NS_OK;
 }
 
-nsresult nsNewsDatabase::IsHeaderRead(nsIMsgDBHdr *msgHdr, PRBool *pRead)
+nsresult nsNewsDatabase::IsHeaderRead(nsIMsgDBHdr *msgHdr, bool *pRead)
 {
     nsresult rv;
     nsMsgKey messageKey;
@@ -204,17 +170,17 @@ NS_IMETHODIMP nsNewsDatabase::SetReadSet(nsMsgKeySet *pSet)
 }
 
 
-PRBool nsNewsDatabase::SetHdrReadFlag(nsIMsgDBHdr *msgHdr, PRBool bRead)
+bool nsNewsDatabase::SetHdrReadFlag(nsIMsgDBHdr *msgHdr, bool bRead)
 {
     nsresult rv;
-    PRBool isRead;
+    bool isRead;
     rv = IsHeaderRead(msgHdr, &isRead);
 
     if (isRead == bRead)
     {
       // give the base class a chance to update m_flags.
       nsMsgDatabase::SetHdrReadFlag(msgHdr, bRead);
-      return PR_FALSE;
+      return false;
     }
     else {
       nsMsgKey messageKey;
@@ -222,38 +188,36 @@ PRBool nsNewsDatabase::SetHdrReadFlag(nsIMsgDBHdr *msgHdr, PRBool bRead)
       // give the base class a chance to update m_flags.
       nsMsgDatabase::SetHdrReadFlag(msgHdr, bRead);
       rv = msgHdr->GetMessageKey(&messageKey);
-      if (NS_FAILED(rv)) return PR_FALSE;
+      if (NS_FAILED(rv)) return false;
 
       NS_ASSERTION(m_readSet, "m_readSet is null");
-      if (!m_readSet) return PR_FALSE;
+      if (!m_readSet) return false;
 
       if (!bRead) {
 #ifdef DEBUG_NEWS_DATABASE
         printf("remove %d from the set\n",messageKey);
 #endif
 
-        rv = m_readSet->Remove(messageKey);
-        if (NS_FAILED(rv)) return PR_FALSE;
+        m_readSet->Remove(messageKey);
 
-        rv = NotifyReadChanged(nsnull);
-        if (NS_FAILED(rv)) return PR_FALSE;
+        rv = NotifyReadChanged(nullptr);
+        if (NS_FAILED(rv)) return false;
       }
       else {
 #ifdef DEBUG_NEWS_DATABASE
         printf("add %d to the set\n",messageKey);
 #endif
 
-        rv = m_readSet->Add(messageKey);
-        if (NS_FAILED(rv)) return PR_FALSE;
+        if (m_readSet->Add(messageKey) < 0) return false;
 
-        rv = NotifyReadChanged(nsnull);
-        if (NS_FAILED(rv)) return PR_FALSE;
+        rv = NotifyReadChanged(nullptr);
+        if (NS_FAILED(rv)) return false;
       }
     }
-    return PR_TRUE;
+    return true;
 }
 
-NS_IMETHODIMP nsNewsDatabase::MarkAllRead(PRUint32 *aNumMarked,
+NS_IMETHODIMP nsNewsDatabase::MarkAllRead(uint32_t *aNumMarked,
                                           nsMsgKey **aThoseMarked)
 {
   nsMsgKey lowWater = nsMsgKey_None, highWater;
@@ -290,9 +254,9 @@ nsresult nsNewsDatabase::SyncWithReadSet()
   nsresult rv = EnumerateMessages(getter_AddRefs(hdrs));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool hasMore = PR_FALSE, readInNewsrc, isReadInDB, changed = PR_FALSE;
+  bool hasMore = false, readInNewsrc, isReadInDB, changed = false;
   nsCOMPtr <nsIMsgDBHdr> header;
-  PRInt32 numMessages = 0, numUnreadMessages = 0;
+  int32_t numMessages = 0, numUnreadMessages = 0;
   nsMsgKey messageKey;
   nsCOMPtr <nsIMsgThread> threadHdr;
 
@@ -315,23 +279,23 @@ nsresult nsNewsDatabase::SyncWithReadSet()
       // If DB and readSet disagree on Read/Unread, fix DB
       if (readInNewsrc!=isReadInDB)
       {
-        MarkHdrRead(header, readInNewsrc, nsnull);
-        changed = PR_TRUE;
+        MarkHdrRead(header, readInNewsrc, nullptr);
+        changed = true;
       }
   }
 
   // Update FolderInfo Counters
-  PRInt32 oldMessages, oldUnreadMessages;
+  int32_t oldMessages, oldUnreadMessages;
   rv = m_dbFolderInfo->GetNumMessages(&oldMessages);
   if (NS_SUCCEEDED(rv) && oldMessages!=numMessages)
   {
-      changed = PR_TRUE;
+      changed = true;
       m_dbFolderInfo->ChangeNumMessages(numMessages-oldMessages);
   }
   rv = m_dbFolderInfo->GetNumUnreadMessages(&oldUnreadMessages);
   if (NS_SUCCEEDED(rv) && oldUnreadMessages!=numUnreadMessages)
   {
-      changed = PR_TRUE;
+      changed = true;
       m_dbFolderInfo->ChangeNumUnreadMessages(numUnreadMessages-oldUnreadMessages);
   }
 
@@ -343,11 +307,11 @@ nsresult nsNewsDatabase::SyncWithReadSet()
 
 nsresult nsNewsDatabase::AdjustExpungedBytesOnDelete(nsIMsgDBHdr *msgHdr)
 {
-  PRUint32 msgFlags;
+  uint32_t msgFlags;
   msgHdr->GetFlags(&msgFlags);
   if (msgFlags & nsMsgMessageFlags::Offline && m_dbFolderInfo)
   {
-    PRUint32 size = 0;
+    uint32_t size = 0;
     (void)msgHdr->GetOfflineMessageSize(&size);
     return m_dbFolderInfo->ChangeExpungedBytes (size);
   }

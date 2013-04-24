@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Windows Search integration.
- *
- * The Initial Developer of the Original Code is
- *  Siddharth Agarwal <sid1337@gmail.com>.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-
-#if MOZ_WINSDK_TARGETVER >= MOZ_NTDDI_LONGHORN
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsMailWinSearchHelper.h"
 #include "nsDirectoryServiceUtils.h"
@@ -80,13 +46,13 @@ nsMailWinSearchHelper::~nsMailWinSearchHelper()
 NS_IMPL_ISUPPORTS1(nsMailWinSearchHelper, nsIMailWinSearchHelper)
 
 
-NS_IMETHODIMP nsMailWinSearchHelper::GetFoldersInCrawlScope(PRBool* aResult)
+NS_IMETHODIMP nsMailWinSearchHelper::GetFoldersInCrawlScope(bool* aResult)
 {
-  *aResult = PR_FALSE;
+  *aResult = false;
   NS_ENSURE_ARG_POINTER(mProfD);
 
   // If the service isn't present or running, we shouldn't proceed.
-  PRBool serviceRunning;
+  bool serviceRunning;
   nsresult rv = GetServiceRunning(&serviceRunning);
   if (!serviceRunning || NS_FAILED(rv))
     return rv;
@@ -108,7 +74,7 @@ NS_IMETHODIMP nsMailWinSearchHelper::GetFoldersInCrawlScope(PRBool* aResult)
     return NS_ERROR_FAILURE;
 
   // We need to create appropriate URLs to check with the crawl scope manager.
-  for (PRUint32 i = 0; i < NS_ARRAY_LENGTH(sFoldersToIndex); i++)
+  for (uint32_t i = 0; i < NS_ARRAY_LENGTH(sFoldersToIndex); i++)
   {
     nsCOMPtr<nsIFile> subdir;
     rv = mProfD->Clone(getter_AddRefs(subdir));
@@ -135,14 +101,14 @@ NS_IMETHODIMP nsMailWinSearchHelper::GetFoldersInCrawlScope(PRBool* aResult)
     if (!included)
       return NS_OK;
   }
-  *aResult = PR_TRUE;
+  *aResult = true;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMailWinSearchHelper::GetServiceRunning(PRBool* aResult)
+NS_IMETHODIMP nsMailWinSearchHelper::GetServiceRunning(bool* aResult)
 {
-  *aResult = PR_FALSE;
-  SC_HANDLE hSCManager = OpenSCManager(nsnull, SERVICES_ACTIVE_DATABASE, SERVICE_QUERY_STATUS);
+  *aResult = false;
+  SC_HANDLE hSCManager = OpenSCManager(nullptr, SERVICES_ACTIVE_DATABASE, SERVICE_QUERY_STATUS);
   if (!hSCManager)
     return NS_ERROR_FAILURE;
 
@@ -164,11 +130,11 @@ NS_IMETHODIMP nsMailWinSearchHelper::GetServiceRunning(PRBool* aResult)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMailWinSearchHelper::SetFANCIBit(nsIFile* aFile, PRBool aBit, PRBool aRecurse)
+NS_IMETHODIMP nsMailWinSearchHelper::SetFANCIBit(nsIFile* aFile, bool aBit, bool aRecurse)
 {
   NS_ENSURE_ARG_POINTER(aFile);
 
-  PRBool exists;
+  bool exists;
   nsresult rv = aFile->Exists(&exists);
   NS_ENSURE_SUCCESS(rv, rv);
   if (!exists)
@@ -196,7 +162,7 @@ NS_IMETHODIMP nsMailWinSearchHelper::SetFANCIBit(nsIFile* aFile, PRBool aBit, PR
   }
 
   // We should only try to recurse if it's a directory
-  PRBool isDirectory;
+  bool isDirectory;
   rv = aFile->IsDirectory(&isDirectory);
   NS_ENSURE_SUCCESS(rv, rv);
   if (aRecurse && isDirectory)
@@ -205,7 +171,7 @@ NS_IMETHODIMP nsMailWinSearchHelper::SetFANCIBit(nsIFile* aFile, PRBool aBit, PR
     rv = aFile->GetDirectoryEntries(getter_AddRefs(children));
     NS_ENSURE_SUCCESS(rv, rv);
     
-    PRBool hasMore;
+    bool hasMore;
     while (NS_SUCCEEDED(rv) && NS_SUCCEEDED(children->HasMoreElements(&hasMore)) && hasMore)
     {
       nsCOMPtr<nsIFile> childFile;
@@ -217,10 +183,10 @@ NS_IMETHODIMP nsMailWinSearchHelper::SetFANCIBit(nsIFile* aFile, PRBool aBit, PR
   return rv;
 }
 
-NS_IMETHODIMP nsMailWinSearchHelper::GetIsFileAssociationSet(PRBool *aResult)
+NS_IMETHODIMP nsMailWinSearchHelper::GetIsFileAssociationSet(bool *aResult)
 {
   NS_ENSURE_ARG_POINTER(aResult);
-  *aResult = PR_FALSE;
+  *aResult = false;
 
   // We'll use the Vista method here
   nsRefPtr<IApplicationAssociationRegistration> pAAR;
@@ -230,8 +196,10 @@ NS_IMETHODIMP nsMailWinSearchHelper::GetIsFileAssociationSet(PRBool *aResult)
                                 IID_IApplicationAssociationRegistration,
                                 getter_AddRefs(pAAR));
 
+  BOOL res;
   if (SUCCEEDED(hr))
-    pAAR->QueryAppIsDefault(L".wdseml", AT_FILEEXTENSION, AL_EFFECTIVE, APP_REG_NAME_MAIL, aResult);
+    pAAR->QueryAppIsDefault(L".wdseml", AT_FILEEXTENSION, AL_EFFECTIVE, APP_REG_NAME_MAIL, &res);
+  *aResult = res;
 
   return NS_OK;
 }
@@ -250,7 +218,7 @@ NS_IMETHODIMP nsMailWinSearchHelper::SetFileAssociation()
   return SUCCEEDED(hr) ? NS_OK : NS_ERROR_FAILURE;
 }
 
-NS_IMETHODIMP nsMailWinSearchHelper::RunSetup(PRBool aEnable)
+NS_IMETHODIMP nsMailWinSearchHelper::RunSetup(bool aEnable)
 {
   nsresult rv;
   if (!mCurProcD)
@@ -303,5 +271,3 @@ NS_IMETHODIMP nsMailWinSearchHelper::RunSetup(PRBool aEnable)
 
   return SUCCEEDED(HRESULT_FROM_WIN32(dwRet)) ? NS_OK : NS_ERROR_FAILURE;
 }
-
-#endif // MOZ_WINSDK_TARGETVER >= MOZ_NTDDI_LONGHORN

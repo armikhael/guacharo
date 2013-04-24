@@ -1,40 +1,7 @@
 /* -*- Mode: javascript; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Benjamin Smedberg <bsmedberg@covad.net>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* The prefs in this file are specific to the seamonkey (toolkit) browser.
  * Generic default prefs that would be useful to embedders belong in
@@ -65,7 +32,26 @@ pref("general.autoScroll", true);
 
 pref("general.useragent.compatMode.firefox", true);
 
-// 0 = blank, 1 = home (browser.startup.homepage), 2 = last
+// site-specific User Agent settings. Example:
+//   To send aol.com the legacy build date instead of the version number in
+//   the UA's Gecko token because mail.aol.com defaults to basic web UI when
+//   accessed with a user agent without Gecko/20100101.
+//   pref("general.useragent.override.aol.com", "Gecko/[^ ]*#Gecko/20100101");
+pref("general.useragent.complexOverride.moodle", true); // bug 797703
+pref("general.useragent.override.bank.barclays.co.uk",   "Gecko/[^ ]*#Gecko/20100101"); // bug 804169
+pref("general.useragent.override.bankmillennium.pl",     "Gecko/[^ ]*#Gecko/20100101"); // bug 804103
+pref("general.useragent.override.becu.org",              "Gecko/[^ ]*#Gecko/20100101"); // bug 804170
+pref("general.useragent.override.becuonlinebanking.org", "Gecko/[^ ]*#Gecko/20100101"); // bug 804170
+pref("general.useragent.override.bfsfcu.org",            "Gecko/[^ ]*#Gecko/20100101"); // bug 804171
+pref("general.useragent.override.cenfedcu.org",          "Gecko/[^ ]*#Gecko/20100101"); // bug 804172
+pref("general.useragent.override.coastal24.com",         "Gecko/[^ ]*#Gecko/20100101"); // bug 804175
+pref("general.useragent.override.mtb.com",               "Gecko/[^ ]*#Gecko/20100101"); // bug 795350
+pref("general.useragent.override.mandtbank.com",         "Gecko/[^ ]*#Gecko/20100101"); // bug 795350
+pref("general.useragent.override.natweststockbrokers.co.uk", "Gecko/[^ ]*#Gecko/20100101"); // bug 804179
+pref("general.useragent.override.natweststockbrokers.com", "Gecko/[^ ]*#Gecko/20100101"); // bug 804179
+pref("general.useragent.override.raiffeisen.hu",         "Gecko/[^ ]*#Gecko/20100101"); // bug 795348
+
+// 0 = blank, 1 = home (browser.startup.homepage), 2 = last visited page, 3 = resume previous browser session
 pref("browser.startup.page",                1);
 pref("browser.startup.homepage",	   "chrome://navigator-region/locale/region.properties");
 pref("browser.startup.homepage.count", 1);
@@ -101,7 +87,10 @@ pref("browser.download.progress.closeWhenDone", false);
 // the Content-Disposition filename) before giving up and falling back to
 // picking a filename without that info in hand so that the user sees some
 // feedback from their action.
-pref("browser.download.saveLinkAsFilenameTimeout", 1000);
+pref("browser.download.saveLinkAsFilenameTimeout", 4000);
+
+// Output console.log/info/warn/error to the Error Console
+pref("browser.dom.window.console.enabled", false);
 
 // Use the findbar instead of the dialog box
 pref("browser.findbar.enabled", true);
@@ -129,7 +118,7 @@ pref("browser.search.openintab", false);
 pref("browser.search.opensidebarsearchpanel", false);
 
 // Open context search results in either a new window or tab.
-pref("browser.search.opentabforcontextsearch", false);
+pref("browser.search.opentabforcontextsearch", true);
 
 // Send ping to the server to update.
 pref("browser.search.update", true);
@@ -150,6 +139,7 @@ pref("keyword.enabled", true);
 pref("keyword.URL", "");
 
 pref("browser.urlbar.autocomplete.enabled", true);
+pref("browser.urlbar.formatting.enabled", true);
 pref("browser.urlbar.clickSelectsAll", true);
 // when clickSelectsAll=true, does it also apply when the click is past end of text?
 pref("browser.urlbar.clickAtEndSelects", true);
@@ -189,17 +179,12 @@ pref("browser.urlbar.restrict.typed", "~");
 pref("browser.urlbar.match.title", "#");
 pref("browser.urlbar.match.url", "@");
 
+pref("browser.history.last_page_visited", "about:blank");
 pref("browser.history.grouping", "day");
 pref("browser.sessionhistory.max_entries", 50);
 
 // Whether history is enabled or not.
 pref("places.history.enabled", true);
-
-// The percentage of system memory that the Places database can use.  Out of the
-// allowed cache size it will at most use the size of the database file.
-// Changes to this value are effective after an application restart.
-// Acceptable values are between 0 and 50.
-pref("places.database.cache_to_memory_percentage", 6);
 
 // the (maximum) number of the recent visits to sample
 // when calculating frecency
@@ -244,9 +229,11 @@ pref("browser.bookmarks.autoExportHTML", false);
 //  0: no backups created (and deletes all existing backups)
 pref("browser.bookmarks.max_backups", 10);
 
-// Don't try to alter this pref, it'll be reset the next time you use the
-// bookmarking dialog
+// Don't try to alter these prefs, they'll be reset the next time you use the
+// bookmarking dialog.
 pref("browser.bookmarks.editDialog.firstEditField", "namePicker");
+pref("browser.bookmarks.editDialog.expandTags", false);
+pref("browser.bookmarks.editDialog.expandFolders", false);
 
 // Tabbed browser
 pref("browser.tabs.loadDivertedInBackground", false);
@@ -283,6 +270,11 @@ pref("browser.tabs.tabClipWidth", 140);
 // 2  no close buttons at all
 // 3  at the end of the tabstrip
 pref("browser.tabs.closeButtons", 3);
+
+// Mouse wheel action when over the tab bar:
+// false  The mouse wheel scrolls the whole tab bar like Firefox (default).
+// true   The mouse wheel advances the selected tab.
+pref("browser.tabs.mouseScrollAdvancesTab", false);
 
 // lets new tab/window load something different than first window
 // -1 - use navigator startup preference
@@ -341,7 +333,17 @@ pref("browser.offline-apps.notify", true);
 
 pref("browser.formfill.expire_days",        180);
 
+pref("mail.biff.alert.show_preview", true);
+pref("mail.biff.alert.show_subject", true);
+pref("mail.biff.alert.show_sender",  true);
+pref("mail.biff.alert.preview_length", 40);
+
 pref("mailnews.ui.deleteMarksRead", true);
+
+// The maximum amount of decoded image data we'll willingly keep around (we
+// might keep around more than this, but we'll try to get down to this value).
+// (This is intentionally on the high side; see bugs 746055 and 768015.)
+pref("image.mem.max_decoded_image_kb", 256000);
 
 pref("spellchecker.dictionaries.download.url", "chrome://branding/locale/brand.properties");
 
@@ -548,6 +550,13 @@ pref("app.update.incompatible.mode", 0);
 // Enables some extra Extension System Logging (can reduce performance)
 pref("extensions.logging.enabled", false);
 
+// Disables strict compatibility, making addons compatible-by-default.
+pref("extensions.strictCompatibility", false);
+
+// Specifies a minimum maxVersion an addon needs to say it's compatible with
+// for it to be compatible by default.
+pref("extensions.minCompatibleAppVersion", "2.1");
+
 // Blocklist preferences
 pref("extensions.blocklist.enabled", true);
 pref("extensions.blocklist.interval", 86400);
@@ -568,16 +577,22 @@ pref("extensions.blocklist.itemURL", "https://addons.mozilla.org/%LOCALE%/%APP%/
 //  .. etc ..
 //
 pref("extensions.update.enabled", true);
-pref("extensions.update.url", "https://versioncheck.addons.mozilla.org/update/VersionCheck.php?reqVersion=%REQ_VERSION%&id=%ITEM_ID%&version=%ITEM_VERSION%&maxAppVersion=%ITEM_MAXAPPVERSION%&status=%ITEM_STATUS%&appID=%APP_ID%&appVersion=%APP_VERSION%&appOS=%APP_OS%&appABI=%APP_ABI%&locale=%APP_LOCALE%&currentAppVersion=%CURRENT_APP_VERSION%&updateType=%UPDATE_TYPE%");
+pref("extensions.update.url", "https://versioncheck.addons.mozilla.org/update/VersionCheck.php?reqVersion=%REQ_VERSION%&id=%ITEM_ID%&version=%ITEM_VERSION%&maxAppVersion=%ITEM_MAXAPPVERSION%&status=%ITEM_STATUS%&appID=%APP_ID%&appVersion=%APP_VERSION%&appOS=%APP_OS%&appABI=%APP_ABI%&locale=%APP_LOCALE%&currentAppVersion=%CURRENT_APP_VERSION%&updateType=%UPDATE_TYPE%&compatMode=%COMPATIBILITY_MODE%");
 pref("extensions.update.interval", 86400);         // Check daily for updates to add-ons
 pref("extensions.update.autoUpdateDefault", true); // Download and install automatically
+
+// Disable add-ons installed into the shared user and shared system areas by
+// default. This does not include the application directory. See the SCOPE
+// constants in AddonManager.jsm for values to use here.
+pref("extensions.autoDisableScopes", 15);
 
 // Preferences for AMO integration
 pref("extensions.getAddons.cache.enabled", true);  // also toggles personalized recommendations
 pref("extensions.getAddons.maxResults", 15);
-pref("extensions.getAddons.get.url", "https://services.addons.mozilla.org/%LOCALE%/%APP%/api/%API_VERSION%/search/guid:%IDS%?src=seamonkey&appOS=%OS%&appVersion=%VERSION%&tMain=%TIME_MAIN%&tFirstPaint=%TIME_FIRST_PAINT%&tSessionRestored=%TIME_SESSION_RESTORED%");
+pref("extensions.getAddons.get.url", "https://services.addons.mozilla.org/%LOCALE%/%APP%/api/%API_VERSION%/search/guid:%IDS%?src=seamonkey&appOS=%OS%&appVersion=%VERSION%");
+pref("extensions.getAddons.getWithPerformance.url", "https://services.addons.mozilla.org/%LOCALE%/%APP%/api/%API_VERSION%/search/guid:%IDS%?src=seamonkey&appOS=%OS%&appVersion=%VERSION%&tMain=%TIME_MAIN%&tFirstPaint=%TIME_FIRST_PAINT%&tSessionRestored=%TIME_SESSION_RESTORED%");
 pref("extensions.getAddons.search.browseURL", "https://addons.mozilla.org/%LOCALE%/%APP%/search?q=%TERMS%");
-pref("extensions.getAddons.search.url", "https://services.addons.mozilla.org/%LOCALE%/%APP%/api/%API_VERSION%/search/%TERMS%/all/%MAX_RESULTS%/%OS%/%VERSION%?src=seamonkey");
+pref("extensions.getAddons.search.url", "https://services.addons.mozilla.org/%LOCALE%/%APP%/api/%API_VERSION%/search/%TERMS%/all/%MAX_RESULTS%/%OS%/%VERSION%/%COMPATIBILITY_MODE%?src=seamonkey");
 pref("extensions.webservice.discoverURL", "https://services.addons.mozilla.org/%LOCALE%/%APP%/discovery/pane/%VERSION%/%OS%");
 
 // getMoreThemes is used by our UI under our switch theme menu
@@ -652,16 +667,6 @@ pref("privacy.item.offlineApps", false);
 pref("privacy.sanitize.sanitizeOnShutdown", false);
 pref("privacy.sanitize.promptOnSanitize", true);
 
-/* mousewheel.withcontrolkey.action:
- * 0 = lines
- * 1 = pages
- * 2 = history
- * 3 = text or full zoom depending on "browser.zoom.full".
- */
-pref("mousewheel.withcontrolkey.action",3);
-pref("mousewheel.withcontrolkey.sysnumlines",false);
-pref("mousewheel.withcontrolkey.numlines",1);
-
 // Show XUL error pages instead of alerts for errors
 pref("browser.xul.error_pages.enabled", true);
 pref("browser.xul.error_pages.expert_bad_cert", false);
@@ -704,11 +709,13 @@ pref("dom.ipc.plugins.enabled", true);
 
 // plugin finder service url
 pref("pfs.datasource.url", "https://pfs.mozilla.org/plugins/PluginFinderService.php?mimetype=%PLUGIN_MIMETYPE%&appID=%APP_ID%&appVersion=%APP_VERSION%&clientOS=%CLIENT_OS%&chromeLocale=%CHROME_LOCALE%");
-pref("plugins.update.url", "http://www.mozilla.com/%LOCALE%/plugincheck/");
+pref("plugins.update.url", "https://www.mozilla.org/%LOCALE%/plugincheck/");
 pref("plugins.update.notifyUser", false);
 pref("plugins.hide_infobar_for_outdated_plugin", false);
 pref("plugins.hide_infobar_for_carbon_failure_plugin", false);
 pref("plugins.hide_infobar_for_missing_plugin", false);
+pref("plugins.click_to_play", false);
+pref("plugin.disable", false);
 
 #ifdef XP_MACOSX
 pref("plugins.use_layers", true);
@@ -728,6 +735,12 @@ pref("toolbar.customization.usesheet", true);
 #ifdef XP_UNIX
 // For the download dialog
 pref("browser.download.progressDnldDialog.enable_launch_reveal_buttons", false);
+
+// Mouse wheel action when over the tab bar:
+// false  The mouse wheel scrolls the whole tab bar like Firefox.
+// true   The mouse wheel advances the selected tab.
+pref("browser.tabs.mouseScrollAdvancesTab", true);
+
 pref("browser.urlbar.clickSelectsAll", false);
 
 // 0 goes back
@@ -762,13 +775,19 @@ pref("browser.rights.override", true);
 #endif
 
 // The sync engines to use.
-pref("services.sync.registerEngines", "Bookmarks,Form,History,Password,Prefs,Tab");
+pref("services.sync.registerEngines", "Bookmarks,Form,History,Password,Prefs,Tab,Addons");
 // Preferences to be synced by default
 pref("services.sync.prefs.sync.accessibility.blockautorefresh", true);
 pref("services.sync.prefs.sync.accessibility.browsewithcaret", true);
 pref("services.sync.prefs.sync.accessibility.typeaheadfind.autostart", true);
 pref("services.sync.prefs.sync.accessibility.typeaheadfind.linksonly", true);
 pref("services.sync.prefs.sync.accessibility.typeaheadfind.usefindbar", true);
+pref("services.sync.prefs.sync.addons.ignoreUserEnabledChanges", true);
+// The addons prefs related to repository verification are intentionally
+// not synced for security reasons. If a system is compromised, a user
+// could weaken the pref locally, install an add-on from an untrusted
+// source, and this would propagate automatically to other,
+// uncompromised Sync-connected devices.
 pref("services.sync.prefs.sync.app.update.mode", true);
 pref("services.sync.prefs.sync.browser.download.manager.behavior", true);
 pref("services.sync.prefs.sync.browser.download.manager.closeWhenDone", true);
@@ -779,6 +798,7 @@ pref("services.sync.prefs.sync.browser.formfill.enable", true);
 pref("services.sync.prefs.sync.browser.link.open_external", true);
 pref("services.sync.prefs.sync.browser.link.open_newwindow", true);
 pref("services.sync.prefs.sync.browser.search.update", true);
+pref("services.sync.prefs.sync.browser.sessionstore.max_concurrent_tabs", true);
 pref("services.sync.prefs.sync.browser.startup.homepage", true);
 pref("services.sync.prefs.sync.browser.startup.page", true);
 pref("services.sync.prefs.sync.browser.tabs.autoHide", true);
@@ -803,6 +823,55 @@ pref("services.sync.prefs.sync.javascript.enabled", true);
 pref("services.sync.prefs.sync.layout.spellcheckDefault", true);
 pref("services.sync.prefs.sync.lightweightThemes.isThemeSelected", true);
 pref("services.sync.prefs.sync.lightweightThemes.usedThemes", true);
+pref("services.sync.prefs.sync.mailnews.confirm.moveFoldersToTrash", true);
+pref("services.sync.prefs.sync.mailnews.customDBHeaders", true);
+pref("services.sync.prefs.sync.mailnews.customHeaders", true);
+pref("services.sync.prefs.sync.mailnews.display.date_senders_timezone", true);
+pref("services.sync.prefs.sync.mailnews.display.disable_format_flowed_support", true);
+pref("services.sync.prefs.sync.mailnews.display.disallow_mime_handlers", true);
+pref("services.sync.prefs.sync.mailnews.display.html_as", true);
+pref("services.sync.prefs.sync.mailnews.display.html_sanitizer.allowed_tags", true);
+pref("services.sync.prefs.sync.mailnews.display.prefer_plaintext", true);
+pref("services.sync.prefs.sync.mailnews.display.show_all_body_parts_menu", true);
+pref("services.sync.prefs.sync.mailnews.emptyTrash.dontAskAgain", true);
+pref("services.sync.prefs.sync.mailnews.filters.confirm_delete", true);
+pref("services.sync.prefs.sync.mailnews.headers.extraExpandedHeaders", true);
+pref("services.sync.prefs.sync.mailnews.headers.showMessageId", true);
+pref("services.sync.prefs.sync.mailnews.headers.showOrganization", true);
+pref("services.sync.prefs.sync.mailnews.headers.showReferences", true);
+pref("services.sync.prefs.sync.mailnews.headers.showSender", true);
+pref("services.sync.prefs.sync.mailnews.headers.showUserAgent", true);
+pref("services.sync.prefs.sync.mailnews.localizedRe", true);
+pref("services.sync.prefs.sync.mailnews.mark_message_read.auto", true);
+pref("services.sync.prefs.sync.mailnews.mark_message_read.delay", true);
+pref("services.sync.prefs.sync.mailnews.mark_message_read.delay.interval", true);
+pref("services.sync.prefs.sync.mailnews.messageid.openInNewWindow", true);
+pref("services.sync.prefs.sync.mailnews.message_display.allow_plugins", true);
+pref("services.sync.prefs.sync.mailnews.message_display.disable_remote_image", true);
+pref("services.sync.prefs.sync.mailnews.nav_crosses_folders", true);
+pref("services.sync.prefs.sync.mailnews.offline_sync_mail", true);
+pref("services.sync.prefs.sync.mailnews.offline_sync_news", true);
+pref("services.sync.prefs.sync.mailnews.offline_sync_send_unsent", true);
+pref("services.sync.prefs.sync.mailnews.offline_sync_work_offline", true);
+pref("services.sync.prefs.sync.mailnews.remember_selected_message", true);
+pref("services.sync.prefs.sync.mailnews.reply_header_authorwrote", true);
+pref("services.sync.prefs.sync.mailnews.reply_header_colon", true);
+pref("services.sync.prefs.sync.mailnews.reply_header_locale", true);
+pref("services.sync.prefs.sync.mailnews.reply_header_ondate", true);
+pref("services.sync.prefs.sync.mailnews.reply_header_originalmessage", true);
+pref("services.sync.prefs.sync.mailnews.reply_header_separator", true);
+pref("services.sync.prefs.sync.mailnews.reply_header_type", true);
+pref("services.sync.prefs.sync.mailnews.scroll_to_new_message", true);
+pref("services.sync.prefs.sync.mailnews.sendInBackground", true);
+pref("services.sync.prefs.sync.mailnews.send_default_charset", true);
+pref("services.sync.prefs.sync.mailnews.send_plaintext_flowed", true);
+pref("services.sync.prefs.sync.mailnews.show_send_progress", true);
+pref("services.sync.prefs.sync.mailnews.start_page.enabled", true);
+pref("services.sync.prefs.sync.mailnews.thread_pane_column_unthreads", true);
+pref("services.sync.prefs.sync.mailnews.ui.deleteMarksRead", true);
+pref("services.sync.prefs.sync.mailnews.ui.junk.manualMarkAsJunkMarksRead", true);
+pref("services.sync.prefs.sync.mailnews.view_default_charset", true);
+pref("services.sync.prefs.sync.mailnews.wraplength", true);
 pref("services.sync.prefs.sync.network.cookie.cookieBehavior", true);
 pref("services.sync.prefs.sync.network.cookie.lifetimePolicy", true);
 pref("services.sync.prefs.sync.permissions.default.image", true);

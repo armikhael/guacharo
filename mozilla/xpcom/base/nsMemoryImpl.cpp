@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsXPCOM.h"
 #include "nsMemoryImpl.h"
@@ -58,13 +26,13 @@ static nsMemoryImpl sGlobalMemory;
 NS_IMPL_QUERY_INTERFACE1(nsMemoryImpl, nsIMemory)
 
 NS_IMETHODIMP_(void*)
-nsMemoryImpl::Alloc(PRSize size)
+nsMemoryImpl::Alloc(size_t size)
 {
     return NS_Alloc(size);
 }
 
 NS_IMETHODIMP_(void*)
-nsMemoryImpl::Realloc(void* ptr, PRSize size)
+nsMemoryImpl::Realloc(void* ptr, size_t size)
 {
     return NS_Realloc(ptr, size);
 }
@@ -76,16 +44,16 @@ nsMemoryImpl::Free(void* ptr)
 }
 
 NS_IMETHODIMP
-nsMemoryImpl::HeapMinimize(PRBool aImmediate)
+nsMemoryImpl::HeapMinimize(bool aImmediate)
 {
     return FlushMemory(NS_LITERAL_STRING("heap-minimize").get(), aImmediate);
 }
 
 NS_IMETHODIMP
-nsMemoryImpl::IsLowMemory(PRBool *result)
+nsMemoryImpl::IsLowMemory(bool *result)
 {
     NS_ERROR("IsLowMemory is deprecated.  See bug 592308.");
-    *result = PR_FALSE;
+    *result = false;
     return NS_OK;
 }
 
@@ -97,7 +65,7 @@ nsMemoryImpl::Create(nsISupports* outer, const nsIID& aIID, void **aResult)
 }
 
 nsresult
-nsMemoryImpl::FlushMemory(const PRUnichar* aReason, PRBool aImmediate)
+nsMemoryImpl::FlushMemory(const PRUnichar* aReason, bool aImmediate)
 {
     nsresult rv = NS_OK;
 
@@ -111,7 +79,7 @@ nsMemoryImpl::FlushMemory(const PRUnichar* aReason, PRBool aImmediate)
         }
     }
 
-    PRInt32 lastVal = PR_ATOMIC_SET(&sIsFlushing, 1);
+    int32_t lastVal = PR_ATOMIC_SET(&sIsFlushing, 1);
     if (lastVal)
         return NS_OK;
 
@@ -150,7 +118,7 @@ nsMemoryImpl::RunFlushers(const PRUnichar* aReason)
 
         if ( e ) {
           nsCOMPtr<nsIObserver> observer;
-          PRBool loop = PR_TRUE;
+          bool loop = true;
 
           while (NS_SUCCEEDED(e->HasMoreElements(&loop)) && loop) 
           {
@@ -180,7 +148,7 @@ nsMemoryImpl::FlushEvent::Run()
     return NS_OK;
 }
 
-PRInt32
+int32_t
 nsMemoryImpl::sIsFlushing = 0;
 
 PRIntervalTime
@@ -190,31 +158,15 @@ nsMemoryImpl::FlushEvent
 nsMemoryImpl::sFlushEvent;
 
 XPCOM_API(void*)
-NS_Alloc(PRSize size)
+NS_Alloc(size_t size)
 {
-    if (size > PR_INT32_MAX)
-        return nsnull;
-
-    void* result = moz_malloc(size);
-    if (! result) {
-        // Request an asynchronous flush
-        sGlobalMemory.FlushMemory(NS_LITERAL_STRING("alloc-failure").get(), PR_FALSE);
-    }
-    return result;
+    return moz_xmalloc(size);
 }
 
 XPCOM_API(void*)
-NS_Realloc(void* ptr, PRSize size)
+NS_Realloc(void* ptr, size_t size)
 {
-    if (size > PR_INT32_MAX)
-        return nsnull;
-
-    void* result = moz_realloc(ptr, size);
-    if (! result && size != 0) {
-        // Request an asynchronous flush
-        sGlobalMemory.FlushMemory(NS_LITERAL_STRING("alloc-failure").get(), PR_FALSE);
-    }
-    return result;
+    return moz_xrealloc(ptr, size);
 }
 
 XPCOM_API(void)

@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Feed Content Sniffer.
- *
- * The Initial Developer of the Original Code is Google Inc.
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Ben Goodger <beng@google.com>
- *   Robert Sayre <sayrer@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsFeedSniffer.h"
 
@@ -67,7 +34,7 @@
 #define NS_RDF "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 #define NS_RSS "http://purl.org/rss/1.0/"
 
-#define MAX_BYTES 512
+#define MAX_BYTES 512u
 
 NS_IMPL_ISUPPORTS3(nsFeedSniffer,
                    nsIContentSniffer,
@@ -76,8 +43,8 @@ NS_IMPL_ISUPPORTS3(nsFeedSniffer,
 
 nsresult
 nsFeedSniffer::ConvertEncodedData(nsIRequest* request,
-                                  const PRUint8* data,
-                                  PRUint32 length)
+                                  const uint8_t* data,
+                                  uint32_t length)
 {
   nsresult rv = NS_OK;
 
@@ -96,11 +63,11 @@ nsFeedSniffer::ConvertEncodedData(nsIRequest* request,
 
       nsCOMPtr<nsIStreamListener> converter;
       rv = converterService->AsyncConvertData(contentEncoding.get(),
-                                              "uncompressed", this, nsnull,
+                                              "uncompressed", this, nullptr,
                                               getter_AddRefs(converter));
       NS_ENSURE_SUCCESS(rv, rv);
 
-      converter->OnStartRequest(request, nsnull);
+      converter->OnStartRequest(request, nullptr);
 
       nsCOMPtr<nsIStringInputStream> rawStream =
         do_CreateInstance(NS_STRINGINPUTSTREAM_CONTRACTID);
@@ -110,74 +77,41 @@ nsFeedSniffer::ConvertEncodedData(nsIRequest* request,
       rv = rawStream->SetData((const char*)data, length);
       NS_ENSURE_SUCCESS(rv, rv);
 
-      rv = converter->OnDataAvailable(request, nsnull, rawStream, 0, length);
+      rv = converter->OnDataAvailable(request, nullptr, rawStream, 0, length);
       NS_ENSURE_SUCCESS(rv, rv);
 
-      converter->OnStopRequest(request, nsnull, NS_OK);
+      converter->OnStopRequest(request, nullptr, NS_OK);
     }
   }
   return rv;
 }
 
 template<int N>
-static PRBool
+static bool
 StringBeginsWithLowercaseLiteral(nsAString& aString,
                                  const char (&aSubstring)[N])
 {
   return StringHead(aString, N).LowerCaseEqualsLiteral(aSubstring);
 }
 
-// XXXsayrer put this in here to get on the branch with minimal delay.
-// Trunk really needs to factor this out. This is the third usage.
-PRBool
+bool
 HasAttachmentDisposition(nsIHttpChannel* httpChannel)
 {
   if (!httpChannel)
-    return PR_FALSE;
+    return false;
 
-  nsCAutoString contentDisposition;
-  nsresult rv =
-    httpChannel->GetResponseHeader(NS_LITERAL_CSTRING("content-disposition"),
-                                   contentDisposition);
+  uint32_t disp;
+  nsresult rv = httpChannel->GetContentDisposition(&disp);
 
-  if (NS_SUCCEEDED(rv) && !contentDisposition.IsEmpty()) {
-    nsCOMPtr<nsIURI> uri;
-    httpChannel->GetURI(getter_AddRefs(uri));
-    nsCOMPtr<nsIMIMEHeaderParam> mimehdrpar =
-      do_GetService(NS_MIMEHEADERPARAM_CONTRACTID, &rv);
-    if (NS_SUCCEEDED(rv))
-    {
-      nsCAutoString fallbackCharset;
-      if (uri)
-        uri->GetOriginCharset(fallbackCharset);
-      nsAutoString dispToken;
-      // Get the disposition type
-      rv = mimehdrpar->GetParameter(contentDisposition, "", fallbackCharset,
-                                    PR_TRUE, nsnull, dispToken);
-      // RFC 2183, section 2.8 says that an unknown disposition
-      // value should be treated as "attachment"
-      // XXXbz this code is duplicated in GetFilenameAndExtensionFromChannel in
-      // nsExternalHelperAppService.  Factor it out!
-      if (NS_FAILED(rv) ||
-          (!dispToken.IsEmpty() &&
-           !StringBeginsWithLowercaseLiteral(dispToken, "inline") &&
-           // Broken sites just send
-           // Content-Disposition: filename="file"
-           // without a disposition token... screen those out.
-           !StringBeginsWithLowercaseLiteral(dispToken, "filename") &&
-           // Also in use is Content-Disposition: name="file"
-           !StringBeginsWithLowercaseLiteral(dispToken, "name")))
-        // We have a content-disposition of "attachment" or unknown
-        return PR_TRUE;
-    }
-  }
+  if (NS_SUCCEEDED(rv) && disp == nsIChannel::DISPOSITION_ATTACHMENT)
+    return true;
 
-  return PR_FALSE;
+  return false;
 }
 
 /**
  * @return the first occurrence of a character within a string buffer,
- *         or nsnull if not found
+ *         or nullptr if not found
  */
 inline const char*
 FindChar(char c, const char *begin, const char *end)
@@ -200,10 +134,10 @@ FindChar(char c, const char *begin, const char *end)
  * @param   end
  *          The end of the data being sniffed, right before the substring that
  *          was found.
- * @returns PR_TRUE if the found substring is the documentElement, PR_FALSE
+ * @returns true if the found substring is the documentElement, false
  *          otherwise.
  */
-static PRBool
+static bool
 IsDocumentElement(const char *start, const char* end)
 {
   // For every tag in the buffer, check to see if it's a PI, Doctype or
@@ -211,24 +145,24 @@ IsDocumentElement(const char *start, const char* end)
   while ( (start = FindChar('<', start, end)) ) {
     ++start;
     if (start >= end)
-      return PR_FALSE;
+      return false;
 
     // Check to see if the character following the '<' is either '?' or '!'
     // (processing instruction or doctype or comment)... these are valid nodes
     // to have in the prologue.
     if (*start != '?' && *start != '!')
-      return PR_FALSE;
+      return false;
 
     // Now advance the iterator until the '>' (We do this because we don't want
     // to sniff indicator substrings that are embedded within other nodes, e.g.
     // comments: <!-- <rdf:RDF .. > -->
     start = FindChar('>', start, end);
     if (!start)
-      return PR_FALSE;
+      return false;
 
     ++start;
   }
-  return PR_TRUE;
+  return true;
 }
 
 /**
@@ -238,15 +172,15 @@ IsDocumentElement(const char *start, const char* end)
  *          The data being sniffed
  * @param   substring
  *          The substring being tested for existence and root-ness.
- * @returns PR_TRUE if the substring exists and is the documentElement, PR_FALSE
+ * @returns true if the substring exists and is the documentElement, false
  *          otherwise.
  */
-static PRBool
+static bool
 ContainsTopLevelSubstring(nsACString& dataString, const char *substring)
 {
-  PRInt32 offset = dataString.Find(substring);
+  int32_t offset = dataString.Find(substring);
   if (offset == -1)
-    return PR_FALSE;
+    return false;
 
   const char *begin = dataString.BeginReading();
 
@@ -256,8 +190,8 @@ ContainsTopLevelSubstring(nsACString& dataString, const char *substring)
 
 NS_IMETHODIMP
 nsFeedSniffer::GetMIMETypeFromContent(nsIRequest* request,
-                                      const PRUint8* data,
-                                      PRUint32 length,
+                                      const uint8_t* data,
+                                      uint32_t length,
                                       nsACString& sniffedType)
 {
   nsCOMPtr<nsIHttpChannel> channel(do_QueryInterface(request));
@@ -295,7 +229,7 @@ nsFeedSniffer::GetMIMETypeFromContent(nsIRequest* request,
   // doing.
   nsCAutoString contentType;
   channel->GetContentType(contentType);
-  PRBool noSniff = contentType.EqualsLiteral(TYPE_RSS) ||
+  bool noSniff = contentType.EqualsLiteral(TYPE_RSS) ||
                    contentType.EqualsLiteral(TYPE_ATOM);
 
   // Check to see if this was a feed request from the location bar or from
@@ -319,7 +253,7 @@ nsFeedSniffer::GetMIMETypeFromContent(nsIRequest* request,
     // set the feed header as a response header, since we have good metadata
     // telling us that the feed is supposed to be RSS or Atom
     channel->SetResponseHeader(NS_LITERAL_CSTRING("X-Moz-Is-Feed"),
-                               NS_LITERAL_CSTRING("1"), PR_FALSE);
+                               NS_LITERAL_CSTRING("1"), false);
     sniffedType.AssignLiteral(TYPE_MAYBE_FEED);
     return NS_OK;
   }
@@ -341,23 +275,26 @@ nsFeedSniffer::GetMIMETypeFromContent(nsIRequest* request,
   if (NS_FAILED(rv))
     return rv;
 
-  const char* testData =
-    mDecodedData.IsEmpty() ? (const char*)data : mDecodedData.get();
+  // We cap the number of bytes to scan at MAX_BYTES to prevent picking up
+  // false positives by accidentally reading document content, e.g. a "how to
+  // make a feed" page.
+  const char* testData;
+  if (mDecodedData.IsEmpty()) {
+    testData = (const char*)data;
+    length = NS_MIN(length, MAX_BYTES);
+  } else {
+    testData = mDecodedData.get();
+    length = NS_MIN(mDecodedData.Length(), MAX_BYTES);
+  }
 
   // The strategy here is based on that described in:
   // http://blogs.msdn.com/rssteam/articles/PublishersGuide.aspx
   // for interoperarbility purposes.
 
-  // We cap the number of bytes to scan at MAX_BYTES to prevent picking up
-  // false positives by accidentally reading document content, e.g. a "how to
-  // make a feed" page.
-  if (length > MAX_BYTES)
-    length = MAX_BYTES;
-
   // Thus begins the actual sniffing.
   nsDependentCSubstring dataString((const char*)testData, length);
 
-  PRBool isFeed = PR_FALSE;
+  bool isFeed = false;
 
   // RSS 0.91/0.92/2.0
   isFeed = ContainsTopLevelSubstring(dataString, "<rss");
@@ -391,9 +328,9 @@ NS_METHOD
 nsFeedSniffer::AppendSegmentToString(nsIInputStream* inputStream,
                                      void* closure,
                                      const char* rawSegment,
-                                     PRUint32 toOffset,
-                                     PRUint32 count,
-                                     PRUint32* writeCount)
+                                     uint32_t toOffset,
+                                     uint32_t count,
+                                     uint32_t* writeCount)
 {
   nsCString* decodedData = static_cast<nsCString*>(closure);
   decodedData->Append(rawSegment, count);
@@ -403,10 +340,10 @@ nsFeedSniffer::AppendSegmentToString(nsIInputStream* inputStream,
 
 NS_IMETHODIMP
 nsFeedSniffer::OnDataAvailable(nsIRequest* request, nsISupports* context,
-                               nsIInputStream* stream, PRUint32 offset,
-                               PRUint32 count)
+                               nsIInputStream* stream, uint32_t offset,
+                               uint32_t count)
 {
-  PRUint32 read;
+  uint32_t read;
   return stream->ReadSegments(AppendSegmentToString, &mDecodedData, count,
                               &read);
 }

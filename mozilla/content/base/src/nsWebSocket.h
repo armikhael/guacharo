@@ -1,56 +1,29 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set sw=2 ts=8 et tw=80 : */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Wellington Fernando de Macedo.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *    Wellington Fernando de Macedo <wfernandom2004@gmail.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsWebSocket_h__
 #define nsWebSocket_h__
 
 #include "nsISupportsUtils.h"
-#include "nsIMozWebSocket.h"
+#include "nsIWebSocket.h"
 #include "nsCOMPtr.h"
 #include "nsString.h"
 #include "nsIJSNativeInitializer.h"
 #include "nsIPrincipal.h"
 #include "nsCycleCollectionParticipant.h"
 #include "nsIDOMEventListener.h"
-#include "nsDOMEventTargetWrapperCache.h"
+#include "nsDOMEventTargetHelper.h"
 #include "nsAutoPtr.h"
 #include "nsIDOMDOMStringList.h"
+#include "nsIInterfaceRequestor.h"
+#include "nsIWebSocketChannel.h"
+#include "nsIWebSocketListener.h"
+#include "nsIObserver.h"
+#include "nsIRequest.h"
+#include "nsWeakReference.h"
 
 #define DEFAULT_WS_SCHEME_PORT  80
 #define DEFAULT_WSS_SCHEME_PORT 443
@@ -62,58 +35,94 @@
 
 #define NS_WEBSOCKET_CONTRACTID "@mozilla.org/websocket;1"
 
-class nsWSNetAddressComparator;
-class nsWebSocketEstablishedConnection;
-class nsWSCloseEvent;
+class CallDispatchConnectionCloseEvents;
+class nsAutoCloseWS;
 
-class nsWebSocket: public nsDOMEventTargetWrapperCache,
-                   public nsIMozWebSocket,
-                   public nsIJSNativeInitializer
+class nsWebSocket: public nsDOMEventTargetHelper,
+                   public nsIWebSocket,
+                   public nsIJSNativeInitializer,
+                   public nsIInterfaceRequestor,
+                   public nsIWebSocketListener,
+                   public nsIObserver,
+                   public nsSupportsWeakReference,
+                   public nsIRequest
 {
-friend class nsWSNetAddressComparator;
-friend class nsWebSocketEstablishedConnection;
-friend class nsWSCloseEvent;
+friend class CallDispatchConnectionCloseEvents;
+friend class nsAutoCloseWS;
 
 public:
   nsWebSocket();
   virtual ~nsWebSocket();
   NS_DECL_ISUPPORTS_INHERITED
-  NS_DECL_CYCLE_COLLECTION_CLASS_INHERITED(nsWebSocket,
-                                           nsDOMEventTargetWrapperCache)
-  NS_DECL_NSIMOZWEBSOCKET
+  NS_DECL_CYCLE_COLLECTION_SKIPPABLE_SCRIPT_HOLDER_CLASS_INHERITED(nsWebSocket,
+                                                                   nsDOMEventTargetHelper)
+  NS_DECL_NSIWEBSOCKET
+  NS_DECL_NSIINTERFACEREQUESTOR
+  NS_DECL_NSIWEBSOCKETLISTENER
+  NS_DECL_NSIOBSERVER
+  NS_DECL_NSIREQUEST
 
   // nsIJSNativeInitializer
   NS_IMETHOD Initialize(nsISupports* aOwner, JSContext* aContext,
-                        JSObject* aObject, PRUint32 aArgc, jsval* aArgv);
+                        JSObject* aObject, uint32_t aArgc, jsval* aArgv);
 
   // nsIDOMEventTarget
   NS_IMETHOD AddEventListener(const nsAString& aType,
                               nsIDOMEventListener *aListener,
-                              PRBool aUseCapture,
-                              PRBool aWantsUntrusted,
-                              PRUint8 optional_argc);
+                              bool aUseCapture,
+                              bool aWantsUntrusted,
+                              uint8_t optional_argc);
   NS_IMETHOD RemoveEventListener(const nsAString& aType,
                                  nsIDOMEventListener* aListener,
-                                 PRBool aUseCapture);
+                                 bool aUseCapture);
 
   // Determine if preferences allow WebSocket
-  static PRBool PrefEnabled();
+  static bool PrefEnabled();
 
-  const PRUint64 WindowID() const { return mWindowID; }
-  const nsCString& GetScriptFile() const { return mScriptFile; }
-  const PRUint32 GetScriptLine() const { return mScriptLine; }
-
+  virtual void DisconnectFromOwner();
 protected:
   nsresult ParseURL(const nsString& aURL);
   nsresult EstablishConnection();
 
-  nsresult CreateAndDispatchSimpleEvent(const nsString& aName);
-  nsresult CreateAndDispatchMessageEvent(const nsACString& aData);
-  nsresult CreateAndDispatchCloseEvent(PRBool aWasClean, PRUint16 aCode,
-                                       const nsString &aReason);
+  // These methods when called can release the WebSocket object
+  nsresult FailConnection(uint16_t reasonCode,
+                          const nsACString& aReasonString = EmptyCString());
+  nsresult CloseConnection(uint16_t reasonCode,
+                           const nsACString& aReasonString = EmptyCString());
+  nsresult Disconnect();
 
-  // called from mConnection accordingly to the situation
-  void SetReadyState(PRUint16 aNewReadyState);
+  nsresult ConsoleError();
+  nsresult PrintErrorOnConsole(const char       *aBundleURI,
+                               const PRUnichar  *aError,
+                               const PRUnichar **aFormatStrings,
+                               uint32_t          aFormatStringsLen);
+
+  // Get msg info out of JS variable being sent (string, arraybuffer, blob)
+  nsresult GetSendParams(nsIVariant *aData, nsCString &aStringOut,
+                         nsCOMPtr<nsIInputStream> &aStreamOut,
+                         bool &aIsBinary, uint32_t &aOutgoingLength,
+                         JSContext *aCx);
+
+  nsresult DoOnMessageAvailable(const nsACString & aMsg, bool isBinary);
+
+  // ConnectionCloseEvents: 'error' event if needed, then 'close' event.
+  // - These must not be dispatched while we are still within an incoming call
+  //   from JS (ex: close()).  Set 'sync' to false in that case to dispatch in a
+  //   separate new event.
+  nsresult ScheduleConnectionCloseEvents(nsISupports *aContext,
+                                         nsresult aStatusCode,
+                                         bool sync);
+  // 2nd half of ScheduleConnectionCloseEvents, sometimes run in its own event.
+  void     DispatchConnectionCloseEvents();
+
+  // These methods actually do the dispatch for various events.
+  nsresult CreateAndDispatchSimpleEvent(const nsString& aName);
+  nsresult CreateAndDispatchMessageEvent(const nsACString& aData,
+                                         bool isBinary);
+  nsresult CreateAndDispatchCloseEvent(bool aWasClean, uint16_t aCode,
+                                       const nsString &aReason);
+  nsresult CreateResponseBlob(const nsACString& aData, JSContext *aCx,
+                              jsval &jsData);
 
   // if there are "strong event listeners" (see comment in nsWebSocket.cpp) or
   // outgoing not sent messages then this method keeps the object alive
@@ -123,6 +132,10 @@ protected:
   // (and possibly collected).
   void DontKeepAliveAnyMore();
 
+  nsresult UpdateURI();
+
+  nsCOMPtr<nsIWebSocketChannel> mChannel;
+
   nsRefPtr<nsDOMEventListenerWrapper> mOnOpenListener;
   nsRefPtr<nsDOMEventListenerWrapper> mOnErrorListener;
   nsRefPtr<nsDOMEventListenerWrapper> mOnMessageListener;
@@ -130,46 +143,52 @@ protected:
 
   // related to the WebSocket constructor steps
   nsString mOriginalURL;
-  PRPackedBool mSecure; // if true it is using SSL and the wss scheme,
+  nsString mEffectiveURL;   // after redirects
+  bool mSecure; // if true it is using SSL and the wss scheme,
                         // otherwise it is using the ws scheme with no SSL
 
-  PRPackedBool mKeepingAlive;
-  PRPackedBool mCheckMustKeepAlive;
-  PRPackedBool mTriggeredCloseEvent;
+  bool mKeepingAlive;
+  bool mCheckMustKeepAlive;
+  bool mOnCloseScheduled;
+  bool mFailed;
+  bool mDisconnected;
 
-  nsCString mClientReason;
-  PRUint16  mClientReasonCode;
-  nsString  mServerReason;
-  PRUint16  mServerReasonCode;
+  // Set attributes of DOM 'onclose' message
+  bool      mCloseEventWasClean;
+  nsString  mCloseEventReason;
+  uint16_t  mCloseEventCode;
 
   nsCString mAsciiHost;  // hostname
-  PRUint32  mPort;
+  uint32_t  mPort;
   nsCString mResource; // [filepath[?query]]
   nsString  mUTF16Origin;
-  
+
   nsCOMPtr<nsIURI> mURI;
   nsCString mRequestedProtocolList;
   nsCString mEstablishedProtocol;
   nsCString mEstablishedExtensions;
 
-  PRUint16 mReadyState;
+  uint16_t mReadyState;
 
   nsCOMPtr<nsIPrincipal> mPrincipal;
 
-  nsRefPtr<nsWebSocketEstablishedConnection> mConnection;
-  PRUint32 mOutgoingBufferedAmount; // actually, we get this value from
-                                    // mConnection when we are connected,
-                                    // but we need this one after disconnecting.
+  uint32_t mOutgoingBufferedAmount;
+
+  enum
+  {
+    WS_BINARY_TYPE_ARRAYBUFFER,
+    WS_BINARY_TYPE_BLOB,
+  } mBinaryType;
 
   // Web Socket owner information:
   // - the script file name, UTF8 encoded.
   // - source code line number where the Web Socket object was constructed.
-  // - the window ID of the outer window where the script lives. Note that this 
-  // may not be the same as the Web Socket owner window.
+  // - the ID of the inner window where the script lives. Note that this may not
+  //   be the same as the Web Socket owner window.
   // These attributes are used for error reporting.
   nsCString mScriptFile;
-  PRUint32 mScriptLine;
-  PRUint64 mWindowID;
+  uint32_t mScriptLine;
+  uint64_t mInnerWindowID;
 
 private:
   nsWebSocket(const nsWebSocket& x);   // prevent bad usage

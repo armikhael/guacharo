@@ -1,42 +1,9 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Google Calendar Provider code.
- *
- * The Initial Developer of the Original Code is
- *   Philipp Kewisch <mozilla@kewis.ch>
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Joey Minta <jminta@gmail.com>
- *   Daniel Boelzle <daniel.boelzle@sun.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://calendar/modules/calProviderUtils.jsm");
+Components.utils.import("resource://calendar/modules/calXMLUtils.jsm");
 Components.utils.import("resource://calendar/modules/calUtils.jsm");
 
 const cICL = Components.interfaces.calIChangeLog;
@@ -61,7 +28,7 @@ calGoogleCalendar.prototype = {
     classID:  Components.ID("{d1a6e988-4b4d-45a5-ba46-43e501ea96e3}"),
 
     getInterfaces: function cI_cGC_getInterfaces (count) {
-        var ifaces = [
+        let ifaces = [
             Components.interfaces.nsISupports,
             Components.interfaces.calICalendar,
             Components.interfaces.calIGoogleCalendar,
@@ -173,8 +140,8 @@ calGoogleCalendar.prototype = {
         }
 
         // We need to find out which Google account fits to this calendar.
-        var sessionMgr = getGoogleSessionManager();
-        var googleUser = getCalendarPref(this, "googleUser");
+        let sessionMgr = getGoogleSessionManager();
+        let googleUser = getCalendarPref(this, "googleUser");
         if (googleUser) {
             this.mSession = sessionMgr.getSessionByUsername(googleUser, true);
         } else {
@@ -182,15 +149,15 @@ calGoogleCalendar.prototype = {
             // user/password prompt and set the session based on those
             // values.
 
-            var username = { value: null };
+            let username = { value: null };
             if (this.isDefaultCalendar) {
                 // Only pre-fill the username if this is the default calendar,
                 // otherwise users might think the cryptic hash is the username
                 // they have to use.
                 username.value = this.mCalendarName;
             }
-            var password = { value: null };
-            var persist = { value: false };
+            let password = { value: null };
+            let persist = { value: false };
 
             if (getCalendarCredentials(this.mCalendarName,
                                        username,
@@ -250,11 +217,11 @@ calGoogleCalendar.prototype = {
     set uri(aUri) {
         // Parse google url, catch private cookies, public calendars,
         // basic and full types, bogus ics file extensions, invalid hostnames
-        var re = new RegExp("/calendar/(feeds|ical)/" +
+        let re = new RegExp("/calendar/(feeds|ical)/" +
                             "([^/]+)/(public|private)-?([^/]+)?/" +
                             "(full|basic)(.ics)?$");
 
-        var matches = aUri.path.match(re);
+        let matches = aUri.path.match(re);
 
         if (!matches) {
             throw new Components.Exception(aUri, Components.results.NS_ERROR_MALFORMED_URI);
@@ -291,10 +258,7 @@ calGoogleCalendar.prototype = {
             case "capabilities.alarms.actionValues":
                 return ["DISPLAY", "EMAIL", "SMS"];
             case "organizerId":
-                if (this.mSession) {
-                    return "mailto:" + this.session.userName;
-                }
-                break;
+                return "mailto:" + this.googleCalendarName;
             case "organizerCN":
                 if (this.mSession) {
                     return this.session.fullName;
@@ -329,10 +293,6 @@ calGoogleCalendar.prototype = {
     },
 
     adoptItem: function cGC_adoptItem(aItem, aListener) {
-        return this.adoptItemOrUseCache(aItem, !!this.mOfflineStorage, aListener);
-    },
-
-    adoptItemOrUseCache: function adoptItemOrUseCache(aItem, useCache, aListener) {
         cal.LOG("[calGoogleCalendar] Adding item " + aItem.title);
 
         try {
@@ -352,18 +312,17 @@ calGoogleCalendar.prototype = {
             // Add the calendar to the item, for later use.
             aItem.calendar = this.superCalendar;
 
-            var request = new calGoogleRequest(this);
-            var xmlEntry = ItemToXMLEntry(aItem, this,
+            let request = new calGoogleRequest(this);
+            let xmlEntry = ItemToXMLEntry(aItem, this,
                                           this.session.userName,
                                           this.session.fullName);
 
             request.type = request.ADD;
             request.uri = this.fullUri.spec;
-            request.setUploadData("application/atom+xml; charset=UTF-8", xmlEntry);
+            request.setUploadData("application/atom+xml; charset=UTF-8", cal.xml.serializeDOM(xmlEntry));
             request.operationListener = aListener;
             request.calendar = this;
             request.newItem = aItem;
-            request.useCache = useCache;
             request.responseListener = { onResult: this.addItem_response.bind(this) };
             request.addQueryParameter("ctz", calendarDefaultTimezone().tzid);
 
@@ -390,47 +349,10 @@ calGoogleCalendar.prototype = {
     addItem: function cGC_addItem(aItem, aListener) {
         // Google assigns an ID to every event added. Any id set here or in
         // adoptItem will be overridden.
-        return this.addItemOrUseCache(aItem, !!this.mOfflineStorage, aListener);
-    },
-
-    addItemOrUseCache: function addItemOrUseCache(aItem, useCache, aListener) {
-        return this.adoptItemOrUseCache(aItem.clone(), useCache, aListener);
+        return this.adoptItem(aItem.clone(), aListener);
     },
 
     modifyItem: function cGC_modifyItem(aNewItem, aOldItem, aListener) {
-        if (this.mOfflineStorage) {
-            return this.modifyItemOrUseCache(aNewItem, aOldItem, true, aListener);
-        } else {
-            return this.doModifyItem(aNewItem, aOldItem, false, aListener);
-        }
-    },
-
-    modifyItemOrUseCache: function modifyItemOrUseCache(aNewItem, aOldItem, useCache, aListener) {
-        let thisCalendar = this;
-        let storage = this.mOfflineStorage.QueryInterface(Components.interfaces.calIOfflineStorage);
-        let modifyOfflineListener = {
-            onGetResult: function(calendar, status, itemType, detail, count, items) {},
-            onOperationComplete: function(calendar, status, opType, id, detail) {
-                storage.modifyOfflineItem(detail, aListener);
-            }
-        };
-
-        let offlineFlagListener = {
-            onGetResult: function(calendar, status, itemType, detail, count, items) {},
-            onOperationComplete: function(calendar, status, opType, id, detail) {
-                let offline_flag = detail;
-                if ((offline_flag == cICL.OFFLINE_FLAG_CREATED_RECORD ||
-                     offline_flag == cICL.OFFLINE_FLAG_MODIFIED_RECORD) && useCache) {
-                    storage.modifyItem(aNewItem, aOldItem, modifyOfflineListener);
-                } else {
-                    thisCalendar.doModifyItem(aNewItem, aOldItem, useCache, aListener, false);
-                }
-            }
-        };
-        storage.getItemOfflineFlag(aOldItem, offlineFlagListener);
-    },
-
-    doModifyItem: function doModifyItem(aNewItem, aOldItem, useCache, aListener) {
         cal.LOG("[calGoogleCalendar] Modifying item " + aOldItem.title);
 
         try {
@@ -460,15 +382,15 @@ calGoogleCalendar.prototype = {
             }
 
             // Set up the request
-            var request = new calGoogleRequest(this.session);
+            let request = new calGoogleRequest(this.session);
 
             // We need to clone the new item, its possible that ItemToXMLEntry
             // will modify the item. For example, if the item is organized by
             // someone else, we cannot save alarms on it and they should
             // therefore not be added in the returned item.
-            var newItem = aNewItem.clone();
+            let newItem = aNewItem.clone();
 
-            var xmlEntry = ItemToXMLEntry(newItem, this,
+            let xmlEntry = ItemToXMLEntry(newItem, this,
                                           this.session.userName,
                                           this.session.fullName);
 
@@ -484,13 +406,12 @@ calGoogleCalendar.prototype = {
                 request.uri = getItemEditURI(aOldItem);
             }
 
-            request.setUploadData("application/atom+xml; charset=UTF-8", xmlEntry);
+            request.setUploadData("application/atom+xml; charset=UTF-8", cal.xml.serializeDOM(xmlEntry));
             request.responseListener = { onResult: this.modifyItem_response.bind(this) };
             request.operationListener = aListener;
             request.newItem = newItem;
             request.oldItem = aOldItem;
             request.calendar = this;
-            request.useCache = useCache;
             request.addQueryParameter("ctz", calendarDefaultTimezone().tzid);
 
             this.session.asyncItemRequest(request);
@@ -515,44 +436,7 @@ calGoogleCalendar.prototype = {
         return null;
     },
 
-
     deleteItem: function cGC_deleteItem(aItem, aListener) {
-        if (this.mOfflineStorage) {
-            return this.deleteItemOrUseCache(aItem, true, aListener);
-        } else {
-            return this.doDeleteItem(aItem, false, aListener);
-        }
-    },
-
-    deleteItemOrUseCache: function deleteItemOrUseCache(aItem, useCache, aListener) {
-        let thisCalendar = this;
-        let storage = this.mOfflineStorage.QueryInterface(Components.interfaces.calIOfflineStorage);
-        let deleteOfflineListener = {
-            onGetResult: function(calendar, status, itemType, detail, count, items) {},
-            onOperationComplete: function(calendar, status, opType, id, detail) {
-                if (aListener) {
-                    aListener.onOperationComplete(calendar, status, opType, aItem.id, aItem);
-                }
-            }
-        };
-
-        let offlineFlagListener = {
-            onGetResult: function(calendar, status, itemType, detail, count, items) {},
-            onOperationComplete: function(calendar, status, opType, id, detail) {
-                let offline_flag = detail;
-                if ((offline_flag == cICL.OFFLINE_FLAG_CREATED_RECORD ||
-                     offline_flag == cICL.OFFLINE_FLAG_MODIFIED_RECORD) && useCache) {
-                    /* We do not delete the item from the cache, but mark it deleted */
-                    storage.deleteOfflineItem(aItem, aListener);
-                } else {
-                    thisCalendar.doDeleteItem(aItem, useCache, aListener);
-                }
-            }
-        };
-        storage.getItemOfflineFlag(aItem, offlineFlagListener);
-    },
-
-    doDeleteItem: function doDeleteItem(aItem, useCache, aListener) {
         cal.LOG("[calGoogleCalendar] Deleting item " + aItem.title + "(" + aItem.id + ")");
 
         try {
@@ -567,14 +451,13 @@ calGoogleCalendar.prototype = {
 
             // We need the item in the response, since google dosen't return any
             // item XML data on delete, and we need to call the observers.
-            var request = new calGoogleRequest(this);
+            let request = new calGoogleRequest(this);
 
             request.type = request.DELETE;
             request.uri = getItemEditURI(aItem);
             request.operationListener = aListener;
             request.oldItem = aItem;
             request.calendar = this;
-            request.useCache = useCache;
             request.responseListener = { onResult: this.deleteItem_response.bind(this) };
 
             this.session.asyncItemRequest(request);
@@ -610,7 +493,7 @@ calGoogleCalendar.prototype = {
 
             // Set up the request
 
-            var request = new calGoogleRequest(this);
+            let request = new calGoogleRequest(this);
 
             request.itemId = aId;
             request.type = request.GET;
@@ -649,11 +532,10 @@ calGoogleCalendar.prototype = {
             this.ensureSession();
 
             // item base type
-            var wantEvents = ((aItemFilter &
+            let wantEvents = ((aItemFilter &
                                Components.interfaces.calICalendar.ITEM_FILTER_TYPE_EVENT) != 0);
-            var wantInvitations = ((aItemFilter &
+            let wantInvitations = ((aItemFilter &
                  Components.interfaces.calICalendar.ITEM_FILTER_REQUEST_NEEDS_ACTION) != 0);
-
 
             if (!wantEvents) {
                 // Events are not wanted, nothing to do. The
@@ -675,10 +557,10 @@ calGoogleCalendar.prototype = {
                 aRangeEnd.isDate = false;
             }
 
-            var rfcRangeStart = cal.toRFC3339(aRangeStart);
-            var rfcRangeEnd = cal.toRFC3339(aRangeEnd);
+            let rfcRangeStart = cal.toRFC3339(aRangeStart);
+            let rfcRangeEnd = cal.toRFC3339(aRangeEnd);
 
-            var request = new calGoogleRequest(this);
+            let request = new calGoogleRequest(this);
 
             request.type = request.GET;
             request.uri = this.fullUri.spec;
@@ -740,62 +622,21 @@ calGoogleCalendar.prototype = {
             e = exp;
         }
 
-        // Now we can do some processing on it. If the cache is used, then we
-        // ultimately need to add the item to the cache, either as offline item
-        // or normal item. We will also have to notify the listener and the
-        // observers sooner or later.
-        if (aOperation.useCache && this.mOfflineStorage && (!e || isCacheException(e))) {
-            let listener;
-            if (item) {
-                // If we have an item, then we can directly notify the target
-                // listener
-                listener = aOperation.operationListener;
-                cal.LOG("[calGoogleCalendar] Adding item " + aOperation.newItem.title + " successful");
-            } else {
-                // Otherwise we create an intermediate listener that also sets
-                // the offline flag
-                let storage = this.mOfflineStorage.QueryInterface(Components.interfaces.calIOfflineStorage);
-                let self = this;
-                item = aOperation.newItem;
-                listener = {
-                    onGetResult: function(calendar, status, itemType, detail, count, items) {},
-                    onOperationComplete: function(calendar, status, opType, id, detail) {
-                        if (Components.isSuccessCode(status)) {
-                            // On success, the addOfflineItem call will notify the listener
-                            cal.LOG("[calGoogleCalendar] Adding item " + aOperation.newItem.title + " failed, but the operation will be retried (status: " + status + ", exception: " + e + ")");
-                            storage.addOfflineItem(detail, aOperation.operationListener);
-                            self.mObservers.notify("onAddItem", [aOperation.newItem]);
-                        } else if (aOperation.operationListener) {
-                            cal.ERROR("[calGoogleCalendar] Could not add item " + aOperation.newItem.title + " to the offline cache:" +
-                                      new Components.Exception(detail, status));
-                            // Otherwise we have to do it ourselves.
-                            self.notifyOperationComplete(aOperation.operationListener,
-                                                         status,
-                                                         Components.interfaces.calIOperationListener.ADD,
-                                                         null,
-                                                         null);
-                        }
-                    }
-                };
-            }
-
-            // Now send the item to the offline storage
-            this.mOfflineStorage.adoptItem(item, listener);
+        let resultCode;
+        if (item) {
+            cal.LOG("[calGoogleCalendar] Adding item " + item.title + " successful");
+            this.mObservers.notify("onAddItem", [item]);
+            resultCode = Components.results.NS_OK;
         } else {
-            // When not using the cache, we merely have to notify onAddItem and
-            // tell the operation listener we are done (error or not)
-            if (item) {
-                cal.LOG("[calGoogleCalendar] Adding item " + item.title + " successful");
-                this.mObservers.notify("onAddItem", [item]);
-            } else {
-                cal.LOG("[calGoogleCalendar] Adding item " + aOperation.newItem.id + " failed, status " + aOperation.status + ", Exception: " + e);
-            }
-            this.notifyOperationComplete(aOperation.operationListener,
-                                         (item ? Components.results.NS_OK : e.result),
-                                         Components.interfaces.calIOperationListener.ADD,
-                                         (item ? item.id : null),
-                                         (item ? item : e.message));
+            cal.LOG("[calGoogleCalendar] Adding item " + aOperation.newItem.id + " failed, status " + aOperation.status + ", Exception: " + e);
+            resultCode = isCacheException(e) ? Components.results.NS_ERROR_NOT_AVAILABLE : e.result || Components.results.NS_ERROR_FAILURE;
         }
+
+        this.notifyOperationComplete(aOperation.operationListener,
+                                     resultCode,
+                                     Components.interfaces.calIOperationListener.ADD,
+                                     (item ? item.id : null),
+                                     (item ? item : e.message));
     },
 
     /**
@@ -836,59 +677,20 @@ calGoogleCalendar.prototype = {
             e = exp;
         }
 
-        // Now we can do some processing on it. If the cache is used, then we
-        // ultimately need to modify the item in the cache, either as offline item
-        // or normal item. We will also have to notify the listener and the
-        // observers sooner or later.
-        if (aOperation.useCache && this.mOfflineStorage && (!e || isCacheException(e))) {
-            let listener;
-            if (newItem) {
-                // If we have an item, then we can directly notify the target
-                // listener
-                listener = aOperation.operationListener;
-                cal.LOG("[calGoogleCalendar] Modifying item " + aOperation.oldItem.id + " successful");
-            } else {
-                let storage = this.mOfflineStorage.QueryInterface(Components.interfaces.calIOfflineStorage);
-                newItem = aOperation.newItem;
-                listener = {
-                    onGetResult: function(calendar, status, itemType, detail, count, items) {},
-                    onOperationComplete: function(calendar, status, opType, id, detail) {
-                        if (Components.isSuccessCode(status)) {
-                            cal.LOG("[calGoogleCalendar] Modifying item " + aOperation.oldItem.id + " failed, but the operation will be retried (status: " + status + ", exception: " + e + ")");
-                            // On success, the modifyOfflineItem call will notify the listener
-                            storage.modifyOfflineItem(detail, aOperation.operationListener);
-                            notifyObserver(newItem, aOperation.oldItem);
-                        } else if (aOperation.operationListener) {
-                            cal.ERROR("[calGoogleCalendar] Could not modify item " + aOperation.newItem.id + " in the offline cache:" +
-                                      new Components.Exception(detail, status));
-                            // Otherwise we have to do it ourselves.
-                            self.notifyOperationComplete(aOperation.operationListener,
-                                                         status,
-                                                         Components.interfaces.calIOperationListener.MODIFY,
-                                                         null,
-                                                         null);
-                        }
-                    }
-                };
-            }
-
-            // Now send the item to the offline storage
-            this.mOfflineStorage.modifyItem(newItem, aOperation.oldItem, listener);
-        } else {
-            // When not using the cache, we merely have to notify onModifyItem and
-            // tell the operation listener we are done (error or not)
+        let resultCode;
+        if (newItem) {
+            cal.LOG("[calGoogleCalendar] Modifying item " + newItem.id + " successful");
             notifyObserver(newItem, aOperation.oldItem);
-            if (newItem) {
-                cal.LOG("[calGoogleCalendar] Modifying item " + newItem.id + " successful");
-            } else {
-                cal.LOG("[calGoogleCalendar] Modifying item " + aOperation.oldItem.id + " failed, status " + aOperation.status + ", Exception: " + e);
-            }
-            this.notifyOperationComplete(aOperation.operationListener,
-                                         (newItem ? Components.results.NS_OK : e.result || Components.results.NS_ERROR_FAILURE),
-                                         Components.interfaces.calIOperationListener.MODIFY,
-                                         (newItem ? newItem.id : null),
-                                         (newItem ? newItem : e.message));
+            resultCode = Components.results.NS_OK;
+        } else {
+            cal.LOG("[calGoogleCalendar] Modifying item " + aOperation.oldItem.id + " failed, status " + aOperation.status + ", Exception: " + e);
+            resultCode = isCacheException(e) ? Components.results.NS_ERROR_NOT_AVAILABLE : e.result || Components.results.NS_ERROR_FAILURE;
         }
+        this.notifyOperationComplete(aOperation.operationListener,
+                                     resultCode,
+                                     Components.interfaces.calIOperationListener.MODIFY,
+                                     (newItem ? newItem.id : null),
+                                     (newItem ? newItem : e.message));
     },
 
     /**
@@ -915,47 +717,20 @@ calGoogleCalendar.prototype = {
             e = exp;
         }
 
-        if (aOperation.useCache && this.mOfflineStorage && (!e || isCacheException(e))) {
-            if (item) {
-                // If we have an item, then we can directly notify the target
-                // listener using the offline storage
-                cal.LOG("[calGoogleCalendar] Deleting item " + aOperation.oldItem.id + " successful");
-                this.mOfflineStorage.deleteItem(item, aOperation.operationListener);
-            } else {
-                // Otherwise we shouldn't remove it from the cache, but set the
-                // offline flag to mark it deleted
-                let self = this;
-                let offlineListener = {
-                    // We should not return a success code since the listeners can delete the physical item in case of success
-                    onGetResult: function(calendar, status, itemType, detail, count, items) {},
-                    onOperationComplete: function(calendar, status, opType, id, detail) {
-                        self.mObservers.notify("onDeleteItem", [aOperation.oldItem]);
-                        cal.LOG("[calGoogleCalendar] Deleting item " + aOperation.oldItem.id + " failed, but the operation will be retried");
-                        self.notifyOperationComplete(aOperation.operationListener,
-                                                     Components.results.NS_ERROR_NOT_AVAILABLE,
-                                                     Components.interfaces.calIOperationListener.GET,
-                                                     aOperation.oldItem.id,
-                                                     aOperation.oldItem);
-                    }
-                };
-                let storage = this.mOfflineStorage.QueryInterface(Components.interfaces.calIOfflineStorage);
-                storage.deleteOfflineItem(aOperation.oldItem, offlineListener);
-            }
+        let resultCode;
+        if (item) {
+            cal.LOG("[calGoogleCalendar] Deleting item " + aOperation.oldItem.id + " successful");
+            this.mObservers.notify("onDeleteItem", [item]);
+            resultCode = Components.results.NS_OK;
         } else {
-            // When not using the cache, we merely have to notify onDeleteItem and
-            // tell the operation listener we are done (error or not)
-            if (item) {
-                cal.LOG("[calGoogleCalendar] Deleting item " + aOperation.oldItem.id + " successful");
-                this.mObservers.notify("onDeleteItem", [item]);
-            } else {
-                cal.LOG("[calGoogleCalendar] Deleting item " + aOperation.oldItem.id + " failed, status " + aOperation.status + ", Exception: " + e);
-            }
-            this.notifyOperationComplete(aOperation.operationListener,
-                                         (item ? Components.results.NS_OK : e.result || Components.results.NS_ERROR_FAILURE),
-                                         Components.interfaces.calIOperationListener.ADD,
-                                         (item ? item.id : null),
-                                         (item ? item : e.message));
+            cal.LOG("[calGoogleCalendar] Deleting item " + aOperation.oldItem.id + " failed, status " + aOperation.status + ", Exception: " + e);
+            resultCode = isCacheException(e) ? Components.results.NS_ERROR_NOT_AVAILABLE : e.result || Components.results.NS_ERROR_FAILURE;
         }
+        this.notifyOperationComplete(aOperation.operationListener,
+                                     resultCode,
+                                     Components.interfaces.calIOperationListener.DELETE,
+                                     (item ? item.id : null),
+                                     (item ? item : e.message));
     },
 
     /**
@@ -975,44 +750,32 @@ calGoogleCalendar.prototype = {
                 throw new Components.Exception(aData, aOperation.status);
             }
 
-            // Prepare Namespaces
-            var gCal = new Namespace("gCal",
-                                     "http://schemas.google.com/gCal/2005");
-            var gd = new Namespace("gd", "http://schemas.google.com/g/2005");
-            var atom = new Namespace("", "http://www.w3.org/2005/Atom");
-            default xml namespace = atom;
-
             // A feed was passed back, parse it.
-            var xml = cal.safeNewXML(aData);
-            var timezoneString = xml.gCal::timezone.@value.toString() || "UTC";
-            var timezone = gdataTimezoneService.getTimezone(timezoneString);
-
-            // This line is needed, otherwise the for each () block will never
-            // be entered. It may seem strange, but if you don't believe me, try
-            // it!
-            xml.link.(@rel);
+            let xml = cal.xml.parseString(aData);
+            let timezoneString = gdataXPathFirst(xml, 'atom:feed/gCal:timezone/@value') || "UTC";
+            let timezone = gdataTimezoneService.getTimezone(timezoneString);
 
             // We might be able to get the full name through this feed's author
             // tags. We need to make sure we have a session for that.
             this.ensureSession();
 
             // Get the item entry by id.
-            var itemEntry = xml.entry.(id.substring(id.lastIndexOf('/') + 1) == aOperation.itemId ||
-                                       gCal::uid.@value == aOperation.itemId);
-            if (!itemEntry || !itemEntry.length()) {
+            let itemXPath = 'atom:feed/atom:entry[substring-before(atom:id/text(), "' + aOperation.itemId + '")!="" or gCal:uid/@value="' + aOperation.itemId + '"]';
+            let itemEntry = gdataXPathFirst(xml, itemXPath);
+            if (!itemEntry) {
                 // Item wasn't found. Skip onGetResult and just complete. Not
                 // finding an item isn't a user-important error, it may be a
                 // wanted case. (i.e itip)
                 cal.LOG("[calGoogleCalendar] Item " + aOperation.itemId + " not found in calendar " + this.name);
                 throw new Components.Exception("Item not found", Components.results.NS_OK);
             }
-            var item = XMLEntryToItem(itemEntry, timezone, this);
+            let item = XMLEntryToItem(itemEntry, timezone, this);
             item.calendar = this.superCalendar;
 
             if (item.recurrenceInfo) {
                 // If this item is recurring, get all exceptions for this item.
-                for each (var entry in xml.entry.gd::originalEvent.(@id == aOperation.itemId)) {
-                    var excItem = XMLEntryToItem(entry.parent(), timezone, this);
+                for each (let entry in gdataXPath(xml, 'atom:feed/atom:entry[gd:originalEvent/@id="' + aOperation.itemId + '"]')) {
+                    let excItem = XMLEntryToItem(entry, timezone, this);
 
                     // Google uses the status field to reflect negative
                     // exceptions.
@@ -1063,7 +826,7 @@ calGoogleCalendar.prototype = {
     getItems_response: function cGC_getItems_response(aOperation, aData) {
         // To simplify code, provide a one-stop function to call, independant of
         // if and what type of listener was passed.
-        var listener = aOperation.operationListener ||
+        let listener = aOperation.operationListener ||
             { onGetResult: function() {}, onOperationComplete: function() {} };
 
         cal.LOG("[calGoogleCalendar] Recieved response for " + aOperation.uri);
@@ -1073,55 +836,41 @@ calGoogleCalendar.prototype = {
                 throw new Components.Exception(aData, aOperation.status);
             }
 
-            // Prepare Namespaces
-            var gCal = new Namespace("gCal",
-                                     "http://schemas.google.com/gCal/2005");
-            var gd = new Namespace("gd", "http://schemas.google.com/g/2005");
-            var atom = new Namespace("", "http://www.w3.org/2005/Atom");
-            default xml namespace = atom;
-
             // A feed was passed back, parse it.
-            var xml = cal.safeNewXML(aData);
-            var timezoneString = xml.gCal::timezone.@value.toString() || "UTC";
-            var timezone = gdataTimezoneService.getTimezone(timezoneString);
-
-            // This line is needed, otherwise the for each () block will never
-            // be entered. It may seem strange, but if you don't believe me, try
-            // it!
-            xml.link.(@rel);
+            let xml = cal.xml.parseString(aData);
+            let timezoneString = gdataXPathFirst(xml, 'atom:feed/gCal:timezone/@value') || "UTC";
+            let timezone = gdataTimezoneService.getTimezone(timezoneString);
 
             // We might be able to get the full name through this feed's author
             // tags. We need to make sure we have a session for that.
             this.ensureSession();
 
-            if (xml.author.email == this.mSession.userName) {
+            if (gdataXPathFirst(xml, 'atom:feed/atom:author/atom:email/text()') == this.mSession.userName) {
                 // If the current entry contains the user's email, then we can
                 // extract the user's full name also.
-                this.mSession.fullName = xml.author.name.toString();
+                this.mSession.fullName = gdataXPathFirst(xml, 'atom:feed/atom:author/atom:name/text()');
             }
 
-
-            var wantInvitations = ((aOperation.itemFilter &
+            let wantInvitations = ((aOperation.itemFilter &
                  Components.interfaces.calICalendar.ITEM_FILTER_REQUEST_NEEDS_ACTION) != 0);
 
             // Parse all <entry> tags
-            for each (var entry in xml.entry) {
-                if (entry.gd::originalEvent.toString().length) {
+            for each (let entry in gdataXPath(xml, 'atom:feed/atom:entry')) {
+                if (gdataXPathFirst(entry, 'gd:originalEvent')) {
                     // This is an exception. If we are doing an uncached
                     // operation, then skip it for now since it will be parsed
                     // later.
                     continue;
                 }
 
-
-                var item = XMLEntryToItem(entry, timezone, this);
+                let item = XMLEntryToItem(entry, timezone, this);
                 item.calendar = this.superCalendar;
 
                 if (wantInvitations) {
                     // If invitations are wanted and this is not an invitation,
                     // or if the user is not an attendee, or has already accepted
                     // then this is not an invitation.
-                    var att = item.getAttendeeById("mailto:" + this.session.userName);
+                    let att = item.getAttendeeById("mailto:" + this.session.userName);
                     if (!this.isInvitation(item) ||
                         !att ||
                         att.participationStatus != "NEEDS-ACTION") {
@@ -1129,27 +878,26 @@ calGoogleCalendar.prototype = {
                     }
                 }
 
-                cal.LOG("[calGoogleCalendar] Parsing entry:\n" + entry + "\n");
+                cal.LOG("[calGoogleCalendar] Parsing entry:\n" + cal.xml.serializeDOM(entry) + "\n");
 
                 if (item.recurrenceInfo) {
                     // If we are doing an uncached operation, then we need to
                     // gather all exceptions and put them into the item.
                     // Otherwise, our listener will take care of mapping the
                     // exception to the base item.
-                    for each (var oid in xml.entry.gd::originalEvent.(@id == item.id)) {
+                    for each (let oid in gdataXPath(xml, 'atom:feed/atom:entry[gd:originalEvent/@id="' + item.id + '"]')) {
                         // Get specific fields so we can speed up the parsing process
-                        var status = oid.parent().gd::eventStatus.@value.toString().substring(39);
+                        let status = gdataXPathFirst(oid, 'gd:eventStatus/@value').substring(39);
 
                         if (status == "canceled") {
-                            let rId = oid.gd::when.@startTime.toString();
+                            let rId = gdataXPathFirst(oid, 'gd:when/@startTime');
                             let rDate = cal.fromRFC3339(rId, timezone);
                             cal.LOG("[calGoogleCalendar] Negative exception " + rId + "/" + rDate);
                             item.recurrenceInfo.removeOccurrenceAt(rDate);
                         } else {
                             // Parse the exception and modify the current item
-                            var excItem = XMLEntryToItem(oid.parent(),
-                                                         timezone,
-                                                         this);
+                            let excItem = XMLEntryToItem(oid, timezone, this);
+
                             if (excItem) {
                                 // Google uses the status field to reflect negative
                                 // exceptions.
@@ -1165,7 +913,7 @@ calGoogleCalendar.prototype = {
 
                 // This is an uncached call, expand the item and tell our
                 // get listener about the item.
-                var expandedItems = expandItems(item, aOperation);
+                let expandedItems = expandItems(item, aOperation);
                 listener.onGetResult(this.superCalendar,
                                      Components.results.NS_OK,
                                      Components.interfaces.calIEvent,
@@ -1206,15 +954,15 @@ calGoogleCalendar.prototype = {
     },
 
     replayChangesOn: function cGC_replayChangesOn(aListener) {
-        var lastUpdate = this.getProperty("google.lastUpdated");
-        var lastUpdateDateTime;
+        let lastUpdate = this.getProperty("google.lastUpdated");
+        let lastUpdateDateTime;
         if (lastUpdate) {
             // Set up the last sync stamp
             lastUpdateDateTime = createDateTime();
             lastUpdateDateTime.icalString = lastUpdate;
 
             // Set up last week
-            var lastWeek = getCorrectedDate(now().getInTimezone(UTC()));
+            let lastWeek = getCorrectedDate(now().getInTimezone(UTC()));
             lastWeek.day -= 7;
             if (lastWeek.compare(lastUpdateDateTime) >= 0) {
                 // The last sync was longer than a week ago. Google requires a full
@@ -1226,13 +974,13 @@ calGoogleCalendar.prototype = {
             cal.LOG("[calGoogleCalendar] The calendar " + this.name + " was last modified: " + lastUpdateDateTime);
         }
 
-        var request = new calGoogleRequest(this.mSession);
+        let request = new calGoogleRequest(this.mSession);
 
         request.type = request.GET;
         request.uri = this.fullUri.spec
         request.destinationCal = this.mOfflineStorage;
 
-        var calendar = this;
+        let calendar = this;
         request.responseListener = { onResult: this.syncItems_response.bind(this, (lastUpdateDateTime == null)) }
         request.operationListener = aListener;
         request.calendar = this;
@@ -1270,55 +1018,42 @@ calGoogleCalendar.prototype = {
                 throw new Components.Exception(aData, aOperation.status);
             }
 
-            // Prepare Namespaces
-            var gCal = new Namespace("gCal",
-                                     "http://schemas.google.com/gCal/2005");
-            var gd = new Namespace("gd", "http://schemas.google.com/g/2005");
-            var atom = new Namespace("", "http://www.w3.org/2005/Atom");
-            default xml namespace = atom;
-
             // A feed was passed back, parse it.
-            var xml = cal.safeNewXML(aData);
-            var timezoneString = xml.gCal::timezone.@value.toString() || "UTC";
-            var timezone = gdataTimezoneService.getTimezone(timezoneString);
-
-            // This line is needed, otherwise the for each () block will never
-            // be entered. It may seem strange, but if you don't believe me, try
-            // it!
-            xml.link.(@rel);
+            let xml = cal.xml.parseString(aData);
+            let timezoneString = gdataXPathFirst(xml, 'atom:feed/gCal:timezone/@value') || "UTC";
+            let timezone = gdataTimezoneService.getTimezone(timezoneString);
 
             // We might be able to get the full name through this feed's author
             // tags. We need to make sure we have a session for that.
             this.ensureSession();
 
-            if (xml.author.email == this.mSession.userName) {
+            if (gdataXPathFirst(xml, 'atom:feed/atom:author/atom:email/text()') == this.mSession.userName) {
                 // If the current entry contains the user's email, then we can
                 // extract the user's full name also.
-                this.mSession.fullName = xml.author.name.toString();
+                this.mSession.fullName = gdataXPathFirst(xml, 'atom:feed/atom:author/atom:name/text()');
             }
 
             // This is the calendar we should sync changes into.
-            var destinationCal = aOperation.destinationCal;
+            let destinationCal = aOperation.destinationCal;
 
-            for each (var entry in xml.entry) {
-
-                var recurrenceId = getRecurrenceIdFromEntry(entry, timezone);
+            for each (let entry in gdataXPath(xml, 'atom:feed/atom:entry')) {
+                let recurrenceId = getRecurrenceIdFromEntry(entry, timezone);
                 if (aIsFullSync && recurrenceId) {
                     // On a full sync, we parse exceptions different.
                     continue;
                 }
                 cal.LOG("[calGoogleCalendar] Parsing entry:\n" + entry + "\n");
 
-                var referenceItemObj = {}
+                let referenceItemObj = {}
                 destinationCal.getItem(getIdFromEntry(entry),
                                        new syncSetter(referenceItemObj));
-                var referenceItem = referenceItemObj.value &&
+                let referenceItem = referenceItemObj.value &&
                                     referenceItemObj.value.clone();
 
                 // Parse the item. If we got a reference item from the storage
                 // calendar, put that in to make sure we get all exceptions and
                 // such.
-                var item = XMLEntryToItem(entry,
+                let item = XMLEntryToItem(entry,
                                           timezone,
                                           this,
                                           (recurrenceId && referenceItem ? null : referenceItem));
@@ -1328,20 +1063,19 @@ calGoogleCalendar.prototype = {
                     // On a full synchronization, we can go ahead and pre-parse
                     // all exceptions and then add the item at once. This way we
                     // make sure
-                    for each (var oid in xml.entry.gd::originalEvent.(@id == item.id)) {
+                    for each (let oid in gdataXPath(xml, 'atom:feed/atom:entry[gd:originalEvent/@id="' + item.id + '"]')) {
                         // Get specific fields so we can speed up the parsing process
-                        var status = oid.parent().gd::eventStatus.@value.toString().substring(39);
+                        let status = gdataXPathFirst(oid, 'gd:eventStatus/@value').substring(39);
 
                         if (status == "canceled") {
-                            let rId = oid.gd::when.@startTime.toString();
+                            let rId = gdataXPathFirst(oid, 'gd:when/@startTime');
                             let rDate = cal.fromRFC3339(rId, timezone);
                             item.recurrenceInfo.removeOccurrenceAt(rDate);
                             cal.LOG("[calGoogleCalendar] Negative exception " + rId + "/" + rDate);
                         } else {
                             // Parse the exception and modify the current item
-                            var excItem = XMLEntryToItem(oid.parent(),
-                                                         timezone,
-                                                         this);
+                            let excItem = XMLEntryToItem(oid, timezone, this);
+
                             if (excItem) {
                                 // Google uses the status field to reflect negative
                                 // exceptions.

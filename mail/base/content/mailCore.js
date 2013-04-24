@@ -1,46 +1,15 @@
 # -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
-# The Original Code is Mozilla Communicator client code, released
-# March 31, 1998.
-#
-# The Initial Developer of the Original Code is
-# Netscape Communications Corporation.
-# Portions created by the Initial Developer are Copyright (C) 2001
-# the Initial Developer. All Rights Reserved.
-#
-# Contributor(s):
-#   Joachim Herb <herb@leo.org>
-#
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /*
- * Core mail routines used by all of the major mail windows (address book, 3-pane, compose and stand alone message window).
- * Routines to support custom toolbars in mail windows, opening up a new window of a particular type all live here. 
- * Before adding to this file, ask yourself, is this a JS routine that is going to be used by all of the main mail windows?
+ * Core mail routines used by all of the major mail windows (address book,
+ * 3-pane, compose and stand alone message window).
+ * Routines to support custom toolbars in mail windows, opening up a new window
+ * of a particular type all live here.
+ * Before adding to this file, ask yourself, is this a JS routine that is going
+ * to be used by all of the main mail windows?
  */
 
 Components.utils.import("resource://gre/modules/Services.jsm");
@@ -98,7 +67,8 @@ function overlayUpdateToolbarMode(aModeValue)
 
 function overlayOnLoad()
 {
-  let restoreButton = document.getElementById("main-box").querySelector("[oncommand*='restore']");
+  let restoreButton = document.getElementById("main-box")
+                              .querySelector("[oncommand*='restore']");
   restoreButton.setAttribute("oncommand", "overlayRestoreDefaultSet();");
 
   // Add the textBesideIcon menu item if it's not already there.
@@ -174,10 +144,7 @@ function CustomizeMailToolbar(toolboxId, customizePopupId)
   var toolbox = document.getElementById(toolboxId);
 
   var customizeURL = "chrome://global/content/customizeToolbar.xul";
-  let prefSvc = Components.classes["@mozilla.org/preferences-service;1"]
-                          .getService(Components.interfaces.nsIPrefService)
-                          .getBranch(null);
-  gCustomizeSheet = prefSvc.getBoolPref("toolbar.customization.usesheet");
+  gCustomizeSheet = Services.prefs.getBoolPref("toolbar.customization.usesheet");
 
   if (gCustomizeSheet) {
     var sheetFrame = document.getElementById("customizeToolbarSheetIFrame");
@@ -260,63 +227,80 @@ function MailToolboxCustomizeDone(aEvent, customizePopupId)
   }
 }
 
-function onViewToolbarCommand(aEvent, toolboxId)
+function onViewToolbarsPopupShowing(aEvent, toolboxIds, aInsertPoint)
 {
-  var toolbox = document.getElementById(toolboxId);
-  var index = aEvent.originalTarget.getAttribute("toolbarindex");
-  var toolbar = toolbox.childNodes[index];
+  if (!Array.isArray(toolboxIds))
+    toolboxIds = [toolboxIds];
 
-  toolbar.collapsed = aEvent.originalTarget.getAttribute("checked") != "true";
-  document.persist(toolbar.id, "collapsed");
-}
-
-function onViewToolbarsPopupShowing(aEvent, toolboxId)
-{
-  var popup = aEvent.target;
+  let popup = aEvent.target;
 
   // Empty the menu
-  for (var i = popup.childNodes.length-1; i >= 0; --i) {
-    var deadItem = popup.childNodes[i];
-    if (deadItem.hasAttribute("toolbarindex"))
+  for (let i = popup.childNodes.length - 1; i >= 0; --i) {
+    let deadItem = popup.childNodes[i];
+
+    // Remove all of the nodes with the iscollapsible
+    // attribute.
+    if (deadItem.hasAttribute("iscollapsible"))
       popup.removeChild(deadItem);
   }
 
-  var firstMenuItem = popup.firstChild;
+  // We'll insert the menuitems before the first item in the list if no insert
+  // point is defined.
+  let firstMenuItem = aInsertPoint || popup.firstChild;
 
-  var toolbox = document.getElementById(toolboxId);
-  for (var i = 0; i < toolbox.childNodes.length; ++i) {
-    var toolbar = toolbox.childNodes[i];
-    var toolbarName = toolbar.getAttribute("toolbarname");
-    var type = toolbar.getAttribute("type");
-    if (toolbarName && type != "menubar") {
-      var menuItem = document.createElement("menuitem");
-      menuItem.setAttribute("toolbarindex", i);
-      menuItem.setAttribute("type", "checkbox");
-      menuItem.setAttribute("label", toolbarName);
-      menuItem.setAttribute("accesskey", toolbar.getAttribute("accesskey"));
-      menuItem.setAttribute("checked", toolbar.getAttribute("collapsed") != "true");
-      popup.insertBefore(menuItem, firstMenuItem);
-      menuItem.addEventListener("command",
-        function(aEvent) { onViewToolbarCommand(aEvent, toolboxId); }, false);
+  for (let [, toolboxId] in Iterator(toolboxIds)) {
+    let toolbox = document.getElementById(toolboxId);
+
+    // We'll consider either childnodes that have a toolbarname attribute,
+    // or externalToolbars.
+    let childToolbars = Array.slice(toolbox
+                                    .getElementsByAttribute("toolbarname",
+                                                            "*"));
+    let potentialToolbars = childToolbars.concat(toolbox.externalToolbars);
+
+    for (let [, toolbarElement] in Iterator(potentialToolbars)) {
+
+      // We have to bind to toolbar because Javascript doesn't do fresh
+      // let-bindings per Iteration.
+      let toolbar = toolbarElement;
+
+      let toolbarName = toolbar.getAttribute("toolbarname");
+      if (toolbarName) {
+        let menuItem = document.createElement("menuitem");
+        let hidingAttribute = toolbar.getAttribute("type") == "menubar" ?
+                              "autohide" : "collapsed";
+        menuItem.setAttribute("type", "checkbox");
+        // Mark this menuitem with an iscollapsible attribute, so we
+        // know we can wipe it out later on.
+        menuItem.setAttribute("iscollapsible", true);
+        menuItem.setAttribute("toolbarid", toolbar.id);
+        menuItem.setAttribute("label", toolbarName);
+        menuItem.setAttribute("accesskey", toolbar.getAttribute("accesskey"));
+        menuItem.setAttribute("checked",
+                              toolbar.getAttribute(hidingAttribute) != "true");
+        popup.insertBefore(menuItem, firstMenuItem);
+
+        let onMenuItemCommand = function(aEvent) {
+          let hidden = aEvent.originalTarget.getAttribute("checked") != "true";
+          toolbar.setAttribute(hidingAttribute, hidden);
+          document.persist(toolbar.id, hidingAttribute);
+        }
+
+        menuItem.addEventListener("command", onMenuItemCommand, false);
+      }
     }
-    toolbar = toolbar.nextSibling;
   }
 }
 
 function toJavaScriptConsole()
 {
-    toOpenWindowByType("global:console", "chrome://global/content/console.xul");
+  toOpenWindowByType("global:console", "chrome://global/content/console.xul");
 }
 
-function toOpenWindowByType( inType, uri )
+function toOpenWindowByType(inType, uri)
 {
-  const Cc = Components.classes;
-  const Ci = Components.interfaces;
-  var windowManager = Cc['@mozilla.org/appshell/window-mediator;1'].getService();
-  var windowManagerInterface = windowManager.QueryInterface(Ci.nsIWindowMediator);
-
-  var topWindow = windowManagerInterface.getMostRecentWindow( inType );
-  if ( topWindow )
+  var topWindow = Services.wm.getMostRecentWindow(inType);
+  if (topWindow)
     topWindow.focus();
   else
     window.open(uri, "_blank", "chrome,extrachrome,menubar,resizable,scrollbars,status,toolbar");
@@ -332,12 +316,7 @@ function focusOnMail(tabNo, event)
 {
   // this is invoked by accel-<number>
   // if the window isn't visible or focused, make it so
-  const Cc = Components.classes;
-  const Ci = Components.interfaces;
-  var windowManager = Cc['@mozilla.org/appshell/window-mediator;1'].getService();
-  var windowManagerInterface = windowManager.QueryInterface(Ci.nsIWindowMediator);
-
-  var topWindow = windowManagerInterface.getMostRecentWindow("mail:3pane");
+  var topWindow = Services.wm.getMostRecentWindow("mail:3pane");
   if (topWindow) {
     if (topWindow != window)
       topWindow.focus();
@@ -346,46 +325,66 @@ function focusOnMail(tabNo, event)
   }
   else {
     window.open("chrome://messenger/content/messenger.xul",
-                "_blank", "chrome,extrachrome,menubar,resizable,scrollbars,status,toolbar");
+                "_blank",
+                "chrome,extrachrome,menubar,resizable,scrollbars,status,toolbar");
   }
 }
 
-function toAddressBook() 
+function toAddressBook()
 {
-  toOpenWindowByType("mail:addressbook", "chrome://messenger/content/addressbook/addressbook.xul");
+  toOpenWindowByType("mail:addressbook",
+                     "chrome://messenger/content/addressbook/addressbook.xul");
+}
+
+function showChatTab()
+{
+  let tabmail = document.getElementById("tabmail");
+  if (gChatTab)
+    tabmail.switchToTab(gChatTab);
+  else
+    tabmail.openTab("chat", {});
 }
 
 function toImport()
 {
-  window.openDialog("chrome://messenger/content/importDialog.xul","importDialog","chrome, modal, titlebar, centerscreen");
+  window.openDialog("chrome://messenger/content/importDialog.xul", "importDialog",
+                    "chrome, modal, titlebar, centerscreen");
 }
 
-// aPaneID
-function openOptionsDialog(aPaneID, aTabID)
+function toSanitize()
 {
-  var prefsService = Components.classes["@mozilla.org/preferences-service;1"].getService(Components.interfaces.nsIPrefService).getBranch(null);
-  var instantApply = prefsService.getBoolPref("browser.preferences.instantApply");
-  var features = "chrome,titlebar,toolbar,centerscreen" + (instantApply ? ",dialog=no" : ",modal");
+   Components.classes["@mozilla.org/mail/mailglue;1"]
+             .getService(Components.interfaces.nsIMailGlue)
+             .sanitize(window);
+}
 
-  var wm = Components.classes["@mozilla.org/appshell/window-mediator;1"]
-           .getService(Components.interfaces.nsIWindowMediator);
-  
-  var win = wm.getMostRecentWindow("Mail:Preferences");
-  if (win)
-  {
+/**
+ * Opens the Preferences (Options) dialog.
+ *
+ * @param aPaneID     ID of prefpane to select automatically.
+ * @param aTabID      ID of tab to select on the prefpane.
+ * @param aOtherArgs  other prefpane specific arguments
+ */
+function openOptionsDialog(aPaneID, aTabID, aOtherArgs)
+{
+  let win = Services.wm.getMostRecentWindow("Mail:Preferences");
+  if (win) {
+    // the dialog is already open
     win.focus();
-    if (aPaneID)
-    {
-      var pane = win.document.getElementById(aPaneID);
-      win.document.documentElement.showPane(pane);
-      
-      // I don't know how to support aTabID for an arbitrary panel when the dialog is already open
-      // This is complicated because showPane is asynchronous (it could trigger a dynamic overlay)
-      // so our tab element may not be accessible right away...
+    if (aPaneID) {
+      let prefWindow = win.document.getElementById("MailPreferences");
+      win.selectPaneAndTab(prefWindow, aPaneID, aTabID);
     }
+  } else {
+    // the dialog must be created
+    let instantApply = Services.prefs
+                               .getBoolPref("browser.preferences.instantApply");
+    let features = "chrome,titlebar,toolbar,centerscreen" +
+                   (instantApply ? ",dialog=no" : ",modal");
+
+    openDialog("chrome://messenger/content/preferences/preferences.xul",
+               "Preferences", features, aPaneID, aTabID, aOtherArgs);
   }
-  else 
-    openDialog("chrome://messenger/content/preferences/preferences.xul","Preferences", features, aPaneID, aTabID);
 }
 
 function openAddonsMgr(aView)
@@ -435,6 +434,39 @@ function openActivityMgr()
 {
   Components.classes['@mozilla.org/activity-manager-ui;1'].
     getService(Components.interfaces.nsIActivityManagerUI).show(window);
+}
+
+function openIMAccountMgr()
+{
+  var win = Services.wm.getMostRecentWindow("Messenger:Accounts");
+  if (win)
+    win.focus();
+  else {
+    win = Services.ww.openWindow(null,
+                                 "chrome://messenger/content/chat/imAccounts.xul",
+                                 "Accounts", "chrome,resizable,centerscreen",
+                                 null);
+  }
+  return win;
+}
+
+function openIMAccountWizard()
+{
+  const kFeatures = "chrome,centerscreen,modal,titlebar";
+  const kUrl = "chrome://messenger/content/chat/imAccountWizard.xul";
+  const kName = "IMAccountWizard";
+
+#ifdef XP_MACOSX
+  // On Mac, avoid using the hidden window as a parent as that would
+  // make it visible.
+  let hiddenWindowUrl =
+    Services.prefs.getCharPref("browser.hiddenWindowChromeURL");
+  if (window.location.href == hiddenWindowUrl) {
+    Services.ww.openWindow(null, kUrl, kName, kFeatures, null);
+    return;
+  }
+#endif
+  window.openDialog(kUrl, kName, kFeatures);
 }
 
 function openSavedFilesWnd()
@@ -498,13 +530,9 @@ function openSupportURL()
  */
 function openFormattedURL(aPrefName)
 {
-  var urlToOpen = Components.classes["@mozilla.org/toolkit/URLFormatterService;1"]
-                            .getService(Components.interfaces.nsIURLFormatter)
-                            .formatURLPref(aPrefName);
+  var urlToOpen = Services.urlFormatter.formatURLPref(aPrefName);
 
-  var uri = Components.classes["@mozilla.org/network/io-service;1"]
-                      .getService(Components.interfaces.nsIIOService)
-                      .newURI(urlToOpen, null, null);
+  var uri = Services.io.newURI(urlToOpen, null, null);
 
   var protocolSvc = Components.classes["@mozilla.org/uriloader/external-protocol-service;1"]
                               .getService(Components.interfaces.nsIExternalProtocolService);
@@ -544,16 +572,13 @@ function safeModeRestart()
 #endif
 
 function getMostRecentMailWindow() {
-  let wm = Cc["@mozilla.org/appshell/window-mediator;1"]
-             .getService(Components.interfaces.nsIWindowMediator);
-
 #ifdef BROKEN_WM_Z_ORDER
-  let win = wm.getMostRecentWindow("mail:3pane", true);
+  let win = Services.wm.getMostRecentWindow("mail:3pane", true);
 
   // if we're lucky, this isn't a popup, and we can just return this
   if (win && win.document.documentElement.getAttribute("chromehidden")) {
     win = null;
-    var windowList = wm.getEnumerator("mail:3pane", true);
+    var windowList = Services.wm.getEnumerator("mail:3pane", true);
     // this is oldest to newest, so this gets a bit ugly
     while (windowList.hasMoreElements()) {
       var nextWin = windowList.getNext();
@@ -562,7 +587,7 @@ function getMostRecentMailWindow() {
     }
   }
 #else
-  var windowList = wm.getZOrderDOMWindowEnumerator("mail:3pane", true);
+  var windowList = Services.wm.getZOrderDOMWindowEnumerator("mail:3pane", true);
   if (!windowList.hasMoreElements())
     return null;
 
@@ -607,8 +632,11 @@ function SanitizeAttachmentDisplayName(aAttachment)
  */
 function CreateAttachmentTransferData(aAttachment)
 {
-  if (aAttachment.contentType == "text/x-moz-deleted")
-    return;
+  // For now, disallow drag-and-drop on cloud attachments. In the future, we
+  // should allow this.
+  if (aAttachment.contentType == "text/x-moz-deleted" ||
+      aAttachment.sendViaCloud)
+    return null;
 
   var name = aAttachment.name || aAttachment.displayName;
 
@@ -657,18 +685,21 @@ nsFlavorDataProvider.prototype =
     {
       var urlPrimitive = { };
       var dataSize = { };
-      aTransferable.getTransferData("application/x-moz-file-promise-url", urlPrimitive, dataSize);
+      aTransferable.getTransferData("application/x-moz-file-promise-url",
+                                    urlPrimitive, dataSize);
 
       var srcUrlPrimitive = urlPrimitive.value.QueryInterface(Components.interfaces.nsISupportsString);
 
       // now get the destination file location from kFilePromiseDirectoryMime
       var dirPrimitive = {};
-      aTransferable.getTransferData("application/x-moz-file-promise-dir", dirPrimitive, dataSize);
+      aTransferable.getTransferData("application/x-moz-file-promise-dir",
+                                    dirPrimitive, dataSize);
       var destDirectory = dirPrimitive.value.QueryInterface(Components.interfaces.nsILocalFile);
 
       // now save the attachment to the specified location
-      // XXX: we need more information than just the attachment url to save it, fortunately, we have an array
-      // of all the current attachments so we can cheat and scan through them
+      // XXX: we need more information than just the attachment url to save it,
+      // fortunately, we have an array of all the current attachments so we can
+      // cheat and scan through them
 
       var attachment = null;
       for each (let index in Iterator(currentAttachments, true))
@@ -682,7 +713,11 @@ nsFlavorDataProvider.prototype =
       if (attachment)
       {
         var name = attachment.name || attachment.displayName;
-        var destFilePath = messenger.saveAttachmentToFolder(attachment.contentType, attachment.url, encodeURIComponent(name), attachment.uri, destDirectory);
+        var destFilePath = messenger.saveAttachmentToFolder(attachment.contentType,
+                                                            attachment.url,
+                                                            encodeURIComponent(name),
+                                                            attachment.uri,
+                                                            destDirectory);
         aData.value = destFilePath.QueryInterface(Components.interfaces.nsISupports);
         aDataLen.value = 4;
       }

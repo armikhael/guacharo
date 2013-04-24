@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-  */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
   
 #ifndef _MDB_
 #include "mdb.h"
@@ -699,13 +667,13 @@ morkStore::CopyAtom(morkEnv* ev, const morkAtom* inAtom)
   {
     mdbYarn yarn;
     if ( inAtom->AliasYarn(&yarn) )
-      outAtom = this->YarnToAtom(ev, &yarn, PR_TRUE /* create */);
+      outAtom = this->YarnToAtom(ev, &yarn, true /* create */);
   }
   return outAtom;
 }
  
 morkAtom*
-morkStore::YarnToAtom(morkEnv* ev, const mdbYarn* inYarn, PRBool createIfMissing /* = PR_TRUE */)
+morkStore::YarnToAtom(morkEnv* ev, const mdbYarn* inYarn, bool createIfMissing /* = true */)
 {
   morkAtom* outAtom = 0;
   if ( ev->Good() )
@@ -1342,24 +1310,28 @@ NS_IMETHODIMP
 morkStore::AddWeakRef(nsIMdbEnv* mev)
 {
   morkEnv *ev  = morkEnv::FromMdbEnv(mev);
-  return morkNode::AddWeakRef(ev);
+  // XXX Casting mork_refs to nsresult
+  return static_cast<nsresult>(morkNode::AddWeakRef(ev));
 }
 NS_IMETHODIMP
 morkStore::AddStrongRef(nsIMdbEnv* mev)
 {
-  return AddRef();
+  // XXX Casting nsrefcnt to nsresult
+  return static_cast<nsresult>(AddRef());
 }
 
 NS_IMETHODIMP
 morkStore::CutWeakRef(nsIMdbEnv* mev)
 {
   morkEnv *ev  = morkEnv::FromMdbEnv(mev);
-  return morkNode::CutWeakRef(ev);
+  // XXX Casting mork_refs to nsresult
+  return static_cast<nsresult>(morkNode::CutWeakRef(ev));
 }
 NS_IMETHODIMP
 morkStore::CutStrongRef(nsIMdbEnv* mev)
 {
-  return Release();
+  // XXX Casting nsrefcnt to nsresult
+  return static_cast<nsresult>(Release());
 }
 
 NS_IMETHODIMP
@@ -1387,7 +1359,7 @@ morkStore::IsOpenMdbObject(nsIMdbEnv* mev, mdb_bool* outOpen)
 NS_IMETHODIMP
 morkStore::GetIsPortReadonly(nsIMdbEnv* mev, mdb_bool* outBool)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mdb_bool isReadOnly = morkBool_kFalse;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -1424,13 +1396,13 @@ morkStore::GetIsStore(nsIMdbEnv* mev, mdb_bool* outBool)
   MORK_USED_1(mev);
  if ( outBool )
     *outBool = morkBool_kTrue;
-  return 0;
+  return NS_OK;
 }
 
 NS_IMETHODIMP
 morkStore::GetIsStoreAndDirty(nsIMdbEnv* mev, mdb_bool* outBool)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mdb_bool isStoreAndDirty = morkBool_kFalse;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -1448,7 +1420,7 @@ morkStore::GetUsagePolicy(nsIMdbEnv* mev,
   mdbUsagePolicy* ioUsagePolicy)
 {
   MORK_USED_1(ioUsagePolicy);
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
   {
@@ -1463,7 +1435,7 @@ morkStore::SetUsagePolicy(nsIMdbEnv* mev,
   const mdbUsagePolicy* inUsagePolicy)
 {
   MORK_USED_1(inUsagePolicy);
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
   {
@@ -1480,7 +1452,7 @@ morkStore::IdleMemoryPurge( // do memory management already scheduled
   nsIMdbEnv* mev, // context
   mdb_size* outEstimatedBytesFreed) // approximate bytes actually freed
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mdb_size estimatedBytesFreed = 0;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -1500,7 +1472,7 @@ morkStore::SessionMemoryPurge( // request specific footprint decrease
   mdb_size* outEstimatedBytesFreed) // approximate bytes actually freed
 {
   MORK_USED_1(inDesiredBytesFreed);
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mdb_size estimate = 0;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -1518,7 +1490,7 @@ morkStore::PanicMemoryPurge( // desperately free all possible memory
   nsIMdbEnv* mev, // context
   mdb_size* outEstimatedBytesFreed) // approximate bytes actually freed
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mdb_size estimate = 0;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -1539,7 +1511,7 @@ morkStore::GetPortFilePath(
   mdbYarn* outFilePath, // name of file holding port content
   mdbYarn* outFormatVersion) // file format description
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   if ( outFormatVersion )
     outFormatVersion->mYarn_Fill = 0;
   if ( outFilePath )
@@ -1562,7 +1534,7 @@ morkStore::GetPortFile(
   nsIMdbEnv* mev, // context
   nsIMdbFile** acqFile) // acquire file used by port or store
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   if ( acqFile )
     *acqFile = 0;
 
@@ -1594,7 +1566,7 @@ morkStore::BestExportFormat( // determine preferred export format
   nsIMdbEnv* mev, // context
   mdbYarn* outFormatVersion) // file format description
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   if ( outFormatVersion )
     outFormatVersion->mYarn_Fill = 0;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
@@ -1614,7 +1586,7 @@ morkStore::CanExportToFormat( // can export content in given specific format?
 {
   MORK_USED_1(inFormatVersion);
   mdb_bool canExport = morkBool_kFalse;
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
   {
@@ -1636,7 +1608,7 @@ morkStore::ExportToFormat( // export content in given specific format
 // Call nsIMdbThumb::DoMore() until done, or until the thumb is broken, and
 // then the export will be finished.
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbThumb* outThumb = 0;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -1664,7 +1636,7 @@ morkStore::TokenToString( // return a string name for an integer token
   mdb_token inToken, // token for inTokenName inside this port
   mdbYarn* outTokenName) // the type of table to access
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
   {
@@ -1684,7 +1656,7 @@ morkStore::StringToToken( // return an integer token for scope name
   // association of inTokenName with a new integer token if possible.
   // But a readonly port will return zero for an unknown scope name.
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mdb_token token = 0;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -1707,7 +1679,7 @@ morkStore::QueryToken( // like StringToToken(), but without adding
   // but unlike StringToToken(), will not assign a new token if not
   // already in use.
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mdb_token token = 0;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -1730,7 +1702,7 @@ morkStore::HasRow( // contains a row with the specified oid?
   const mdbOid* inOid,  // hypothetical row oid
   mdb_bool* outHasRow) // whether GetRow() might succeed
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mdb_bool hasRow = morkBool_kFalse;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -1752,7 +1724,7 @@ morkStore::GetRow( // access one row with specific oid
   const mdbOid* inOid,  // hypothetical row oid
   nsIMdbRow** acqRow) // acquire specific row (or null)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbRow* outRow = 0;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -1774,7 +1746,7 @@ morkStore::GetRowRefCount( // get number of tables that contain a row
   const mdbOid* inOid,  // hypothetical row oid
   mdb_count* outRefCount) // number of tables containing inRowKey 
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mdb_count count = 0;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -1829,7 +1801,7 @@ morkStore::FindRow(nsIMdbEnv* mev, // search for row with matching cell
   // of a given key need be remembered.  Implementors are not required to sort
   // all rows by the specified column.
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbRow* outRow = 0;
   mdbOid rowOid;
   rowOid.mOid_Scope = 0;
@@ -1864,7 +1836,7 @@ morkStore::HasTable( // supports a table with the specified oid?
   const mdbOid* inOid,  // hypothetical table oid
   mdb_bool* outHasTable) // whether GetTable() might succeed
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mork_bool hasTable = morkBool_kFalse;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -1886,7 +1858,7 @@ morkStore::GetTable( // access one table with specific oid
   const mdbOid* inOid,  // hypothetical table oid
   nsIMdbTable** acqTable) // acquire specific table (or null)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbTable* outTable = 0;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -1909,7 +1881,7 @@ morkStore::HasTableKind( // supports a table of the specified type?
   mdb_count* outTableCount, // current number of such tables
   mdb_bool* outSupportsTable) // whether GetTableKind() might succeed
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
   {
@@ -1929,7 +1901,7 @@ morkStore::GetTableKind( // access one (random) table of specific type
   mdb_bool* outMustBeUnique, // whether port can hold only one of these
   nsIMdbTable** acqTable)      // acquire scoped collection of rows
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbTable* outTable = 0;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -1952,7 +1924,7 @@ morkStore::GetPortTableCursor( // get cursor for all tables of specific type
   mdb_kind inTableKind, // the type of table to access
   nsIMdbPortTableCursor** acqCursor) // all such tables in the port
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbPortTableCursor* outCursor = 0;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -1982,7 +1954,7 @@ morkStore::ShouldCompress( // store wastes at least inPercentWaste?
 {
   mdb_percent actualWaste = 0;
   mdb_bool shouldCompress = morkBool_kFalse;
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
   {
@@ -2011,7 +1983,7 @@ morkStore::NewTable( // make one new table of specific type
   const mdbOid* inOptionalMetaRowOid, // can be nil to avoid specifying 
   nsIMdbTable** acqTable)     // acquire scoped collection of rows
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbTable* outTable = 0;
   morkEnv* ev = this->CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -2036,7 +2008,7 @@ morkStore::NewTableWithOid( // make one new table of specific type
   const mdbOid* inOptionalMetaRowOid, // can be nil to avoid specifying 
   nsIMdbTable** acqTable)     // acquire scoped collection of rows
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbTable* outTable = 0;
   morkEnv* ev = CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -2065,7 +2037,7 @@ morkStore::RowScopeHasAssignedIds(nsIMdbEnv* mev,
   mdb_bool* outCallerAssigned, // nonzero if caller assigned specified
   mdb_bool* outStoreAssigned) // nonzero if store db assigned specified
 {
-  NS_ASSERTION(PR_FALSE, " not implemented");
+  NS_ASSERTION(false, " not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -2075,7 +2047,7 @@ morkStore::SetCallerAssignedIds(nsIMdbEnv* mev,
   mdb_bool* outCallerAssigned, // nonzero if caller assigned specified
   mdb_bool* outStoreAssigned) // nonzero if store db assigned specified
 {
-  NS_ASSERTION(PR_FALSE, " not implemented");
+  NS_ASSERTION(false, " not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -2085,7 +2057,7 @@ morkStore::SetStoreAssignedIds(nsIMdbEnv* mev,
   mdb_bool* outCallerAssigned, // nonzero if caller assigned specified
   mdb_bool* outStoreAssigned) // nonzero if store db assigned specified
 {
-  NS_ASSERTION(PR_FALSE, " not implemented");
+  NS_ASSERTION(false, " not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 // } ----- end row scope methods -----
@@ -2096,7 +2068,7 @@ morkStore::NewRowWithOid(nsIMdbEnv* mev, // new row w/ caller assigned oid
   const mdbOid* inOid,   // caller assigned oid
   nsIMdbRow** acqRow) // create new row
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbRow* outRow = 0;
   morkEnv* ev = CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -2119,7 +2091,7 @@ morkStore::NewRow(nsIMdbEnv* mev, // new row with db assigned oid
 // Note this row must be added to some table or cell child before the
 // store is closed in order to make this row persist across sesssions.
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbRow* outRow = 0;
   morkEnv* ev = CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
@@ -2146,7 +2118,7 @@ morkStore::ImportContent( // import content from port
 // Call nsIMdbThumb::DoMore() until done, or until the thumb is broken, and
 // then the import will be finished.
 {
-  NS_ASSERTION(PR_FALSE, " not implemented");
+  NS_ASSERTION(false, " not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -2158,7 +2130,7 @@ morkStore::ImportFile( // import content from port
 // Call nsIMdbThumb::DoMore() until done, or until the thumb is broken, and
 // then the import will be finished.
 {
-  NS_ASSERTION(PR_FALSE, " not implemented");
+  NS_ASSERTION(false, " not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 // } ----- end inport/export methods -----
@@ -2171,7 +2143,7 @@ morkStore::ShareAtomColumnsHint( // advise re shared col content atomizing
   const mdbColumnSet* inColumnSet) // cols desired tokenized together
 {
   MORK_USED_2(inColumnSet,inScopeHint);
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
   {
@@ -2187,7 +2159,7 @@ morkStore::AvoidAtomColumnsHint( // advise col w/ poor atomizing prospects
   const mdbColumnSet* inColumnSet) // cols with poor atomizing prospects
 {
   MORK_USED_1(inColumnSet);
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )
   {
@@ -2200,20 +2172,6 @@ morkStore::AvoidAtomColumnsHint( // advise col w/ poor atomizing prospects
 
 // { ----- begin commit methods -----
 NS_IMETHODIMP
-morkStore::SmallCommit( // save minor changes if convenient and uncostly
-  nsIMdbEnv* mev) // context
-{
-  mdb_err outErr = 0;
-  morkEnv* ev = CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
-  if ( ev )
-  {
-    // ev->StubMethodOnlyError(); // it's okay to do nothing for small commit
-    outErr = ev->AsErr();
-  }
-  return outErr;
-}
-
-NS_IMETHODIMP
 morkStore::LargeCommit( // save important changes if at all possible
   nsIMdbEnv* mev, // context
   nsIMdbThumb** acqThumb) // acquire thumb for incremental commit
@@ -2222,7 +2180,7 @@ morkStore::LargeCommit( // save important changes if at all possible
 // locked until commit is finished or canceled through the thumb instance.
 // Until the commit is done, the store will report it has readonly status.
 {
-  nsresult outErr = 0;
+  nsresult outErr = NS_OK;
   nsIMdbThumb* outThumb = 0;
   morkEnv* ev = CanUseStore(mev, /*inMutable*/ morkBool_kFalse, &outErr);
   if ( ev )

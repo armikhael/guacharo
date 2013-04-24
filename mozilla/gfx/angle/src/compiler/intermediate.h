@@ -410,8 +410,8 @@ protected:
 //
 class TIntermUnary : public TIntermOperator {
 public:
-    TIntermUnary(TOperator o, TType& t) : TIntermOperator(o, t), operand(0) {}
-    TIntermUnary(TOperator o) : TIntermOperator(o), operand(0) {}
+    TIntermUnary(TOperator o, TType& t) : TIntermOperator(o, t), operand(0), useEmulatedFunction(false) {}
+    TIntermUnary(TOperator o) : TIntermOperator(o), operand(0), useEmulatedFunction(false) {}
 
     virtual void traverse(TIntermTraverser*);
     virtual TIntermUnary* getAsUnaryNode() { return this; }
@@ -420,21 +420,28 @@ public:
     TIntermTyped* getOperand() { return operand; }    
     bool promote(TInfoSink&);
 
+    void setUseEmulatedFunction() { useEmulatedFunction = true; }
+    bool getUseEmulatedFunction() { return useEmulatedFunction; }
+
 protected:
     TIntermTyped* operand;
+
+    // If set to true, replace the built-in function call with an emulated one
+    // to work around driver bugs.
+    bool useEmulatedFunction;
 };
 
 typedef TVector<TIntermNode*> TIntermSequence;
 typedef TVector<int> TQualifierList;
-typedef TMap<TString, TString> TPragmaTable;
+
 //
 // Nodes that operate on an arbitrary sized set of children.
 //
 class TIntermAggregate : public TIntermOperator {
 public:
-    TIntermAggregate() : TIntermOperator(EOpNull), userDefined(false), pragmaTable(0), endLine(0) { }
-    TIntermAggregate(TOperator o) : TIntermOperator(o), pragmaTable(0) { }
-    ~TIntermAggregate() { delete pragmaTable; }
+    TIntermAggregate() : TIntermOperator(EOpNull), userDefined(false), endLine(0), useEmulatedFunction(false) { }
+    TIntermAggregate(TOperator o) : TIntermOperator(o), useEmulatedFunction(false) { }
+    ~TIntermAggregate() { }
 
     virtual TIntermAggregate* getAsAggregate() { return this; }
     virtual void traverse(TIntermTraverser*);
@@ -445,16 +452,18 @@ public:
     const TString& getName() const { return name; }
 
     void setUserDefined() { userDefined = true; }
-    bool isUserDefined() { return userDefined; }
+    bool isUserDefined() const { return userDefined; }
 
     void setOptimize(bool o) { optimize = o; }
     bool getOptimize() { return optimize; }
     void setDebug(bool d) { debug = d; }
     bool getDebug() { return debug; }
-    void addToPragmaTable(const TPragmaTable& pTable);
-    const TPragmaTable& getPragmaTable() const { return *pragmaTable; }
+
     void setEndLine(TSourceLoc line) { endLine = line; }
     TSourceLoc getEndLine() const { return endLine; }
+
+    void setUseEmulatedFunction() { useEmulatedFunction = true; }
+    bool getUseEmulatedFunction() { return useEmulatedFunction; }
 
 protected:
     TIntermAggregate(const TIntermAggregate&); // disallow copy constructor
@@ -465,8 +474,11 @@ protected:
 
     bool optimize;
     bool debug;
-    TPragmaTable *pragmaTable;
     TSourceLoc endLine;
+
+    // If set to true, replace the built-in function call with an emulated one
+    // to work around driver bugs.
+    bool useEmulatedFunction;
 };
 
 //
@@ -519,6 +531,7 @@ public:
             postVisit(postVisit),
             rightToLeft(rightToLeft),
             depth(0) {}
+    virtual ~TIntermTraverser() {};
 
     virtual void visitSymbol(TIntermSymbol*) {}
     virtual void visitConstantUnion(TIntermConstantUnion*) {}

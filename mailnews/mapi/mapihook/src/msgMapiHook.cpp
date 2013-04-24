@@ -1,41 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corp.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *                 Krishna Mohan Khandrika (kkhandrika@netscape.com)
- *                 Srilatha Moturi (srilatha@netscape.com)
- *                 Rajiv Dayal (rdayal@netscape.com)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #define MAPI_STARTUP_ARG       "/MAPIStartUp"
 
@@ -69,9 +34,7 @@
 #include "nsIMsgCompose.h"
 #include "nsMsgCompCID.h"
 #include "nsIMsgSend.h"
-#include "nsIProxyObjectManager.h"
 #include "nsIMsgComposeService.h"
-#include "nsProxiedService.h"
 #include "nsDirectoryServiceDefs.h"
 #include "nsIDirectoryService.h"
 #include "nsMsgI18N.h"
@@ -80,7 +43,9 @@
 #include "msgMapiSupport.h"
 #include "msgMapiMain.h"
 #include "nsThreadUtils.h"
+#include "nsMsgUtils.h"
 #include "nsNetUtil.h"
+#include "mozilla/Services.h"
 
 #include "nsEmbedCID.h"
 
@@ -95,11 +60,11 @@ public:
     // nsISupports interface
     NS_DECL_ISUPPORTS
 
-    /* void OnStartSending (in string aMsgID, in PRUint32 aMsgSize); */
-    NS_IMETHOD OnStartSending(const char *aMsgID, PRUint32 aMsgSize) { return NS_OK; }
+    /* void OnStartSending (in string aMsgID, in uint32_t aMsgSize); */
+    NS_IMETHOD OnStartSending(const char *aMsgID, uint32_t aMsgSize) { return NS_OK; }
 
-    /* void OnProgress (in string aMsgID, in PRUint32 aProgress, in PRUint32 aProgressMax); */
-    NS_IMETHOD OnProgress(const char *aMsgID, PRUint32 aProgress, PRUint32 aProgressMax) { return NS_OK;}
+    /* void OnProgress (in string aMsgID, in uint32_t aProgress, in uint32_t aProgressMax); */
+    NS_IMETHOD OnProgress(const char *aMsgID, uint32_t aProgress, uint32_t aProgressMax) { return NS_OK;}
 
     /* void OnStatus (in string aMsgID, in wstring aMsg); */
     NS_IMETHOD OnStatus(const char *aMsgID, const PRUnichar *aMsg) { return NS_OK;}
@@ -109,7 +74,7 @@ public:
                            nsIFile *returnFile) {
         PR_CEnterMonitor(this);
         PR_CNotifyAll(this);
-        m_done = PR_TRUE;
+        m_done = true;
         PR_CExitMonitor(this);
         return NS_OK ;
     }
@@ -117,7 +82,7 @@ public:
 	/* void OnSendNotPerformed */
 	NS_IMETHOD OnSendNotPerformed(const char *aMsgID, nsresult aStatus)
 	{
-		return OnStopSending(aMsgID, aStatus, nsnull, nsnull) ;
+		return OnStopSending(aMsgID, aStatus, nullptr, nullptr) ;
 	}
 
     /* void OnGetDraftFolderURI (); */
@@ -125,14 +90,14 @@ public:
 
     static nsresult CreateMAPISendListener( nsIMsgSendListener **ppListener);
 
-    PRBool IsDone() { return m_done ; }
+    bool IsDone() { return m_done ; }
 
 protected :
     nsMAPISendListener() {
-        m_done = PR_FALSE;
+        m_done = false;
     }
 
-    PRBool          m_done;
+    bool            m_done;
 };
 
 
@@ -150,7 +115,7 @@ nsresult nsMAPISendListener::CreateMAPISendListener( nsIMsgSendListener **ppList
     return NS_OK;
 }
 
-PRBool nsMapiHook::isMapiService = PR_FALSE;
+bool nsMapiHook::isMapiService = false;
 
 void nsMapiHook::CleanUp()
 {
@@ -158,33 +123,34 @@ void nsMapiHook::CleanUp()
     // to cleanup mapi related stuff inside mozilla code.
 }
 
-PRBool nsMapiHook::DisplayLoginDialog(PRBool aLogin, PRUnichar **aUsername,
+bool nsMapiHook::DisplayLoginDialog(bool aLogin, PRUnichar **aUsername,
                       PRUnichar **aPassword)
 {
   nsresult rv;
-  PRBool btnResult = PR_FALSE;
+  bool btnResult = false;
 
   nsCOMPtr<nsIPromptService> dlgService(do_GetService(NS_PROMPTSERVICE_CONTRACTID, &rv));
   if (NS_SUCCEEDED(rv) && dlgService)
   {
-    nsCOMPtr<nsIStringBundleService> bundleService(do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv));
-    if (NS_FAILED(rv) || !bundleService) return PR_FALSE;
+    nsCOMPtr<nsIStringBundleService> bundleService =
+      mozilla::services::GetStringBundleService();
+    if (!bundleService) return false;
 
     nsCOMPtr<nsIStringBundle> bundle;
     rv = bundleService->CreateBundle(MAPI_PROPERTIES_CHROME, getter_AddRefs(bundle));
-    if (NS_FAILED(rv) || !bundle) return PR_FALSE;
+    if (NS_FAILED(rv) || !bundle) return false;
 
     nsCOMPtr<nsIStringBundle> brandBundle;
     rv = bundleService->CreateBundle(
                     "chrome://branding/locale/brand.properties",
                     getter_AddRefs(brandBundle));
-    if (NS_FAILED(rv)) return PR_FALSE;
+    if (NS_FAILED(rv)) return false;
 
     nsString brandName;
     rv = brandBundle->GetStringFromName(
                        NS_LITERAL_STRING("brandFullName").get(),
                        getter_Copies(brandName));
-    if (NS_FAILED(rv)) return PR_FALSE;
+    if (NS_FAILED(rv)) return false;
 
     nsString loginTitle;
     const PRUnichar *brandStrings[] = { brandName.get() };
@@ -192,19 +158,19 @@ PRBool nsMapiHook::DisplayLoginDialog(PRBool aLogin, PRUnichar **aUsername,
     const PRUnichar *dTitlePropertyTag = loginTitlePropertyTag.get();
     rv = bundle->FormatStringFromName(dTitlePropertyTag, brandStrings, 1,
                                       getter_Copies(loginTitle));
-    if (NS_FAILED(rv)) return PR_FALSE;
+    if (NS_FAILED(rv)) return false;
 
     if (aLogin)
     {
       nsString loginText;
       rv = bundle->GetStringFromName(NS_LITERAL_STRING("loginTextwithName").get(),
                                      getter_Copies(loginText));
-      if (NS_FAILED(rv) || loginText.IsEmpty()) return PR_FALSE;
+      if (NS_FAILED(rv) || loginText.IsEmpty()) return false;
 
-      PRBool dummyValue = PR_FALSE;
-      rv = dlgService->PromptUsernameAndPassword(nsnull, loginTitle.get(),
+      bool dummyValue = false;
+      rv = dlgService->PromptUsernameAndPassword(nullptr, loginTitle.get(),
                                                  loginText.get(), aUsername, aPassword,
-                                                 nsnull, &dummyValue, &btnResult);
+                                                 nullptr, &dummyValue, &btnResult);
     }
     else
     {
@@ -216,33 +182,33 @@ PRBool nsMapiHook::DisplayLoginDialog(PRBool aLogin, PRUnichar **aUsername,
       const PRUnichar *dpropertyTag = loginTextPropertyTag.get();
       rv = bundle->FormatStringFromName(dpropertyTag, userNameStrings, 1,
                                         getter_Copies(loginText));
-      if (NS_FAILED(rv)) return PR_FALSE;
+      if (NS_FAILED(rv)) return false;
 
-      PRBool dummyValue = PR_FALSE;
-      rv = dlgService->PromptPassword(nsnull, loginTitle.get(), loginText.get(),
-                                      aPassword, nsnull, &dummyValue, &btnResult);
+      bool dummyValue = false;
+      rv = dlgService->PromptPassword(nullptr, loginTitle.get(), loginText.get(),
+                                      aPassword, nullptr, &dummyValue, &btnResult);
     }
   }
 
   return btnResult;
 }
 
-PRBool nsMapiHook::VerifyUserName(const nsString& aUsername, nsCString& aIdKey)
+bool nsMapiHook::VerifyUserName(const nsString& aUsername, nsCString& aIdKey)
 {
   nsresult rv;
 
   if (aUsername.IsEmpty())
-    return PR_FALSE;
+    return false;
 
   nsCOMPtr<nsIMsgAccountManager> accountManager(do_GetService(NS_MSGACCOUNTMANAGER_CONTRACTID, &rv));
-  if (NS_FAILED(rv)) return PR_FALSE;
+  if (NS_FAILED(rv)) return false;
   nsCOMPtr<nsISupportsArray> identities;
   rv = accountManager->GetAllIdentities(getter_AddRefs(identities));
-  if (NS_FAILED(rv)) return PR_FALSE;
-  PRUint32 numIndentities;
+  if (NS_FAILED(rv)) return false;
+  uint32_t numIndentities;
   identities->Count(&numIndentities);
 
-  for (PRUint32 i = 0; i < numIndentities; i++)
+  for (uint32_t i = 0; i < numIndentities; i++)
   {
     // convert supports->Identity
     nsCOMPtr<nsISupports> thisSupports;
@@ -256,7 +222,7 @@ PRBool nsMapiHook::VerifyUserName(const nsString& aUsername, nsCString& aIdKey)
       if (NS_FAILED(rv)) continue;
 
       // get the username from the email and compare with the username
-      PRInt32 index = email.FindChar('@');
+      int32_t index = email.FindChar('@');
       if (index != -1)
         email.SetLength(index);
 
@@ -265,52 +231,53 @@ PRBool nsMapiHook::VerifyUserName(const nsString& aUsername, nsCString& aIdKey)
     }
   }
 
-  return PR_FALSE;
+  return false;
 }
 
-PRBool
+bool
 nsMapiHook::IsBlindSendAllowed()
 {
-  PRBool enabled = PR_FALSE;
-  PRBool warn = PR_TRUE;
+  bool enabled = false;
+  bool warn = true;
   nsCOMPtr<nsIPrefBranch> prefBranch = do_GetService(NS_PREFSERVICE_CONTRACTID);
   if (prefBranch) {
       prefBranch->GetBoolPref(PREF_MAPI_WARN_PRIOR_TO_BLIND_SEND, &warn);
       prefBranch->GetBoolPref(PREF_MAPI_BLIND_SEND_ENABLED, &enabled);
   }
   if (!enabled)
-      return PR_FALSE;
+      return false;
 
   if (!warn)
-      return PR_TRUE; // Everything is okay.
+      return true; // Everything is okay.
 
   nsresult rv;
-  nsCOMPtr<nsIStringBundleService> bundleService(do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv));
-  if (NS_FAILED(rv) || !bundleService) return PR_FALSE;
+  nsCOMPtr<nsIStringBundleService> bundleService =
+    mozilla::services::GetStringBundleService();
+  if (!bundleService) return false;
 
   nsCOMPtr<nsIStringBundle> bundle;
   rv = bundleService->CreateBundle(MAPI_PROPERTIES_CHROME, getter_AddRefs(bundle));
-  if (NS_FAILED(rv) || !bundle) return PR_FALSE;
+  if (NS_FAILED(rv) || !bundle) return false;
 
   nsString warningMsg;
   rv = bundle->GetStringFromName(NS_LITERAL_STRING("mapiBlindSendWarning").get(),
                                       getter_Copies(warningMsg));
-  if (NS_FAILED(rv)) return PR_FALSE;
+  if (NS_FAILED(rv)) return false;
 
   nsString dontShowAgainMessage;
   rv = bundle->GetStringFromName(NS_LITERAL_STRING("mapiBlindSendDontShowAgain").get(),
                                       getter_Copies(dontShowAgainMessage));
-  if (NS_FAILED(rv)) return PR_FALSE;
+  if (NS_FAILED(rv)) return false;
 
   nsCOMPtr<nsIPromptService> dlgService(do_GetService(NS_PROMPTSERVICE_CONTRACTID, &rv));
-  if (NS_FAILED(rv) || !dlgService) return PR_FALSE;
+  if (NS_FAILED(rv) || !dlgService) return false;
 
-  PRBool continueToWarn = PR_TRUE;
-  PRBool okayToContinue = PR_FALSE;
-  dlgService->ConfirmCheck(nsnull, nsnull, warningMsg.get(), dontShowAgainMessage.get(), &continueToWarn, &okayToContinue);
+  bool continueToWarn = true;
+  bool okayToContinue = false;
+  dlgService->ConfirmCheck(nullptr, nullptr, warningMsg.get(), dontShowAgainMessage.get(), &continueToWarn, &okayToContinue);
 
   if (!continueToWarn && okayToContinue && prefBranch)
-    prefBranch->SetBoolPref(PREF_MAPI_WARN_PRIOR_TO_BLIND_SEND, PR_FALSE);
+    prefBranch->SetBoolPref(PREF_MAPI_WARN_PRIOR_TO_BLIND_SEND, false);
 
   return okayToContinue;
 }
@@ -362,7 +329,7 @@ nsresult nsMapiHook::BlindSendMail (unsigned long aSession, nsIMsgCompFields * a
   if (NS_FAILED(rv) || (!pMsgComposeParams) ) return rv ;
 
   // populate the compose params
-  PRBool forcePlainText;
+  bool forcePlainText;
   aCompFields->GetForcePlainText(&forcePlainText);
   pMsgComposeParams->SetType(nsIMsgCompType::New);
   pMsgComposeParams->SetFormat(forcePlainText ? nsIMsgCompFormat::PlainText : nsIMsgCompFormat::HTML);
@@ -377,10 +344,12 @@ nsresult nsMapiHook::BlindSendMail (unsigned long aSession, nsIMsgCompFields * a
 
   /** initialize nsIMsgCompose, Send the message, wait for send completion response **/
 
-  rv = pMsgCompose->Initialize(pMsgComposeParams, hiddenWindow, nsnull);
+  rv = pMsgCompose->Initialize(pMsgComposeParams, hiddenWindow, nullptr);
   if (NS_FAILED(rv)) return rv ;
 
-  return pMsgCompose->SendMsg(nsIMsgSend::nsMsgDeliverNow, pMsgId, nsnull, nsnull, nsnull) ;
+  // If we're in offline mode, we'll need to queue it for later. No point in trying to send it.
+  return pMsgCompose->SendMsg(WeAreOffline() ? nsIMsgSend::nsMsgQueueForLater : nsIMsgSend::nsMsgDeliverNow,
+			      pMsgId, nullptr, nullptr, nullptr);
   if (NS_FAILED(rv)) return rv ;
 
   // assign to interface pointer from nsCOMPtr to facilitate typecast below
@@ -460,7 +429,7 @@ nsresult nsMapiHook::PopulateCompFields(lpnsMapiMessage aMessage,
     aCompFields->SetSubject(NS_ConvertASCIItoUTF16(aMessage->lpszSubject));
 
   // handle attachments as File URL
-  rv = HandleAttachments (aCompFields, aMessage->nFileCount, aMessage->lpFiles, PR_TRUE) ;
+  rv = HandleAttachments (aCompFields, aMessage->nFileCount, aMessage->lpFiles, true) ;
   if (NS_FAILED(rv)) return rv ;
 
   // set body
@@ -472,14 +441,14 @@ nsresult nsMapiHook::PopulateCompFields(lpnsMapiMessage aMessage,
         Body.AppendLiteral(CRLF);
 
       if (Body.Find("<html>") == kNotFound)
-        aCompFields->SetForcePlainText(PR_TRUE);
+        aCompFields->SetForcePlainText(true);
 
       rv = aCompFields->SetBody(Body) ;
   }
   return rv ;
 }
 
-nsresult nsMapiHook::HandleAttachments (nsIMsgCompFields * aCompFields, PRInt32 aFileCount,
+nsresult nsMapiHook::HandleAttachments (nsIMsgCompFields * aCompFields, int32_t aFileCount,
                                         lpnsMapiFileDesc aFiles, BOOL aIsUnicode)
 {
     nsresult rv = NS_OK ;
@@ -487,14 +456,14 @@ nsresult nsMapiHook::HandleAttachments (nsIMsgCompFields * aCompFields, PRInt32 
     nsCAutoString Attachments ;
     nsCAutoString TempFiles ;
 
-    nsCOMPtr <nsILocalFile> pFile = do_CreateInstance (NS_LOCAL_FILE_CONTRACTID, &rv) ;
+    nsCOMPtr <nsIFile> pFile = do_CreateInstance (NS_LOCAL_FILE_CONTRACTID, &rv) ;
     if (NS_FAILED(rv) || (!pFile) ) return rv ;
-    nsCOMPtr <nsILocalFile> pTempDir = do_CreateInstance (NS_LOCAL_FILE_CONTRACTID, &rv) ;
+    nsCOMPtr <nsIFile> pTempDir = do_CreateInstance (NS_LOCAL_FILE_CONTRACTID, &rv) ;
     if (NS_FAILED(rv) || (!pTempDir) ) return rv ;
 
     for (int i=0 ; i < aFileCount ; i++)
     {
-        PRBool bTempFile = PR_FALSE ;
+        bool bTempFile = false ;
         if (aFiles[i].lpszPathName)
         {
             // check if attachment exists
@@ -503,15 +472,14 @@ nsresult nsMapiHook::HandleAttachments (nsIMsgCompFields * aCompFields, PRInt32 
             else
                 pFile->InitWithNativePath (nsDependentCString((const char*)aFiles[i].lpszPathName));
 
-            PRBool bExist ;
+            bool bExist ;
             rv = pFile->Exists(&bExist) ;
             PR_LOG(MAPI, PR_LOG_DEBUG, ("nsMapiHook::HandleAttachments: filename: %s path: %s exists = %s \n", (const char*)aFiles[i].lpszFileName, (const char*)aFiles[i].lpszPathName, bExist ? "true" : "false"));
             if (NS_FAILED(rv) || (!bExist) ) return NS_ERROR_FILE_TARGET_DOES_NOT_EXIST ;
 
             //Temp Directory
-            nsCOMPtr <nsIFile> pTempFileDir;
-            NS_GetSpecialDirectory(NS_OS_TEMP_DIR, getter_AddRefs(pTempFileDir));
-            nsCOMPtr <nsILocalFile> pTempDir = do_QueryInterface(pTempFileDir);
+            nsCOMPtr <nsIFile> pTempDir;
+            NS_GetSpecialDirectory(NS_OS_TEMP_DIR, getter_AddRefs(pTempDir));
 
             // create a new sub directory called moz_mapi underneath the temp directory
             pTempDir->AppendRelativePath(NS_LITERAL_STRING("moz_mapi"));
@@ -536,7 +504,7 @@ nsresult nsMapiHook::HandleAttachments (nsIMsgCompFields * aCompFields, PRInt32 
                 else
                     ConvertToUnicode(nsMsgI18NFileSystemCharset(), (char *) aFiles[i].lpszFileName, wholeFileName);
                 // need to find the last '\' and find the leafname from that.
-                PRInt32 lastSlash = wholeFileName.RFindChar(PRUnichar('\\'));
+                int32_t lastSlash = wholeFileName.RFindChar(PRUnichar('\\'));
                 if (lastSlash != kNotFound)
                   leafName.Assign(Substring(wholeFileName, lastSlash + 1));
                 else
@@ -560,7 +528,7 @@ nsresult nsMapiHook::HandleAttachments (nsIMsgCompFields * aCompFields, PRInt32 
             {
               rv = pTempFile->CreateUnique(nsIFile::NORMAL_FILE_TYPE, 0777);
               NS_ENSURE_SUCCESS(rv, rv);
-              pTempFile->Remove(PR_FALSE); // remove so we can copy over it.
+              pTempFile->Remove(false); // remove so we can copy over it.
               pTempFile->GetLeafName(leafName);
             }
             // copy the file to its new location and file name
@@ -570,7 +538,7 @@ nsresult nsMapiHook::HandleAttachments (nsIMsgCompFields * aCompFields, PRInt32 
             pFile->Append(leafName);
 
             // create MsgCompose attachment object
-            attachment->SetTemporary(PR_TRUE); // this one is a temp file so set the flag for MsgCompose
+            attachment->SetTemporary(true); // this one is a temp file so set the flag for MsgCompose
 
             // now set the attachment object
             nsCAutoString pURL ;
@@ -578,7 +546,7 @@ nsresult nsMapiHook::HandleAttachments (nsIMsgCompFields * aCompFields, PRInt32 
             attachment->SetUrl(pURL);
 
             // set the file size
-            PRInt64 fileSize;
+            int64_t fileSize;
             pFile->GetFileSize(&fileSize);
             attachment->SetSize(fileSize);
 
@@ -664,7 +632,7 @@ nsresult nsMapiHook::PopulateCompFieldsWithConversion(lpnsMapiMessage aMessage,
   }
 
   // handle attachments as File URL
-  rv = HandleAttachments (aCompFields, aMessage->nFileCount, aMessage->lpFiles, PR_FALSE) ;
+  rv = HandleAttachments (aCompFields, aMessage->nFileCount, aMessage->lpFiles, false) ;
   if (NS_FAILED(rv)) return rv ;
 
   // set body
@@ -679,7 +647,7 @@ nsresult nsMapiHook::PopulateCompFieldsWithConversion(lpnsMapiMessage aMessage,
       Body.AppendLiteral(CRLF);
 
     if (Body.Find("<html>") == kNotFound)
-      aCompFields->SetForcePlainText(PR_TRUE);
+      aCompFields->SetForcePlainText(true);
 
     rv = aCompFields->SetBody(Body) ;
   }
@@ -701,7 +669,7 @@ nsresult nsMapiHook::PopulateCompFieldsForSendDocs(nsIMsgCompFields * aCompField
   nsAutoString strDelimChars ;
   nsString strFilePaths;
   nsresult rv = NS_OK ;
-  PRBool bExist ;
+  bool bExist ;
 
   if (aFlags & MAPI_UNICODE)
   {
@@ -731,23 +699,22 @@ nsresult nsMapiHook::PopulateCompFieldsForSendDocs(nsIMsgCompFields * aCompField
   if (strDelimChars.IsEmpty())
       strDelimChars.AssignLiteral(";");
 
-  PRInt32 offset = 0 ;
-  PRInt32 FilePathsLen = strFilePaths.Length() ;
+  int32_t offset = 0 ;
+  int32_t FilePathsLen = strFilePaths.Length() ;
   if (FilePathsLen)
   {
     nsAutoString Subject ;
 
     // multiple files to be sent, delim specified
-    nsCOMPtr <nsILocalFile> pFile = do_CreateInstance (NS_LOCAL_FILE_CONTRACTID, &rv) ;
+    nsCOMPtr <nsIFile> pFile = do_CreateInstance (NS_LOCAL_FILE_CONTRACTID, &rv) ;
     if (NS_FAILED(rv) || (!pFile) ) return rv ;
 
     PRUnichar * newFilePaths = (PRUnichar *) strFilePaths.get() ;
     while (offset != kNotFound)
     {
       //Temp Directory
-      nsCOMPtr <nsIFile> pTempFileDir;
-      NS_GetSpecialDirectory(NS_OS_TEMP_DIR, getter_AddRefs(pTempFileDir));
-      nsCOMPtr <nsILocalFile> pTempDir = do_QueryInterface(pTempFileDir);
+      nsCOMPtr <nsIFile> pTempDir;
+      NS_GetSpecialDirectory(NS_OS_TEMP_DIR, getter_AddRefs(pTempDir));
 
       // if not already existing, create another temp dir for mapi within Win temp dir
       // this is windows only so we can do "\\"
@@ -810,7 +777,7 @@ nsresult nsMapiHook::PopulateCompFieldsForSendDocs(nsIMsgCompFields * aCompField
       pTempDir->Append(fileNameNative);
 
       // this one is a temp file so set the flag for MsgCompose
-      attachment->SetTemporary(PR_TRUE);
+      attachment->SetTemporary(true);
 
       // now set the attachment object
       nsCAutoString pURL;
@@ -818,7 +785,7 @@ nsresult nsMapiHook::PopulateCompFieldsForSendDocs(nsIMsgCompFields * aCompField
       attachment->SetUrl(pURL);
 
       // set the file size
-      PRInt64 fileSize;
+      int64_t fileSize;
       pFile->GetFileSize(&fileSize);
       attachment->SetSize(fileSize);
 
@@ -847,7 +814,7 @@ nsresult nsMapiHook::ShowComposerWindow (unsigned long aSession, nsIMsgCompField
     nsCOMPtr<nsIMsgComposeParams> pMsgComposeParams (do_CreateInstance(NS_MSGCOMPOSEPARAMS_CONTRACTID, &rv));
     if (NS_FAILED(rv) || (!pMsgComposeParams) ) return rv ;
 
-    PRBool forcePlainText;
+    bool forcePlainText;
     aCompFields->GetForcePlainText(&forcePlainText);
     pMsgComposeParams->SetFormat(forcePlainText ? nsIMsgCompFormat::Default : nsIMsgCompFormat::HTML);
     // populate the compose params
@@ -860,7 +827,7 @@ nsresult nsMapiHook::ShowComposerWindow (unsigned long aSession, nsIMsgCompField
     nsCOMPtr <nsIMsgComposeService> compService = do_GetService (NS_MSGCOMPOSESERVICE_CONTRACTID) ;
     if (NS_FAILED(rv)|| (!compService) ) return rv ;
 
-    rv = compService->OpenComposeWindowWithParams(nsnull, pMsgComposeParams) ;
+    rv = compService->OpenComposeWindowWithParams(nullptr, pMsgComposeParams) ;
     if (NS_FAILED(rv)) return rv ;
 
     return rv ;

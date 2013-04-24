@@ -1,42 +1,12 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 // vim:cindent:ts=4:et:sw=4:
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is the Mozilla Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "TestHarness.h"
 #include "nsCOMArray.h"
+#include "mozilla/Attributes.h"
 
 // {9e70a320-be02-11d1-8031-006008159b5a}
 #define NS_IFOO_IID \
@@ -49,15 +19,15 @@ public:
   NS_DECLARE_STATIC_IID_ACCESSOR(NS_IFOO_IID)
 
   NS_IMETHOD_(nsrefcnt) RefCnt() = 0;
-  NS_IMETHOD_(PRInt32) ID() = 0;
+  NS_IMETHOD_(int32_t) ID() = 0;
 };
 
 NS_DEFINE_STATIC_IID_ACCESSOR(IFoo, NS_IFOO_IID)
 
-class Foo : public IFoo {
+class Foo MOZ_FINAL : public IFoo {
 public:
 
-  Foo(PRInt32 aID);
+  Foo(int32_t aID);
   ~Foo();
 
   // nsISupports implementation
@@ -65,16 +35,16 @@ public:
 
   // IFoo implementation
   NS_IMETHOD_(nsrefcnt) RefCnt() { return mRefCnt; }
-  NS_IMETHOD_(PRInt32) ID() { return mID; }
+  NS_IMETHOD_(int32_t) ID() { return mID; }
 
-  static PRInt32 gCount;
+  static int32_t gCount;
 
-  PRInt32 mID;
+  int32_t mID;
 };
 
-PRInt32 Foo::gCount = 0;
+int32_t Foo::gCount = 0;
 
-Foo::Foo(PRInt32 aID)
+Foo::Foo(int32_t aID)
 {
   mID = aID;
   ++gCount;
@@ -104,7 +74,7 @@ public:
 
 NS_DEFINE_STATIC_IID_ACCESSOR(IBar, NS_IBAR_IID)
 
-class Bar : public IBar {
+class Bar MOZ_FINAL : public IBar {
 public:
 
   explicit Bar(nsCOMArray<IBar>& aArray);
@@ -113,13 +83,13 @@ public:
   // nsISupports implementation
   NS_DECL_ISUPPORTS
 
-  static PRInt32 sReleaseCalled;
+  static int32_t sReleaseCalled;
 
 private:
   nsCOMArray<IBar>& mArray;
 };
 
-PRInt32 Bar::sReleaseCalled = 0;
+int32_t Bar::sReleaseCalled = 0;
 
 typedef nsCOMArray<IBar> Array2;
 
@@ -166,7 +136,7 @@ int main(int argc, char **argv)
 
   Array arr;
 
-  for (PRInt32 i = 0; i < 20; ++i) {
+  for (int32_t i = 0; i < 20; ++i) {
     nsCOMPtr<IFoo> foo = new Foo(i);
     arr.AppendObject(foo);
   }
@@ -190,23 +160,23 @@ int main(int argc, char **argv)
     rv = 1;
   }
 
-  for (PRInt32 i = 0; i < 10; ++i) {
-	if (arr[i] == nsnull) {
+  for (int32_t i = 0; i < 10; ++i) {
+	if (arr[i] == nullptr) {
       fail("nsCOMArray elements should be non-null");
       rv = 1;
 	  break;
     }
   }
 
-  for (PRInt32 i = 10; i < 30; ++i) {
-	if (arr[i] != nsnull) {
+  for (int32_t i = 10; i < 30; ++i) {
+	if (arr[i] != nullptr) {
       fail("nsCOMArray elements should be null");
       rv = 1;
 	  break;
     }
   }
 
-  PRInt32 base;
+  int32_t base;
   {
     Array2 arr2;
 
@@ -214,7 +184,7 @@ int main(int argc, char **argv)
          *fourthObject,
          *fifthObject,
          *ninthObject;
-    for (PRInt32 i = 0; i < 20; ++i) {
+    for (int32_t i = 0; i < 20; ++i) {
       nsCOMPtr<IBar> bar = new Bar(arr2);
       switch (i) {
       case 2:
@@ -262,7 +232,7 @@ int main(int argc, char **argv)
     if (arr2.Count() != 5) {
       fail("RemoveObjectsAt should remove exactly three objects");
     }
-    for (PRInt32 j = 0; j < arr2.Count(); ++j) {
+    for (int32_t j = 0; j < arr2.Count(); ++j) {
       if (arr2.ObjectAt(j) == thirdObject) {
         fail("RemoveObjectsAt should have removed thirdObject");
       }
@@ -293,7 +263,7 @@ int main(int argc, char **argv)
   {
     Array2 arr2;
 
-    for (PRInt32 i = 0; i < 20; ++i) {
+    for (int32_t i = 0; i < 20; ++i) {
       nsCOMPtr<IBar> bar  = new Bar(arr2);
       arr2.AppendObject(bar);
     }

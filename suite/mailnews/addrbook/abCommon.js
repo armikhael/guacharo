@@ -1,44 +1,8 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Addressbook.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corp.
- * Portions created by the Initial Developer are Copyright (C) 1999-2001
- * the Initial Developer. All Rights Reserved.
- *
- * Original Author:
- *   Paul Hangas <hangas@netscape.com>
- *
- * Contributor(s):
- *   Seth Spitzer <sspitzer@netscape.com>
- *   Mark Banner <mark@standard8.demon.co.uk>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+Components.utils.import("resource://gre/modules/Services.jsm");
 Components.utils.import("resource:///modules/mailServices.js");
 
 var gDirTree = 0;
@@ -46,9 +10,6 @@ var abList = null;
 var gAbResultsTree = null;
 var gAbView = null;
 var gAddressBookBundle;
-
-var gPrefs = Components.classes["@mozilla.org/preferences-service;1"].getService(Components.interfaces.nsIPrefBranch);
-var gHeaderParser = Components.classes["@mozilla.org/messenger/headerparser;1"].getService(Components.interfaces.nsIMsgHeaderParser);
 
 const kDefaultSortColumn = "GeneratedName";
 const kDefaultAscending = "ascending";
@@ -112,7 +73,7 @@ var DirPaneController =
             var disable = false;
             try {
               var prefName = selectedDir.substr(kLdapUrlPrefix.length);
-              disable = gPrefs.getBoolPref(prefName + ".disable_delete");
+              disable = Services.prefs.getBoolPref(prefName + ".disable_delete");
             }
             catch(ex) {
               // if this preference is not set its ok.
@@ -221,8 +182,6 @@ function AbDeleteSelectedDirectory()
 
 function AbDeleteDirectory(aURI)
 {
-  var promptService = Components.classes["@mozilla.org/embedcomp/prompt-service;1"].getService(Components.interfaces.nsIPromptService);
-
   var directory = GetDirectoryFromURI(aURI);
   var confirmDeleteMessage;
   var clearPrefsRequired = false;
@@ -231,10 +190,10 @@ function AbDeleteDirectory(aURI)
     confirmDeleteMessage = gAddressBookBundle.getString("confirmDeleteMailingList");
   else {
     // Check if this address book is being used for collection
-    if (gPrefs.getCharPref("mail.collect_addressbook") == aURI &&
-        (gPrefs.getBoolPref("mail.collect_email_address_outgoing") ||
-         gPrefs.getBoolPref("mail.collect_email_address_incoming") ||
-         gPrefs.getBoolPref("mail.collect_email_address_newsgroup"))) {
+    if (Services.prefs.getCharPref("mail.collect_addressbook") == aURI &&
+        (Services.prefs.getBoolPref("mail.collect_email_address_outgoing") ||
+         Services.prefs.getBoolPref("mail.collect_email_address_incoming") ||
+         Services.prefs.getBoolPref("mail.collect_email_address_newsgroup"))) {
       var brandShortName = document.getElementById("bundle_brand").getString("brandShortName");
 
       confirmDeleteMessage = gAddressBookBundle.getFormattedString("confirmDeleteCollectionAddressbook", [brandShortName]);
@@ -245,23 +204,22 @@ function AbDeleteDirectory(aURI)
     }
   }
 
-  if (!promptService.confirm(window,
-                             gAddressBookBundle.getString(
-                                                directory.isMailList ?
-                                                "confirmDeleteMailingListTitle" :
-                                                "confirmDeleteAddressbookTitle"),
-                             confirmDeleteMessage))
+  let title = gAddressBookBundle.getString(directory.isMailList ?
+                                             "confirmDeleteMailingListTitle" :
+                                             "confirmDeleteAddressbookTitle");
+  if (!Services.prompt.confirm(window, title, confirmDeleteMessage))
     return;
 
   // First clear all the prefs if required
   if (clearPrefsRequired) {
-    gPrefs.setBoolPref("mail.collect_email_address_outgoing", false);
-    gPrefs.setBoolPref("mail.collect_email_address_incoming", false);
-    gPrefs.setBoolPref("mail.collect_email_address_newsgroup", false);
+    Services.prefs.setBoolPref("mail.collect_email_address_outgoing", false);
+    Services.prefs.setBoolPref("mail.collect_email_address_incoming", false);
+    Services.prefs.setBoolPref("mail.collect_email_address_newsgroup", false);
 
     // Also reset the displayed value so that we don't get a blank item in the
     // prefs dialog if it gets enabled.
-    gPrefs.setCharPref("mail.collect_addressbook", kPersonalAddressbookURI);
+    Services.prefs.setCharPref("mail.collect_addressbook",
+                               kPersonalAddressbookURI);
   }
 
   MailServices.ab.deleteAddressBook(aURI);
@@ -277,7 +235,7 @@ function InitCommonJS()
 function UpgradeAddressBookResultsPaneUI(prefName)
 {
   // placeholder in case any new columns get added to the address book
-  // var resultsPaneUIVersion = gPrefs.getIntPref(prefName);
+  // var resultsPaneUIVersion = Services.prefs.getIntPref(prefName);
 }
 
 function AbDelete()
@@ -287,7 +245,6 @@ function AbDelete()
   if (types == kNothingSelected)
     return;
 
-  var promptService = Components.classes["@mozilla.org/embedcomp/prompt-service;1"].getService(Components.interfaces.nsIPromptService);
   // If at least one mailing list is selected then prompt users for deletion.
   if (types != kCardsOnly)
   {
@@ -298,7 +255,7 @@ function AbDelete()
       confirmDeleteMessage = gAddressBookBundle.getString("confirmDeleteMailingLists");
     else
       confirmDeleteMessage = gAddressBookBundle.getString("confirmDeleteMailingList");
-    if (!promptService.confirm(window, null, confirmDeleteMessage))
+    if (!Services.prompt.confirm(window, null, confirmDeleteMessage))
       return;
   }
 
@@ -335,14 +292,36 @@ function AbNewMessage()
       params.type = Components.interfaces.nsIMsgCompType.New;
       params.format = Components.interfaces.nsIMsgCompFormat.Default;
       if (DirPaneHasFocus())
-        composeFields.to = GetSelectedAddressesFromDirTree();
+      {
+        var directory = gDirectoryTreeView.getDirectoryAtIndex(gDirTree.currentIndex);
+        var hidesRecipients = false;
+        try
+        {
+          // This is a bit of hackery so that extensions can have mailing lists
+          // where recipients are sent messages via BCC.
+          hidesRecipients = directory.getBoolValue("HidesRecipients", false);
+        }
+        catch (e)
+        {
+          // Standard mailing lists do not have preferences
+          // associated with them, so we'll silently eat the error.
+        }
+
+        if (directory && directory.isMailList && hidesRecipients)
+          // Bug 669301 (https://bugzilla.mozilla.org/show_bug.cgi?id=669301)
+          // We're using BCC right now to hide recipients from one another.
+          // We should probably use group syntax, but that's broken
+          // right now, so this will have to do.
+          composeFields.bcc = GetSelectedAddressesFromDirTree();
+        else
+          composeFields.to = GetSelectedAddressesFromDirTree();
+      }
       else
+      {
         composeFields.to = GetSelectedAddresses();
+      }
       params.composeFields = composeFields;
-      var msgComposeService =
-        Components.classes["@mozilla.org/messengercompose;1"]
-                  .getService(Components.interfaces.nsIMsgComposeService);
-      msgComposeService.OpenComposeWindowWithParams(null, params);
+      MailServices.compose.OpenComposeWindowWithParams(null, params);
     }
   }
 }
@@ -363,33 +342,26 @@ function AbCopyAddress()
 
   Components.classes["@mozilla.org/widget/clipboardhelper;1"]
             .getService(Components.interfaces.nsIClipboardHelper)
-            .copyString(addresses);
+            .copyString(addresses, document);
 }
 
-// XXX todo
-// could this be moved into utilityOverlay.js?
-function goToggleSplitter( id, elementID )
+/**
+ * Set up items in the View > Layout menupopup.  This function is responsible
+ * for updating the menu items' state to reflect reality.
+ *
+ * @param aEvent the event that caused the View > Layout menupopup to be shown
+ */
+function InitViewLayoutMenuPopup(aEvent)
 {
-  var splitter = document.getElementById( id );
-  var element = document.getElementById( elementID );
-  if ( splitter )
-  {
-    var attribValue = splitter.getAttribute("state") ;
-    if ( attribValue == "collapsed" )
-    {
-      splitter.setAttribute("state", "open" );
-      if ( element )
-        element.setAttribute("checked","true")
-    }
-    else
-    {
-      splitter.setAttribute("state", "collapsed");
-      if ( element )
-        element.setAttribute("checked","false")
-    }
-    document.persist(id, 'state');
-    document.persist(elementID, 'checked');
-  }
+  let dirTreeVisible = document.getElementById("dirTree-splitter")
+                               .getAttribute("state") != "collapsed";
+  document.getElementById("menu_showDirectoryPane")
+          .setAttribute("checked", dirTreeVisible);
+
+  let cardPaneVisible = document.getElementById("results-splitter")
+                                .getAttribute("state") != "collapsed";
+  document.getElementById("menu_showCardPane")
+          .setAttribute("checked", cardPaneVisible);
 }
 
 // Generate a list of cards from the selected mailing list 
@@ -490,7 +462,6 @@ function DirPaneSelectionChange()
 {
   if (gDirectoryTreeView.selection &&
       gDirectoryTreeView.selection.count == 1) {
-    gPreviousDirTreeIndex = gDirTree.currentIndex;
     ChangeDirectoryByURI(GetSelectedDirectory());
   }
 }
@@ -591,7 +562,7 @@ function GenerateAddressFromCard(card)
   }
   else 
     email = card.primaryEmail;
-  return gHeaderParser.makeFullAddress(card.displayName, email);
+  return MailServices.headerParser.makeFullAddress(card.displayName, email);
 }
 
 function GetDirectoryFromURI(uri)
@@ -638,13 +609,11 @@ function GetSelectedDirectory()
  * This will create the directory if it does not yet exist.
  */
 function getPhotosDir() {
-  var file = Components.classes["@mozilla.org/file/directory_service;1"]
-                       .getService(Components.interfaces.nsIProperties)
-                       .get("ProfD", Components.interfaces.nsIFile);
+  var file = Services.dirsvc.get("ProfD", Components.interfaces.nsIFile);
   // Get the Photos directory
   file.append("Photos");
   if (!file.exists() || !file.isDirectory())
-    file.create(Components.interfaces.nsIFile.DIRECTORY_TYPE, 0777);
+    file.create(Components.interfaces.nsIFile.DIRECTORY_TYPE, parseInt("0777", 8));
   return file;
 }
 
@@ -669,9 +638,7 @@ function getPhotoURI(aPhotoName) {
   }
   if (!file.exists())
     return defaultPhotoURI;
-  return Components.classes["@mozilla.org/network/io-service;1"]
-                   .getService(Components.interfaces.nsIIOService)
-                   .newFileURI(file).spec;
+  return Services.io.newFileURI(file).spec;
 }
 
 /**
@@ -690,7 +657,7 @@ function saveStreamToFile(aIStream, aFile) {
                           .createInstance(Components.interfaces.nsIFileOutputStream);
   var buffer  = Components.classes["@mozilla.org/network/buffered-output-stream;1"]
                           .createInstance(Components.interfaces.nsIBufferedOutputStream);
-  fstream.init(aFile, 0x04 | 0x08 | 0x20, 0600, 0); // write, create, truncate
+  fstream.init(aFile, 0x04 | 0x08 | 0x20, parseInt("0600", 8), 0); // write, create, truncate
   buffer.init(fstream, 8192);
 
   buffer.writeFrom(aIStream, aIStream.available());
@@ -721,7 +688,7 @@ function saveStreamToFile(aIStream, aFile) {
  *
  * @return An nsIFile representation of the photo.
  */
-function savePhoto(aUri) {
+function storePhoto(aUri) {
   if (!aUri)
     return false;
 
@@ -729,9 +696,7 @@ function savePhoto(aUri) {
   var file = getPhotosDir();
 
   // Create a channel from the URI and open it as an input stream
-  var ios = Components.classes["@mozilla.org/network/io-service;1"]
-                      .getService(Components.interfaces.nsIIOService);
-  var channel = ios.newChannelFromURI(ios.newURI(aUri, null, null));
+  var channel = Services.io.newChannelFromURI(Services.io.newURI(aUri, null, null));
   var istream = channel.open();
 
   // Get the photo file

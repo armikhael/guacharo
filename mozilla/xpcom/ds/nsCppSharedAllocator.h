@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 #ifndef nsCppSharedAllocator_h__
 #define nsCppSharedAllocator_h__
 
@@ -53,7 +57,7 @@ class nsCppSharedAllocator
       pointer
       allocate( size_type n, const void* /*hint*/=0 )
         {
-          return reinterpret_cast<pointer>(nsMemory::Alloc(static_cast<PRUint32>(n*sizeof(T))));
+          return reinterpret_cast<pointer>(nsMemory::Alloc(static_cast<uint32_t>(n*sizeof(T))));
         }
 
       void
@@ -84,17 +88,17 @@ class nsCppSharedAllocator
 
 
 template <class T>
-PRBool
+bool
 operator==( const nsCppSharedAllocator<T>&, const nsCppSharedAllocator<T>& )
   {
-    return PR_TRUE;
+    return true;
   }
 
 template <class T>
-PRBool
+bool
 operator!=( const nsCppSharedAllocator<T>&, const nsCppSharedAllocator<T>& )
   {
-    return PR_FALSE;
+    return false;
   }
 
 #endif /* !defined(nsCppSharedAllocator_h__) */

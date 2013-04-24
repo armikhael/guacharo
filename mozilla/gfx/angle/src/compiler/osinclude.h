@@ -12,13 +12,13 @@
 // declares any os-specific functions.
 //
 
-#if defined(ANGLE_USE_NSPR)
-/* no need to define anything when using NSPR */
-#elif defined(_WIN32) || defined(_WIN64)
+#if defined(_WIN32) || defined(_WIN64)
 #define ANGLE_OS_WIN
 #elif defined(__APPLE__) || defined(__linux__) || \
       defined(__FreeBSD__) || defined(__OpenBSD__) || \
-      defined(__sun)
+      defined(__sun) || defined(ANDROID) || \
+      defined(__GLIBC__) || defined(__GNU__) || \
+      defined(__QNX__)
 #define ANGLE_OS_POSIX
 #else
 #error Unsupported platform.
@@ -43,7 +43,7 @@
 // Thread Local Storage Operations
 //
 #if defined(ANGLE_USE_NSPR)
-typedef PRUintn OS_TLSIndex;
+typedef unsigned OS_TLSIndex;
 #define OS_INVALID_TLS_INDEX 0xFFFFFFFF
 #elif defined(ANGLE_OS_WIN)
 typedef DWORD OS_TLSIndex;

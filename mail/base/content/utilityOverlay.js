@@ -1,66 +1,14 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Alec Flett <alecf@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-
-/**
- * Communicator Shared Utility Library
- * for shared application glue for the Communicator suite of applications
- **/
-
-/*
-  Note: All Editor/Composer-related methods have been moved to editorApplicationOverlay.js,
-  so app windows that require those must include editorNavigatorOverlay.xul
-*/
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://gre/modules/Services.jsm");
 
 var gShowBiDi = false;
 
 function getBrowserURL() {
-
-  try {
-    var prefs = Components.classes["@mozilla.org/preferences-service;1"]
-                         .getService(Components.interfaces.nsIPrefBranch);
-    var url = prefs.getCharPref("browser.chromeURL");
-    if (url)
-      return url;
-  } catch(e) {
-  }
-  return "chrome://navigator/content/navigator.xul";
+  return Services.prefs.getCharPref("browser.chromeURL");
 }
 
 // update menu items that rely on focus
@@ -198,6 +146,22 @@ function goToggleToolbar( id, elementID )
   }
 }
 
+/**
+ * Toggle a splitter to show or hide some piece of UI (e.g. the message preview
+ * pane).
+ *
+ * @param splitterId the splliter that should be toggled
+ */
+function togglePaneSplitter(splitterId)
+{
+  var splitter = document.getElementById(splitterId);
+  var state = splitter.getAttribute("state");
+  if (state == "collapsed")
+    splitter.setAttribute("state", "open");
+  else
+    splitter.setAttribute("state", "collapsed")
+}
+
 // openUILink handles clicks on UI elements that cause URLs to load.
 // Firefox and SeaMonkey have a function with the same name,
 // so extensions can use this everywhere to open links.
@@ -219,6 +183,40 @@ function openWhatsNew()
 }
 
 /**
+ * Open the specified tab type (possibly in a new window)
+ *
+ * @param tabType the tab type to open (e.g. "contentTab")
+ * @param tabParams the parameters to pass to the tab
+ * @param where 'tab' to open in a new tab (default) or 'window' to open in a
+ *        new window
+ */
+function openTab(tabType, tabParams, where)
+{
+  if (where != "window") {
+    let tabmail = document.getElementById("tabmail");
+    if (!tabmail) {
+      // Try opening new tabs in an existing 3pane window
+      let mail3PaneWindow = Services.wm.getMostRecentWindow("mail:3pane");
+      if (mail3PaneWindow) {
+        tabmail = mail3PaneWindow.document.getElementById("tabmail");
+        mail3PaneWindow.focus();
+      }
+    }
+
+    if (tabmail) {
+      tabmail.openTab(tabType, tabParams);
+      return;
+    }
+  }
+
+  // Either we explicitly wanted to open in a new window, or we fell through to
+  // here because there's no 3pane.
+  window.openDialog("chrome://messenger/content/", "_blank",
+                    "chrome,dialog=no,all", null,
+                    { tabType: tabType, tabParams: tabParams });
+}
+
+/**
  * Open the specified URL as a content tab (or window)
  *
  * @param url the location to open
@@ -234,47 +232,37 @@ function openContentTab(url, where, handlerRegExp)
   if (handlerRegExp)
     clickHandler = "specialTabs.siteClickHandler(event, new RegExp(\"" + handlerRegExp + "\"));";
 
-  if (where != "window") {
-    let tabmail = document.getElementById("tabmail");
-    if (!tabmail) {
-      // Try opening new tabs in an existing 3pane window
-      let mail3PaneWindow = Components.classes["@mozilla.org/appshell/window-mediator;1"]
-                                      .getService(Components.interfaces.nsIWindowMediator)
-                                      .getMostRecentWindow("mail:3pane");
-      if (mail3PaneWindow) {
-        tabmail = mail3PaneWindow.document.getElementById("tabmail");
-        mail3PaneWindow.focus();
-      }
-    }
-
-    if (tabmail) {
-      tabmail.openTab("contentTab", {contentPage: url, clickHandler: clickHandler});
-      return;
-    }
-  }
-
-  // Either we explicitly wanted to open in a new window, or we fell through to
-  // here because there's no 3pane.
-  window.openDialog("chrome://messenger/content/", "_blank",
-                    "chrome,dialog=no,all", null,
-                    { tabType: "contentTab",
-                      tabParams: {contentPage: url, clickHandler: clickHandler} });
+  openTab("contentTab", {contentPage: url, clickHandler: clickHandler}, where);
 }
 
 /**
- * Open the Migration Assistant.
+ * Open a search page for the specified query in a new tab, window, or
+ * externally. If mail.websearch.open_externally is true, always open
+ * externally.
  *
- * @param aIsUpgrade whether this is being opened as a result of upgrading
- *     from an earlier version of Thunderbird.
+ * @param query the term to search for
+ * @param where 'tab' to open in a new tab (default), 'window' to open in a
+ *        new window, or 'external' to open in the default browser
  */
-function openFeatureConfigurator(aIsUpgrade) {
-  let options = "chrome,dialog=yes,all,centerscreen,width=704,height=416";
-  if (aIsUpgrade)
-    options += ",modal";
-  window.openDialog("chrome://messenger/content/featureConfigurator.xhtml",
-                    "_blank", options,
-                    // Below are window.arguments for featureConfigurator.js
-                    window, aIsUpgrade);
+function openSearchTab(query, where) {
+  let currentEngine = Services.search.currentEngine;
+  let submission = currentEngine.getSubmission(query);
+
+  if (where == "external" ||
+      Services.prefs.getBoolPref("mail.websearch.open_externally")) {
+    openLinkExternally(submission.uri.spec);
+    return;
+  }
+
+  let params = {
+    background: false,
+    contentPage: submission.uri.spec,
+    postData: submission.postData,
+    query: query,
+    engine: currentEngine,
+    clickHandler: "webSearchTabType.siteClickHandler(event)",
+  };
+  openTab("webSearchTab", params, where);
 }
 
 /**
@@ -288,4 +276,17 @@ function openDictionaryList(where) {
   let dictUrl = Services.urlFormatter
     .formatURLPref("spellchecker.dictionaries.download.url");
   openContentTab(dictUrl, where, "^https://addons.mozilla.org/");
+}
+
+/**
+ * Open the privacy policy in a new content tab, if possible in an available
+ * mail:3pane window, otherwise by opening a new mail:3pane.
+ *
+ * @param where the context to open the privacy policy in (e.g. 'tab',
+ *        'window'). See openContentTab for more details.
+ */
+function openPrivacyPolicy(where) {
+  const kTelemetryInfoUrl = "toolkit.telemetry.infoURL";
+  let url = Services.prefs.getCharPref(kTelemetryInfoUrl);
+  openContentTab(url, where, "^http://www.mozilla.org/");
 }

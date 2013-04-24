@@ -6,9 +6,15 @@
 // blacklist entry is successfully blocked.
 // Uses test_gfxBlacklist.xml
 
-do_load_httpd_js();
+Components.utils.import("resource://testing-common/httpd.js");
 
 var gTestserver = null;
+
+function get_platform() {
+  var xulRuntime = Components.classes["@mozilla.org/xre/app-info;1"]
+                             .getService(Components.interfaces.nsIXULRuntime);
+  return xulRuntime.OS;
+}
 
 function load_blocklist(file) {
   Services.prefs.setCharPref("extensions.blocklist.url", "http://localhost:4444/data/" + file);
@@ -35,16 +41,33 @@ function run_test() {
   gfxInfo.QueryInterface(Ci.nsIGfxInfoDebug);
 
   // Set the vendor/device ID, etc, to match the test file.
-  gfxInfo.spoofVendorID(0xabab);
-  gfxInfo.spoofDeviceID(0x1234);
-  gfxInfo.spoofDriverVersion("8.52.322.2202");
-  // Windows 7
-  gfxInfo.spoofOSVersion(0x60001);
+  switch (get_platform()) {
+    case "WINNT":
+      gfxInfo.spoofVendorID("0xabab");
+      gfxInfo.spoofDeviceID("0x1234");
+      gfxInfo.spoofDriverVersion("8.52.322.2202");
+      // Windows 7
+      gfxInfo.spoofOSVersion(0x60001);
+      break;
+    case "Linux":
+      // We don't support driver versions on Linux.
+      do_test_finished();
+      return;
+    case "Darwin":
+      // We don't support driver versions on Darwin.
+      do_test_finished();
+      return;
+    case "Android":
+      gfxInfo.spoofVendorID("abab");
+      gfxInfo.spoofDeviceID("ghjk");
+      gfxInfo.spoofDriverVersion("7");
+      break;
+  }
 
   createAppInfo("xpcshell@tests.mozilla.org", "XPCShell", "3", "8");
   startupManager();
 
-  gTestserver = new nsHttpServer();
+  gTestserver = new HttpServer();
   gTestserver.registerDirectory("/data/", do_get_file("data"));
   gTestserver.start(4444);
 

@@ -1,41 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  * vim: sw=2 ts=2 sts=2
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Private Browsing Tests.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Shawn Wilsher <me@shawnwilsher.com> (Original Author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
  * Test added with bug 460086 to test the behavior of the new API that was added
@@ -43,7 +10,9 @@
  */
 
 ////////////////////////////////////////////////////////////////////////////////
-//// Constants
+//// Globals
+
+Cu.import("resource://gre/modules/PlacesUtils.jsm");
 
 let pb = Cc[PRIVATEBROWSING_CONTRACT_ID].
          getService(Ci.nsIPrivateBrowsingService);
@@ -88,9 +57,9 @@ function uri(aURIString)
 function add_visit(aURI)
 {
   check_visited(aURI, false);
-  let bh = Cc["@mozilla.org/browser/global-history;2"].
-           getService(Ci.nsIBrowserHistory);
-  bh.addPageWithDetails(aURI, aURI.spec, Date.now() * 1000);
+  PlacesUtils.history.addVisit(aURI, Date.now() * 1000, null,
+                               Ci.nsINavHistoryService.TRANSITION_LINK, false,
+                               0);
   check_visited(aURI, true);
 }
 
@@ -104,10 +73,8 @@ function add_visit(aURI)
  */
 function check_visited(aURI, aIsVisited)
 {
-  let gh = Cc["@mozilla.org/browser/global-history;2"].
-           getService(Ci.nsIGlobalHistory2);
   let checker = aIsVisited ? do_check_true : do_check_false;
-  checker(gh.isVisited(aURI));
+  checker(PlacesUtils.ghistory2.isVisited(aURI));
 }
 
 /**
@@ -282,7 +249,11 @@ function add_permission(aURI)
   check_permission_exists(aURI, false);
   let pm = Cc["@mozilla.org/permissionmanager;1"].
            getService(Ci.nsIPermissionManager);
-  pm.add(aURI, PERMISSION_TYPE, PERMISSION_VALUE);
+  let principal = Cc["@mozilla.org/scriptsecuritymanager;1"]
+                    .getService(Ci.nsIScriptSecurityManager)
+                    .getNoAppCodebasePrincipal(aURI);
+
+  pm.addFromPrincipal(principal, PERMISSION_TYPE, PERMISSION_VALUE);
   check_permission_exists(aURI, true);
 }
 
@@ -298,7 +269,11 @@ function check_permission_exists(aURI, aExists)
 {
   let pm = Cc["@mozilla.org/permissionmanager;1"].
            getService(Ci.nsIPermissionManager);
-  let perm = pm.testExactPermission(aURI, PERMISSION_TYPE);
+  let principal = Cc["@mozilla.org/scriptsecuritymanager;1"]
+                    .getService(Ci.nsIScriptSecurityManager)
+                    .getNoAppCodebasePrincipal(aURI);
+
+  let perm = pm.testExactPermissionFromPrincipal(principal, PERMISSION_TYPE);
   let checker = aExists ? do_check_eq : do_check_neq;
   checker(perm, PERMISSION_VALUE);
 }
@@ -362,9 +337,7 @@ function test_history_not_cleared_with_uri_contains_domain()
   check_visited(TEST_URI, true);
 
   // Clear history since we left something there from this test.
-  let bh = Cc["@mozilla.org/browser/global-history;2"].
-           getService(Ci.nsIBrowserHistory);
-  bh.removeAllPages();
+  PlacesUtils.bhistory.removeAllPages();
 }
 
 // Cookie Service
@@ -578,7 +551,7 @@ function test_storage_cleared()
   {
     let principal = Cc["@mozilla.org/scriptsecuritymanager;1"].
                     getService(Ci.nsIScriptSecurityManager).
-                    getCodebasePrincipal(aURI);
+                    getNoAppCodebasePrincipal(aURI);
     let dsm = Cc["@mozilla.org/dom/storagemanager;1"].
               getService(Ci.nsIDOMStorageManager);
     return dsm.getLocalStorageForPrincipal(principal, "");

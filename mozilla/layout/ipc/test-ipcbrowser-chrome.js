@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 function init() {
     enableAsyncScrolling();
     messageManager.loadFrameScript(
@@ -32,29 +36,29 @@ function loadURL(url) {
 }
 
 function scrollContentBy(dx, dy) {
-    messageManager.sendAsyncMessage("scrollBy",
-                                    { dx: dx, dy: dy });
+    messageManager.broadcastAsyncMessage("scrollBy",
+                                         { dx: dx, dy: dy });
 
 }
 
 function scrollContentTo(x, y) {
-    messageManager.sendAsyncMessage("scrollTo",
-                                    { x: x, y: y });
+    messageManager.broadcastAsyncMessage("scrollTo",
+                                         { x: x, y: y });
 }
 
 function setContentViewport(w, h) {
-    messageManager.sendAsyncMessage("setViewport",
-                                    { w: w, h: h });
+    messageManager.broadcastAsyncMessage("setViewport",
+                                         { w: w, h: h });
 }
 
 function setContentDisplayPort(x, y, w, h) {
-    messageManager.sendAsyncMessage("setDisplayPort",
-                                    { x: x, y: y, w: w, h: h });
+    messageManager.broadcastAsyncMessage("setDisplayPort",
+                                         { x: x, y: y, w: w, h: h });
 }
 
 function setContentResolution(xres, yres) {
-    messageManager.sendAsyncMessage("setResolution",
-                                    { xres: xres, yres: yres });
+    messageManager.broadcastAsyncMessage("setResolution",
+                                         { xres: xres, yres: yres });
 }
 
 // Functions affecting <browser>.
@@ -88,6 +92,10 @@ function startAnimatedScrollBy(dx, dy) {
 
     var sentScrollBy = false;
     function nudgeScroll(now) {
+	if (!scrolling) {
+	    // we've been canceled
+	    return;
+	}
         var ddx = dx * (now - prevNow) / kDurationMs;
         var ddy = dy * (now - prevNow) / kDurationMs;
 
@@ -99,8 +107,8 @@ function startAnimatedScrollBy(dx, dy) {
         rootView().scrollBy(ddx, ddy);
 
         if (!sentScrollBy && 100 <= (now - start)) {
-            messageManager.sendAsyncMessage("scrollBy",
-                                            { dx: dx, dy: dy });
+            messageManager.broadcastAsyncMessage("scrollBy",
+                                                 { dx: dx, dy: dy });
             sentScrollBy = true;
         }
 
@@ -110,18 +118,14 @@ function startAnimatedScrollBy(dx, dy) {
             rootView().scrollBy(fixupDx, fixupDy);
 
             scrolling = false;
-            removeEventListener("MozBeforePaint", nudgeScroll, false);
         }
         else {
-            mozRequestAnimationFrame();
+            mozRequestAnimationFrame(nudgeScroll);
         }
 
         prevNow = now;
     }
 
     nudgeScroll(start);
-    addEventListener("MozBeforePaint",
-                     function (e) { nudgeScroll(e.timeStamp); },
-                     false);
-    mozRequestAnimationFrame();
+    mozRequestAnimationFrame(nudgeScroll);
 }

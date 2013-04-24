@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Mark Banner <bugzilla@standard8.plus.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
  * The purpose of this test is to check that lightweight theme installation
@@ -65,32 +32,6 @@ var setupModule = function (module) {
 
 const ALERT_TIMEOUT = 10000;
 
-let AlertWatcher = {
-  planForAlert: function(aController) {
-    this.alerted = false;
-    aController.window.document.addEventListener("AlertActive",
-                                                 this.alertActive, false);
-  },
-  waitForAlert: function(aController) {
-    if (!this.alerted)
-      aController.waitForEval("subject.alerted", ALERT_TIMEOUT, 100, this);
-
-    // Double check the notification box has finished animating.
-    let notificationBox =
-      mc.tabmail.selectedTab.panel.getElementsByTagName("notificationbox")[0];
-    if (notificationBox && notificationBox._animating)
-      aController.waitForEval("!subject._animating", ALERT_TIMEOUT, 100,
-                              notificationBox);
-
-    aController.window.document.removeEventListener("AlertActive",
-                                                    this.alertActive, false);
-  },
-  alerted: false,
-  alertActive: function() {
-    AlertWatcher.alerted = true;
-  }
-};
-
 function check_and_click_notification_box_action_in_current_tab(totalButtons,
                                                                 selectButton) {
   let notificationBox =
@@ -121,18 +62,18 @@ function install_theme(themeNo, previousThemeNo) {
 
   // Clicking the button will bring up a notification box requesting to allow
   // installation of the theme
-  AlertWatcher.planForAlert(mc);
+  NotificationWatcher.planForNotification(mc);
   mc.click(new elib.Elem(mc.window.content.document
                            .getElementById("install" + themeNo)));
-  AlertWatcher.waitForAlert(mc);
+  NotificationWatcher.waitForNotification(mc);
 
   // We're going to acknowledge the theme installation being allowed, and
   // in doing so, the theme will be installed. However, we also will get a new
   // notification box displayed saying the installation is complete, so we'll
   // have to handle that here as well.
-  AlertWatcher.planForAlert(mc);
+  NotificationWatcher.planForNotification(mc);
   check_and_click_notification_box_action_in_current_tab(1, 0);
-  AlertWatcher.waitForAlert(mc);
+  NotificationWatcher.waitForNotification(mc);
 
   // Before we do anything more, check what we've got installed.
   if (!currentLwTheme())
@@ -158,18 +99,18 @@ function install_theme(themeNo, previousThemeNo) {
   }
 
   // Now Click again to install, and this time, we'll leave it there.
-  AlertWatcher.planForAlert(mc);
+  NotificationWatcher.planForNotification(mc);
   mc.click(new elib.Elem(mc.window.content.document
                            .getElementById("install" + themeNo)));
-  AlertWatcher.waitForAlert(mc);
+  NotificationWatcher.waitForNotification(mc);
 
   // We're going to acknowledge the theme installation being allowed, and
   // in doing so, the theme will be installed. However, we also will get a new
   // notification box displayed saying the installation is complete, so we'll
   // have to handle that here as well.
-  AlertWatcher.planForAlert(mc);
+  NotificationWatcher.planForNotification(mc);
   check_and_click_notification_box_action_in_current_tab(1, 0);
-  AlertWatcher.waitForAlert(mc);
+  NotificationWatcher.waitForNotification(mc);
 
   // Now just close the notification box
   close_notification_box_in_current_tab();
@@ -183,7 +124,7 @@ function install_theme(themeNo, previousThemeNo) {
                     " got " + currentTheme.id);
 }
 
-function test_lightweight_themes() {
+function test_lightweight_themes_install() {
   // Before we run the test, check we've not got a theme already installed.
   if (currentLwTheme())
     throw new Error("Lightweight theme selected when there should not have been.");
@@ -192,9 +133,13 @@ function test_lightweight_themes() {
 
   // Try installing the first theme, no previous theme.
   install_theme(1);
+}
 
+function test_lightweight_themes_install_and_undo() {
   // Now try the second one, checking that the first is selected when we undo.
   install_theme(2, 1);
 
   close_tab(newTab);
 }
+// XXX Bug 727571 - undo doesn't currently revert to the correct state.
+test_lightweight_themes_install_and_undo.__force_skip__ = true;

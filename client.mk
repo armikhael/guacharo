@@ -1,43 +1,6 @@
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
-# The Original Code is mozilla.org code.
-#
-# The Initial Developer of the Original Code is
-# Netscape Communications Corporation.
-# Portions created by the Initial Developer are Copyright (C) 1998
-# the Initial Developer. All Rights Reserved.
-#
-# Contributor(s):
-#   Stephen Lamm
-#   Benjamin Smedberg <bsmedberg@covad.net>
-#   Chase Phillips <chase@mozilla.org>
-#   Mark Mentovai <mark@moxienet.com>
-#   Robert Kaiser <kairo@kairo.at>
-#
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 # Build a comm application (Mozilla calendar, mail or suite).
 #
@@ -109,16 +72,16 @@ endif
 PERL ?= perl
 PYTHON ?= python
 
-CONFIG_GUESS_SCRIPT := $(wildcard $(TOPSRCDIR)/mozilla/build/autoconf/config.guess)
+CONFIG_GUESS_SCRIPT := $(wildcard $(TOPSRCDIR)/build/autoconf/config.guess)
 ifdef CONFIG_GUESS_SCRIPT
-  CONFIG_GUESS = $(shell $(CONFIG_GUESS_SCRIPT))
+  CONFIG_GUESS := $(shell $(CONFIG_GUESS_SCRIPT))
 endif
 
 
 ####################################
 # Sanity checks
 
-ifneq (,$(filter MINGW%,$(shell uname -s)))
+ifneq (,$(findstring mingw,$(CONFIG_GUESS)))
 # check for CRLF line endings
 ifneq (0,$(shell $(PERL) -e 'binmode(STDIN); while (<STDIN>) { if (/\r/) { print "1"; exit } } print "0"' < $(TOPSRCDIR)/client.mk))
 $(error This source tree appears to have Windows-style line endings. To \
@@ -132,17 +95,24 @@ endif
 
 # See build pages, http://www.mozilla.org/build/ for how to set up mozconfig.
 
-MOZCONFIG_LOADER := mozilla/build/autoconf/mozconfig2client-mk
-MOZCONFIG_FINDER := mozilla/build/autoconf/mozconfig-find
-MOZCONFIG_MODULES := mozilla/build/unix/uniq.pl
+MOZCONFIG_LOADER := build/autoconf/mozconfig2client-mk
 
-run_for_side_effects := \
-  $(shell $(TOPSRCDIR)/$(MOZCONFIG_LOADER) $(TOPSRCDIR) $(TOPSRCDIR)/.mozconfig.mk > $(TOPSRCDIR)/.mozconfig.out)
+define CR
 
-include $(TOPSRCDIR)/.mozconfig.mk
+
+endef
+
+$(eval $(subst ||,$(CR),$(shell $(TOPSRCDIR)/$(MOZCONFIG_LOADER) $(TOPSRCDIR) 2> $(TOPSRCDIR)/.mozconfig.out | sed 's/$$/||/')))
 
 ifndef MOZ_OBJDIR
   MOZ_OBJDIR = obj-$(CONFIG_GUESS)
+else
+# On Windows Pymake builds check MOZ_OBJDIR doesn't start with "/"
+  ifneq (,$(findstring mingw,$(CONFIG_GUESS)))
+  ifeq (1_a,$(.PYMAKE)_$(firstword a$(subst /, ,$(MOZ_OBJDIR))))
+  $(error For Windows Pymake builds, MOZ_OBJDIR must be a Windows [and not MSYS] style path.)
+  endif
+  endif
 endif
 
 ifdef MOZ_BUILD_PROJECTS
@@ -173,6 +143,15 @@ CONFIGURES += $(TOPSRCDIR)/mozilla/js/src/configure
 
 # The default rule is build
 build::
+
+# These targets are candidates for auto-running client.py
+
+ifeq (01,$(MAKELEVEL)$(if $(ALWAYS_RUN_CLIENT_PY),1,))
+
+build profiledbuild configure:: run_client_py
+	$(MAKE) -f $(TOPSRCDIR)/client.mk $@
+else
+
 
 # Print out any options loaded from mozconfig.
 all build clean depend distclean export libs install realclean::
@@ -210,7 +189,7 @@ endif
 
 profiledbuild::
 	$(MAKE) -f $(TOPSRCDIR)/client.mk build MOZ_PROFILE_GENERATE=1
-	$(MAKE) -C $(PGO_OBJDIR) package
+	$(MAKE) -C $(PGO_OBJDIR) stage-package
 	OBJDIR=${PGO_OBJDIR} $(PROFILE_GEN_SCRIPT)
 	$(MAKE) -f $(TOPSRCDIR)/client.mk maybe_clobber_profiledbuild
 	$(MAKE) -f $(TOPSRCDIR)/client.mk build MOZ_PROFILE_USE=1
@@ -268,6 +247,7 @@ else
 ####################################
 # Configure
 
+MAKEFILE      = $(wildcard $(OBJDIR)/Makefile)
 CONFIG_STATUS = $(wildcard $(OBJDIR)/config.status)
 CONFIG_CACHE  = $(wildcard $(OBJDIR)/config.cache)
 
@@ -285,13 +265,16 @@ $(CONFIGURES): %: %.in $(EXTRA_CONFIG_DEPS)
 CONFIG_STATUS_DEPS := \
 	$(wildcard $(CONFIGURES)) \
 	$(TOPSRCDIR)/allmakefiles.sh \
-	$(TOPSRCDIR)/.mozconfig.mk \
 	$(TOPSRCDIR)/mozilla/allmakefiles.sh \
 	$(wildcard $(TOPSRCDIR)/mozilla/nsprpub/configure) \
 	$(wildcard $(TOPSRCDIR)/mozilla/config/milestone.txt) \
 	$(wildcard $(TOPSRCDIR)/ldap/sdks/c-sdk/configure) \
 	$(wildcard $(addsuffix confvars.sh,$(wildcard $(TOPSRCDIR)/*/))) \
 	$(NULL)
+
+CONFIGURE_ENV_ARGS += \
+  MAKE="$(MAKE)" \
+  $(NULL)
 
 # configure uses the program name to determine @srcdir@. Calling it without
 #   $(TOPSRCDIR) will set @srcdir@ to "."; otherwise, it is set to the full
@@ -316,13 +299,18 @@ endif
                \"$(MAKE) -f client.mk build\"" && exit 1 )
 	@touch $(OBJDIR)/Makefile
 
-$(OBJDIR)/Makefile $(OBJDIR)/config.status: $(CONFIG_STATUS_DEPS)
+ifneq (,$(MAKEFILE))
+$(OBJDIR)/Makefile: $(OBJDIR)/config.status
+
+$(OBJDIR)/config.status: $(CONFIG_STATUS_DEPS)
+else
+$(OBJDIR)/Makefile: $(CONFIG_STATUS_DEPS)
+endif
 	@$(MAKE) -f $(TOPSRCDIR)/client.mk configure
 
 ifneq (,$(CONFIG_STATUS))
 $(OBJDIR)/config/autoconf.mk: $(TOPSRCDIR)/config/autoconf.mk.in
-	cd $(OBJDIR); \
-	  CONFIG_FILES=config/autoconf.mk ./config.status
+	$(PYTHON) $(OBJDIR)/config.status -n --file=$(OBJDIR)/config/autoconf.mk
 endif
 
 
@@ -368,6 +356,7 @@ ifdef MOZ_POSTFLIGHT
 endif
 
 endif # MOZ_CURRENT_PROJECT
+endif # RAN_CLIENT_PY
 
 ####################################
 # Postflight, after building all projects
@@ -407,9 +396,14 @@ cleansrcdir:
 echo-variable-%:
 	@echo $($*)
 
+checkout co: run_client_py
+
+run_client_py:
+	$(PYTHON) $(TOPSRCDIR)/client.py checkout $(CLIENT_PY_ARGS)
+
 # This makefile doesn't support parallel execution. It does pass
 # MOZ_MAKE_FLAGS to sub-make processes, so they will correctly execute
 # in parallel.
 .NOTPARALLEL:
 
-.PHONY: checkout real_checkout depend build profiledbuild maybe_clobber_profiledbuild export libs alldep install clean realclean distclean cleansrcdir pull_all build_all clobber clobber_all pull_and_build_all everything configure preflight_all preflight postflight postflight_all
+.PHONY: checkout co real_checkout depend build profiledbuild maybe_clobber_profiledbuild export libs alldep install clean realclean distclean cleansrcdir pull_all build_all clobber clobber_all pull_and_build_all everything configure preflight_all preflight postflight postflight_all

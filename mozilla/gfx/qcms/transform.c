@@ -994,13 +994,15 @@ void qcms_profile_precache_output_transform(qcms_profile *profile)
 	if (profile->color_space != RGB_SIGNATURE)
 		return;
 
-	/* don't precache since we will use the B2A LUT */
-	if (profile->B2A0)
-		return;
+	if (qcms_supports_iccv4) {
+		/* don't precache since we will use the B2A LUT */
+		if (profile->B2A0)
+			return;
 
-	/* don't precache since we will use the mBA LUT */
-	if (profile->mBA)
-		return;
+		/* don't precache since we will use the mBA LUT */
+		if (profile->mBA)
+			return;
+	}
 
 	/* don't precache if we do not have the TRC curves */
 	if (!profile->redTRC || !profile->greenTRC || !profile->blueTRC)
@@ -1078,7 +1080,8 @@ qcms_transform* qcms_transform_precacheLUT_float(qcms_transform *transform, qcms
 	//XXX: qcms_modular_transform_data may return either the src or dest buffer. If so it must not be free-ed
 	if (src && lut != src) {
 		free(src);
-	} else if (dest && lut != src) {
+	}
+	if (dest && lut != dest) {
 		free(dest);
 	}
 

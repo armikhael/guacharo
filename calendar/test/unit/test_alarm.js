@@ -1,38 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Sun Microsystems code.
- *
- * The Initial Developer of the Original Code is
- *   Philipp Kewisch <mozilla@kewis.ch>
- * Portions created by the Initial Developer are Copyright (C) 2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 function run_test() {
     test_initial_creation();
@@ -82,7 +50,15 @@ function test_display_alarm() {
     alarm.summary = "test";
     do_check_eq(alarm.summary, null);
 
-    // TODO No attendees
+    // No attendees allowed
+    let attendee = cal.createAttendee();
+    attendee.id = "mailto:horst";
+
+    try {
+        alarm.addAttendee(attendee);
+        do_throw("DISPLAY alarm should not be able to save attendees");
+    } catch (e) {}
+
     dump("Done\n");
 }
 
@@ -101,7 +77,28 @@ function test_email_alarm() {
     alarm.summary = "summary";
     do_check_eq(alarm.summary, "summary");
 
-    // TODO check for at least one attendee
+    // Check for at least one attendee
+    let attendee1 = cal.createAttendee();
+    attendee1.id = "mailto:horst";
+    let attendee2 = cal.createAttendee();
+    attendee2.id = "mailto:gustav";
+
+    do_check_eq(alarm.getAttendees({}).length, 0);
+    alarm.addAttendee(attendee1);
+    do_check_eq(alarm.getAttendees({}).length, 1);
+    alarm.addAttendee(attendee2);
+    do_check_eq(alarm.getAttendees({}).length, 2);
+    alarm.addAttendee(attendee1);
+    let addedAttendees = alarm.getAttendees({});
+    do_check_eq(addedAttendees.length, 2);
+    do_check_eq(addedAttendees[0], attendee2);
+    do_check_eq(addedAttendees[1], attendee1);
+
+    alarm.deleteAttendee(attendee1);
+    do_check_eq(alarm.getAttendees({}).length, 1);
+
+    alarm.clearAttendees();
+    do_check_eq(alarm.getAttendees({}).length, 0);
 
     // TODO test attachments
     dump("Done\n");
@@ -110,6 +107,8 @@ function test_email_alarm() {
 function test_audio_alarm() {
     dump("Testing AUDIO alarms...");
     let alarm = cal.createAlarm();
+    alarm.related = Components.interfaces.calIAlarm.ALARM_RELATED_ABSOLUTE;
+    alarm.alarmDate = cal.createDateTime();
     // Set ACTION to AUDIO, make sure this was not rejected
     alarm.action = "AUDIO";
     do_check_eq(alarm.action, "AUDIO");
@@ -120,10 +119,52 @@ function test_audio_alarm() {
 
     // No Summary, for ACTION:AUDIO
     alarm.summary = "summary";
-    do_check_eq(alarm.description, null);
+    do_check_eq(alarm.summary, null);
 
-    // TODO No attendees
-    // TODO test for one attachment
+    // No attendees allowed
+    let attendee = cal.createAttendee();
+    attendee.id = "mailto:horst";
+
+    try {
+        alarm.addAttendee(attendee);
+        do_throw("AUDIO alarm should not be able to save attendees");
+    } catch (e) {}
+
+    // Test attachments
+    let sound = cal.createAttachment();
+    sound.uri = makeURL("file:///sound.wav");
+    let sound2 = cal.createAttachment();
+    sound2.uri = makeURL("file:///sound2.wav");
+
+    // Adding an attachment should work
+    alarm.addAttachment(sound);
+    let addedAttachments = alarm.getAttachments({});
+    do_check_eq(addedAttachments.length, 1);
+    do_check_eq(addedAttachments[0], sound);
+    do_check_true(alarm.icalString.indexOf("ATTACH:file:///sound.wav") > -1);
+
+    // Adding twice shouldn't change anything
+    alarm.addAttachment(sound);
+    addedAttachments = alarm.getAttachments({});
+    do_check_eq(addedAttachments.length, 1);
+    do_check_eq(addedAttachments[0], sound);
+
+    try {
+        alarm.addAttachment(sound2);
+        do_throw("Adding a second alarm should fail for type AUDIO");
+    } catch (e) {}
+
+    // Deleting should work
+    alarm.deleteAttachment(sound);
+    addedAttachments = alarm.getAttachments({});
+    do_check_eq(addedAttachments.length, 0);
+
+    // As well as clearing
+    alarm.addAttachment(sound);
+    alarm.clearAttachments();
+    addedAttachments = alarm.getAttachments({});
+    do_check_eq(addedAttachments.length, 0);
+
     dump("Done\n");
 }
 
@@ -142,9 +183,47 @@ function test_custom_alarm() {
     alarm.summary = "summary";
     do_check_eq(alarm.summary, "summary");
 
-    // TODO test for attendees
-    // TODO test for attachments
-    dump("Done\n");
+    // Test for attendees
+    let attendee1 = cal.createAttendee();
+    attendee1.id = "mailto:horst";
+    let attendee2 = cal.createAttendee();
+    attendee2.id = "mailto:gustav";
+
+    do_check_eq(alarm.getAttendees({}).length, 0);
+    alarm.addAttendee(attendee1);
+    do_check_eq(alarm.getAttendees({}).length, 1);
+    alarm.addAttendee(attendee2);
+    do_check_eq(alarm.getAttendees({}).length, 2);
+    alarm.addAttendee(attendee1);
+    do_check_eq(alarm.getAttendees({}).length, 2);
+
+    alarm.deleteAttendee(attendee1);
+    do_check_eq(alarm.getAttendees({}).length, 1);
+
+    alarm.clearAttendees();
+    do_check_eq(alarm.getAttendees({}).length, 0);
+
+    // Test for attachments
+    let attach1 = cal.createAttachment();
+    attach1.uri = makeURL("file:///example.txt");
+    let attach2 = cal.createAttachment();
+    attach2.uri = makeURL("file:///example2.txt");
+
+    alarm.addAttachment(attach1);
+    alarm.addAttachment(attach2);
+
+    let addedAttachments = alarm.getAttachments({});
+    do_check_eq(addedAttachments.length, 2);
+    do_check_eq(addedAttachments[0], attach1);
+    do_check_eq(addedAttachments[1], attach2);
+
+    alarm.deleteAttachment(attach1);
+    addedAttachments = alarm.getAttachments({});
+    do_check_eq(addedAttachments.length, 1);
+
+    alarm.clearAttachments();
+    addedAttachments = alarm.getAttachments({});
+    do_check_eq(addedAttachments.length, 0);
 }
 
 // Check if any combination of REPEAT and DURATION work as expected.

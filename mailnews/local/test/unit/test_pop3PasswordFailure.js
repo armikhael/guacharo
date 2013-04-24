@@ -24,31 +24,6 @@ const kUserName = "testpop3";
 const kInvalidPassword = "pop3test";
 const kValidPassword = "testpop3";
 
-var dummyDocShell =
-{
-  getInterface: function (iid) {
-    if (iid.equals(Ci.nsIAuthPrompt)) {
-      return Cc["@mozilla.org/login-manager/prompter;1"]
-               .getService(Ci.nsIAuthPrompt);
-    }
-
-    throw Components.results.NS_ERROR_FAILURE;
-  },
-
-  QueryInterface: XPCOMUtils.generateQI([Ci.nsIDocShell,
-                                         Ci.nsIInterfaceRequestor])
-}
-
-// Dummy message window that ensures we get prompted for logins.
-var dummyMsgWindow =
-{
-  rootDocShell: dummyDocShell,
-  promptDialog: alertUtilsPrompts,
-
-  QueryInterface: XPCOMUtils.generateQI([Ci.nsIMsgWindow,
-                                         Ci.nsISupportsWeakReference])
-};
-
 function alert(aDialogText, aText)
 {
   // The first few attempts may prompt about the password problem, the last
@@ -95,7 +70,7 @@ function promptPasswordPS(aParent, aDialogTitle, aText, aPassword, aCheckMsg,
 }
 
 function getPopMail() {
-  pop3Service.GetNewMail(dummyMsgWindow, urlListener, gLocalInboxFolder,
+  pop3Service.GetNewMail(gDummyMsgWindow, urlListener, gLocalInboxFolder,
                          incomingServer);
 
   server.performTest();
@@ -177,14 +152,11 @@ function actually_run_test() {
 function run_test()
 {
   // Disable new mail notifications
-  var prefSvc = Components.classes["@mozilla.org/preferences-service;1"]
-    .getService(Components.interfaces.nsIPrefBranch);
-
-  prefSvc.setBoolPref("mail.biff.play_sound", false);
-  prefSvc.setBoolPref("mail.biff.show_alert", false);
-  prefSvc.setBoolPref("mail.biff.show_tray_icon", false);
-  prefSvc.setBoolPref("mail.biff.animate_dock_icon", false);
-  prefSvc.setBoolPref("signon.debug", true);
+  Services.prefs.setBoolPref("mail.biff.play_sound", false);
+  Services.prefs.setBoolPref("mail.biff.show_alert", false);
+  Services.prefs.setBoolPref("mail.biff.show_tray_icon", false);
+  Services.prefs.setBoolPref("mail.biff.animate_dock_icon", false);
+  Services.prefs.setBoolPref("signon.debug", true);
 
   // Passwords File (generated from Mozilla 1.8 branch).
   let signons = do_get_file("../../../data/signons-mailnews1.8.txt");

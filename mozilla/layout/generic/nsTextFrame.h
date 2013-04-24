@@ -1,51 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Robert O'Callahan <robert@ocallahan.org>
- *   Roger B. Sidje <rbs@maths.uq.edu.au>
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *   Prabhat Hegde <prabhat.hegde@sun.com>
- *   Tomi Leppikangas <tomi.leppikangas@oulu.fi>
- *   Roland Mainz <roland.mainz@informatik.med.uni-giessen.de>
- *   Daniel Glazman <glazman@netscape.com>
- *   Neil Deakin <neil@mozdevgroup.com>
- *   Masayuki Nakano <masayuki@d-toybox.com>
- *   Mats Palmgren <matspal@gmail.com>
- *   Uri Bernstein <uriber@gmail.com>
- *   Stephen Blackheath <entangled.mooched.stephen@blacksapphire.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsTextFrame_h__
 #define nsTextFrame_h__
@@ -65,17 +21,30 @@ class PropertyProvider;
 // reflow
 #define TEXT_HAS_NONCOLLAPSED_CHARACTERS NS_FRAME_STATE_BIT(31)
 
-class nsTextFrame : public nsFrame {
+// This state bit is set on frames which are forced to trim their leading and
+// trailing whitespaces
+#define TEXT_FORCE_TRIM_WHITESPACE       NS_FRAME_STATE_BIT(32)
+
+#define TEXT_HAS_FONT_INFLATION          NS_FRAME_STATE_BIT(61)
+
+typedef nsFrame nsTextFrameBase;
+
+class nsTextFrame : public nsTextFrameBase {
 public:
+  NS_DECL_QUERYFRAME_TARGET(nsTextFrame)
   NS_DECL_FRAMEARENA_HELPERS
 
   friend class nsContinuingTextFrame;
 
-  nsTextFrame(nsStyleContext* aContext) : nsFrame(aContext)
+  nsTextFrame(nsStyleContext* aContext)
+    : nsTextFrameBase(aContext)
   {
     NS_ASSERTION(mContentOffset == 0, "Bogus content offset");
   }
   
+  // nsQueryFrame
+  NS_DECL_QUERYFRAME
+
   // nsIFrame
   NS_IMETHOD BuildDisplayList(nsDisplayListBuilder*   aBuilder,
                               const nsRect&           aDirtyRect,
@@ -110,7 +79,7 @@ public:
   virtual nsIFrame* GetNextInFlowVirtual() const { return GetNextInFlow(); }
   nsIFrame* GetNextInFlow() const {
     return mNextContinuation && (mNextContinuation->GetStateBits() & NS_FRAME_IS_FLUID_CONTINUATION) ? 
-      mNextContinuation : nsnull;
+      mNextContinuation : nullptr;
   }
   NS_IMETHOD SetNextInFlow(nsIFrame* aNextInFlow) {
     NS_ASSERTION (!aNextInFlow || GetType() == aNextInFlow->GetType(),
@@ -136,7 +105,7 @@ public:
    */
   virtual nsIAtom* GetType() const;
   
-  virtual PRBool IsFrameOfType(PRUint32 aFlags) const
+  virtual bool IsFrameOfType(uint32_t aFlags) const
   {
     // Set the frame state bit for text frames to mark them as replaced.
     // XXX kipp: temporary
@@ -145,7 +114,7 @@ public:
   }
 
 #ifdef DEBUG
-  NS_IMETHOD List(FILE* out, PRInt32 aIndent) const;
+  NS_IMETHOD List(FILE* out, int32_t aIndent) const;
   NS_IMETHOD GetFrameName(nsAString& aResult) const;
   NS_IMETHOD_(nsFrameState) GetDebugStateBits() const ;
 #endif
@@ -157,75 +126,78 @@ public:
    * This is called only on the primary text frame. It indicates that
    * the selection state of the given character range has changed.
    * Text in the range is unconditionally invalidated
-   * (nsTypedSelection::Repaint depends on this).
+   * (Selection::Repaint depends on this).
    * @param aSelected true if the selection has been added to the range,
    * false otherwise
    * @param aType the type of selection added or removed
    */
-  virtual void SetSelected(PRBool        aSelected,
-                           SelectionType aType);
-  void SetSelectedRange(PRUint32 aStart,
-                        PRUint32 aEnd,
-                        PRBool aSelected,
+  void SetSelectedRange(uint32_t aStart, uint32_t aEnd, bool aSelected,
                         SelectionType aType);
 
-  virtual PRBool PeekOffsetNoAmount(PRBool aForward, PRInt32* aOffset);
-  virtual PRBool PeekOffsetCharacter(PRBool aForward, PRInt32* aOffset,
-                                     PRBool aRespectClusters = PR_TRUE);
-  virtual PRBool PeekOffsetWord(PRBool aForward, PRBool aWordSelectEatSpace, PRBool aIsKeyboardSelect,
-                                PRInt32* aOffset, PeekWordState* aState);
+  virtual bool PeekOffsetNoAmount(bool aForward, int32_t* aOffset);
+  virtual bool PeekOffsetCharacter(bool aForward, int32_t* aOffset,
+                                     bool aRespectClusters = true);
+  virtual bool PeekOffsetWord(bool aForward, bool aWordSelectEatSpace, bool aIsKeyboardSelect,
+                                int32_t* aOffset, PeekWordState* aState);
 
-  NS_IMETHOD CheckVisibility(nsPresContext* aContext, PRInt32 aStartIndex, PRInt32 aEndIndex, PRBool aRecurse, PRBool *aFinished, PRBool *_retval);
+  NS_IMETHOD CheckVisibility(nsPresContext* aContext, int32_t aStartIndex, int32_t aEndIndex, bool aRecurse, bool *aFinished, bool *_retval);
   
   // Flags for aSetLengthFlags
   enum { ALLOW_FRAME_CREATION_AND_DESTRUCTION = 0x01 };
 
   // Update offsets to account for new length. This may clear mTextRun.
-  void SetLength(PRInt32 aLength, nsLineLayout* aLineLayout,
-                 PRUint32 aSetLengthFlags = 0);
+  void SetLength(int32_t aLength, nsLineLayout* aLineLayout,
+                 uint32_t aSetLengthFlags = 0);
   
-  NS_IMETHOD GetOffsets(PRInt32 &start, PRInt32 &end)const;
+  NS_IMETHOD GetOffsets(int32_t &start, int32_t &end)const;
   
-  virtual void AdjustOffsetsForBidi(PRInt32 start, PRInt32 end);
+  virtual void AdjustOffsetsForBidi(int32_t start, int32_t end);
   
-  NS_IMETHOD GetPointFromOffset(PRInt32                 inOffset,
+  NS_IMETHOD GetPointFromOffset(int32_t                 inOffset,
                                 nsPoint*                outPoint);
   
-  NS_IMETHOD  GetChildFrameContainingOffset(PRInt32     inContentOffset,
-                                            PRBool                  inHint,
-                                            PRInt32*                outFrameContentOffset,
+  NS_IMETHOD  GetChildFrameContainingOffset(int32_t     inContentOffset,
+                                            bool                    inHint,
+                                            int32_t*                outFrameContentOffset,
                                             nsIFrame*               *outChildFrame);
   
-  virtual PRBool IsVisibleInSelection(nsISelection* aSelection);
+  virtual bool IsVisibleInSelection(nsISelection* aSelection);
   
-  virtual PRBool IsEmpty();
-  virtual PRBool IsSelfEmpty() { return IsEmpty(); }
+  virtual bool IsEmpty();
+  virtual bool IsSelfEmpty() { return IsEmpty(); }
   virtual nscoord GetBaseline() const;
   
   /**
-   * @return PR_TRUE if this text frame ends with a newline character.  It
-   * should return PR_FALSE if this is not a text frame.
+   * @return true if this text frame ends with a newline character.  It
+   * should return false if this is not a text frame.
    */
-  virtual PRBool HasTerminalNewline() const;
+  virtual bool HasTerminalNewline() const;
 
   /**
    * Returns true if this text frame is logically adjacent to the end of the
    * line.
    */
-  PRBool IsAtEndOfLine() const;
+  bool IsAtEndOfLine() const;
   
   /**
    * Call this only after reflow the frame. Returns true if non-collapsed
    * characters are present.
    */
-  PRBool HasNoncollapsedCharacters() const {
+  bool HasNoncollapsedCharacters() const {
     return (GetStateBits() & TEXT_HAS_NONCOLLAPSED_CHARACTERS) != 0;
   }
   
 #ifdef ACCESSIBILITY
-  virtual already_AddRefed<nsAccessible> CreateAccessible();
+  virtual already_AddRefed<Accessible> CreateAccessible();
 #endif
-  
+
+  float GetFontSizeInflation() const;
+  bool IsCurrentFontInflation(float aInflation) const;
+  bool HasFontSizeInflation() const {
+    return (GetStateBits() & TEXT_HAS_FONT_INFLATION) != 0;
+  }
+  void SetFontSizeInflation(float aInflation);
+
   virtual void MarkIntrinsicWidthsDirty();
   virtual nscoord GetMinWidth(nsRenderingContext *aRenderingContext);
   virtual nscoord GetPrefWidth(nsRenderingContext *aRenderingContext);
@@ -236,40 +208,53 @@ public:
   virtual nsSize ComputeSize(nsRenderingContext *aRenderingContext,
                              nsSize aCBSize, nscoord aAvailableWidth,
                              nsSize aMargin, nsSize aBorder, nsSize aPadding,
-                             PRBool aShrinkWrap);
+                             uint32_t aFlags) MOZ_OVERRIDE;
   virtual nsRect ComputeTightBounds(gfxContext* aContext) const;
   NS_IMETHOD Reflow(nsPresContext* aPresContext,
                     nsHTMLReflowMetrics& aMetrics,
                     const nsHTMLReflowState& aReflowState,
                     nsReflowStatus& aStatus);
-  virtual PRBool CanContinueTextRun() const;
+  virtual bool CanContinueTextRun() const;
   // Method that is called for a text frame that is logically
   // adjacent to the end of the line (i.e. followed only by empty text frames,
   // placeholders or inlines containing such).
   struct TrimOutput {
     // true if we trimmed some space or changed metrics in some other way.
     // In this case, we should call RecomputeOverflow on this frame.
-    PRPackedBool mChanged;
+    bool mChanged;
     // true if the last character is not justifiable so should be subtracted
     // from the count of justifiable characters in the frame, since the last
     // character in a line is not justifiable.
-    PRPackedBool mLastCharIsJustifiable;
+    bool mLastCharIsJustifiable;
     // an amount to *subtract* from the frame's width (zero if !mChanged)
     nscoord      mDeltaWidth;
   };
   TrimOutput TrimTrailingWhiteSpace(nsRenderingContext* aRC);
-  virtual nsresult GetRenderedText(nsAString* aString = nsnull,
-                                   gfxSkipChars* aSkipChars = nsnull,
-                                   gfxSkipCharsIterator* aSkipIter = nsnull,
-                                   PRUint32 aSkippedStartOffset = 0,
-                                   PRUint32 aSkippedMaxLength = PR_UINT32_MAX);
+  virtual nsresult GetRenderedText(nsAString* aString = nullptr,
+                                   gfxSkipChars* aSkipChars = nullptr,
+                                   gfxSkipCharsIterator* aSkipIter = nullptr,
+                                   uint32_t aSkippedStartOffset = 0,
+                                   uint32_t aSkippedMaxLength = PR_UINT32_MAX);
 
-  nsOverflowAreas RecomputeOverflow();
+  nsOverflowAreas
+    RecomputeOverflow(const nsHTMLReflowState& aBlockReflowState);
+
+  enum TextRunType {
+    // Anything in reflow (but not intrinsic width calculation) or
+    // painting should use the inflated text run (i.e., with font size
+    // inflation applied).
+    eInflated,
+    // Intrinsic width calculation should use the non-inflated text run.
+    // When there is font size inflation, it will be different.
+    eNotInflated
+  };
 
   void AddInlineMinWidthForFlow(nsRenderingContext *aRenderingContext,
-                                nsIFrame::InlineMinWidthData *aData);
+                                nsIFrame::InlineMinWidthData *aData,
+                                TextRunType aTextRunType);
   void AddInlinePrefWidthForFlow(nsRenderingContext *aRenderingContext,
-                                 InlinePrefWidthData *aData);
+                                 InlinePrefWidthData *aData,
+                                 TextRunType aTextRunType);
 
   /**
    * Calculate the horizontal bounds of the grapheme clusters that fit entirely
@@ -279,8 +264,7 @@ public:
    * the method returns false.
    * @return true if at least one whole grapheme cluster fit between the edges
    */
-  bool MeasureCharClippedText(gfxContext* aCtx,
-                              nscoord aLeftEdge, nscoord aRightEdge,
+  bool MeasureCharClippedText(nscoord aLeftEdge, nscoord aRightEdge,
                               nscoord* aSnappedLeftEdge,
                               nscoord* aSnappedRightEdge);
   /**
@@ -289,16 +273,91 @@ public:
    * undefined when the method returns false.
    * @return true if at least one whole grapheme cluster fit between the edges
    */
-  bool MeasureCharClippedText(gfxContext* aCtx,
-                              PropertyProvider& aProvider,
+  bool MeasureCharClippedText(PropertyProvider& aProvider,
                               nscoord aLeftEdge, nscoord aRightEdge,
-                              PRUint32* aStartOffset, PRUint32* aMaxLength,
+                              uint32_t* aStartOffset, uint32_t* aMaxLength,
                               nscoord* aSnappedLeftEdge,
                               nscoord* aSnappedRightEdge);
-  // primary frame paint method called from nsDisplayText
-  // The private DrawText() is what applies the text to a graphics context
+
+  /**
+   * Object with various callbacks for PaintText() to invoke for different parts
+   * of the frame's text rendering, when we're generating paths rather than
+   * painting.
+   *
+   * Callbacks are invoked in the following order:
+   *
+   *   (NotifyBeforeSelectionBackground NotifySelectionBackgroundPathEmitted)?
+   *   (NotifyBeforeDecorationLine NotifyDecorationLinePathEmitted)*
+   *   NotifyBeforeText
+   *   NotifyGlyphPathEmitted*
+   *   NotifyAfterText
+   *   (NotifyBeforeDecorationLine NotifyDecorationLinePathEmitted)*
+   *   (NotifyBeforeSelectionDecorationLine NotifySelectionDecorationLinePathEmitted)*
+   *
+   * The color of each part of the frame's text rendering is passed as an argument
+   * to the NotifyBefore* callback for that part.  The nscolor can take on one of
+   * the three selection special colors defined in LookAndFeel.h --
+   * NS_TRANSPARENT, NS_SAME_AS_FOREGROUND_COLOR and
+   * NS_40PERCENT_FOREGROUND_COLOR.
+   */
+  struct DrawPathCallbacks : gfxTextRun::DrawCallbacks
+  {
+    /**
+     * Called just before any paths have been emitted to the gfxContext
+     * for the glyphs of the frame's text.
+     */
+    virtual void NotifyBeforeText(nscolor aColor) { }
+
+    /**
+     * Called just after all the paths have been emitted to the gfxContext
+     * for the glyphs of the frame's text.
+     */
+    virtual void NotifyAfterText() { }
+
+    /**
+     * Called just before a path corresponding to the selection background
+     * has been emitted to the gfxContext.
+     */
+    virtual void NotifyBeforeSelectionBackground(nscolor aColor) { }
+
+    /**
+     * Called just after a path corresponding to the selection background
+     * has been emitted to the gfxContext.
+     */
+    virtual void NotifySelectionBackgroundPathEmitted() { }
+
+    /**
+     * Called just before a path corresponding to a text decoration line
+     * has been emitted to the gfxContext.
+     */
+    virtual void NotifyBeforeDecorationLine(nscolor aColor) { }
+
+    /**
+     * Called just after a path corresponding to a text decoration line
+     * has been emitted to the gfxContext.
+     */
+    virtual void NotifyDecorationLinePathEmitted() { }
+
+    /**
+     * Called just before a path corresponding to a selection decoration line
+     * has been emitted to the gfxContext.
+     */
+    virtual void NotifyBeforeSelectionDecorationLine(nscolor aColor) { }
+
+    /**
+     * Called just after a path corresponding to a selection decoration line
+     * has been emitted to the gfxContext.
+     */
+    virtual void NotifySelectionDecorationLinePathEmitted() { }
+  };
+
+  // Primary frame paint method called from nsDisplayText.  Can also be used
+  // to generate paths rather than paint the frame's text by passing a callback
+  // object.  The private DrawText() is what applies the text to a graphics
+  // context.
   void PaintText(nsRenderingContext* aRenderingContext, nsPoint aPt,
-                 const nsRect& aDirtyRect, const nsCharClipDisplayItem& aItem);
+                 const nsRect& aDirtyRect, const nsCharClipDisplayItem& aItem,
+                 DrawPathCallbacks* aCallbacks = nullptr);
   // helper: paint text frame when we're impacted by at least one selection.
   // Return false if the text was not painted and we should continue with
   // the fast path.
@@ -307,10 +366,11 @@ public:
                               const gfxPoint& aTextBaselinePt,
                               const gfxRect& aDirtyRect,
                               PropertyProvider& aProvider,
-                              PRUint32 aContentOffset,
-                              PRUint32 aContentLength,
+                              uint32_t aContentOffset,
+                              uint32_t aContentLength,
                               nsTextPaintStyle& aTextPaintStyle,
-                              const nsCharClipDisplayItem::ClipEdges& aClipEdges);
+                              const nsCharClipDisplayItem::ClipEdges& aClipEdges,
+                              DrawPathCallbacks* aCallbacks);
   // helper: paint text with foreground and background colors determined
   // by selection(s). Also computes a mask of all selection types applying to
   // our text, returned in aAllTypes.
@@ -321,91 +381,122 @@ public:
                                     const gfxPoint& aTextBaselinePt,
                                     const gfxRect& aDirtyRect,
                                     PropertyProvider& aProvider,
-                                    PRUint32 aContentOffset,
-                                    PRUint32 aContentLength,
+                                    uint32_t aContentOffset,
+                                    uint32_t aContentLength,
                                     nsTextPaintStyle& aTextPaintStyle,
                                     SelectionDetails* aDetails,
                                     SelectionType* aAllTypes,
-                            const nsCharClipDisplayItem::ClipEdges& aClipEdges);
+                             const nsCharClipDisplayItem::ClipEdges& aClipEdges,
+                                    DrawPathCallbacks* aCallbacks);
   // helper: paint text decorations for text selected by aSelectionType
   void PaintTextSelectionDecorations(gfxContext* aCtx,
                                      const gfxPoint& aFramePt,
                                      const gfxPoint& aTextBaselinePt,
                                      const gfxRect& aDirtyRect,
                                      PropertyProvider& aProvider,
-                                     PRUint32 aContentOffset,
-                                     PRUint32 aContentLength,
+                                     uint32_t aContentOffset,
+                                     uint32_t aContentLength,
                                      nsTextPaintStyle& aTextPaintStyle,
                                      SelectionDetails* aDetails,
-                                     SelectionType aSelectionType);
+                                     SelectionType aSelectionType,
+                                     DrawPathCallbacks* aCallbacks);
 
-  virtual nscolor GetCaretColorAt(PRInt32 aOffset);
+  virtual nscolor GetCaretColorAt(int32_t aOffset);
 
-  PRInt16 GetSelectionStatus(PRInt16* aSelectionFlags);
+  int16_t GetSelectionStatus(int16_t* aSelectionFlags);
 
 #ifdef DEBUG
-  void ToCString(nsCString& aBuf, PRInt32* aTotalContentLength) const;
+  void ToCString(nsCString& aBuf, int32_t* aTotalContentLength) const;
 #endif
 
-  PRInt32 GetContentOffset() const { return mContentOffset; }
-  PRInt32 GetContentLength() const
+  int32_t GetContentOffset() const { return mContentOffset; }
+  int32_t GetContentLength() const
   {
     NS_ASSERTION(GetContentEnd() - mContentOffset >= 0, "negative length");
     return GetContentEnd() - mContentOffset;
   }
-  PRInt32 GetContentEnd() const;
+  int32_t GetContentEnd() const;
   // This returns the length the frame thinks it *should* have after it was
   // last reflowed (0 if it hasn't been reflowed yet). This should be used only
   // when setting up the text offsets for a new continuation frame.
-  PRInt32 GetContentLengthHint() const { return mContentLengthHint; }
+  int32_t GetContentLengthHint() const { return mContentLengthHint; }
 
   // Compute the length of the content mapped by this frame
   // and all its in-flow siblings. Basically this means starting at mContentOffset
   // and going to the end of the text node or the next bidi continuation
   // boundary.
-  PRInt32 GetInFlowContentLength();
+  int32_t GetInFlowContentLength();
 
   /**
    * Acquires the text run for this content, if necessary.
-   * @param aRC the rendering context to use as a reference for creating
-   * the textrun, if available (if not, we'll create one which will just be slower)
-   * @param aBlock the block ancestor for this frame, or nsnull if unknown
-   * @param aLine the line that this frame is on, if any, or nsnull if unknown
+   * @param aWhichTextRun indicates whether to get an inflated or non-inflated
+   * text run
+   * @param aReferenceContext the rendering context to use as a reference for
+   * creating the textrun, if available (if not, we'll create one which will
+   * just be slower)
+   * @param aLineContainer the block ancestor for this frame, or nullptr if
+   * unknown
    * @param aFlowEndInTextRun if non-null, this returns the textrun offset of
    * end of the text associated with this frame and its in-flow siblings
    * @return a gfxSkipCharsIterator set up to map DOM offsets for this frame
    * to offsets into the textrun; its initial offset is set to this frame's
    * content offset
    */
-  gfxSkipCharsIterator EnsureTextRun(gfxContext* aReferenceContext = nsnull,
-                                     nsIFrame* aLineContainer = nsnull,
-                                     const nsLineList::iterator* aLine = nsnull,
-                                     PRUint32* aFlowEndInTextRun = nsnull);
+  gfxSkipCharsIterator EnsureTextRun(TextRunType aWhichTextRun,
+                                     gfxContext* aReferenceContext = nullptr,
+                                     nsIFrame* aLineContainer = nullptr,
+                                     const nsLineList::iterator* aLine = nullptr,
+                                     uint32_t* aFlowEndInTextRun = nullptr);
 
-  gfxTextRun* GetTextRun() { return mTextRun; }
-  void SetTextRun(gfxTextRun* aTextRun) { mTextRun = aTextRun; }
+  gfxTextRun* GetTextRun(TextRunType aWhichTextRun) {
+    if (aWhichTextRun == eInflated || !HasFontSizeInflation())
+      return mTextRun;
+    return GetUninflatedTextRun();
+  }
+  gfxTextRun* GetUninflatedTextRun();
+  void SetTextRun(gfxTextRun* aTextRun, TextRunType aWhichTextRun,
+                  float aInflation);
   /**
-   * Clears out |mTextRun| from all frames that hold a reference to it,
-   * starting at |aStartContinuation|, or if it's nsnull, starting at |this|.
-   * Deletes |mTextRun| if all references were cleared and it's not cached.
+   * Notify the frame that it should drop its pointer to a text run.
+   * Returns whether the text run was removed (i.e., whether it was
+   * associated with this frame, either as its inflated or non-inflated
+   * text run.
    */
-  void ClearTextRun(nsTextFrame* aStartContinuation);
+  bool RemoveTextRun(gfxTextRun* aTextRun);
+  /**
+   * Clears out |mTextRun| (or the uninflated text run, when aInflated
+   * is nsTextFrame::eNotInflated and there is inflation) from all frames that hold a
+   * reference to it, starting at |aStartContinuation|, or if it's
+   * nullptr, starting at |this|.  Deletes the text run if all references
+   * were cleared and it's not cached.
+   */
+  void ClearTextRun(nsTextFrame* aStartContinuation,
+                    TextRunType aWhichTextRun);
+
+  void ClearTextRuns() {
+    ClearTextRun(nullptr, nsTextFrame::eInflated);
+    if (HasFontSizeInflation()) {
+      ClearTextRun(nullptr, nsTextFrame::eNotInflated);
+    }
+  }
 
   // Get the DOM content range mapped by this frame after excluding
   // whitespace subject to start-of-line and end-of-line trimming.
   // The textrun must have been created before calling this.
   struct TrimmedOffsets {
-    PRInt32 mStart;
-    PRInt32 mLength;
-    PRInt32 GetEnd() { return mStart + mLength; }
+    int32_t mStart;
+    int32_t mLength;
+    int32_t GetEnd() const { return mStart + mLength; }
   };
   TrimmedOffsets GetTrimmedOffsets(const nsTextFragment* aFrag,
-                                   PRBool aTrimAfter);
+                                   bool aTrimAfter);
 
   // Similar to Reflow(), but for use from nsLineLayout
   void ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
-                  nsRenderingContext* aRenderingContext, PRBool aShouldBlink,
+                  nsRenderingContext* aRenderingContext, bool aShouldBlink,
                   nsHTMLReflowMetrics& aMetrics, nsReflowStatus& aStatus);
+
+  bool IsFloatingFirstLetterChild() const;
 
 protected:
   virtual ~nsTextFrame();
@@ -419,14 +510,20 @@ protected:
   // the length from the difference between this frame's offset and the next
   // frame's offset, or the text length if there is no next frame. This means
   // the frames always map the text node without overlapping or leaving any gaps.
-  PRInt32     mContentOffset;
+  int32_t     mContentOffset;
   // This does *not* indicate the length of text currently mapped by the frame;
   // instead it's a hint saying that this frame *wants* to map this much text
   // so if we create a new continuation, this is where that continuation should
   // start.
-  PRInt32     mContentLengthHint;
+  int32_t     mContentLengthHint;
   nscoord     mAscent;
   gfxTextRun* mTextRun;
+
+  /**
+   * Return true if the frame is part of a Selection.
+   * Helper method to implement the public IsSelected() API.
+   */
+  virtual bool IsFrameSelected() const;
 
   // The caller of this method must call DestroySelectionDetails() on the
   // return value, if that return value is not null.  Calling
@@ -434,12 +531,13 @@ protected:
   SelectionDetails* GetSelectionDetails();
 
   void UnionAdditionalOverflow(nsPresContext* aPresContext,
+                               const nsHTMLReflowState& aBlockReflowState,
                                PropertyProvider& aProvider,
                                nsRect* aVisualOverflowRect,
                                bool aIncludeTextDecorations);
 
-  void PaintOneShadow(PRUint32 aOffset,
-                      PRUint32 aLength,
+  void PaintOneShadow(uint32_t aOffset,
+                      uint32_t aLength,
                       nsCSSShadowItem* aShadowDetails,
                       PropertyProvider* aProvider,
                       const nsRect& aDirtyRect,
@@ -448,7 +546,8 @@ protected:
                       gfxContext* aCtx,
                       const nscolor& aForegroundColor,
                       const nsCharClipDisplayItem::ClipEdges& aClipEdges,
-                      nscoord aLeftSideOffset);
+                      nscoord aLeftSideOffset,
+                      gfxRect& aBoundingBox);
 
   struct LineDecoration {
     nsIFrame* mFrame;
@@ -458,12 +557,12 @@ protected:
     nscoord mBaselineOffset;
 
     nscolor mColor;
-    PRUint8 mStyle;
+    uint8_t mStyle;
 
     LineDecoration(nsIFrame *const aFrame,
                    const nscoord aOff,
                    const nscolor aColor,
-                   const PRUint8 aStyle)
+                   const uint8_t aStyle)
       : mFrame(aFrame),
         mBaselineOffset(aOff),
         mColor(aColor),
@@ -489,68 +588,79 @@ protected:
 
     TextDecorations() { }
 
-    PRBool HasDecorationLines() const {
+    bool HasDecorationLines() const {
       return HasUnderline() || HasOverline() || HasStrikeout();
     }
-    PRBool HasUnderline() const {
+    bool HasUnderline() const {
       return !mUnderlines.IsEmpty();
     }
-    PRBool HasOverline() const {
+    bool HasOverline() const {
       return !mOverlines.IsEmpty();
     }
-    PRBool HasStrikeout() const {
+    bool HasStrikeout() const {
       return !mStrikes.IsEmpty();
     }
   };
+  enum TextDecorationColorResolution {
+    eResolvedColors,
+    eUnresolvedColors
+  };
   void GetTextDecorations(nsPresContext* aPresContext,
+                          TextDecorationColorResolution aColorResolution,
                           TextDecorations& aDecorations);
 
   void DrawTextRun(gfxContext* const aCtx,
                    const gfxPoint& aTextBaselinePt,
-                   PRUint32 aOffset,
-                   PRUint32 aLength,
+                   uint32_t aOffset,
+                   uint32_t aLength,
                    PropertyProvider& aProvider,
+                   nscolor aTextColor,
                    gfxFloat& aAdvanceWidth,
-                   PRBool aDrawSoftHyphen);
+                   bool aDrawSoftHyphen,
+                   DrawPathCallbacks* aCallbacks);
 
   void DrawTextRunAndDecorations(gfxContext* const aCtx,
+                                 const gfxRect& aDirtyRect,
                                  const gfxPoint& aFramePt,
                                  const gfxPoint& aTextBaselinePt,
-                                 PRUint32 aOffset,
-                                 PRUint32 aLength,
+                                 uint32_t aOffset,
+                                 uint32_t aLength,
                                  PropertyProvider& aProvider,
                                  const nsTextPaintStyle& aTextStyle,
+                                 nscolor aTextColor,
                              const nsCharClipDisplayItem::ClipEdges& aClipEdges,
                                  gfxFloat& aAdvanceWidth,
-                                 PRBool aDrawSoftHyphen,
+                                 bool aDrawSoftHyphen,
                                  const TextDecorations& aDecorations,
-                                 const nscolor* const aDecorationOverrideColor);
+                                 const nscolor* const aDecorationOverrideColor,
+                                 DrawPathCallbacks* aCallbacks);
 
   void DrawText(gfxContext* const aCtx,
+                const gfxRect& aDirtyRect,
                 const gfxPoint& aFramePt,
                 const gfxPoint& aTextBaselinePt,
-                PRUint32 aOffset,
-                PRUint32 aLength,
+                uint32_t aOffset,
+                uint32_t aLength,
                 PropertyProvider& aProvider,
                 const nsTextPaintStyle& aTextStyle,
+                nscolor aTextColor,
                 const nsCharClipDisplayItem::ClipEdges& aClipEdges,
                 gfxFloat& aAdvanceWidth,
-                PRBool aDrawSoftHyphen,
-                const nscolor* const aDecorationOverrideColor = nsnull);
+                bool aDrawSoftHyphen,
+                const nscolor* const aDecorationOverrideColor = nullptr,
+                DrawPathCallbacks* aCallbacks = nullptr);
 
   // Set non empty rect to aRect, it should be overflow rect or frame rect.
-  // If the result rect is larger than the given rect, this returns PR_TRUE.
-  PRBool CombineSelectionUnderlineRect(nsPresContext* aPresContext,
+  // If the result rect is larger than the given rect, this returns true.
+  bool CombineSelectionUnderlineRect(nsPresContext* aPresContext,
                                        nsRect& aRect);
 
-  PRBool IsFloatingFirstLetterChild();
-
   ContentOffsets GetCharacterOffsetAtFramePointInternal(const nsPoint &aPoint,
-                   PRBool aForInsertionPoint);
+                   bool aForInsertionPoint);
 
   void ClearFrameOffsetCache();
 
-  virtual PRBool HasAnyNoncollapsedCharacters();
+  virtual bool HasAnyNoncollapsedCharacters();
 
   void ClearMetrics(nsHTMLReflowMetrics& aMetrics);
 };

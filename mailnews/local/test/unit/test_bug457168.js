@@ -14,8 +14,7 @@ var thisTest;
 var tests = [
   { title: "Get New Mail, One Message",
     messages: [ "message2.eml", "message2.eml", "message3.eml" ],
-    transaction: [ "AUTH", "CAPA", "AUTH PLAIN", "STAT", "LIST",
-                   "UIDL", "XTND XLST Message-Id",
+    transaction: [ "AUTH", "CAPA", "AUTH PLAIN", "STAT", "LIST", "UIDL",
                    "RETR 1", "DELE 1", "RETR 2", "DELE 2", "RETR 3", "DELE 3" ] }
 ];
 
@@ -114,14 +113,11 @@ function testNext() {
 
 function run_test() {
   // Disable new mail notifications
-  var prefSvc = Components.classes["@mozilla.org/preferences-service;1"]
-    .getService(Components.interfaces.nsIPrefBranch);
-
-  prefSvc.setBoolPref("mail.biff.play_sound", false);
-  prefSvc.setBoolPref("mail.biff.show_alert", false);
-  prefSvc.setBoolPref("mail.biff.show_tray_icon", false);
-  prefSvc.setBoolPref("mail.biff.animate_dock_icon", false);
-  prefSvc.setIntPref("mail.server.default.dup_action", 2);
+  Services.prefs.setBoolPref("mail.biff.play_sound", false);
+  Services.prefs.setBoolPref("mail.biff.show_alert", false);
+  Services.prefs.setBoolPref("mail.biff.show_tray_icon", false);
+  Services.prefs.setBoolPref("mail.biff.animate_dock_icon", false);
+  Services.prefs.setIntPref("mail.server.default.dup_action", 2);
 
   server = setupServerDaemon();
   daemon = server[0];

@@ -1,39 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #include "nsCOMPtr.h"
 #include "mimeiimg.h"
 #include "mimemoz2.h"
@@ -52,9 +20,9 @@ MimeDefClass(MimeInlineImage, MimeInlineImageClass,
 static int MimeInlineImage_initialize (MimeObject *);
 static void MimeInlineImage_finalize (MimeObject *);
 static int MimeInlineImage_parse_begin (MimeObject *);
-static int MimeInlineImage_parse_line (const char *, PRInt32, MimeObject *);
-static int MimeInlineImage_parse_eof (MimeObject *, PRBool);
-static int MimeInlineImage_parse_decoded_buffer (const char *, PRInt32, MimeObject *);
+static int MimeInlineImage_parse_line (const char *, int32_t, MimeObject *);
+static int MimeInlineImage_parse_eof (MimeObject *, bool);
+static int MimeInlineImage_parse_decoded_buffer (const char *, int32_t, MimeObject *);
 
 static int
 MimeInlineImageClassInitialize(MimeInlineImageClass *clazz)
@@ -118,17 +86,17 @@ MimeInlineImage_parse_begin (MimeObject *obj)
     part = mime_part_address(obj);
     if (!part) return MIME_OUT_OF_MEMORY;
 
-      char *no_part_url = nsnull;
+      char *no_part_url = nullptr;
       if (obj->options->part_to_load && obj->options->format_out == nsMimeOutput::nsMimeMessageBodyDisplay)
         no_part_url = mime_get_base_url(obj->options->url);
 
         if (no_part_url)
         {
-          image_url = mime_set_url_part(no_part_url, part, PR_TRUE);
+          image_url = mime_set_url_part(no_part_url, part, true);
           PR_Free(no_part_url);
         }
         else
-          image_url = mime_set_url_part(obj->options->url, part, PR_TRUE);
+          image_url = mime_set_url_part(obj->options->url, part, true);
 
     if (!image_url)
     {
@@ -167,7 +135,7 @@ MimeInlineImage_parse_begin (MimeObject *obj)
     html = obj->options->make_image_html(img->image_data);
     if (!html) return MIME_OUT_OF_MEMORY;
 
-    status = MimeObject_write(obj, html, strlen(html), PR_TRUE);
+    status = MimeObject_write(obj, html, strlen(html), true);
     PR_Free(html);
     if (status < 0) return status;
   }
@@ -190,7 +158,7 @@ MimeInlineImage_parse_begin (MimeObject *obj)
 
 
 static int
-MimeInlineImage_parse_eof (MimeObject *obj, PRBool abort_p)
+MimeInlineImage_parse_eof (MimeObject *obj, bool abort_p)
 {
   MimeInlineImage *img = (MimeInlineImage *) obj;
   int status;
@@ -198,7 +166,7 @@ MimeInlineImage_parse_eof (MimeObject *obj, PRBool abort_p)
 
   /* Force out any buffered data from the superclass (the base64 decoder.) */
   status = ((MimeObjectClass*)&MIME_SUPERCLASS)->parse_eof(obj, abort_p);
-  if (status < 0) abort_p = PR_TRUE;
+  if (status < 0) abort_p = true;
 
   if (img->image_data)
   {
@@ -212,7 +180,7 @@ MimeInlineImage_parse_eof (MimeObject *obj, PRBool abort_p)
 
 
 static int
-MimeInlineImage_parse_decoded_buffer (const char *buf, PRInt32 size, MimeObject *obj)
+MimeInlineImage_parse_decoded_buffer (const char *buf, int32_t size, MimeObject *obj)
 {
   /* This is called (by MimeLeafClass->parse_buffer) with blocks of data
    that have already been base64-decoded.  Pass this raw image data
@@ -243,7 +211,7 @@ MimeInlineImage_parse_decoded_buffer (const char *buf, PRInt32 size, MimeObject 
       NS_ASSERTION(obj->options->state->first_data_written_p, "1.1 <rhp@netscape.com> 19 Mar 1999 12:00");
     }
 
-    return MimeObject_write(obj, buf, size, PR_TRUE);
+    return MimeObject_write(obj, buf, size, true);
   }
 
 
@@ -277,7 +245,7 @@ MimeInlineImage_parse_decoded_buffer (const char *buf, PRInt32 size, MimeObject 
 
 
 static int
-MimeInlineImage_parse_line (const char *line, PRInt32 length, MimeObject *obj)
+MimeInlineImage_parse_line (const char *line, int32_t length, MimeObject *obj)
 {
   NS_ERROR("This method should never be called (inline images do no line buffering).");
   return -1;

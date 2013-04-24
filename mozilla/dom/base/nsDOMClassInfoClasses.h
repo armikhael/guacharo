@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Johnny Stenback <jst@netscape.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 DOMCI_CLASS(Window)
 DOMCI_CLASS(Location)
@@ -45,9 +12,6 @@ DOMCI_CLASS(MimeType)
 DOMCI_CLASS(MimeTypeArray)
 DOMCI_CLASS(BarProp)
 DOMCI_CLASS(History)
-DOMCI_CLASS(PerformanceTiming)
-DOMCI_CLASS(PerformanceNavigation)
-DOMCI_CLASS(Performance)
 DOMCI_CLASS(Screen)
 DOMCI_CLASS(DOMPrototype)
 DOMCI_CLASS(DOMConstructor)
@@ -75,10 +39,14 @@ DOMCI_CLASS(MutationEvent)
 DOMCI_CLASS(UIEvent)
 DOMCI_CLASS(MouseEvent)
 DOMCI_CLASS(MouseScrollEvent)
+DOMCI_CLASS(WheelEvent)
 DOMCI_CLASS(DragEvent)
 DOMCI_CLASS(KeyboardEvent)
-DOMCI_CLASS(PopupBlockedEvent)
-DOMCI_CLASS(DeviceOrientationEvent)
+DOMCI_CLASS(CompositionEvent)
+#define MOZ_GENERATED_EVENT_LIST
+#define MOZ_GENERATED_EVENT(_event_interface) DOMCI_CLASS(_event_interface)
+#include "GeneratedEvents.h"
+#undef MOZ_GENERATED_EVENT_LIST
 DOMCI_CLASS(DeviceMotionEvent)
 DOMCI_CLASS(DeviceAcceleration)
 DOMCI_CLASS(DeviceRotationRate)
@@ -87,6 +55,8 @@ DOMCI_CLASS(DeviceRotationRate)
 DOMCI_CLASS(HTMLDocument)
 DOMCI_CLASS(HTMLOptionsCollection)
 DOMCI_CLASS(HTMLCollection)
+DOMCI_CLASS(HTMLPropertiesCollection)
+DOMCI_CLASS(PropertyNodeList)
 
 // HTML element classes
 DOMCI_CLASS(HTMLElement)
@@ -122,6 +92,7 @@ DOMCI_CLASS(HTMLMapElement)
 DOMCI_CLASS(HTMLMenuElement)
 DOMCI_CLASS(HTMLMenuItemElement)
 DOMCI_CLASS(HTMLMetaElement)
+DOMCI_CLASS(HTMLMeterElement)
 DOMCI_CLASS(HTMLModElement)
 DOMCI_CLASS(HTMLOListElement)
 DOMCI_CLASS(HTMLObjectElement)
@@ -196,8 +167,6 @@ DOMCI_CLASS(ChromeWindow)
 // RGBColor object used by getComputedStyle
 DOMCI_CLASS(CSSRGBColor)
 
-DOMCI_CLASS(RangeException)
-
 // CSSValueList object that represents an nsIDOMCSSValueList, used
 // by DOM CSS
 DOMCI_CLASS(CSSValueList)
@@ -218,15 +187,13 @@ DOMCI_CLASS(XULTreeBuilder)
 // DOMStringList object
 DOMCI_CLASS(DOMStringList)
 
-// NameList object used by the DOM
-DOMCI_CLASS(NameList)
-
 #ifdef MOZ_XUL
 DOMCI_CLASS(TreeColumn)
 DOMCI_CLASS(TreeColumns)
 #endif
 
 DOMCI_CLASS(CSSMozDocumentRule)
+DOMCI_CLASS(CSSSupportsRule)
 
 DOMCI_CLASS(BeforeUnloadEvent)
 
@@ -236,14 +203,12 @@ DOMCI_CLASS(SVGDocument)
 // SVG element classes
 DOMCI_CLASS(SVGAElement)
 DOMCI_CLASS(SVGAltGlyphElement)
-#ifdef MOZ_SMIL
 DOMCI_CLASS(SVGAnimateElement)
 DOMCI_CLASS(SVGAnimateTransformElement)
 DOMCI_CLASS(SVGAnimateMotionElement)
 DOMCI_CLASS(SVGMpathElement)
 DOMCI_CLASS(SVGSetElement)
 DOMCI_CLASS(TimeEvent)
-#endif // MOZ_SMIL
 DOMCI_CLASS(SVGCircleElement)
 DOMCI_CLASS(SVGClipPathElement)
 DOMCI_CLASS(SVGDefsElement)
@@ -297,7 +262,9 @@ DOMCI_CLASS(SVGTextElement)
 DOMCI_CLASS(SVGTextPathElement)
 DOMCI_CLASS(SVGTitleElement)
 DOMCI_CLASS(SVGTSpanElement)
+DOMCI_CLASS(SVGUnknownElement)
 DOMCI_CLASS(SVGUseElement)
+DOMCI_CLASS(SVGViewElement)
 
 // other SVG classes
 DOMCI_CLASS(SVGAngle)
@@ -314,7 +281,6 @@ DOMCI_CLASS(SVGAnimatedRect)
 DOMCI_CLASS(SVGAnimatedString)
 DOMCI_CLASS(SVGAnimatedTransformList)
 DOMCI_CLASS(SVGEvent)
-DOMCI_CLASS(SVGException)
 DOMCI_CLASS(SVGLength)
 DOMCI_CLASS(SVGLengthList)
 DOMCI_CLASS(SVGMatrix)
@@ -344,6 +310,7 @@ DOMCI_CLASS(SVGPoint)
 DOMCI_CLASS(SVGPointList)
 DOMCI_CLASS(SVGPreserveAspectRatio)
 DOMCI_CLASS(SVGRect)
+DOMCI_CLASS(SVGStringList)
 DOMCI_CLASS(SVGTransform)
 DOMCI_CLASS(SVGTransformList)
 DOMCI_CLASS(SVGZoomEvent)
@@ -354,12 +321,10 @@ DOMCI_CLASS(CanvasRenderingContext2D)
 DOMCI_CLASS(CanvasGradient)
 DOMCI_CLASS(CanvasPattern)
 DOMCI_CLASS(TextMetrics)
+DOMCI_CLASS(ImageData)
 
 // SmartCard Events
 DOMCI_CLASS(SmartCardEvent)
-  
-// PageTransition Events
-DOMCI_CLASS(PageTransitionEvent)
 
 // WindowUtils
 DOMCI_CLASS(WindowUtils)
@@ -369,7 +334,6 @@ DOMCI_CLASS(XSLTProcessor)
 
 // DOM Level 3 XPath objects
 DOMCI_CLASS(XPathEvaluator)
-DOMCI_CLASS(XPathException)
 DOMCI_CLASS(XPathExpression)
 DOMCI_CLASS(XPathNSResolver)
 DOMCI_CLASS(XPathResult)
@@ -377,10 +341,7 @@ DOMCI_CLASS(XPathResult)
 // WhatWG WebApps Objects
 DOMCI_CLASS(StorageObsolete)
 DOMCI_CLASS(Storage)
-DOMCI_CLASS(StorageList)
 DOMCI_CLASS(StorageItem)
-DOMCI_CLASS(StorageEvent)
-DOMCI_CLASS(StorageEventObsolete)
 
 // DOMParser, XMLSerializer
 DOMCI_CLASS(DOMParser)
@@ -405,9 +366,9 @@ DOMCI_CLASS(OfflineResourceList)
 DOMCI_CLASS(FileList)
 DOMCI_CLASS(Blob)
 DOMCI_CLASS(File)
-DOMCI_CLASS(FileException)
-DOMCI_CLASS(FileError)
 DOMCI_CLASS(FileReader)
+DOMCI_CLASS(ArchiveReader)
+DOMCI_CLASS(ArchiveRequest)
 DOMCI_CLASS(MozURLProperty)
 DOMCI_CLASS(MozBlobBuilder)
 
@@ -423,12 +384,32 @@ DOMCI_CLASS(DataContainerEvent)
 // HTML5
 DOMCI_CLASS(MessageEvent)
 
+DOMCI_CLASS(DeviceStorage)
+DOMCI_CLASS(DeviceStorageCursor)
+DOMCI_CLASS(DeviceStorageStat)
+
 // Geolocation
 DOMCI_CLASS(GeoGeolocation)
 DOMCI_CLASS(GeoPosition)
 DOMCI_CLASS(GeoPositionCoords)
-DOMCI_CLASS(GeoPositionAddress)
 DOMCI_CLASS(GeoPositionError)
+
+DOMCI_CLASS(BatteryManager)
+
+DOMCI_CLASS(MozPowerManager)
+DOMCI_CLASS(MozWakeLock)
+
+DOMCI_CLASS(MozSmsManager)
+DOMCI_CLASS(MozSmsMessage)
+DOMCI_CLASS(MozSmsEvent)
+DOMCI_CLASS(MozSmsRequest)
+DOMCI_CLASS(MozSmsFilter)
+DOMCI_CLASS(MozSmsCursor)
+
+DOMCI_CLASS(MozConnection)
+DOMCI_CLASS(MozMobileConnection)
+
+DOMCI_CLASS(USSDReceivedEvent)
 
 // @font-face in CSS
 DOMCI_CLASS(CSSFontFaceRule)
@@ -441,6 +422,9 @@ DOMCI_CLASS(HTMLSourceElement)
 DOMCI_CLASS(MediaError)
 DOMCI_CLASS(HTMLAudioElement)
 DOMCI_CLASS(TimeRanges)
+
+// Media streams
+DOMCI_CLASS(MediaStream)
 #endif
 
 DOMCI_CLASS(ProgressEvent)
@@ -471,15 +455,19 @@ DOMCI_CLASS(WebGLShader)
 DOMCI_CLASS(WebGLFramebuffer)
 DOMCI_CLASS(WebGLRenderbuffer)
 DOMCI_CLASS(WebGLUniformLocation)
+DOMCI_CLASS(WebGLShaderPrecisionFormat)
 DOMCI_CLASS(WebGLActiveInfo)
 DOMCI_CLASS(WebGLExtension)
+DOMCI_CLASS(WebGLExtensionStandardDerivatives)
+DOMCI_CLASS(WebGLExtensionTextureFilterAnisotropic)
+DOMCI_CLASS(WebGLExtensionLoseContext)
+DOMCI_CLASS(WebGLExtensionCompressedTextureS3TC)
+DOMCI_CLASS(WebGLExtensionDepthTexture)
 
 DOMCI_CLASS(PaintRequest)
 DOMCI_CLASS(PaintRequestList)
 
 DOMCI_CLASS(ScrollAreaEvent)
-DOMCI_CLASS(PopStateEvent)
-DOMCI_CLASS(HashChangeEvent)
 
 DOMCI_CLASS(EventListenerInfo)
 
@@ -487,6 +475,8 @@ DOMCI_CLASS(TransitionEvent)
 DOMCI_CLASS(AnimationEvent)
 
 DOMCI_CLASS(ContentFrameMessageManager)
+DOMCI_CLASS(ChromeMessageBroadcaster)
+DOMCI_CLASS(ChromeMessageSender)
 
 DOMCI_CLASS(FormData)
 
@@ -494,10 +484,10 @@ DOMCI_CLASS(DesktopNotification)
 DOMCI_CLASS(DesktopNotificationCenter)
 
 // WebSocket
-DOMCI_CLASS(MozWebSocket)
-DOMCI_CLASS(CloseEvent)
+DOMCI_CLASS(WebSocket)
 
 DOMCI_CLASS(IDBFactory)
+DOMCI_CLASS(IDBFileHandle)
 DOMCI_CLASS(IDBRequest)
 DOMCI_CLASS(IDBDatabase)
 DOMCI_CLASS(IDBObjectStore)
@@ -507,10 +497,7 @@ DOMCI_CLASS(IDBCursorWithValue)
 DOMCI_CLASS(IDBKeyRange)
 DOMCI_CLASS(IDBIndex)
 DOMCI_CLASS(IDBVersionChangeEvent)
-DOMCI_CLASS(IDBVersionChangeRequest)
-DOMCI_CLASS(IDBDatabaseException)
-
-DOMCI_CLASS(EventException)
+DOMCI_CLASS(IDBOpenDBRequest)
 
 DOMCI_CLASS(Touch)
 DOMCI_CLASS(TouchList)
@@ -520,4 +507,37 @@ DOMCI_CLASS(MozCSSKeyframeRule)
 DOMCI_CLASS(MozCSSKeyframesRule)
 
 DOMCI_CLASS(MediaQueryList)
-DOMCI_CLASS(CustomEvent)
+
+DOMCI_CLASS(MutationObserver)
+DOMCI_CLASS(MutationRecord)
+
+#ifdef MOZ_B2G_RIL
+DOMCI_CLASS(MozWifiStatusChangeEvent)
+DOMCI_CLASS(MozWifiConnectionInfoEvent)
+DOMCI_CLASS(Telephony)
+DOMCI_CLASS(TelephonyCall)
+DOMCI_CLASS(CallEvent)
+DOMCI_CLASS(MozVoicemail)
+DOMCI_CLASS(MozVoicemailEvent)
+#endif
+
+#ifdef MOZ_B2G_BT
+DOMCI_CLASS(BluetoothManager)
+DOMCI_CLASS(BluetoothAdapter)
+DOMCI_CLASS(BluetoothDevice)
+DOMCI_CLASS(BluetoothPropertyEvent)
+#endif
+
+DOMCI_CLASS(CameraManager)
+DOMCI_CLASS(CameraControl)
+DOMCI_CLASS(CameraCapabilities)
+
+DOMCI_CLASS(DOMError)
+DOMCI_CLASS(DOMRequest)
+DOMCI_CLASS(OpenWindowEventDetail)
+
+DOMCI_CLASS(DOMFileHandle)
+DOMCI_CLASS(FileRequest)
+DOMCI_CLASS(LockedFile)
+
+DOMCI_CLASS(MozActivity)

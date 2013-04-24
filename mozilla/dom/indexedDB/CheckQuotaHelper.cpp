@@ -1,41 +1,8 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set ts=2 et sw=2 tw=80: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Indexed Database.
- *
- * The Initial Developer of the Original Code is
- * The Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Ben Turner <bent.mozilla@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "CheckQuotaHelper.h"
 
@@ -52,7 +19,7 @@
 #include "nsThreadUtils.h"
 #include "mozilla/Services.h"
 
-#include "IDBFactory.h"
+#include "IndexedDatabaseManager.h"
 
 #define PERMISSION_INDEXEDDB_UNLIMITED "indexedDB-unlimited"
 
@@ -67,9 +34,8 @@ using mozilla::MutexAutoLock;
 namespace {
 
 inline
-PRUint32
-GetQuotaPermissions(const nsACString& aASCIIOrigin,
-                    nsIDOMWindow* aWindow)
+uint32_t
+GetQuotaPermissions(nsIDOMWindow* aWindow)
 {
   NS_ASSERTION(NS_IsMainThread(), "Wrong thread!");
 
@@ -80,17 +46,15 @@ GetQuotaPermissions(const nsACString& aASCIIOrigin,
     return nsIPermissionManager::ALLOW_ACTION;
   }
 
-  nsCOMPtr<nsIURI> uri;
-  nsresult rv = NS_NewURI(getter_AddRefs(uri), aASCIIOrigin);
-  NS_ENSURE_SUCCESS(rv, nsIPermissionManager::DENY_ACTION);
-
   nsCOMPtr<nsIPermissionManager> permissionManager =
     do_GetService(NS_PERMISSIONMANAGER_CONTRACTID);
   NS_ENSURE_TRUE(permissionManager, nsIPermissionManager::DENY_ACTION);
 
-  PRUint32 permission;
-  rv = permissionManager->TestPermission(uri, PERMISSION_INDEXEDDB_UNLIMITED,
-                                         &permission);
+  uint32_t permission;
+  nsresult rv =
+    permissionManager->TestPermissionFromPrincipal(sop->GetPrincipal(),
+                                                   PERMISSION_INDEXEDDB_UNLIMITED,
+                                                   &permission);
   NS_ENSURE_SUCCESS(rv, nsIPermissionManager::DENY_ACTION);
 
   return permission;
@@ -98,11 +62,9 @@ GetQuotaPermissions(const nsACString& aASCIIOrigin,
 
 } // anonymous namespace
 
-CheckQuotaHelper::CheckQuotaHelper(IDBDatabase* aDatabase,
+CheckQuotaHelper::CheckQuotaHelper(nsPIDOMWindow* aWindow,
                                    mozilla::Mutex& aMutex)
-: mWindow(aDatabase->Owner()),
-  mWindowSerial(mWindow->GetSerial()),
-  mOrigin(aDatabase->Origin()),
+: mWindow(aWindow),
   mMutex(aMutex),
   mCondVar(mMutex, "CheckQuotaHelper::mCondVar"),
   mPromptResult(0),
@@ -146,7 +108,7 @@ CheckQuotaHelper::Cancel()
     nsCOMPtr<nsIObserverService> obs = GetObserverService();
     NS_WARN_IF_FALSE(obs, "Failed to get observer service!");
     if (obs && NS_FAILED(obs->NotifyObservers(static_cast<nsIRunnable*>(this),
-                                              TOPIC_QUOTA_CANCEL, nsnull))) {
+                                              TOPIC_QUOTA_CANCEL, nullptr))) {
       NS_WARNING("Failed to notify observers!");
     }
 
@@ -156,7 +118,7 @@ CheckQuotaHelper::Cancel()
       nsAutoString response;
       response.AppendInt(nsIPermissionManager::UNKNOWN_ACTION);
 
-      if (NS_SUCCEEDED(Observe(nsnull, TOPIC_QUOTA_RESPONSE, response.get()))) {
+      if (NS_SUCCEEDED(Observe(nullptr, TOPIC_QUOTA_RESPONSE, response.get()))) {
         NS_ASSERTION(mHasPrompted, "Should have set this in Observe!");
       }
       else {
@@ -175,52 +137,54 @@ CheckQuotaHelper::Run()
 {
   NS_ASSERTION(NS_IsMainThread(), "Wrong thread!");
 
-  if (!mHasPrompted) {
-    mPromptResult = GetQuotaPermissions(mOrigin, mWindow);
-  }
+  nsresult rv = NS_OK;
 
-  nsresult rv;
-  if (mHasPrompted) {
-    // Add permissions to the database, but only if we are in the parent
-    // process (if we are in the child process, we have already
-    // set the permission when the prompt was shown in the parent, as
-    // we cannot set the permission from the child).
-    if (mPromptResult != nsIPermissionManager::UNKNOWN_ACTION &&
-        XRE_GetProcessType() == GeckoProcessType_Default) {
-      nsCOMPtr<nsIURI> uri;
-      rv = NS_NewURI(getter_AddRefs(uri), mOrigin);
-      NS_ENSURE_SUCCESS(rv, rv);
-  
-      nsCOMPtr<nsIPermissionManager> permissionManager =
-        do_GetService(NS_PERMISSIONMANAGER_CONTRACTID);
-      NS_ENSURE_STATE(permissionManager);
-  
-      rv = permissionManager->Add(uri, PERMISSION_INDEXEDDB_UNLIMITED,
-                                  mPromptResult,
-                                  nsIPermissionManager::EXPIRE_NEVER, 0);
-      NS_ENSURE_SUCCESS(rv, rv);
+  if (NS_SUCCEEDED(rv)) {
+    if (!mHasPrompted) {
+      mPromptResult = GetQuotaPermissions(mWindow);
     }
-  }
-  else if (mPromptResult == nsIPermissionManager::UNKNOWN_ACTION) {
-    PRUint32 quota = IDBFactory::GetIndexedDBQuota();
-    NS_ASSERTION(quota, "Shouldn't get here if quota is disabled!");
 
-    nsString quotaString;
-    quotaString.AppendInt(quota);
+    if (mHasPrompted) {
+      // Add permissions to the database, but only if we are in the parent
+      // process (if we are in the child process, we have already
+      // set the permission when the prompt was shown in the parent, as
+      // we cannot set the permission from the child).
+      if (mPromptResult != nsIPermissionManager::UNKNOWN_ACTION &&
+          XRE_GetProcessType() == GeckoProcessType_Default) {
+        nsCOMPtr<nsIScriptObjectPrincipal> sop = do_QueryInterface(mWindow);
+        NS_ENSURE_TRUE(sop, NS_ERROR_FAILURE);
 
-    nsCOMPtr<nsIObserverService> obs = GetObserverService();
-    NS_ENSURE_STATE(obs);
+        nsCOMPtr<nsIPermissionManager> permissionManager =
+          do_GetService(NS_PERMISSIONMANAGER_CONTRACTID);
+        NS_ENSURE_STATE(permissionManager);
 
-    // We have to watch to make sure that the window doesn't go away without
-    // responding to us. Otherwise our database threads will hang.
-    rv = obs->AddObserver(this, DOM_WINDOW_DESTROYED_TOPIC, PR_FALSE);
-    NS_ENSURE_SUCCESS(rv, rv);
+        rv = permissionManager->AddFromPrincipal(sop->GetPrincipal(),
+                                                 PERMISSION_INDEXEDDB_UNLIMITED,
+                                                 mPromptResult,
+                                                 nsIPermissionManager::EXPIRE_NEVER, 0);
+        NS_ENSURE_SUCCESS(rv, rv);
+      }
+    }
+    else if (mPromptResult == nsIPermissionManager::UNKNOWN_ACTION) {
+      uint32_t quota = IndexedDatabaseManager::GetIndexedDBQuotaMB();
 
-    rv = obs->NotifyObservers(static_cast<nsIRunnable*>(this),
-                              TOPIC_QUOTA_PROMPT, quotaString.get());
-    NS_ENSURE_SUCCESS(rv, rv);
+      nsString quotaString;
+      quotaString.AppendInt(quota);
 
-    return NS_OK;
+      nsCOMPtr<nsIObserverService> obs = GetObserverService();
+      NS_ENSURE_STATE(obs);
+
+      // We have to watch to make sure that the window doesn't go away without
+      // responding to us. Otherwise our database threads will hang.
+      rv = obs->AddObserver(this, DOM_WINDOW_DESTROYED_TOPIC, false);
+      NS_ENSURE_SUCCESS(rv, rv);
+
+      rv = obs->NotifyObservers(static_cast<nsIRunnable*>(this),
+                                TOPIC_QUOTA_PROMPT, quotaString.get());
+      NS_ENSURE_SUCCESS(rv, rv);
+
+      return NS_OK;
+    }
   }
 
   MutexAutoLock lock(mMutex);
@@ -228,7 +192,7 @@ CheckQuotaHelper::Run()
   NS_ASSERTION(mWaiting, "Huh?!");
 
     // This should never be used again.
-  mWindow = nsnull;
+  mWindow = nullptr;
 
   mWaiting = false;
   mCondVar.NotifyAll();
@@ -250,7 +214,7 @@ CheckQuotaHelper::GetInterface(const nsIID& aIID,
     return mWindow->QueryInterface(aIID, aResult);
   }
 
-  *aResult = nsnull;
+  *aResult = nullptr;
   return NS_ERROR_NOT_AVAILABLE;
 }
 

@@ -14,7 +14,7 @@
       onpopuphidden="testtag_finish()">
 <datepicker id="datepicker"/>
 <datepicker id="datepicker-popup" type="popup"/>
-<hbox onDOMMouseScroll="mouseScrolled = event.getPreventDefault();">
+<hbox onDOMMouseScroll="mouseScrolled = event.defaultPrevented;">
   <datepicker id="datepicker-grid" type="grid"/>
 </hbox>
 </hbox>
@@ -55,7 +55,8 @@ function testtag_finish()
   ok(!document.getElementById("datepicker-popup").open, "datepicker popup open false again");
 
   var dpgrid = document.getElementById("datepicker-grid");
-  synthesizeMouseScroll(dpgrid, 5, 5, { delta: 10 });
+  synthesizeWheel(dpgrid, 5, 5, { deltaY: 10.0,
+                                  deltaMode: WheelEvent.DOM_DELTA_LINE });
   is(mouseScrolled, true, "mouse scrolled");
   is(dpgrid.displayedMonth, 2, "mouse scroll changed month");
 

@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef _nsMsgSearchDBViewsH_
 #define _nsMsgSearchDBView_H_
@@ -61,7 +29,7 @@ public:
 
   virtual const char * GetViewName(void) {return "SearchView"; }
   NS_IMETHOD Open(nsIMsgFolder *folder, nsMsgViewSortTypeValue sortType, nsMsgViewSortOrderValue sortOrder, 
-        nsMsgViewFlagsTypeValue viewFlags, PRInt32 *pCount);
+        nsMsgViewFlagsTypeValue viewFlags, int32_t *pCount);
   NS_IMETHOD CloneDBView(nsIMessenger *aMessengerInstance, nsIMsgWindow *aMsgWindow,
                          nsIMsgDBViewCommandUpdater *aCmdUpdater, nsIMsgDBView **_retval);
   NS_IMETHOD CopyDBView(nsMsgDBView *aNewMsgDBView, nsIMessenger *aMessengerInstance, 
@@ -71,7 +39,7 @@ public:
   NS_IMETHOD Sort(nsMsgViewSortTypeValue sortType, 
                   nsMsgViewSortOrderValue sortOrder);
   NS_IMETHOD GetCommandStatus(nsMsgViewCommandTypeValue command,
-                              PRBool *selectable_p, 
+                              bool *selectable_p, 
                               nsMsgViewCommandCheckStateValue *selected_p);
   NS_IMETHOD DoCommand(nsMsgViewCommandTypeValue command);
   NS_IMETHOD DoCommandWithFolder(nsMsgViewCommandTypeValue command, nsIMsgFolder *destFolder);
@@ -80,16 +48,16 @@ public:
                           nsMsgViewSortTypeValue aSortType,
                           nsMsgViewSortOrderValue aSortOrder, 
                           nsMsgViewFlagsTypeValue aViewFlags,
-                          PRInt32 *aCount);
+                          int32_t *aCount);
   NS_IMETHOD OnHdrDeleted(nsIMsgDBHdr *aHdrDeleted, nsMsgKey aParentKey, 
-                          PRInt32 aFlags, nsIDBChangeListener *aInstigator);
-  NS_IMETHOD OnHdrFlagsChanged(nsIMsgDBHdr *aHdrChanged, PRUint32 aOldFlags,
-                               PRUint32 aNewFlags, nsIDBChangeListener *aInstigator);
-  NS_IMETHOD GetNumMsgsInView(PRInt32 *aNumMsgs);
+                          int32_t aFlags, nsIDBChangeListener *aInstigator);
+  NS_IMETHOD OnHdrFlagsChanged(nsIMsgDBHdr *aHdrChanged, uint32_t aOldFlags,
+                               uint32_t aNewFlags, nsIDBChangeListener *aInstigator);
+  NS_IMETHOD GetNumMsgsInView(int32_t *aNumMsgs);
   // override to get location
-  NS_IMETHOD GetCellText(PRInt32 aRow, nsITreeColumn* aCol, nsAString& aValue);
+  NS_IMETHOD GetCellText(int32_t aRow, nsITreeColumn* aCol, nsAString& aValue);
   virtual nsresult GetMsgHdrForViewIndex(nsMsgViewIndex index, nsIMsgDBHdr **msgHdr);
-  virtual nsresult OnNewHeader(nsIMsgDBHdr *newHdr, nsMsgKey parentKey, PRBool ensureListed);
+  virtual nsresult OnNewHeader(nsIMsgDBHdr *newHdr, nsMsgKey parentKey, bool ensureListed);
   NS_IMETHOD GetFolderForViewIndex(nsMsgViewIndex index, nsIMsgFolder **folder);
 
   NS_IMETHOD OnAnnouncerGoingAway(nsIDBChangeAnnouncer *instigator);
@@ -106,26 +74,26 @@ protected:
   virtual nsresult HashHdr(nsIMsgDBHdr *msgHdr, nsString& aHashKey);
   virtual nsresult ListIdsInThread(nsIMsgThread *threadHdr, 
                                    nsMsgViewIndex startOfThreadViewIndex, 
-                                   PRUint32 *pNumListed);
-  nsresult FetchLocation(PRInt32 aRow, nsAString& aLocationString);
+                                   uint32_t *pNumListed);
+  nsresult FetchLocation(int32_t aRow, nsAString& aLocationString);
   virtual nsresult AddHdrFromFolder(nsIMsgDBHdr *msgHdr, nsIMsgFolder *folder);
   virtual nsresult GetDBForViewIndex(nsMsgViewIndex index, nsIMsgDatabase **db);
   virtual nsresult RemoveByIndex(nsMsgViewIndex index);
-  virtual nsresult CopyMessages(nsIMsgWindow *window, nsMsgViewIndex *indices, PRInt32 numIndices, PRBool isMove, nsIMsgFolder *destFolder);
-  virtual nsresult DeleteMessages(nsIMsgWindow *window, nsMsgViewIndex *indices, PRInt32 numIndices, PRBool deleteStorage);
+  virtual nsresult CopyMessages(nsIMsgWindow *window, nsMsgViewIndex *indices, int32_t numIndices, bool isMove, nsIMsgFolder *destFolder);
+  virtual nsresult DeleteMessages(nsIMsgWindow *window, nsMsgViewIndex *indices, int32_t numIndices, bool deleteStorage);
   virtual void InsertMsgHdrAt(nsMsgViewIndex index, nsIMsgDBHdr *hdr,
-                              nsMsgKey msgKey, PRUint32 flags, PRUint32 level);
+                              nsMsgKey msgKey, uint32_t flags, uint32_t level);
   virtual void SetMsgHdrAt(nsIMsgDBHdr *hdr, nsMsgViewIndex index,
-                              nsMsgKey msgKey, PRUint32 flags, PRUint32 level);
-  virtual PRBool InsertEmptyRows(nsMsgViewIndex viewIndex, PRInt32 numRows);
-  virtual void RemoveRows(nsMsgViewIndex viewIndex, PRInt32 numRows);
+                              nsMsgKey msgKey, uint32_t flags, uint32_t level);
+  virtual bool InsertEmptyRows(nsMsgViewIndex viewIndex, int32_t numRows);
+  virtual void RemoveRows(nsMsgViewIndex viewIndex, int32_t numRows);
   virtual nsMsgViewIndex FindHdr(nsIMsgDBHdr *msgHdr, nsMsgViewIndex startIndex = 0,
-                                 PRBool allowDummy=PR_FALSE);
-  nsresult GetFoldersAndHdrsForSelection(nsMsgViewIndex *indices, PRInt32 numIndices);
+                                 bool allowDummy=false);
+  nsresult GetFoldersAndHdrsForSelection(nsMsgViewIndex *indices, int32_t numIndices);
   nsresult GroupSearchResultsByFolder();
-  nsresult PartitionSelectionByFolder(nsMsgViewIndex *indices, PRInt32 numIndices, nsTArray<PRUint32> **indexArrays, PRInt32 *numArrays);
+  nsresult PartitionSelectionByFolder(nsMsgViewIndex *indices, int32_t numIndices, nsTArray<uint32_t> **indexArrays, int32_t *numArrays);
   virtual nsresult ApplyCommandToIndicesWithFolder(nsMsgViewCommandTypeValue command, nsMsgViewIndex* indices,
-                    PRInt32 numIndices, nsIMsgFolder *destFolder);
+                    int32_t numIndices, nsIMsgFolder *destFolder);
   void MoveThreadAt(nsMsgViewIndex threadIndex);
   
   virtual nsresult GetMessageEnumerator(nsISimpleEnumerator **enumerator);
@@ -135,10 +103,10 @@ protected:
   nsCOMPtr <nsISupportsArray> m_hdrsForEachFolder;
   nsCOMPtr <nsISupportsArray> m_copyListenerList;
   nsCOMArray<nsIMsgFolder> m_uniqueFoldersSelected;
-  PRUint32 mCurIndex;
+  uint32_t mCurIndex;
 
   nsMsgViewIndex* mIndicesForChainedDeleteAndFile;
-  PRInt32 mTotalIndices;
+  int32_t mTotalIndices;
   nsCOMArray<nsIMsgDatabase> m_dbToUseList;
   nsMsgViewCommandTypeValue mCommand;
   nsCOMPtr <nsIMsgFolder> mDestFolder;
@@ -159,7 +127,7 @@ protected:
 
   // map message-ids to msg hdrs in the view, used for threading.
   nsInterfaceHashtable <nsCStringHashKey, nsIMsgDBHdr> m_hdrsTable;
-  PRUint32 m_totalMessagesInView;
+  uint32_t m_totalMessagesInView;
 
   PR_STATIC_CALLBACK(PLDHashOperator) ThreadTableCloner(const nsACString &aKey, 
                                                         nsIMsgThread* aThread, 
@@ -169,9 +137,9 @@ protected:
                                                         void* aArg);
   virtual nsMsgGroupThread *CreateGroupThread(nsIMsgDatabase *db);
   nsresult GetXFThreadFromMsgHdr(nsIMsgDBHdr *msgHdr, nsIMsgThread **pThread,
-                                 PRBool *foundByMessageId = nsnull);
-  nsresult GetThreadFromHash(nsCString &reference, nsIMsgThread **thread);
-  nsresult GetMsgHdrFromHash(nsCString &reference, nsIMsgDBHdr **hdr);
+                                 bool *foundByMessageId = nullptr);
+  bool     GetThreadFromHash(nsCString &reference, nsIMsgThread **thread);
+  bool     GetMsgHdrFromHash(nsCString &reference, nsIMsgDBHdr **hdr);
   nsresult AddRefToHash(nsCString &reference, nsIMsgThread *thread);
   nsresult AddMsgToHashTables(nsIMsgDBHdr *msgHdr, nsIMsgThread *thread);
   nsresult RemoveRefFromHash(nsCString &reference);

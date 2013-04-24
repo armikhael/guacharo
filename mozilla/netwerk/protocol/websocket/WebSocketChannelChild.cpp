@@ -1,47 +1,20 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set sw=2 ts=8 et tw=80 : */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Josh Matthews <josh@joshmatthews.net>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "WebSocketLog.h"
 #include "mozilla/dom/TabChild.h"
 #include "mozilla/net/NeckoChild.h"
 #include "WebSocketChannelChild.h"
 #include "nsITabChild.h"
+#include "nsILoadContext.h"
+#include "nsNetUtil.h"
+#include "mozilla/ipc/InputStreamUtils.h"
+#include "mozilla/ipc/URIUtils.h"
+
+using namespace mozilla::ipc;
 
 namespace mozilla {
 namespace net {
@@ -260,7 +233,7 @@ class AcknowledgeEvent : public ChannelEvent
 {
  public:
   AcknowledgeEvent(WebSocketChannelChild* aChild,
-                   const PRUint32& aSize)
+                   const uint32_t& aSize)
   : mChild(aChild)
   , mSize(aSize)
   {}
@@ -271,11 +244,11 @@ class AcknowledgeEvent : public ChannelEvent
   }
  private:
   WebSocketChannelChild* mChild;
-  PRUint32 mSize;
+  uint32_t mSize;
 };
 
 bool
-WebSocketChannelChild::RecvOnAcknowledge(const PRUint32& aSize)
+WebSocketChannelChild::RecvOnAcknowledge(const uint32_t& aSize)
 {
   if (mEventQ.ShouldEnqueue()) {
     mEventQ.Enqueue(new AcknowledgeEvent(this, aSize));
@@ -286,7 +259,7 @@ WebSocketChannelChild::RecvOnAcknowledge(const PRUint32& aSize)
 }
 
 void
-WebSocketChannelChild::OnAcknowledge(const PRUint32& aSize)
+WebSocketChannelChild::OnAcknowledge(const uint32_t& aSize)
 {
   LOG(("WebSocketChannelChild::RecvOnAcknowledge() %p\n", this));
   if (mListener) {
@@ -299,7 +272,7 @@ class ServerCloseEvent : public ChannelEvent
 {
  public:
   ServerCloseEvent(WebSocketChannelChild* aChild,
-                   const PRUint16 aCode,
+                   const uint16_t aCode,
                    const nsCString &aReason)
   : mChild(aChild)
   , mCode(aCode)
@@ -312,12 +285,12 @@ class ServerCloseEvent : public ChannelEvent
   }
  private:
   WebSocketChannelChild* mChild;
-  PRUint16               mCode;
+  uint16_t               mCode;
   nsCString              mReason;
 };
 
 bool
-WebSocketChannelChild::RecvOnServerClose(const PRUint16& aCode,
+WebSocketChannelChild::RecvOnServerClose(const uint16_t& aCode,
                                          const nsCString& aReason)
 {
   if (mEventQ.ShouldEnqueue()) {
@@ -329,7 +302,7 @@ WebSocketChannelChild::RecvOnServerClose(const PRUint16& aCode,
 }
 
 void
-WebSocketChannelChild::OnServerClose(const PRUint16& aCode,
+WebSocketChannelChild::OnServerClose(const uint16_t& aCode,
                                      const nsCString& aReason)
 {
   LOG(("WebSocketChannelChild::RecvOnServerClose() %p\n", this));
@@ -350,7 +323,7 @@ WebSocketChannelChild::AsyncOpen(nsIURI *aURI,
   NS_ABORT_IF_FALSE(aURI && aListener && !mListener, 
                     "Invalid state for WebSocketChannelChild::AsyncOpen");
 
-  mozilla::dom::TabChild* tabChild = nsnull;
+  mozilla::dom::TabChild* tabChild = nullptr;
   nsCOMPtr<nsITabChild> iTabChild;
   NS_QueryNotificationCallbacks(mCallbacks, mLoadGroup,
                                 NS_GET_IID(nsITabChild),
@@ -359,11 +332,15 @@ WebSocketChannelChild::AsyncOpen(nsIURI *aURI,
     tabChild = static_cast<mozilla::dom::TabChild*>(iTabChild.get());
   }
 
+  URIParams uri;
+  SerializeURI(aURI, uri);
+
   // Corresponding release in DeallocPWebSocket
   AddIPDLReference();
 
   gNeckoChild->SendPWebSocketConstructor(this, tabChild);
-  if (!SendAsyncOpen(aURI, nsCString(aOrigin), mProtocol, mEncrypted))
+  if (!SendAsyncOpen(uri, nsCString(aOrigin), mProtocol, mEncrypted,
+                     IPC::SerializedLoadContext(this)))
     return NS_ERROR_UNEXPECTED;
 
   mOriginalURI = aURI;
@@ -376,7 +353,7 @@ WebSocketChannelChild::AsyncOpen(nsIURI *aURI,
 }
 
 NS_IMETHODIMP
-WebSocketChannelChild::Close(PRUint16 code, const nsACString & reason)
+WebSocketChannelChild::Close(uint16_t code, const nsACString & reason)
 {
   LOG(("WebSocketChannelChild::Close() %p\n", this));
 
@@ -401,6 +378,20 @@ WebSocketChannelChild::SendBinaryMsg(const nsACString &aMsg)
   LOG(("WebSocketChannelChild::SendBinaryMsg() %p\n", this));
 
   if (!mIPCOpen || !SendSendBinaryMsg(nsCString(aMsg)))
+    return NS_ERROR_UNEXPECTED;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+WebSocketChannelChild::SendBinaryStream(nsIInputStream *aStream,
+                                        uint32_t aLength)
+{
+  LOG(("WebSocketChannelChild::SendBinaryStream() %p\n", this));
+
+  OptionalInputStreamParams stream;
+  SerializeInputStream(aStream, stream);
+
+  if (!mIPCOpen || !SendSendBinaryStream(stream, aLength))
     return NS_ERROR_UNEXPECTED;
   return NS_OK;
 }

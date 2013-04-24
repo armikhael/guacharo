@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Mail Client.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Mike Conley <mconley@mozillamessaging.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * Tests for the address book.
@@ -43,7 +10,8 @@ var MODULE_NAME = 'test-address-book';
 
 var RELATIVE_ROOT = '../shared-modules';
 var MODULE_REQUIRES = ['address-book-helpers', 'folder-display-helpers',
-                       'compose-helpers', 'window-helpers'];
+                       'compose-helpers', 'window-helpers',
+                       'prompt-helpers'];
 
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource:///modules/Services.jsm");
@@ -53,86 +21,6 @@ let abController = null;
 var addrBook1, addrBook2, addrBook3, addrBook4;
 var mListA, mListB, mListC, mListD, mListE;
 var windowHelper;
-
-var gMockPromptService = {
-  QueryInterface: XPCOMUtils.generateQI([Ci.nsIPromptService]),
-  _will_return: null,
-  _did_confirm: false,
-  _confirm_msg: null,
-  _originalFactory: null,
-  _cid: null,
-  _contractID: "@mozilla.org/embedcomp/prompt-service;1",
-
-  confirm: function(aParent, aDialogTitle, aText) {
-    this._did_confirm = true;
-    this._confirm_msg = aText;
-    return this._will_return;
-  },
-
-  _return: function(aReturn) {
-    this._will_return = aReturn;
-  },
-
-  _reset: function() {
-    this._will_return = null;
-    this._did_confirm = false;
-    this._confirm_msg = null;
-  },
-
-  register: function() {
-    let Cm = Components.manager;
-    let Cc = Components.classes;
-    let Ci = Components.interfaces;
-
-    this._originalFactory = Cm.getClassObject(Cc[this._contractID], Ci.nsIFactory);
-
-    let registrar = Cm.QueryInterface(Ci.nsIComponentRegistrar);
-    this._cid = registrar.contractIDToCID(this._contractID);
-
-    registrar.unregisterFactory(this._cid,
-                                this._originalFactory);
-
-    registrar.registerFactory(this._cid,
-                              "Mock Prompt Service",
-                              this._contractID,
-                              gMockPromptServiceFactory);
-  },
-
-  unregister: function() {
-    let Cm = Components.manager;
-    let Ci = Components.interfaces;
-
-    let registrar = Cm.QueryInterface(Ci.nsIComponentRegistrar);
-
-    registrar.unregisterFactory(this._cid,
-                                gMockPromptServiceFactory);
-
-    registrar.registerFactory(this._cid,
-                              "Prompt Service",
-                              this._contractID,
-                              this._originalFactory);
-  },
-
-};
-
-var gMockPromptServiceFactory = {
-  createInstance: function(aOuter, aIID) {
-    if (aOuter != null)
-      throw Cr.NS_ERROR_NO_AGGREGATION;
-
-    if (!aIID.equals(Ci.nsIPromptService))
-      throw Cr.NS_ERROR_NO_INTERFACE;
-
-    return gMockPromptService;
-  }
-};
-
-/* Helper function to open a new address book window, and return an
- * augmented controller for it.
- */
-function get_augmented_address_book_window() {
-  return windowHelper.augment_controller(open_address_book_window());
-}
 
 function setupModule(module)
 {
@@ -145,10 +33,13 @@ function setupModule(module)
   let ch = collector.getModule('compose-helpers');
   ch.installInto(module);
 
+  let ph = collector.getModule('prompt-helpers');
+  ph.installInto(module);
+
   windowHelper = collector.getModule('window-helpers');
 
   // Open the address book main window
-  abController = get_augmented_address_book_window();
+  abController = open_address_book_window();
 
   // Let's add some new address books.  I'll add them
   // out of order to properly test the alphabetical
@@ -174,8 +65,10 @@ function setupModule(module)
   // There are 7 address books (Personal, AB 1, AB 2, AB 3, AB 4, LDAP Book
   // and Collected Address Book.  So let's ensure that those address books
   // exist in the tree view before executing our tests.
-  abController.waitForEval("subject.window.gDirectoryTreeView.rowCount == 7",
-                           1000, 10, abController);
+  abController.waitFor(
+    function () (abController.window.gDirectoryTreeView.rowCount == 7),
+    "Timeout waiting for all 7 address books to show up in the tree view",
+    1000, 10);
 }
 
 /* Test that the address book manager automatically sorts
@@ -230,7 +123,7 @@ function test_persist_collapsed_and_expanded_states()
 
   // Now close and re-open the address book
   abController.window.close();
-  abController = get_augmented_address_book_window();
+  abController = open_address_book_window();
 
   assert_true(is_address_book_collapsed(addrBook2));
   assert_true(!is_address_book_collapsed(addrBook1));
@@ -243,7 +136,7 @@ function test_persist_collapsed_and_expanded_states()
 
   // Now close and re-open the address book
   abController.window.close();
-  abController = get_augmented_address_book_window();
+  abController = open_address_book_window();
 
   assert_true(!is_address_book_collapsed(addrBook2));
   assert_true(is_address_book_collapsed(addrBook1));
@@ -273,31 +166,35 @@ function test_deleting_contact_causes_confirm_prompt()
 
   // Set the mock prompt to return false, so that the
   // contact should not be deleted.
-  gMockPromptService._return(false);
+  gMockPromptService.returnValue = false;
 
   // Now attempt to delete the contact
   select_contact(toDelete);
   abController.keypress(null, "VK_DELETE", {});
 
+  let promptState = gMockPromptService.promptState;
+  assert_not_equals(null, promptState, "Expected a prompt state");
   // Was a confirm displayed?
-  assert_true(gMockPromptService._did_confirm);
+  assert_equals("confirm", promptState.method);
   // Was the right message displayed?
-  assert_equals(gMockPromptService._confirm_msg, confirmSingle);
+  assert_equals(confirmSingle, promptState.text);
   // The contact should not have been deleted.
   assert_equals(abController.window.gAbView.rowCount, totalEntries);
 
-  gMockPromptService._reset();
+  gMockPromptService.reset();
 
   // Now we'll return true on confirm so that
   // the contact is deleted.
-  gMockPromptService._return(true);
+  gMockPromptService.returnValue = true;
   select_contact(toDelete);
   abController.keypress(null, "VK_DELETE", {});
 
+  promptState = gMockPromptService.promptState;
+  assert_not_equals(null, promptState, "Expected a prompt state");
   // Was a confirm displayed?
-  assert_true(gMockPromptService._did_confirm);
+  assert_equals("confirm", promptState.method);
   // Was the right message displayed?
-  assert_equals(gMockPromptService._confirm_msg, confirmSingle);
+  assert_equals(confirmSingle, promptState.text);
   // The contact should have been deleted.
   assert_equals(abController.window.gAbView.rowCount,
                 totalEntries - toDelete.length);
@@ -332,31 +229,35 @@ function test_deleting_contacts_causes_confirm_prompt()
 
   // Set the mock prompt to return false, so that the
   // contact should not be deleted.
-  gMockPromptService._return(false);
+  gMockPromptService.returnValue = false;
 
   // Now attempt to delete the contact
   select_contacts(toDelete);
   abController.keypress(null, "VK_DELETE", {});
 
+  let promptState = gMockPromptService.promptState;
+  assert_not_equals(null, promptState, "Expected a prompt state");
   // Was a confirm displayed?
-  assert_true(gMockPromptService._did_confirm);
+  assert_equals("confirm", promptState.method);
   // Was the right message displayed?
-  assert_equals(gMockPromptService._confirm_msg, confirmMultiple);
+  assert_equals(confirmMultiple, promptState.text);
   // The contact should not have been deleted.
   assert_equals(abController.window.gAbView.rowCount, totalEntries);
 
-  gMockPromptService._reset();
+  gMockPromptService.reset();
 
   // Now we'll return true on confirm so that
   // the contact is deleted.
-  gMockPromptService._return(true);
+  gMockPromptService.returnValue = true;
   select_contacts(toDelete);
   abController.keypress(null, "VK_DELETE", {});
 
+  promptState = gMockPromptService.promptState;
+  assert_not_equals(null, promptState, "Expected a prompt state");
   // Was a confirm displayed?
-  assert_true(gMockPromptService._did_confirm);
+  assert_equals("confirm", promptState.method);
   // Was the right message displayed?
-  assert_equals(gMockPromptService._confirm_msg, confirmMultiple);
+  assert_equals(confirmMultiple, promptState.text);
   // The contact should have been deleted.
   assert_equals(abController.window.gAbView.rowCount,
                 totalEntries - toDelete.length);
@@ -383,23 +284,29 @@ function test_deleting_mailing_lists() {
 
   // Let's click "cancel" on the confirm dialog box
   // first.
-  gMockPromptService._return(false);
+  gMockPromptService.returnValue = false;
 
   abController.window.AbDeleteDirectory(addedList.URI);
 
+  let promptState = gMockPromptService.promptState;
+  assert_not_equals(null, promptState, "Expected a prompt state");
+
   // Test that the confirmation dialog was brought up.
-  assert_true(gMockPromptService._did_confirm);
+  assert_equals("confirm", promptState.method);
 
   // Ensure that the mailing list was not removed.
   assert_true(addrBook1.hasDirectory(addedList));
 
   // This time, let's click "OK" on the confirm dialog box
-  gMockPromptService._return(true);
+  gMockPromptService.reset();
+  gMockPromptService.returnValue = true;
 
   abController.window.AbDeleteDirectory(addedList.URI);
 
   // Test that the confirmation dialog was brought up.
-  assert_true(gMockPromptService._did_confirm);
+  promptState = gMockPromptService.promptState;
+  assert_not_equals(null, promptState, "Expected a prompt state");
+  assert_equals("confirm", promptState.method);
 
   // Ensure that the mailing list was removed.
   assert_false(addrBook1.hasDirectory(addedList));

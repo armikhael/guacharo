@@ -4,18 +4,17 @@ Subject: Set javascript.options.showInConsole
 
 ---
  mozilla/modules/libpref/src/init/all.js |    1 +
- 1 files changed, 1 insertions(+), 0 deletions(-)
+ 1 file changed, 1 insertion(+)
 
 diff --git a/mozilla/modules/libpref/src/init/all.js b/mozilla/modules/libpref/src/init/all.js
-index 3beaf66..ae54f45 100644
+index be5bfa5..287f61b 100644
 --- a/mozilla/modules/libpref/src/init/all.js
 +++ b/mozilla/modules/libpref/src/init/all.js
-@@ -617,6 +617,7 @@ pref("javascript.options.strict",           false);
+@@ -701,6 +701,7 @@ pref("javascript.options.strict",           false);
  pref("javascript.options.strict.debug",     true);
  #endif
  pref("javascript.options.relimit",          true);
 +pref("javascript.options.showInConsole",    true);
- pref("javascript.options.tracejit.content",  true);
- pref("javascript.options.tracejit.chrome",   true);
  pref("javascript.options.methodjit.content", true);
--- 
+ pref("javascript.options.methodjit.chrome",  true);
+ pref("javascript.options.pccounts.content", false);

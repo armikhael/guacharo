@@ -12,6 +12,8 @@ let CrashTestUtils = {
   CRASH_INVALID_POINTER_DEREF: 0,
   CRASH_PURE_VIRTUAL_CALL:     1,
   CRASH_RUNTIMEABORT:          2,
+  CRASH_OOM:                   3,
+  CRASH_MOZ_CRASH:             4,
 
   // Constants for dumpHasStream()
   // From google_breakpad/common/minidump_format.h

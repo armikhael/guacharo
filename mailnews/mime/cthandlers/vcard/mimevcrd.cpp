@@ -1,39 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "mimevcrd.h"
  
@@ -46,8 +14,8 @@
 #include "prprf.h"
 #include "nsServiceManagerUtils.h"
 
-static int MimeInlineTextVCard_parse_line (const char *, PRInt32, MimeObject *);
-static int MimeInlineTextVCard_parse_eof (MimeObject *, PRBool);
+static int MimeInlineTextVCard_parse_line (const char *, int32_t, MimeObject *);
+static int MimeInlineTextVCard_parse_eof (MimeObject *, bool);
 static int MimeInlineTextVCard_parse_begin (MimeObject *obj);
 
 static int s_unique = 0;
@@ -87,7 +55,7 @@ MIME_VCardCreateContentTypeHandlerClass(const char *content_type,
     return NULL;
 
   clazz->superclass = (MimeObjectClass *)COM_GetmimeInlineTextClass();
-  initStruct->force_inline_display = PR_TRUE;
+  initStruct->force_inline_display = true;
   return clazz;
 }
 
@@ -122,7 +90,7 @@ MimeInlineTextVCard_parse_begin (MimeObject *obj)
   /* initialize vcard string to empty; */
   NS_MsgSACopy(&(clazz->vCardString), "");
 
-  obj->options->state->separator_suppressed_p = PR_TRUE;
+  obj->options->state->separator_suppressed_p = true;
   return 0;
 }
 
@@ -134,7 +102,7 @@ char *strcpySafe (char *dest, const char *src, size_t destLength)
 }
 
 static int
-MimeInlineTextVCard_parse_line (const char *line, PRInt32 length, MimeObject *obj)
+MimeInlineTextVCard_parse_line (const char *line, int32_t length, MimeObject *obj)
 {
   // This routine gets fed each line of data, one at a time.
   char* linestring;
@@ -144,7 +112,7 @@ MimeInlineTextVCard_parse_line (const char *line, PRInt32 length, MimeObject *ob
   if (!obj->options || !obj->options->output_fn) return 0;
   if (!obj->options->write_html_p)
   {
-    return COM_MimeObject_write(obj, line, length, PR_TRUE);
+    return COM_MimeObject_write(obj, line, length, true);
   }
 
   linestring = (char *) PR_MALLOC (length + 1);
@@ -163,7 +131,7 @@ MimeInlineTextVCard_parse_line (const char *line, PRInt32 length, MimeObject *ob
 
 ////////////////////////////////////////////////////////////////////////////////
 static int
-MimeInlineTextVCard_parse_eof (MimeObject *obj, PRBool abort_p)
+MimeInlineTextVCard_parse_eof (MimeObject *obj, bool abort_p)
 {
   nsCOMPtr<nsIMsgVCardService> vCardService =
              do_GetService(MSGVCARDSERVICE_CONTRACT_ID);
@@ -229,7 +197,7 @@ static int EndVCard (MimeObject *obj)
   /* Scribble HTML-ending stuff into the stream */
   char htmlFooters[32];
   PR_snprintf (htmlFooters, sizeof(htmlFooters), "</BODY>%s</HTML>%s", MSG_LINEBREAK, MSG_LINEBREAK);
-  status = COM_MimeObject_write(obj, htmlFooters, strlen(htmlFooters), PR_FALSE);
+  status = COM_MimeObject_write(obj, htmlFooters, strlen(htmlFooters), false);
 
   if (status < 0) return status;
 
@@ -245,7 +213,7 @@ static int BeginVCard (MimeObject *obj)
 
   s_unique++;
   PR_snprintf (htmlHeaders, sizeof(htmlHeaders), "<HTML>%s<BODY>%s", MSG_LINEBREAK, MSG_LINEBREAK);
-    status = COM_MimeObject_write(obj, htmlHeaders, strlen(htmlHeaders), PR_TRUE);
+    status = COM_MimeObject_write(obj, htmlHeaders, strlen(htmlHeaders), true);
 
   if (status < 0) return status;
 
@@ -279,7 +247,7 @@ static int GenerateVCardData(MimeObject * aMimeObj, VObject* aVcard)
   nsCAutoString vEscCard;
   int len = 0;
 
-  vCard.Adopt(vCardService->WriteMemoryVObjects(0, &len, aVcard, PR_FALSE));
+  vCard.Adopt(vCardService->WriteMemoryVObjects(0, &len, aVcard, false));
   MsgEscapeString(vCard, nsINetUtil::ESCAPE_XALPHAS, vEscCard);
 
   // first cell in the outer table row is a clickable image which brings up the rich address book UI for the vcard
@@ -300,7 +268,7 @@ static int GenerateVCardData(MimeObject * aMimeObj, VObject* aVcard)
   vCardOutput += "</tr> </table>";
 
   // now write out the vCard
-  return COM_MimeObject_write(aMimeObj, (char *) vCardOutput.get(), vCardOutput.Length(), PR_TRUE);
+  return COM_MimeObject_write(aMimeObj, (char *) vCardOutput.get(), vCardOutput.Length(), true);
 }
 
 

@@ -2,19 +2,14 @@
 /* Any copyright is dedicated to the Public Domain.
    http://creativecommons.org/publicdomain/zero/1.0/ */
 
-// Reference to the Scratchpad chrome window object.
-let gScratchpadWindow;
-
 function test()
 {
   waitForExplicitFinish();
 
   gBrowser.selectedTab = gBrowser.addTab();
-  gBrowser.selectedBrowser.addEventListener("load", function() {
-    gBrowser.selectedBrowser.removeEventListener("load", arguments.callee, true);
-
-    gScratchpadWindow = Scratchpad.openScratchpad();
-    gScratchpadWindow.addEventListener("load", runTests, false);
+  gBrowser.selectedBrowser.addEventListener("load", function onTabLoad() {
+    gBrowser.selectedBrowser.removeEventListener("load", onTabLoad, true);
+    openScratchpad(runTests);
   }, true);
 
   content.location = "data:text/html,<p>test run() and display() in Scratchpad";
@@ -22,8 +17,6 @@ function test()
 
 function runTests()
 {
-  gScratchpadWindow.removeEventListener("load", arguments.callee, false);
-
   let sp = gScratchpadWindow.Scratchpad;
 
   content.wrappedJSObject.foobarBug636725 = 1;
@@ -32,8 +25,9 @@ function runTests()
 
   let exec = sp.run();
   is(exec[0], sp.getText(), "run()[0] is correct");
-  is(exec[1], content.wrappedJSObject.foobarBug636725,
-     "run()[1] is correct");
+  ok(!exec[1], "run()[1] is correct");
+  is(exec[2], content.wrappedJSObject.foobarBug636725,
+     "run()[2] is correct");
 
   is(sp.getText(), "++window.foobarBug636725",
      "run() does not change the editor content");
@@ -46,13 +40,13 @@ function runTests()
   is(content.wrappedJSObject.foobarBug636725, 3,
      "display() updated window.foobarBug636725");
 
-  is(sp.getText(), "++window.foobarBug636725/*\n3\n*/",
+  is(sp.getText(), "++window.foobarBug636725\n/*\n3\n*/",
      "display() shows evaluation result in the textbox");
 
-  is(sp.selectedText, "/*\n3\n*/", "selectedText is correct");
+  is(sp.selectedText, "\n/*\n3\n*/", "selectedText is correct");
   let selection = sp.getSelectionRange();
   is(selection.start, 24, "selection.start is correct");
-  is(selection.end, 31, "selection.end is correct");
+  is(selection.end, 32, "selection.end is correct");
 
   // Test selection run() and display().
 
@@ -77,8 +71,10 @@ function runTests()
 
   is(exec[0], "window.foobarBug636725 = 'a';",
      "run()[0] is correct");
-  is(exec[1], "a",
+  ok(!exec[1], 
      "run()[1] is correct");
+  is(exec[2], "a",
+     "run()[2] is correct");
 
   is(sp.getText(), "window.foobarBug636725 = 'a';\n" +
                    "window.foobarBug636725 = 'b';",
@@ -98,16 +94,16 @@ function runTests()
      "display() worked for the selected range");
 
   is(sp.getText(), "window.foobarBug636725" +
-                   "/*\na\n*/" +
+                   "\n/*\na\n*/" +
                    " = 'c';\n" +
                    "window.foobarBug636725 = 'b';",
      "display() shows evaluation result in the textbox");
 
-  is(sp.selectedText, "/*\na\n*/", "selectedText is correct");
+  is(sp.selectedText, "\n/*\na\n*/", "selectedText is correct");
 
   selection = sp.getSelectionRange();
   is(selection.start, 22, "selection.start is correct");
-  is(selection.end, 29, "selection.end is correct");
+  is(selection.end, 30, "selection.end is correct");
 
   sp.deselect();
 
@@ -126,8 +122,5 @@ function runTests()
   sp.redo();
   is(sp.getText(), "foo2", "redo() works");
 
-  gScratchpadWindow.close();
-  gScratchpadWindow = null;
-  gBrowser.removeCurrentTab();
   finish();
 }

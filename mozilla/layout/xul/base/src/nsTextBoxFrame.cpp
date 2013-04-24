@@ -1,43 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Eric Vaughan, Netscape Communications
- *   Peter Annema <disttsc@bart.nl>
- *   Dean Tessman <dean_tessman@hotmail.com>
- *   Masayuki Nakano <masayuki@d-toybox.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsTextBoxFrame.h"
 
@@ -53,8 +17,6 @@
 #include "nsMenuBarListener.h"
 #include "nsXPIDLString.h"
 #include "nsIServiceManager.h"
-#include "nsIDocument.h"
-#include "nsIDOMDocument.h"
 #include "nsIDOMElement.h"
 #include "nsIDOMXULLabelElement.h"
 #include "nsEventStateManager.h"
@@ -67,6 +29,7 @@
 #include "nsBoxFrame.h"
 #include "mozilla/Preferences.h"
 #include "nsLayoutUtils.h"
+#include "mozilla/Attributes.h"
 
 #ifdef IBMBIDI
 #include "nsBidiUtils.h"
@@ -78,15 +41,15 @@ using namespace mozilla;
 class nsAccessKeyInfo
 {
 public:
-    PRInt32 mAccesskeyIndex;
+    int32_t mAccesskeyIndex;
     nscoord mBeforeWidth, mAccessWidth, mAccessUnderlineSize, mAccessOffset;
 };
 
 
-PRBool nsTextBoxFrame::gAlwaysAppendAccessKey          = PR_FALSE;
-PRBool nsTextBoxFrame::gAccessKeyPrefInitialized       = PR_FALSE;
-PRBool nsTextBoxFrame::gInsertSeparatorBeforeAccessKey = PR_FALSE;
-PRBool nsTextBoxFrame::gInsertSeparatorPrefInitialized = PR_FALSE;
+bool nsTextBoxFrame::gAlwaysAppendAccessKey          = false;
+bool nsTextBoxFrame::gAccessKeyPrefInitialized       = false;
+bool nsTextBoxFrame::gInsertSeparatorBeforeAccessKey = false;
+bool nsTextBoxFrame::gInsertSeparatorPrefInitialized = false;
 
 nsIFrame*
 NS_NewTextBoxFrame (nsIPresShell* aPresShell, nsStyleContext* aContext)
@@ -98,12 +61,12 @@ NS_IMPL_FRAMEARENA_HELPERS(nsTextBoxFrame)
 
 
 NS_IMETHODIMP
-nsTextBoxFrame::AttributeChanged(PRInt32         aNameSpaceID,
+nsTextBoxFrame::AttributeChanged(int32_t         aNameSpaceID,
                                  nsIAtom*        aAttribute,
-                                 PRInt32         aModType)
+                                 int32_t         aModType)
 {
-    PRBool aResize;
-    PRBool aRedraw;
+    bool aResize;
+    bool aRedraw;
 
     UpdateAttributes(aAttribute, aResize, aRedraw);
 
@@ -119,14 +82,14 @@ nsTextBoxFrame::AttributeChanged(PRInt32         aNameSpaceID,
     // If the accesskey changed, register for the new value
     // The old value has been unregistered in nsXULElement::SetAttr
     if (aAttribute == nsGkAtoms::accesskey || aAttribute == nsGkAtoms::control)
-        RegUnregAccessKey(PR_TRUE);
+        RegUnregAccessKey(true);
 
     return NS_OK;
 }
 
 nsTextBoxFrame::nsTextBoxFrame(nsIPresShell* aShell, nsStyleContext* aContext):
-  nsLeafBoxFrame(aShell, aContext), mAccessKeyInfo(nsnull), mCropType(CropRight),
-  mNeedsReflowCallback(PR_FALSE)
+  nsLeafBoxFrame(aShell, aContext), mAccessKeyInfo(nullptr), mCropType(CropRight),
+  mNeedsReflowCallback(false)
 {
     MarkIntrinsicWidthsDirty();
 }
@@ -144,12 +107,12 @@ nsTextBoxFrame::Init(nsIContent*      aContent,
 {
     nsTextBoxFrameSuper::Init(aContent, aParent, aPrevInFlow);
 
-    PRBool aResize;
-    PRBool aRedraw;
-    UpdateAttributes(nsnull, aResize, aRedraw); /* update all */
+    bool aResize;
+    bool aRedraw;
+    UpdateAttributes(nullptr, aResize, aRedraw); /* update all */
 
     // register access key
-    RegUnregAccessKey(PR_TRUE);
+    RegUnregAccessKey(true);
 
     return NS_OK;
 }
@@ -158,16 +121,16 @@ void
 nsTextBoxFrame::DestroyFrom(nsIFrame* aDestructRoot)
 {
     // unregister access key
-    RegUnregAccessKey(PR_FALSE);
+    RegUnregAccessKey(false);
     nsTextBoxFrameSuper::DestroyFrom(aDestructRoot);
 }
 
-PRBool
+bool
 nsTextBoxFrame::AlwaysAppendAccessKey()
 {
   if (!gAccessKeyPrefInitialized) 
   {
-    gAccessKeyPrefInitialized = PR_TRUE;
+    gAccessKeyPrefInitialized = true;
 
     const char* prefName = "intl.menuitems.alwaysappendaccesskeys";
     nsAdoptingString val = Preferences::GetLocalizedString(prefName);
@@ -176,12 +139,12 @@ nsTextBoxFrame::AlwaysAppendAccessKey()
   return gAlwaysAppendAccessKey;
 }
 
-PRBool
+bool
 nsTextBoxFrame::InsertSeparatorBeforeAccessKey()
 {
   if (!gInsertSeparatorPrefInitialized)
   {
-    gInsertSeparatorPrefInitialized = PR_TRUE;
+    gInsertSeparatorPrefInitialized = true;
 
     const char* prefName = "intl.menuitems.insertseparatorbeforeaccesskeys";
     nsAdoptingString val = Preferences::GetLocalizedString(prefName);
@@ -190,16 +153,16 @@ nsTextBoxFrame::InsertSeparatorBeforeAccessKey()
   return gInsertSeparatorBeforeAccessKey;
 }
 
-class nsAsyncAccesskeyUpdate : public nsIReflowCallback
+class nsAsyncAccesskeyUpdate MOZ_FINAL : public nsIReflowCallback
 {
 public:
     nsAsyncAccesskeyUpdate(nsIFrame* aFrame) : mWeakFrame(aFrame)
     {
     }
 
-    virtual PRBool ReflowFinished()
+    virtual bool ReflowFinished()
     {
-        PRBool shouldFlush = PR_FALSE;
+        bool shouldFlush = false;
         nsTextBoxFrame* frame =
             static_cast<nsTextBoxFrame*>(mWeakFrame.GetFrame());
         if (frame) {
@@ -217,12 +180,12 @@ public:
     nsWeakFrame mWeakFrame;
 };
 
-PRBool
+bool
 nsTextBoxFrame::UpdateAccesskey(nsWeakFrame& aWeakThis)
 {
     nsAutoString accesskey;
     nsCOMPtr<nsIDOMXULLabelElement> labelElement = do_QueryInterface(mContent);
-    NS_ENSURE_TRUE(aWeakThis.IsAlive(), PR_FALSE);
+    NS_ENSURE_TRUE(aWeakThis.IsAlive(), false);
     if (labelElement) {
         // Accesskey may be stored on control.
         // Because this method is called by the reflow callback, current context
@@ -232,7 +195,7 @@ nsTextBoxFrame::UpdateAccesskey(nsWeakFrame& aWeakThis)
         nsCxPusher cx;
         if (cx.Push(mContent)) {
           labelElement->GetAccessKey(accesskey);
-          NS_ENSURE_TRUE(aWeakThis.IsAlive(), PR_FALSE);
+          NS_ENSURE_TRUE(aWeakThis.IsAlive(), false);
         }
     }
     else {
@@ -247,24 +210,24 @@ nsTextBoxFrame::UpdateAccesskey(nsWeakFrame& aWeakThis)
         PresContext()->PresShell()->
             FrameNeedsReflow(this, nsIPresShell::eStyleChange,
                              NS_FRAME_IS_DIRTY);
-        return PR_TRUE;
+        return true;
     }
-    return PR_FALSE;
+    return false;
 }
 
 void
 nsTextBoxFrame::UpdateAttributes(nsIAtom*         aAttribute,
-                                 PRBool&          aResize,
-                                 PRBool&          aRedraw)
+                                 bool&          aResize,
+                                 bool&          aRedraw)
 {
-    PRBool doUpdateTitle = PR_FALSE;
-    aResize = PR_FALSE;
-    aRedraw = PR_FALSE;
+    bool doUpdateTitle = false;
+    aResize = false;
+    aRedraw = false;
 
-    if (aAttribute == nsnull || aAttribute == nsGkAtoms::crop) {
+    if (aAttribute == nullptr || aAttribute == nsGkAtoms::crop) {
         static nsIContent::AttrValuesArray strings[] =
           {&nsGkAtoms::left, &nsGkAtoms::start, &nsGkAtoms::center,
-           &nsGkAtoms::right, &nsGkAtoms::end, nsnull};
+           &nsGkAtoms::right, &nsGkAtoms::end, nullptr};
         CroppingStyle cropType;
         switch (mContent->FindAttrValueIn(kNameSpaceID_None, nsGkAtoms::crop,
                                           strings, eCaseMatters)) {
@@ -285,25 +248,25 @@ nsTextBoxFrame::UpdateAttributes(nsIAtom*         aAttribute,
         }
 
         if (cropType != mCropType) {
-            aResize = PR_TRUE;
+            aResize = true;
             mCropType = cropType;
         }
     }
 
-    if (aAttribute == nsnull || aAttribute == nsGkAtoms::value) {
+    if (aAttribute == nullptr || aAttribute == nsGkAtoms::value) {
         mContent->GetAttr(kNameSpaceID_None, nsGkAtoms::value, mTitle);
-        doUpdateTitle = PR_TRUE;
+        doUpdateTitle = true;
     }
 
-    if (aAttribute == nsnull || aAttribute == nsGkAtoms::accesskey) {
-        mNeedsReflowCallback = PR_TRUE;
+    if (aAttribute == nullptr || aAttribute == nsGkAtoms::accesskey) {
+        mNeedsReflowCallback = true;
         // Ensure that layout is refreshed and reflow callback called.
-        aResize = PR_TRUE;
+        aResize = true;
     }
 
     if (doUpdateTitle) {
         UpdateAccessTitle();
-        aResize = PR_TRUE;
+        aResize = true;
     }
 
 }
@@ -313,7 +276,7 @@ public:
   nsDisplayXULTextBox(nsDisplayListBuilder* aBuilder,
                       nsTextBoxFrame* aFrame) :
     nsDisplayItem(aBuilder, aFrame),
-    mDisableSubpixelAA(PR_FALSE)
+    mDisableSubpixelAA(false)
   {
     MOZ_COUNT_CTOR(nsDisplayXULTextBox);
   }
@@ -325,18 +288,18 @@ public:
 
   virtual void Paint(nsDisplayListBuilder* aBuilder,
                      nsRenderingContext* aCtx);
-  virtual nsRect GetBounds(nsDisplayListBuilder* aBuilder);
+  virtual nsRect GetBounds(nsDisplayListBuilder* aBuilder, bool* aSnap);
   NS_DISPLAY_DECL_NAME("XULTextBox", TYPE_XUL_TEXT_BOX)
 
   virtual nsRect GetComponentAlphaBounds(nsDisplayListBuilder* aBuilder);
 
-  virtual void DisableComponentAlpha() { mDisableSubpixelAA = PR_TRUE; }
+  virtual void DisableComponentAlpha() { mDisableSubpixelAA = true; }
 
   void PaintTextToContext(nsRenderingContext* aCtx,
                           nsPoint aOffset,
                           const nscolor* aColor);
 
-  PRPackedBool mDisableSubpixelAA;
+  bool mDisableSubpixelAA;
 };
 
 static void
@@ -365,7 +328,7 @@ nsDisplayXULTextBox::Paint(nsDisplayListBuilder* aBuilder,
                                  PaintTextShadowCallback,
                                  (void*)this);
 
-  PaintTextToContext(aCtx, nsPoint(0, 0), nsnull);
+  PaintTextToContext(aCtx, nsPoint(0, 0), nullptr);
 }
 
 void
@@ -378,8 +341,9 @@ nsDisplayXULTextBox::PaintTextToContext(nsRenderingContext* aCtx,
 }
 
 nsRect
-nsDisplayXULTextBox::GetBounds(nsDisplayListBuilder* aBuilder) {
-  return mFrame->GetVisualOverflowRect() + ToReferenceFrame();
+nsDisplayXULTextBox::GetBounds(nsDisplayListBuilder* aBuilder, bool* aSnap) {
+  *aSnap = false;
+  return mFrame->GetVisualOverflowRectRelativeToSelf() + ToReferenceFrame();
 }
 
 nsRect
@@ -413,13 +377,14 @@ nsTextBoxFrame::PaintTitle(nsRenderingContext& aRenderingContext,
     if (mTitle.IsEmpty())
         return;
 
-    DrawText(aRenderingContext, mTextDrawRect + aPt, aOverrideColor);
+    DrawText(aRenderingContext, aDirtyRect, mTextDrawRect + aPt, aOverrideColor);
 }
 
 void
 nsTextBoxFrame::DrawText(nsRenderingContext& aRenderingContext,
-                         const nsRect&        aTextRect,
-                         const nscolor*       aOverrideColor)
+                         const nsRect&       aDirtyRect,
+                         const nsRect&       aTextRect,
+                         const nscolor*      aOverrideColor)
 {
     nsPresContext* presContext = PresContext();
 
@@ -427,14 +392,14 @@ nsTextBoxFrame::DrawText(nsRenderingContext& aRenderingContext,
     nscolor overColor;
     nscolor underColor;
     nscolor strikeColor;
-    PRUint8 overStyle;
-    PRUint8 underStyle;
-    PRUint8 strikeStyle;
+    uint8_t overStyle;
+    uint8_t underStyle;
+    uint8_t strikeStyle;
 
     // Begin with no decorations
-    PRUint8 decorations = NS_STYLE_TEXT_DECORATION_LINE_NONE;
+    uint8_t decorations = NS_STYLE_TEXT_DECORATION_LINE_NONE;
     // A mask of all possible decorations.
-    PRUint8 decorMask = NS_STYLE_TEXT_DECORATION_LINE_LINES_MASK;
+    uint8_t decorMask = NS_STYLE_TEXT_DECORATION_LINE_LINES_MASK;
 
     nsIFrame* f = this;
     do {  // find decoration colors
@@ -449,13 +414,13 @@ nsTextBoxFrame::DrawText(nsRenderingContext& aRenderingContext,
         if (aOverrideColor) {
           color = *aOverrideColor;
         } else {
-          PRBool isForeground;
+          bool isForeground;
           styleText->GetDecorationColor(color, isForeground);
           if (isForeground) {
             color = nsLayoutUtils::GetColor(f, eCSSProperty_color);
           }
         }
-        PRUint8 style = styleText->GetDecorationStyle();
+        uint8_t style = styleText->GetDecorationStyle();
 
         if (NS_STYLE_TEXT_DECORATION_LINE_UNDERLINE & decorMask &
               styleText->mTextDecorationLine) {
@@ -480,8 +445,7 @@ nsTextBoxFrame::DrawText(nsRenderingContext& aRenderingContext,
         }
       }
     } while (0 != decorMask &&
-             (f = nsLayoutUtils::GetParentOrPlaceholderFor(
-                                   presContext->FrameManager(), f)));
+             (f = nsLayoutUtils::GetParentOrPlaceholderFor(f)));
 
     nsRefPtr<nsFontMetrics> fontMet;
     nsLayoutUtils::GetFontMetricsForFrame(this, getter_AddRefs(fontMet));
@@ -497,6 +461,8 @@ nsTextBoxFrame::DrawText(nsRenderingContext& aRenderingContext,
                 presContext->AppUnitsToGfxUnits(aTextRect.y));
     gfxFloat width = presContext->AppUnitsToGfxUnits(aTextRect.width);
     gfxFloat ascentPixel = presContext->AppUnitsToGfxUnits(ascent);
+    gfxFloat xInFrame = PresContext()->AppUnitsToGfxUnits(mTextDrawRect.x);
+    gfxRect dirtyRect(presContext->AppUnitsToGfxUnits(aDirtyRect));
 
     // Underlines are drawn before overlines, and both before the text
     // itself, per http://www.w3.org/TR/CSS21/zindex.html point 7.2.1.4.1.1.
@@ -510,15 +476,15 @@ nsTextBoxFrame::DrawText(nsRenderingContext& aRenderingContext,
       gfxFloat sizePixel = presContext->AppUnitsToGfxUnits(size);
       if ((decorations & NS_FONT_DECORATION_UNDERLINE) &&
           underStyle != NS_STYLE_TEXT_DECORATION_STYLE_NONE) {
-        nsCSSRendering::PaintDecorationLine(ctx, underColor,
-                          pt, gfxSize(width, sizePixel),
+        nsCSSRendering::PaintDecorationLine(this, ctx, dirtyRect, underColor,
+                          pt, xInFrame, gfxSize(width, sizePixel),
                           ascentPixel, offsetPixel,
                           NS_STYLE_TEXT_DECORATION_LINE_UNDERLINE, underStyle);
       }
       if ((decorations & NS_FONT_DECORATION_OVERLINE) &&
           overStyle != NS_STYLE_TEXT_DECORATION_STYLE_NONE) {
-        nsCSSRendering::PaintDecorationLine(ctx, overColor,
-                          pt, gfxSize(width, sizePixel),
+        nsCSSRendering::PaintDecorationLine(this, ctx, dirtyRect, overColor,
+                          pt, xInFrame, gfxSize(width, sizePixel),
                           ascentPixel, ascentPixel,
                           NS_STYLE_TEXT_DECORATION_LINE_OVERLINE, overStyle);
       }
@@ -566,7 +532,7 @@ nsTextBoxFrame::DrawText(nsRenderingContext& aRenderingContext,
     if (NS_FAILED(rv) )
 #endif // IBMBIDI
     {
-       aRenderingContext.SetTextRunRTL(PR_FALSE);
+       aRenderingContext.SetTextRunRTL(false);
 
        if (mAccessKeyInfo && mAccessKeyInfo->mAccesskeyIndex != kNotFound) {
            // In the simple (non-BiDi) case, we calculate the mnemonic's
@@ -599,9 +565,9 @@ nsTextBoxFrame::DrawText(nsRenderingContext& aRenderingContext,
       fontMet->GetStrikeout(offset, size);
       gfxFloat offsetPixel = presContext->AppUnitsToGfxUnits(offset);
       gfxFloat sizePixel = presContext->AppUnitsToGfxUnits(size);
-      nsCSSRendering::PaintDecorationLine(ctx, strikeColor,
-                        pt, gfxSize(width, sizePixel), ascentPixel, offsetPixel,
-                        NS_STYLE_TEXT_DECORATION_LINE_LINE_THROUGH,
+      nsCSSRendering::PaintDecorationLine(this, ctx, dirtyRect, strikeColor,
+                        pt, xInFrame, gfxSize(width, sizePixel), ascentPixel,
+                        offsetPixel, NS_STYLE_TEXT_DECORATION_LINE_LINE_THROUGH,
                         strikeStyle);
     }
 }
@@ -613,7 +579,7 @@ nsTextBoxFrame::CalculateUnderline(nsRenderingContext& aRenderingContext)
          // Calculate all fields of mAccessKeyInfo which
          // are the same for both BiDi and non-BiDi frames.
          const PRUnichar *titleString = mCroppedTitle.get();
-         aRenderingContext.SetTextRunRTL(PR_FALSE);
+         aRenderingContext.SetTextRunRTL(false);
          mAccessKeyInfo->mAccessWidth =
              aRenderingContext.GetWidth(titleString[mAccessKeyInfo->
                                                     mAccesskeyIndex]);
@@ -658,7 +624,7 @@ nsTextBoxFrame::CalculateTitleForWidth(nsPresContext*      aPresContext,
 
     // see if the width is even smaller than the ellipsis
     // if so, clear the text (XXX set as many '.' as we can?).
-    aRenderingContext.SetTextRunRTL(PR_FALSE);
+    aRenderingContext.SetTextRunRTL(false);
     titleWidth = aRenderingContext.GetWidth(kEllipsis);
 
     if (titleWidth > aWidth) {
@@ -757,7 +723,7 @@ nsTextBoxFrame::CalculateTitleForWidth(nsPresContext*      aPresContext,
             nsAutoString leftString, rightString;
 
             rightPos = mTitle.Length() - 1;
-            aRenderingContext.SetTextRunRTL(PR_FALSE);
+            aRenderingContext.SetTextRunRTL(false);
             for (leftPos = 0; leftPos <= rightPos;) {
                 // look at the next character on the left end
                 ch = mTitle.CharAt(leftPos);
@@ -817,7 +783,7 @@ nsTextBoxFrame::UpdateAccessTitle()
      * toolkit/content/commonDialog.js (setLabelForNode)
      * toolkit/content/widgets/text.xml (formatAccessKey)
      */
-    PRInt32 menuAccessKey;
+    int32_t menuAccessKey;
     nsMenuBarListener::GetMenuAccessKey(&menuAccessKey);
     if (!menuAccessKey || mAccessKey.IsEmpty())
         return;
@@ -838,7 +804,7 @@ nsTextBoxFrame::UpdateAccessTitle()
     }
 
     const nsDependentString& kEllipsis = nsContentUtils::GetLocalizedEllipsis();
-    PRUint32 offset = mTitle.Length();
+    uint32_t offset = mTitle.Length();
     if (StringEndsWith(mTitle, kEllipsis)) {
         offset -= kEllipsis.Length();
     } else if (StringEndsWith(mTitle, OLD_ELLIPSIS)) {
@@ -864,13 +830,13 @@ nsTextBoxFrame::UpdateAccessTitle()
 void
 nsTextBoxFrame::UpdateAccessIndex()
 {
-    PRInt32 menuAccessKey;
+    int32_t menuAccessKey;
     nsMenuBarListener::GetMenuAccessKey(&menuAccessKey);
     if (menuAccessKey) {
         if (mAccessKey.IsEmpty()) {
             if (mAccessKeyInfo) {
                 delete mAccessKeyInfo;
-                mAccessKeyInfo = nsnull;
+                mAccessKeyInfo = nullptr;
             }
         } else {
             if (!mAccessKeyInfo) {
@@ -887,7 +853,7 @@ nsTextBoxFrame::UpdateAccessIndex()
             // remember the beginning of the string
             nsAString::const_iterator originalStart = start;
 
-            PRBool found;
+            bool found;
             if (!AlwaysAppendAccessKey()) {
                 // not appending access key - do case-sensitive search
                 // first
@@ -919,7 +885,7 @@ nsTextBoxFrame::DoLayout(nsBoxLayoutState& aBoxLayoutState)
         if (cb) {
             PresContext()->PresShell()->PostReflowCallback(cb);
         }
-        mNeedsReflowCallback = PR_FALSE;
+        mNeedsReflowCallback = false;
     }
 
     nsresult rv = nsLeafBoxFrame::DoLayout(aBoxLayoutState);
@@ -927,16 +893,35 @@ nsTextBoxFrame::DoLayout(nsBoxLayoutState& aBoxLayoutState)
     CalcDrawRect(*aBoxLayoutState.GetRenderingContext());
 
     const nsStyleText* textStyle = GetStyleText();
+    
+    nsRect scrollBounds(nsPoint(0, 0), GetSize());
+    nsRect textRect = mTextDrawRect;
+    
+    nsRefPtr<nsFontMetrics> fontMet;
+    nsLayoutUtils::GetFontMetricsForFrame(this, getter_AddRefs(fontMet));
+    nsBoundingMetrics metrics = 
+      fontMet->GetInkBoundsForVisualOverflow(mCroppedTitle.get(),
+                                             mCroppedTitle.Length(),
+                                             aBoxLayoutState.GetRenderingContext());
+
+    textRect.x -= metrics.leftBearing;
+    textRect.width = metrics.width;
+    // In DrawText() we always draw with the baseline at MaxAscent() (relative to mTextDrawRect), 
+    textRect.y += fontMet->MaxAscent() - metrics.ascent;
+    textRect.height = metrics.ascent + metrics.descent;
+
+    // Our scrollable overflow is our bounds; our visual overflow may
+    // extend beyond that.
+    nsRect visualBounds;
+    visualBounds.UnionRect(scrollBounds, textRect);
+    nsOverflowAreas overflow(visualBounds, scrollBounds);
+
     if (textStyle->mTextShadow) {
-      nsRect bounds(nsPoint(0, 0), GetSize());
-      nsOverflowAreas overflow(bounds, bounds);
-      // Our scrollable overflow is our bounds; our visual overflow may
-      // extend beyond that.
-      nsPoint origin(0,0);
+      // text-shadow extends our visual but not scrollable bounds
       nsRect &vis = overflow.VisualOverflow();
       vis.UnionRect(vis, nsLayoutUtils::GetTextShadowRectsUnion(mTextDrawRect, this));
-      FinishAndStoreOverflow(overflow, GetSize());
     }
+    FinishAndStoreOverflow(overflow, GetSize());
 
     return rv;
 }
@@ -944,20 +929,22 @@ nsTextBoxFrame::DoLayout(nsBoxLayoutState& aBoxLayoutState)
 nsRect
 nsTextBoxFrame::GetComponentAlphaBounds()
 {
-  return nsLayoutUtils::GetTextShadowRectsUnion(mTextDrawRect, this,
-                                                nsLayoutUtils::EXCLUDE_BLUR_SHADOWS);
+  if (GetStyleText()->mTextShadow) {
+    return GetVisualOverflowRectRelativeToSelf();
+  }
+  return mTextDrawRect;
 }
 
-PRBool
+bool
 nsTextBoxFrame::ComputesOwnOverflowArea()
 {
-    return PR_TRUE;
+    return true;
 }
 
 /* virtual */ void
 nsTextBoxFrame::MarkIntrinsicWidthsDirty()
 {
-    mNeedsRecalc = PR_TRUE;
+    mNeedsRecalc = true;
     nsTextBoxFrameSuper::MarkIntrinsicWidthsDirty();
 }
 
@@ -989,7 +976,7 @@ nsTextBoxFrame::CalcTextSize(nsBoxLayoutState& aBoxLayoutState)
             GetTextSize(presContext, *rendContext,
                         mTitle, size, mAscent);
             mTextSize = size;
-            mNeedsRecalc = PR_FALSE;
+            mNeedsRecalc = false;
         }
     }
 }
@@ -1043,8 +1030,8 @@ nsTextBoxFrame::GetPrefSize(nsBoxLayoutState& aBoxLayoutState)
     DISPLAY_PREF_SIZE(this, size);
 
     AddBorderAndPadding(size);
-    PRBool widthSet, heightSet;
-    nsIBox::AddCSSPrefSize(this, size, widthSet, heightSet);
+    bool widthSet, heightSet;
+    nsIFrame::AddCSSPrefSize(this, size, widthSet, heightSet);
 
     return size;
 }
@@ -1065,8 +1052,8 @@ nsTextBoxFrame::GetMinSize(nsBoxLayoutState& aBoxLayoutState)
         size.width = 0;
 
     AddBorderAndPadding(size);
-    PRBool widthSet, heightSet;
-    nsIBox::AddCSSMinSize(aBoxLayoutState, this, size, widthSet, heightSet);
+    bool widthSet, heightSet;
+    nsIFrame::AddCSSMinSize(aBoxLayoutState, this, size, widthSet, heightSet);
 
     return size;
 }
@@ -1098,7 +1085,7 @@ nsTextBoxFrame::GetFrameName(nsAString& aResult) const
 // If you make changes to this function, check its counterparts 
 // in nsBoxFrame and nsXULLabelFrame
 nsresult
-nsTextBoxFrame::RegUnregAccessKey(PRBool aDoReg)
+nsTextBoxFrame::RegUnregAccessKey(bool aDoReg)
 {
     // if we have no content, we can't do anything
     if (!mContent)
@@ -1126,7 +1113,7 @@ nsTextBoxFrame::RegUnregAccessKey(PRBool aDoReg)
     // and (un)register the access key
     nsEventStateManager *esm = PresContext()->EventStateManager();
 
-    PRUint32 key = accessKey.First();
+    uint32_t key = accessKey.First();
     if (aDoReg)
         esm->RegisterAccessKey(mContent, key);
     else

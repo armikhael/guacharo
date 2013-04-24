@@ -1,40 +1,7 @@
 <?xml version="1.0"?>
-<!--
-   - ***** BEGIN LICENSE BLOCK *****
-   - Version: MPL 1.1/GPL 2.0/LGPL 2.1
-   -
-   - The contents of this file are subject to the Mozilla Public License Version
-   - 1.1 (the "License"); you may not use this file except in compliance with
-   - the License. You may obtain a copy of the License at
-   - http://www.mozilla.org/MPL/
-   -
-   - Software distributed under the License is distributed on an "AS IS" basis,
-   - WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-   - for the specific language governing rights and limitations under the
-   - License.
-   -
-   - The Original Code is Mail folder code.
-   -
-   - The Initial Developer of the Original Code is
-   -   Joey Minta <jminta@gmail.com>
-   - Portions created by the Initial Developer are Copyright (C) 2008
-   - the Initial Developer. All Rights Reserved.
-   -
-   - Contributor(s):
-   -
-   - Alternatively, the contents of this file may be used under the terms of
-   - either the GNU General Public License Version 2 or later (the "GPL"), or
-   - the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-   - in which case the provisions of the GPL or the LGPL are applicable instead
-   - of those above. If you wish to allow use of your version of this file only
-   - under the terms of either the GPL or the LGPL, and not to allow others to
-   - use your version of this file under the terms of the MPL, indicate your
-   - decision by deleting the provisions above and replace them with the notice
-   - and other provisions required by the GPL or the LGPL. If you do not delete
-   - the provisions above, a recipient may use your version of this file under
-   - the terms of any one of the MPL, the GPL or the LGPL.
-   -
-   - ***** END LICENSE BLOCK *****
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/.
 -->
 
 <bindings id="mailFolderBindings"
@@ -142,6 +109,15 @@
                  !aFolder.supportsOffline;
         },
 
+        // Folders that can subscribe feeds.
+        feeds: function filter_feeds(aFolder) {
+          if (aFolder.server.type != "rss" ||
+              aFolder.getFlag(Components.interfaces.nsMsgFolderFlags.Trash) ||
+              aFolder.getFlag(Components.interfaces.nsMsgFolderFlags.Virtual))
+            return false;
+          return true;
+        },
+
         junk: function filter_junk(aFolder) {
           // Don't show servers (nntp & any others) which do not allow search or filing
           // I don't really understand why canSearchMessages is needed, but it was included in
@@ -239,9 +215,9 @@
          * particular nsIMsgFolder
          *
          * @param aItem  the nsIMsgFolder to check
-         * @param aMenu (optional) menu to look in, defaults to this._menu.
+         * @param aMenu  (optional) menu to look in, defaults to this._menu.
          * @returns      null if no child for that folder exists, otherwise the
-         *              menuitem for that child
+         *               menuitem for that child
          */
         _getChildForItem: function act__itemIsChild(aItem, aMenu) {
           aMenu = aMenu || this._menu;
@@ -250,10 +226,10 @@
 
            if (!(aItem instanceof Components.interfaces.nsIMsgFolder))
              return null;
-           for (var i = 0; i < aMenu.childNodes.length; i++) {
-             var folder = aMenu.childNodes[i]._folder;
+           for (let i = 0; i < aMenu.childNodes.length; i++) {
+             let folder = aMenu.childNodes[i]._folder;
              if (folder && folder.URI == aItem.URI)
-               return aItem;
+               return aMenu.childNodes[i];
            }
            return null;
         }
@@ -278,27 +254,27 @@
           const Cc = Components.classes;
           const Ci = Components.interfaces;
 
-          var folders = new Array();
+          let folders = [];
 
           // Figure out which folders to build.  If we don't have a parent, then
           // we assume we should build the top-level accounts.  (Actually we
           // build the fake root folders for those accounts.)
           if (!this._parentFolder) {
-            var acctMgr = Cc["@mozilla.org/messenger/account-manager;1"].
+            let acctMgr = Cc["@mozilla.org/messenger/account-manager;1"].
                           getService(Ci.nsIMsgAccountManager);
-            var count = acctMgr.accounts.Count();
+            let count = acctMgr.accounts.Count();
 
             // Sadly, the accountMgr doesn't provide us we a sorted list of
             // accounts.  We have to get them in the right order on our own. To
             // Do this, we'll stick them in an array, and then sort that array.
-            var accounts = new Array();
-            for (var i = 0; i < count; i++) {
-              var acct = acctMgr.accounts.GetElementAt(i).QueryInterface(Ci.nsIMsgAccount);
+            let accounts = [];
+            for (let i = 0; i < count; i++) {
+              let acct = acctMgr.accounts.GetElementAt(i).QueryInterface(Ci.nsIMsgAccount);
 
               // This is a HACK to work around bug 41133. If we have one of the
               // dummy "news" accounts there, that account won't have an
               // incomingServer attached to it, and everything will blow up.
-              if (acct.incomingServer)
+              if (acct.incomingServer && acct.incomingServer.type != "im")
                 accounts.push(acct);
             }
 
@@ -307,20 +283,22 @@
              * in the following order: (1) default account (2) other mail
              * accounts (3) Local Folders (4) news
              */
+            var defaultAccountKey = acctMgr.defaultAccount.key;
             function accountCompare(a, b) {
-              if (a.key == acctMgr.defaultAccount.key)
+              if (a.key == defaultAccountKey)
                 return -1;
-              if (b.key == acctMgr.defaultAccount.key)
+              if (b.key == defaultAccountKey)
                 return 1;
-              var aIsNews = a.incomingServer.type == "nntp";
-              var bIsNews = b.incomingServer.type == "nntp";
+
+              let aIsNews = a.incomingServer.type == "nntp";
+              let bIsNews = b.incomingServer.type == "nntp";
               if (aIsNews && !bIsNews)
                 return 1;
               if (bIsNews && !aIsNews)
                 return -1;
 
-              var aIsLocal = a.incomingServer.type == "none";
-              var bIsLocal = b.incomingServer.type == "none";
+              let aIsLocal = a.incomingServer.type == "none";
+              let bIsLocal = b.incomingServer.type == "none";
               if (aIsLocal && !bIsLocal)
                 return 1;
               if (bIsLocal && !aIsLocal)
@@ -331,13 +309,11 @@
 
             // Now generate our folder-list.  Note that we'll special case this
             // situation below, to avoid destroying the sort order we just made
-            for each (var acct in accounts) {
-              folders.push(acct.incomingServer.rootFolder);
-            }
+            folders = accounts.map(function(acct) acct.incomingServer.rootFolder);
           } else {
             // If we do have a parent folder, then we just build based on those
             // subFolders for that parent
-            var myenum = this._parentFolder.subFolders;
+            let myenum = this._parentFolder.subFolders;
             while (myenum.hasMoreElements()) {
               folders.push(myenum.getNext().QueryInterface(Ci.nsIMsgFolder));
             }
@@ -606,14 +582,14 @@
           }
 
           // Start iterating at the top of the hierarchy, that is, with the root
-          // folders for each account.
-          var acctMgr = Cc["@mozilla.org/messenger/account-manager;1"].
-                        getService(Ci.nsIMsgAccountManager);
-          var count = acctMgr.accounts.Count();
+          // folders for each incoming server.
+          var servers = Cc["@mozilla.org/messenger/account-manager;1"].
+                        getService(Ci.nsIMsgAccountManager).allServers;
+          var count = servers.Count();
           for (var i = 0; i < count; i++) {
-            var acct = acctMgr.accounts.GetElementAt(i).QueryInterface(Ci.nsIMsgAccount);
-            addIfRecent(acct.incomingServer.rootFolder);
-            checkSubFolders(acct.incomingServer.rootFolder);
+            var incomingServer = servers.QueryElementAt(i, Ci.nsIMsgIncomingServer);
+            addIfRecent(incomingServer.rootFolder);
+            checkSubFolders(incomingServer.rootFolder);
           }
 
           function sorter(a, b) {
@@ -686,33 +662,15 @@
         <parameter name="aFolder"/>
         <parameter name="aMenuNode"/>
         <body><![CDATA[
-          const Ci = Components.interfaces;
+          Components.utils.import("resource:///modules/folderUtils.jsm");
           // First set the SpecialFolder attribute
-          if (aFolder.flags & Ci.nsMsgFolderFlags.Inbox)
-            aMenuNode.setAttribute("SpecialFolder", "Inbox");
-          else if (aFolder.flags & Ci.nsMsgFolderFlags.Trash)
-            aMenuNode.setAttribute("SpecialFolder", "Trash");
-          else if (aFolder.flags & Ci.nsMsgFolderFlags.Queue)
-            aMenuNode.setAttribute("SpecialFolder", "Outbox");
-          else if (aFolder.flags & Ci.nsMsgFolderFlags.SentMail)
-            aMenuNode.setAttribute("SpecialFolder", "Sent");
-          else if (aFolder.flags & Ci.nsMsgFolderFlags.Drafts)
-            aMenuNode.setAttribute("SpecialFolder", "Drafts");
-          else if (aFolder.flags & Ci.nsMsgFolderFlags.Templates)
-            aMenuNode.setAttribute("SpecialFolder", "Templates");
-          else if (aFolder.flags & Ci.nsMsgFolderFlags.Junk)
-            aMenuNode.setAttribute("SpecialFolder", "Junk");
-          else if (aFolder.flags & Ci.nsMsgFolderFlags.Archive)
-            aMenuNode.setAttribute("SpecialFolder", "Archive");
-          else if (aFolder.flags & Ci.nsMsgFolderFlags.Virtual)
-            aMenuNode.setAttribute("SpecialFolder", "Virtual");
-          else
-            aMenuNode.setAttribute("SpecialFolder", "none");
+          aMenuNode.setAttribute("SpecialFolder", getSpecialFolderString(aFolder));
 
           // Now set the biffState
-          var biffStates = ["NewMail", "NoMail", "UnknownMail"];
-          for each (var state in biffStates) {
-            if (aFolder.biffState == Ci.nsIMsgFolder["nsMsgBiffState_" + state]) {
+          let biffStates = ["NewMail", "NoMail", "UnknownMail"];
+          for each (let state in biffStates) {
+            if (aFolder.biffState ==
+                Components.interfaces.nsIMsgFolder["nsMsgBiffState_" + state]) {
               aMenuNode.setAttribute("BiffState", state);
               break;
             }

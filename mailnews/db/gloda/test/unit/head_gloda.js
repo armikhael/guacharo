@@ -1,4 +1,3 @@
 gDEPTH = "../../../../../";
 
-// Import the required setup scripts.
-load("../../../../resources/abSetup.js");
+// glodaTestHelper.js does all the imports

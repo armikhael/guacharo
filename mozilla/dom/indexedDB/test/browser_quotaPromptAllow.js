@@ -4,7 +4,7 @@
  */
 
 // Make sure this is a unique origin or the tests will randomly fail!
-const testPageURL = "http://test1.example.org/browser/" +
+const testPageURL = "http://bug704464-1.example.com/browser/" +
   "dom/indexedDB/test/browser_quotaPrompt.html";
 const notificationID = "indexedDB-quota-prompt";
 
@@ -12,7 +12,6 @@ function test()
 {
   waitForExplicitFinish();
   requestLongerTimeout(10);
-  setPermission(testPageURL, "indexedDB");
   removePermission(testPageURL, "indexedDB-unlimited");
   Services.prefs.setIntPref("dom.indexedDB.warningQuota", 2);
   executeSoon(test1);
@@ -43,7 +42,7 @@ function test1()
                "Correct permission set");
             gBrowser.removeCurrentTab();
             unregisterAllPopupEventHandlers();
-            executeSoon(test2);
+            executeSoon(finish);
           });
           executeSoon(function() { dispatchEvent("indexedDB-done"); });
         }
@@ -71,7 +70,7 @@ function test1()
   }, true);
 
   info("loading test page: " + testPageURL);
-  content.location = testPageURL;
+  content.location = testPageURL + "?v=1";
 }
 
 function test2()
@@ -136,5 +135,5 @@ function test2()
   }, true);
 
   info("loading test page: " + testPageURL);
-  content.location = testPageURL;
+  content.location = testPageURL + "?v=3";
 }

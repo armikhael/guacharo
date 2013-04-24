@@ -1,55 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Robert O'Callahan <robert@ocallahan.org>
- *   Roger B. Sidje <rbs@maths.uq.edu.au>
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *   Prabhat Hegde <prabhat.hegde@sun.com>
- *   Tomi Leppikangas <tomi.leppikangas@oulu.fi>
- *   Roland Mainz <roland.mainz@informatik.med.uni-giessen.de>
- *   Daniel Glazman <glazman@netscape.com>
- *   Neil Deakin <neil@mozdevgroup.com>
- *   Masayuki Nakano <masayuki@d-toybox.com>
- *   Mats Palmgren <matspal@gmail.com>
- *   Uri Bernstein <uriber@gmail.com>
- *   Stephen Blackheath <entangled.mooched.stephen@blacksapphire.com>
- *   Michael Ventnor <m.ventnor@gmail.com>
- *   Ehsan Akhgari <ehsan.akhgari@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* rendering object for textual content of elements */
+
+#include "mozilla/Util.h"
 
 #include "nsCOMPtr.h"
 #include "nsHTMLParts.h"
@@ -62,6 +18,8 @@
 #include "nsIContent.h"
 #include "nsStyleConsts.h"
 #include "nsStyleContext.h"
+#include "nsStyleStruct.h"
+#include "nsStyleStructInlines.h"
 #include "nsCoord.h"
 #include "nsRenderingContext.h"
 #include "nsIPresShell.h"
@@ -82,7 +40,7 @@
 #include "nsTextFrameTextRunCache.h"
 #include "nsExpirationTracker.h"
 #include "nsTextFrame.h"
-#include "nsIUGenCategory.h"
+#include "nsUnicodeProperties.h"
 #include "nsUnicharUtilCIID.h"
 
 #include "nsTextFragment.h"
@@ -90,7 +48,7 @@
 #include "nsFrameSelection.h"
 #include "nsISelection.h"
 #include "nsIDOMRange.h"
-#include "nsILookAndFeel.h"
+#include "nsRange.h"
 #include "nsCSSRendering.h"
 #include "nsContentUtils.h"
 #include "nsLineBreaker.h"
@@ -106,16 +64,20 @@
 #include "nsAutoPtr.h"
 
 #include "nsBidiUtils.h"
+#include "nsPrintfCString.h"
 
 #include "gfxFont.h"
 #include "gfxContext.h"
-#include "gfxTextRunWordCache.h"
 #include "gfxImageSurface.h"
 
 #include "mozilla/dom/Element.h"
 #include "mozilla/Util.h" // for DebugOnly
+#include "mozilla/LookAndFeel.h"
+#include "mozilla/Attributes.h"
 
-#ifdef NS_DEBUG
+#include "sampler.h"
+
+#ifdef DEBUG
 #undef NOISY_BLINK
 #undef NOISY_REFLOW
 #undef NOISY_TRIM
@@ -129,11 +91,11 @@ using namespace mozilla;
 using namespace mozilla::dom;
 
 struct TabWidth {
-  TabWidth(PRUint32 aOffset, PRUint32 aWidth)
+  TabWidth(uint32_t aOffset, uint32_t aWidth)
     : mOffset(aOffset), mWidth(float(aWidth))
   { }
 
-  PRUint32 mOffset; // character offset within the text covered by the
+  uint32_t mOffset; // character offset within the text covered by the
                     // PropertyProvider
   float    mWidth;  // extra space to be added at this position (in app units)
 };
@@ -147,9 +109,9 @@ struct TabWidthStore {
   // beginning at aOffset and has length aLength. (Width records outside this
   // range will be ignored.)
   void ApplySpacing(gfxTextRun::PropertyProvider::Spacing *aSpacing,
-                    PRUint32 aOffset, PRUint32 aLength);
+                    uint32_t aOffset, uint32_t aLength);
 
-  PRUint32           mLimit;  // offset up to which tabs have been measured;
+  uint32_t           mLimit;  // offset up to which tabs have been measured;
                               // positions beyond this have not been calculated
                               // yet but may be appended if needed later
   nsTArray<TabWidth> mWidths; // (offset,width) records for each tab character
@@ -157,13 +119,13 @@ struct TabWidthStore {
 
 void
 TabWidthStore::ApplySpacing(gfxTextRun::PropertyProvider::Spacing *aSpacing,
-                            PRUint32 aOffset, PRUint32 aLength)
+                            uint32_t aOffset, uint32_t aLength)
 {
   // We could binary-search for the first record that falls within the range,
   // but as the number of tabs is normally small and we usually process them
   // sequentially from the beginning of the line, it doesn't seem worth doing
   // at this point.
-  for (PRUint32 i = 0; i < mWidths.Length(); ++i) {
+  for (uint32_t i = 0; i < mWidths.Length(); ++i) {
     TabWidth& tw = mWidths[i];
     if (tw.mOffset < aOffset) {
       continue;
@@ -182,7 +144,12 @@ static void DestroyTabWidth(void* aPropertyValue)
 
 NS_DECLARE_FRAME_PROPERTY(TabWidthProperty, DestroyTabWidth)
 
-NS_DECLARE_FRAME_PROPERTY(OffsetToFrameProperty, nsnull)
+NS_DECLARE_FRAME_PROPERTY(OffsetToFrameProperty, nullptr)
+
+// text runs are destroyed by the text run cache
+NS_DECLARE_FRAME_PROPERTY(UninflatedTextRunProperty, nullptr)
+
+NS_DECLARE_FRAME_PROPERTY(FontSizeInflationProperty, nullptr)
 
 // The following flags are set during reflow
 
@@ -223,11 +190,26 @@ NS_DECLARE_FRAME_PROPERTY(OffsetToFrameProperty, nsnull)
 // This bit is set while the frame is registered as a blinking frame.
 #define TEXT_BLINK_ON              NS_FRAME_STATE_BIT(29)
 
-// Set when this text frame is mentioned in the userdata for a textrun
+// Set when this text frame is mentioned in the userdata for mTextRun
 #define TEXT_IN_TEXTRUN_USER_DATA  NS_FRAME_STATE_BIT(30)
 
 // nsTextFrame.h has
 // #define TEXT_HAS_NONCOLLAPSED_CHARACTERS NS_FRAME_STATE_BIT(31)
+
+// nsTextFrame.h has
+// #define TEXT_FORCE_TRIM_WHITESPACE       NS_FRAME_STATE_BIT(32)
+
+// Set when this text frame is mentioned in the userdata for the
+// uninflated textrun property
+#define TEXT_IN_UNINFLATED_TEXTRUN_USER_DATA NS_FRAME_STATE_BIT(60)
+
+// nsTextFrame.h has
+// #define TEXT_HAS_FONT_INFLATION          NS_FRAME_STATE_BIT(61)
+
+// If true, then this frame is being removed due to a SetLength() on a
+// previous continuation and the style context of that previous
+// continuation is the same as this frame's
+#define TEXT_STYLE_MATCHES_PREV_CONTINUATION NS_FRAME_STATE_BIT(62)
 
 // Whether this frame is cached in the Offset Frame Cache (OffsetToFrameProperty)
 #define TEXT_IN_OFFSET_CACHE       NS_FRAME_STATE_BIT(63)
@@ -272,9 +254,9 @@ NS_DECLARE_FRAME_PROPERTY(OffsetToFrameProperty, nsnull)
  */
 struct TextRunMappedFlow {
   nsTextFrame* mStartFrame;
-  PRInt32      mDOMOffsetToBeforeTransformOffset;
+  int32_t      mDOMOffsetToBeforeTransformOffset;
   // The text mapped starts at mStartFrame->GetContentOffset() and is this long
-  PRUint32     mContentLength;
+  uint32_t     mContentLength;
 };
 
 /**
@@ -286,8 +268,8 @@ struct TextRunMappedFlow {
  */
 struct TextRunUserData {
   TextRunMappedFlow* mMappedFlows;
-  PRUint32           mMappedFlowCount;
-  PRUint32           mLastFlowIndex;
+  uint32_t           mMappedFlowCount;
+  uint32_t           mLastFlowIndex;
 };
 
 /**
@@ -299,31 +281,41 @@ class nsTextPaintStyle {
 public:
   nsTextPaintStyle(nsTextFrame* aFrame);
 
+  void SetResolveColors(bool aResolveColors) {
+    NS_ASSERTION(mFrame->IsSVGText() || aResolveColors,
+                 "must resolve colors is frame is not for SVG text");
+    mResolveColors = aResolveColors;
+  }
+
   nscolor GetTextColor();
   /**
    * Compute the colors for normally-selected text. Returns false if
    * the normal selection is not being displayed.
    */
-  PRBool GetSelectionColors(nscolor* aForeColor,
+  bool GetSelectionColors(nscolor* aForeColor,
                             nscolor* aBackColor);
   void GetHighlightColors(nscolor* aForeColor,
                           nscolor* aBackColor);
   void GetURLSecondaryColor(nscolor* aForeColor);
-  void GetIMESelectionColors(PRInt32  aIndex,
+  void GetIMESelectionColors(int32_t  aIndex,
                              nscolor* aForeColor,
                              nscolor* aBackColor);
-  // if this returns PR_FALSE, we don't need to draw underline.
-  PRBool GetSelectionUnderlineForPaint(PRInt32  aIndex,
+  // if this returns false, we don't need to draw underline.
+  bool GetSelectionUnderlineForPaint(int32_t  aIndex,
                                        nscolor* aLineColor,
                                        float*   aRelativeSize,
-                                       PRUint8* aStyle);
+                                       uint8_t* aStyle);
 
-  // if this returns PR_FALSE, we don't need to draw underline.
-  static PRBool GetSelectionUnderline(nsPresContext* aPresContext,
-                                      PRInt32 aIndex,
+  // if this returns false, we don't need to draw underline.
+  static bool GetSelectionUnderline(nsPresContext* aPresContext,
+                                      int32_t aIndex,
                                       nscolor* aLineColor,
                                       float* aRelativeSize,
-                                      PRUint8* aStyle);
+                                      uint8_t* aStyle);
+
+  // if this returns false, no text-shadow was specified for the selection
+  // and the *aShadow parameter was not modified.
+  bool GetSelectionShadow(nsCSSShadowArray** aShadow);
 
   nsPresContext* PresContext() const { return mPresContext; }
 
@@ -335,7 +327,7 @@ public:
     eIndexSpellChecker
   };
 
-  static PRInt32 GetUnderlineStyleIndexForSelectionType(PRInt32 aSelectionType)
+  static int32_t GetUnderlineStyleIndexForSelectionType(int32_t aSelectionType)
   {
     switch (aSelectionType) {
       case nsISelectionController::SELECTION_IME_RAWINPUT:
@@ -357,41 +349,45 @@ public:
 protected:
   nsTextFrame*   mFrame;
   nsPresContext* mPresContext;
-  PRPackedBool   mInitCommonColors;
-  PRPackedBool   mInitSelectionColors;
+  bool           mInitCommonColors;
+  bool           mInitSelectionColorsAndShadow;
+  bool           mResolveColors;
 
   // Selection data
 
-  PRInt16      mSelectionStatus; // see nsIDocument.h SetDisplaySelection()
+  int16_t      mSelectionStatus; // see nsIDocument.h SetDisplaySelection()
   nscolor      mSelectionTextColor;
   nscolor      mSelectionBGColor;
+  nsRefPtr<nsCSSShadowArray> mSelectionShadow;
+  bool                       mHasSelectionShadow;
 
   // Common data
 
-  PRInt32 mSufficientContrast;
+  int32_t mSufficientContrast;
   nscolor mFrameBackgroundColor;
 
-  // selection colors and underline info, the colors are resolved colors,
-  // i.e., the foreground color and background color are swapped if it's needed.
-  // And also line color will be resolved from them.
+  // selection colors and underline info, the colors are resolved colors if
+  // mResolveColors is true (which is the default), i.e., the foreground color
+  // and background color are swapped if it's needed. And also line color will
+  // be resolved from them.
   struct nsSelectionStyle {
-    PRBool mInit;
+    bool    mInit;
     nscolor mTextColor;
     nscolor mBGColor;
     nscolor mUnderlineColor;
-    PRUint8 mUnderlineStyle;
+    uint8_t mUnderlineStyle;
     float   mUnderlineRelativeSize;
   };
   nsSelectionStyle mSelectionStyle[5];
 
   // Color initializations
   void InitCommonColors();
-  PRBool InitSelectionColors();
+  bool InitSelectionColorsAndShadow();
 
-  nsSelectionStyle* GetSelectionStyle(PRInt32 aIndex);
-  void InitSelectionStyle(PRInt32 aIndex);
+  nsSelectionStyle* GetSelectionStyle(int32_t aIndex);
+  void InitSelectionStyle(int32_t aIndex);
 
-  PRBool EnsureSufficientContrast(nscolor *aForeColor, nscolor *aBackColor);
+  bool EnsureSufficientContrast(nscolor *aForeColor, nscolor *aBackColor);
 
   nscolor GetResolvedForeColor(nscolor aColor, nscolor aDefaultForeColor,
                                nscolor aBackColor);
@@ -410,33 +406,36 @@ DestroyUserData(void* aUserData)
  * Remove |aTextRun| from the frame continuation chain starting at
  * |aStartContinuation| if non-null, otherwise starting at |aFrame|.
  * Unmark |aFrame| as a text run owner if it's the frame we start at.
- * Return PR_TRUE if |aStartContinuation| is non-null and was found
+ * Return true if |aStartContinuation| is non-null and was found
  * in the next-continuation chain of |aFrame|.
  */
-static PRBool
+static bool
 ClearAllTextRunReferences(nsTextFrame* aFrame, gfxTextRun* aTextRun,
-                          nsTextFrame* aStartContinuation)
+                          nsTextFrame* aStartContinuation,
+                          nsFrameState aWhichTextRunState)
 {
   NS_PRECONDITION(aFrame, "");
   NS_PRECONDITION(!aStartContinuation ||
-                  !aStartContinuation->GetTextRun() ||
-                  aStartContinuation->GetTextRun() == aTextRun,
+                  (!aStartContinuation->GetTextRun(nsTextFrame::eInflated) ||
+                   aStartContinuation->GetTextRun(nsTextFrame::eInflated) == aTextRun) ||
+                  (!aStartContinuation->GetTextRun(nsTextFrame::eNotInflated) ||
+                   aStartContinuation->GetTextRun(nsTextFrame::eNotInflated) == aTextRun),
                   "wrong aStartContinuation for this text run");
 
   if (!aStartContinuation || aStartContinuation == aFrame) {
-    aFrame->RemoveStateBits(TEXT_IN_TEXTRUN_USER_DATA);
+    aFrame->RemoveStateBits(aWhichTextRunState);
   } else {
     do {
       NS_ASSERTION(aFrame->GetType() == nsGkAtoms::textFrame, "Bad frame");
       aFrame = static_cast<nsTextFrame*>(aFrame->GetNextContinuation());
     } while (aFrame && aFrame != aStartContinuation);
   }
-  PRBool found = aStartContinuation == aFrame;
+  bool found = aStartContinuation == aFrame;
   while (aFrame) {
     NS_ASSERTION(aFrame->GetType() == nsGkAtoms::textFrame, "Bad frame");
-    if (aFrame->GetTextRun() != aTextRun)
+    if (!aFrame->RemoveTextRun(aTextRun)) {
       break;
-    aFrame->SetTextRun(nsnull);
+    }
     aFrame = static_cast<nsTextFrame*>(aFrame->GetNextContinuation());
   }
   NS_POSTCONDITION(!found || aStartContinuation, "how did we find null?");
@@ -451,7 +450,7 @@ ClearAllTextRunReferences(nsTextFrame* aFrame, gfxTextRun* aTextRun,
  * @note the caller is expected to take care of possibly destroying the
  * text run if all userdata frames were reset (userdata is deallocated
  * by this function though). The caller can detect this has occured by
- * checking |aTextRun->GetUserData() == nsnull|.
+ * checking |aTextRun->GetUserData() == nullptr|.
  */
 static void
 UnhookTextRunFromFrames(gfxTextRun* aTextRun, nsTextFrame* aStartContinuation)
@@ -460,44 +459,53 @@ UnhookTextRunFromFrames(gfxTextRun* aTextRun, nsTextFrame* aStartContinuation)
     return;
 
   if (aTextRun->GetFlags() & nsTextFrameUtils::TEXT_IS_SIMPLE_FLOW) {
-    nsIFrame* userDataFrame = static_cast<nsIFrame*>(aTextRun->GetUserData());
-    DebugOnly<PRBool> found =
-      ClearAllTextRunReferences(static_cast<nsTextFrame*>(userDataFrame),
-                                aTextRun, aStartContinuation);
+    nsTextFrame* userDataFrame = static_cast<nsTextFrame*>(
+      static_cast<nsIFrame*>(aTextRun->GetUserData()));
+    nsFrameState whichTextRunState =
+      userDataFrame->GetTextRun(nsTextFrame::eInflated) == aTextRun
+        ? TEXT_IN_TEXTRUN_USER_DATA
+        : TEXT_IN_UNINFLATED_TEXTRUN_USER_DATA;
+    DebugOnly<bool> found =
+      ClearAllTextRunReferences(userDataFrame, aTextRun,
+                                aStartContinuation, whichTextRunState);
     NS_ASSERTION(!aStartContinuation || found,
                  "aStartContinuation wasn't found in simple flow text run");
-    if (!(userDataFrame->GetStateBits() & TEXT_IN_TEXTRUN_USER_DATA)) {
-      aTextRun->SetUserData(nsnull);
+    if (!(userDataFrame->GetStateBits() & whichTextRunState)) {
+      aTextRun->SetUserData(nullptr);
     }
   } else {
     TextRunUserData* userData =
       static_cast<TextRunUserData*>(aTextRun->GetUserData());
-    PRInt32 destroyFromIndex = aStartContinuation ? -1 : 0;
-    for (PRUint32 i = 0; i < userData->mMappedFlowCount; ++i) {
+    int32_t destroyFromIndex = aStartContinuation ? -1 : 0;
+    for (uint32_t i = 0; i < userData->mMappedFlowCount; ++i) {
       nsTextFrame* userDataFrame = userData->mMappedFlows[i].mStartFrame;
-      PRBool found =
+      nsFrameState whichTextRunState =
+        userDataFrame->GetTextRun(nsTextFrame::eInflated) == aTextRun
+          ? TEXT_IN_TEXTRUN_USER_DATA
+          : TEXT_IN_UNINFLATED_TEXTRUN_USER_DATA;
+      bool found =
         ClearAllTextRunReferences(userDataFrame, aTextRun,
-                                  aStartContinuation);
+                                  aStartContinuation, whichTextRunState);
       if (found) {
-        if (userDataFrame->GetStateBits() & TEXT_IN_TEXTRUN_USER_DATA) {
+        if (userDataFrame->GetStateBits() & whichTextRunState) {
           destroyFromIndex = i + 1;
         }
         else {
           destroyFromIndex = i;
         }
-        aStartContinuation = nsnull;
+        aStartContinuation = nullptr;
       }
     }
     NS_ASSERTION(destroyFromIndex >= 0,
                  "aStartContinuation wasn't found in multi flow text run");
     if (destroyFromIndex == 0) {
       DestroyUserData(userData);
-      aTextRun->SetUserData(nsnull);
+      aTextRun->SetUserData(nullptr);
     }
     else {
-      userData->mMappedFlowCount = PRUint32(destroyFromIndex);
-      if (userData->mLastFlowIndex >= PRUint32(destroyFromIndex)) {
-        userData->mLastFlowIndex = PRUint32(destroyFromIndex) - 1;
+      userData->mMappedFlowCount = uint32_t(destroyFromIndex);
+      if (userData->mLastFlowIndex >= uint32_t(destroyFromIndex)) {
+        userData->mLastFlowIndex = uint32_t(destroyFromIndex) - 1;
       }
     }
   }
@@ -505,12 +513,12 @@ UnhookTextRunFromFrames(gfxTextRun* aTextRun, nsTextFrame* aStartContinuation)
 
 class FrameTextRunCache;
 
-static FrameTextRunCache *gTextRuns = nsnull;
+static FrameTextRunCache *gTextRuns = nullptr;
 
 /*
  * Cache textruns and expire them after 3*10 seconds of no use.
  */
-class FrameTextRunCache : public nsExpirationTracker<gfxTextRun,3> {
+class FrameTextRunCache MOZ_FINAL : public nsExpirationTracker<gfxTextRun,3> {
 public:
   enum { TIMEOUT_SECONDS = 10 };
   FrameTextRunCache()
@@ -523,66 +531,33 @@ public:
     if (aTextRun->GetExpirationState()->IsTracked()) {
       RemoveObject(aTextRun);
     }
-    if (aTextRun->GetFlags() & gfxTextRunWordCache::TEXT_IN_CACHE) {
-      gfxTextRunWordCache::RemoveTextRun(aTextRun);
-    }
   }
 
   // This gets called when the timeout has expired on a gfxTextRun
   virtual void NotifyExpired(gfxTextRun* aTextRun) {
-    UnhookTextRunFromFrames(aTextRun, nsnull);
+    UnhookTextRunFromFrames(aTextRun, nullptr);
     RemoveFromCache(aTextRun);
     delete aTextRun;
   }
 };
 
-static gfxTextRun *
-MakeTextRun(const PRUnichar *aText, PRUint32 aLength,
+// Helper to create a textrun and remember it in the textframe cache,
+// for either 8-bit or 16-bit text strings
+template<typename T>
+gfxTextRun *
+MakeTextRun(const T *aText, uint32_t aLength,
             gfxFontGroup *aFontGroup, const gfxFontGroup::Parameters* aParams,
-            PRUint32 aFlags)
+            uint32_t aFlags)
 {
-    nsAutoPtr<gfxTextRun> textRun;
-    if (aLength == 0) {
-        textRun = aFontGroup->MakeEmptyTextRun(aParams, aFlags);
-    } else if (aLength == 1 && aText[0] == ' ') {
-        textRun = aFontGroup->MakeSpaceTextRun(aParams, aFlags);
-    } else {
-        textRun = gfxTextRunWordCache::MakeTextRun(aText, aLength, aFontGroup,
-            aParams, aFlags);
+    nsAutoPtr<gfxTextRun> textRun(aFontGroup->MakeTextRun(aText, aLength,
+                                                          aParams, aFlags));
+    if (!textRun) {
+        return nullptr;
     }
-    if (!textRun)
-        return nsnull;
     nsresult rv = gTextRuns->AddObject(textRun);
     if (NS_FAILED(rv)) {
         gTextRuns->RemoveFromCache(textRun);
-        return nsnull;
-    }
-#ifdef NOISY_BIDI
-    printf("Created textrun\n");
-#endif
-    return textRun.forget();
-}
-
-static gfxTextRun *
-MakeTextRun(const PRUint8 *aText, PRUint32 aLength,
-            gfxFontGroup *aFontGroup, const gfxFontGroup::Parameters* aParams,
-            PRUint32 aFlags)
-{
-    nsAutoPtr<gfxTextRun> textRun;
-    if (aLength == 0) {
-        textRun = aFontGroup->MakeEmptyTextRun(aParams, aFlags);
-    } else if (aLength == 1 && aText[0] == ' ') {
-        textRun = aFontGroup->MakeSpaceTextRun(aParams, aFlags);
-    } else {
-        textRun = gfxTextRunWordCache::MakeTextRun(aText, aLength, aFontGroup,
-            aParams, aFlags);
-    }
-    if (!textRun)
-        return nsnull;
-    nsresult rv = gTextRuns->AddObject(textRun);
-    if (NS_FAILED(rv)) {
-        gTextRuns->RemoveFromCache(textRun);
-        return nsnull;
+        return nullptr;
     }
 #ifdef NOISY_BIDI
     printf("Created textrun\n");
@@ -598,19 +573,19 @@ nsTextFrameTextRunCache::Init() {
 void
 nsTextFrameTextRunCache::Shutdown() {
     delete gTextRuns;
-    gTextRuns = nsnull;
+    gTextRuns = nullptr;
 }
 
-PRInt32 nsTextFrame::GetContentEnd() const {
+int32_t nsTextFrame::GetContentEnd() const {
   nsTextFrame* next = static_cast<nsTextFrame*>(GetNextContinuation());
   return next ? next->GetContentOffset() : mContent->GetText()->GetLength();
 }
 
 struct FlowLengthProperty {
-  PRInt32 mStartOffset;
+  int32_t mStartOffset;
   // The offset of the next fixed continuation after mStartOffset, or
   // of the end of the text if there is none
-  PRInt32 mEndFlowOffset;
+  int32_t mEndFlowOffset;
 
   static void Destroy(void* aObject, nsIAtom* aPropertyName,
                       void* aPropertyValue, void* aData)
@@ -619,7 +594,7 @@ struct FlowLengthProperty {
   }
 };
 
-PRInt32 nsTextFrame::GetInFlowContentLength() {
+int32_t nsTextFrame::GetInFlowContentLength() {
   if (!(mState & NS_FRAME_IS_BIDI)) {
     return mContent->TextLength() - mContentOffset;
   }
@@ -644,14 +619,14 @@ PRInt32 nsTextFrame::GetInFlowContentLength() {
   }
 
   nsTextFrame* nextBidi = static_cast<nsTextFrame*>(GetLastInFlow()->GetNextContinuation());
-  PRInt32 endFlow = nextBidi ? nextBidi->GetContentOffset() : mContent->TextLength();
+  int32_t endFlow = nextBidi ? nextBidi->GetContentOffset() : mContent->TextLength();
 
   if (!flowLength) {
     flowLength = new FlowLengthProperty;
     if (NS_FAILED(mContent->SetProperty(nsGkAtoms::flowlength, flowLength,
                                         FlowLengthProperty::Destroy))) {
       delete flowLength;
-      flowLength = nsnull;
+      flowLength = nullptr;
     }
   }
   if (flowLength) {
@@ -667,18 +642,18 @@ PRInt32 nsTextFrame::GetInFlowContentLength() {
 // when it combines with another character
 // So we have several versions of IsSpace for use in different contexts.
 
-static PRBool IsSpaceCombiningSequenceTail(const nsTextFragment* aFrag, PRUint32 aPos)
+static bool IsSpaceCombiningSequenceTail(const nsTextFragment* aFrag, uint32_t aPos)
 {
   NS_ASSERTION(aPos <= aFrag->GetLength(), "Bad offset");
   if (!aFrag->Is2b())
-    return PR_FALSE;
+    return false;
   return nsTextFrameUtils::IsSpaceCombiningSequenceTail(
     aFrag->Get2b() + aPos, aFrag->GetLength() - aPos);
 }
 
 // Check whether aPos is a space for CSS 'word-spacing' purposes
-static PRBool IsCSSWordSpacingSpace(const nsTextFragment* aFrag,
-                                    PRUint32 aPos, const nsStyleText* aStyleText)
+static bool IsCSSWordSpacingSpace(const nsTextFragment* aFrag,
+                                    uint32_t aPos, const nsStyleText* aStyleText)
 {
   NS_ASSERTION(aPos < aFrag->GetLength(), "No text for IsSpace!");
 
@@ -690,13 +665,13 @@ static PRBool IsCSSWordSpacingSpace(const nsTextFragment* aFrag,
   case '\r':
   case '\t': return !aStyleText->WhiteSpaceIsSignificant();
   case '\n': return !aStyleText->NewlineIsSignificant();
-  default: return PR_FALSE;
+  default: return false;
   }
 }
 
 // Check whether the string aChars/aLength starts with space that's
 // trimmable according to CSS 'white-space:normal/nowrap'. 
-static PRBool IsTrimmableSpace(const PRUnichar* aChars, PRUint32 aLength)
+static bool IsTrimmableSpace(const PRUnichar* aChars, uint32_t aLength)
 {
   NS_ASSERTION(aLength > 0, "No text for IsSpace!");
 
@@ -708,12 +683,12 @@ static PRBool IsTrimmableSpace(const PRUnichar* aChars, PRUint32 aLength)
 
 // Check whether the character aCh is trimmable according to CSS
 // 'white-space:normal/nowrap'
-static PRBool IsTrimmableSpace(char aCh)
+static bool IsTrimmableSpace(char aCh)
 {
   return aCh == ' ' || aCh == '\t' || aCh == '\f' || aCh == '\n' || aCh == '\r';
 }
 
-static PRBool IsTrimmableSpace(const nsTextFragment* aFrag, PRUint32 aPos,
+static bool IsTrimmableSpace(const nsTextFragment* aFrag, uint32_t aPos,
                                const nsStyleText* aStyleText)
 {
   NS_ASSERTION(aPos < aFrag->GetLength(), "No text for IsSpace!");
@@ -725,11 +700,11 @@ static PRBool IsTrimmableSpace(const nsTextFragment* aFrag, PRUint32 aPos,
   case '\t':
   case '\r':
   case '\f': return !aStyleText->WhiteSpaceIsSignificant();
-  default: return PR_FALSE;
+  default: return false;
   }
 }
 
-static PRBool IsSelectionSpace(const nsTextFragment* aFrag, PRUint32 aPos)
+static bool IsSelectionSpace(const nsTextFragment* aFrag, uint32_t aPos)
 {
   NS_ASSERTION(aPos < aFrag->GetLength(), "No text for IsSpace!");
   PRUnichar ch = aFrag->CharAt(aPos);
@@ -743,15 +718,15 @@ static PRBool IsSelectionSpace(const nsTextFragment* aFrag, PRUint32 aPos)
 // character is at offset aStartOffset; the maximum number of characters
 // to check is aLength. aDirection is -1 or 1 depending on whether we should
 // progress backwards or forwards.
-static PRUint32
+static uint32_t
 GetTrimmableWhitespaceCount(const nsTextFragment* aFrag,
-                            PRInt32 aStartOffset, PRInt32 aLength,
-                            PRInt32 aDirection)
+                            int32_t aStartOffset, int32_t aLength,
+                            int32_t aDirection)
 {
-  PRInt32 count = 0;
+  int32_t count = 0;
   if (aFrag->Is2b()) {
     const PRUnichar* str = aFrag->Get2b() + aStartOffset;
-    PRInt32 fragLen = aFrag->GetLength() - aStartOffset;
+    int32_t fragLen = aFrag->GetLength() - aStartOffset;
     for (; count < aLength; ++count) {
       if (!IsTrimmableSpace(str, fragLen))
         break;
@@ -769,20 +744,20 @@ GetTrimmableWhitespaceCount(const nsTextFragment* aFrag,
   return count;
 }
 
-static PRBool
-IsAllWhitespace(const nsTextFragment* aFrag, PRBool aAllowNewline)
+static bool
+IsAllWhitespace(const nsTextFragment* aFrag, bool aAllowNewline)
 {
   if (aFrag->Is2b())
-    return PR_FALSE;
-  PRInt32 len = aFrag->GetLength();
+    return false;
+  int32_t len = aFrag->GetLength();
   const char* str = aFrag->Get1b();
-  for (PRInt32 i = 0; i < len; ++i) {
+  for (int32_t i = 0; i < len; ++i) {
     char ch = str[i];
     if (ch == ' ' || ch == '\t' || ch == '\r' || (ch == '\n' && aAllowNewline))
       continue;
-    return PR_FALSE;
+    return false;
   }
-  return PR_TRUE;
+  return true;
 }
 
 /**
@@ -797,12 +772,13 @@ IsAllWhitespace(const nsTextFragment* aFrag, PRBool aAllowNewline)
 class BuildTextRunsScanner {
 public:
   BuildTextRunsScanner(nsPresContext* aPresContext, gfxContext* aContext,
-      nsIFrame* aLineContainer) :
-    mCurrentFramesAllSameTextRun(nsnull),
+      nsIFrame* aLineContainer, nsTextFrame::TextRunType aWhichTextRun) :
+    mCurrentFramesAllSameTextRun(nullptr),
     mContext(aContext),
     mLineContainer(aLineContainer),
     mBidiEnabled(aPresContext->BidiEnabled()),
-    mSkipIncompleteTextRuns(PR_FALSE),
+    mSkipIncompleteTextRuns(false),
+    mWhichTextRun(aWhichTextRun),
     mNextRunContextInfo(nsTextFrameUtils::INCOMING_NONE),
     mCurrentRunContextInfo(nsTextFrameUtils::INCOMING_NONE) {
     ResetRunInfo();
@@ -815,16 +791,16 @@ public:
   }
 
   void SetAtStartOfLine() {
-    mStartOfLine = PR_TRUE;
-    mCanStopOnThisLine = PR_FALSE;
+    mStartOfLine = true;
+    mCanStopOnThisLine = false;
   }
-  void SetSkipIncompleteTextRuns(PRBool aSkip) {
+  void SetSkipIncompleteTextRuns(bool aSkip) {
     mSkipIncompleteTextRuns = aSkip;
   }
   void SetCommonAncestorWithLastFrame(nsIFrame* aFrame) {
     mCommonAncestorWithLastFrame = aFrame;
   }
-  PRBool CanStopOnThisLine() {
+  bool CanStopOnThisLine() {
     return mCanStopOnThisLine;
   }
   nsIFrame* GetCommonAncestorWithLastFrame() {
@@ -837,15 +813,15 @@ public:
     }
   }
   void ScanFrame(nsIFrame* aFrame);
-  PRBool IsTextRunValidForMappedFlows(gfxTextRun* aTextRun);
-  void FlushFrames(PRBool aFlushLineBreaks, PRBool aSuppressTrailingBreak);
+  bool IsTextRunValidForMappedFlows(gfxTextRun* aTextRun);
+  void FlushFrames(bool aFlushLineBreaks, bool aSuppressTrailingBreak);
   void FlushLineBreaks(gfxTextRun* aTrailingTextRun);
   void ResetRunInfo() {
-    mLastFrame = nsnull;
+    mLastFrame = nullptr;
     mMappedFlows.Clear();
     mLineBreakBeforeFrames.Clear();
     mMaxTextLength = 0;
-    mDoubleByteText = PR_FALSE;
+    mDoubleByteText = false;
   }
   void AccumulateRunInfo(nsTextFrame* aFrame);
   /**
@@ -854,17 +830,24 @@ public:
    * state for following textruns.
    */
   gfxTextRun* BuildTextRunForFrames(void* aTextBuffer);
-  void AssignTextRun(gfxTextRun* aTextRun);
-  nsTextFrame* GetNextBreakBeforeFrame(PRUint32* aIndex);
-  void SetupBreakSinksForTextRun(gfxTextRun* aTextRun, PRBool aIsExistingTextRun,
-                                 PRBool aSuppressSink);
+  bool SetupLineBreakerContext(gfxTextRun *aTextRun);
+  void AssignTextRun(gfxTextRun* aTextRun, float aInflation);
+  nsTextFrame* GetNextBreakBeforeFrame(uint32_t* aIndex);
+  enum SetupBreakSinksFlags {
+    SBS_DOUBLE_BYTE =      (1 << 0),
+    SBS_EXISTING_TEXTRUN = (1 << 1),
+    SBS_SUPPRESS_SINK    = (1 << 2)
+  };
+  void SetupBreakSinksForTextRun(gfxTextRun* aTextRun,
+                                 const void* aTextPtr,
+                                 uint32_t    aFlags);
   struct FindBoundaryState {
     nsIFrame*    mStopAtFrame;
     nsTextFrame* mFirstTextFrame;
     nsTextFrame* mLastTextFrame;
-    PRPackedBool mSeenTextRunBoundaryOnLaterLine;
-    PRPackedBool mSeenTextRunBoundaryOnThisLine;
-    PRPackedBool mSeenSpaceForLineBreakingOnThisLine;
+    bool mSeenTextRunBoundaryOnLaterLine;
+    bool mSeenTextRunBoundaryOnThisLine;
+    bool mSeenSpaceForLineBreakingOnThisLine;
   };
   enum FindBoundaryResult {
     FB_CONTINUE,
@@ -873,7 +856,7 @@ public:
   };
   FindBoundaryResult FindBoundaries(nsIFrame* aFrame, FindBoundaryState* aState);
 
-  PRBool ContinueTextRunAcrossFrames(nsTextFrame* aFrame1, nsTextFrame* aFrame2);
+  bool ContinueTextRunAcrossFrames(nsTextFrame* aFrame1, nsTextFrame* aFrame2);
 
   // Like TextRunMappedFlow but with some differences. mStartFrame to mEndFrame
   // (exclusive) are a sequence of in-flow frames (if mEndFrame is null, then
@@ -888,32 +871,32 @@ public:
     // was no previous text frame on this line.
     nsIFrame*    mAncestorControllingInitialBreak;
     
-    PRInt32 GetContentEnd() {
+    int32_t GetContentEnd() {
       return mEndFrame ? mEndFrame->GetContentOffset()
           : mStartFrame->GetContent()->GetText()->GetLength();
     }
   };
 
-  class BreakSink : public nsILineBreakSink {
+  class BreakSink MOZ_FINAL : public nsILineBreakSink {
   public:
-    BreakSink(gfxTextRun* aTextRun, gfxContext* aContext, PRUint32 aOffsetIntoTextRun,
-              PRBool aExistingTextRun) :
+    BreakSink(gfxTextRun* aTextRun, gfxContext* aContext, uint32_t aOffsetIntoTextRun,
+              bool aExistingTextRun) :
                 mTextRun(aTextRun), mContext(aContext),
                 mOffsetIntoTextRun(aOffsetIntoTextRun),
-                mChangedBreaks(PR_FALSE), mExistingTextRun(aExistingTextRun) {}
+                mChangedBreaks(false), mExistingTextRun(aExistingTextRun) {}
 
-    virtual void SetBreaks(PRUint32 aOffset, PRUint32 aLength,
-                           PRUint8* aBreakBefore) {
+    virtual void SetBreaks(uint32_t aOffset, uint32_t aLength,
+                           uint8_t* aBreakBefore) {
       if (mTextRun->SetPotentialLineBreaks(aOffset + mOffsetIntoTextRun, aLength,
                                            aBreakBefore, mContext)) {
-        mChangedBreaks = PR_TRUE;
+        mChangedBreaks = true;
         // Be conservative and assume that some breaks have been set
         mTextRun->ClearFlagBits(nsTextFrameUtils::TEXT_NO_BREAKS);
       }
     }
     
-    virtual void SetCapitalization(PRUint32 aOffset, PRUint32 aLength,
-                                   PRPackedBool* aCapitalize) {
+    virtual void SetCapitalization(uint32_t aOffset, uint32_t aLength,
+                                   bool* aCapitalize) {
       NS_ASSERTION(mTextRun->GetFlags() & nsTextFrameUtils::TEXT_IS_TRANSFORMED,
                    "Text run should be transformed!");
       nsTransformedTextRun* transformedTextRun =
@@ -924,7 +907,7 @@ public:
 
     void Finish() {
       NS_ASSERTION(!(mTextRun->GetFlags() &
-                     (gfxTextRunWordCache::TEXT_UNUSED_FLAGS |
+                     (gfxTextRunFactory::TEXT_UNUSED_FLAGS |
                       nsTextFrameUtils::TEXT_UNUSED_FLAG)),
                    "Flag set that should never be set! (memory safety error?)");
       if (mTextRun->GetFlags() & nsTextFrameUtils::TEXT_IS_TRANSFORMED) {
@@ -936,9 +919,9 @@ public:
 
     gfxTextRun*  mTextRun;
     gfxContext*  mContext;
-    PRUint32     mOffsetIntoTextRun;
-    PRPackedBool mChangedBreaks;
-    PRPackedBool mExistingTextRun;
+    uint32_t     mOffsetIntoTextRun;
+    bool mChangedBreaks;
+    bool mExistingTextRun;
   };
 
 private:
@@ -956,14 +939,15 @@ private:
   nsIFrame*                     mCommonAncestorWithLastFrame;
   // mMaxTextLength is an upper bound on the size of the text in all mapped frames
   // The value PR_UINT32_MAX represents overflow; text will be discarded
-  PRUint32                      mMaxTextLength;
-  PRPackedBool                  mDoubleByteText;
-  PRPackedBool                  mBidiEnabled;
-  PRPackedBool                  mStartOfLine;
-  PRPackedBool                  mSkipIncompleteTextRuns;
-  PRPackedBool                  mCanStopOnThisLine;
-  PRUint8                       mNextRunContextInfo;
-  PRUint8                       mCurrentRunContextInfo;
+  uint32_t                      mMaxTextLength;
+  bool                          mDoubleByteText;
+  bool                          mBidiEnabled;
+  bool                          mStartOfLine;
+  bool                          mSkipIncompleteTextRuns;
+  bool                          mCanStopOnThisLine;
+  nsTextFrame::TextRunType      mWhichTextRun;
+  uint8_t                       mNextRunContextInfo;
+  uint8_t                       mCurrentRunContextInfo;
 };
 
 static nsIFrame*
@@ -975,7 +959,7 @@ FindLineContainer(nsIFrame* aFrame)
   return aFrame;
 }
 
-static PRBool
+static bool
 IsLineBreakingWhiteSpace(PRUnichar aChar)
 {
   // 0x0A (\n) is not handled as white-space by the line breaker, since
@@ -987,25 +971,25 @@ IsLineBreakingWhiteSpace(PRUnichar aChar)
   return nsLineBreaker::IsSpace(aChar) || aChar == 0x0A;
 }
 
-static PRBool
-TextContainsLineBreakerWhiteSpace(const void* aText, PRUint32 aLength,
-                                  PRBool aIsDoubleByte)
+static bool
+TextContainsLineBreakerWhiteSpace(const void* aText, uint32_t aLength,
+                                  bool aIsDoubleByte)
 {
-  PRUint32 i;
+  uint32_t i;
   if (aIsDoubleByte) {
     const PRUnichar* chars = static_cast<const PRUnichar*>(aText);
     for (i = 0; i < aLength; ++i) {
       if (IsLineBreakingWhiteSpace(chars[i]))
-        return PR_TRUE;
+        return true;
     }
-    return PR_FALSE;
+    return false;
   } else {
-    const PRUint8* chars = static_cast<const PRUint8*>(aText);
+    const uint8_t* chars = static_cast<const uint8_t*>(aText);
     for (i = 0; i < aLength; ++i) {
       if (IsLineBreakingWhiteSpace(chars[i]))
-        return PR_TRUE;
+        return true;
     }
-    return PR_FALSE;
+    return false;
   }
 }
 
@@ -1016,23 +1000,23 @@ struct FrameTextTraversal {
   // The first overflow frame to scan (or null, if no such frame should be scanned)
   nsIFrame*    mOverflowFrameToScan;
   // Whether to scan the siblings of mFrameToDescendInto/mOverflowFrameToDescendInto
-  PRPackedBool mScanSiblings;
+  bool mScanSiblings;
 
   // These identify the boundaries of the context required for
   // line breaking or textrun construction
-  PRPackedBool mLineBreakerCanCrossFrameBoundary;
-  PRPackedBool mTextRunCanCrossFrameBoundary;
+  bool mLineBreakerCanCrossFrameBoundary;
+  bool mTextRunCanCrossFrameBoundary;
 
   nsIFrame* NextFrameToScan() {
     nsIFrame* f;
     if (mFrameToScan) {
       f = mFrameToScan;
-      mFrameToScan = mScanSiblings ? f->GetNextSibling() : nsnull;
+      mFrameToScan = mScanSiblings ? f->GetNextSibling() : nullptr;
     } else if (mOverflowFrameToScan) {
       f = mOverflowFrameToScan;
-      mOverflowFrameToScan = mScanSiblings ? f->GetNextSibling() : nsnull;
+      mOverflowFrameToScan = mScanSiblings ? f->GetNextSibling() : nullptr;
     } else {
-      f = nsnull;
+      f = nullptr;
     }
     return f;
   }
@@ -1045,12 +1029,12 @@ CanTextCrossFrameBoundary(nsIFrame* aFrame, nsIAtom* aType)
 
   FrameTextTraversal result;
 
-  PRBool continuesTextRun = aFrame->CanContinueTextRun();
+  bool continuesTextRun = aFrame->CanContinueTextRun();
   if (aType == nsGkAtoms::placeholderFrame) {
     // placeholders are "invisible", so a text run should be able to span
     // across one. But don't descend into the out-of-flow.
-    result.mLineBreakerCanCrossFrameBoundary = PR_TRUE;
-    result.mOverflowFrameToScan = nsnull;
+    result.mLineBreakerCanCrossFrameBoundary = true;
+    result.mOverflowFrameToScan = nullptr;
     if (continuesTextRun) {
       // ... Except for first-letter floats, which are really in-flow
       // from the point of view of capitalization etc, so we'd better
@@ -1059,26 +1043,27 @@ CanTextCrossFrameBoundary(nsIFrame* aFrame, nsIAtom* aType)
       // ligature across the float boundary.
       result.mFrameToScan =
         (static_cast<nsPlaceholderFrame*>(aFrame))->GetOutOfFlowFrame();
-      result.mScanSiblings = PR_FALSE;
-      result.mTextRunCanCrossFrameBoundary = PR_FALSE;
+      result.mScanSiblings = false;
+      result.mTextRunCanCrossFrameBoundary = false;
     } else {
-      result.mFrameToScan = nsnull;
-      result.mTextRunCanCrossFrameBoundary = PR_TRUE;
+      result.mFrameToScan = nullptr;
+      result.mTextRunCanCrossFrameBoundary = true;
     }
   } else {
     if (continuesTextRun) {
-      result.mFrameToScan = aFrame->GetFirstChild(nsnull);
-      result.mOverflowFrameToScan = aFrame->GetFirstChild(nsGkAtoms::overflowList);
+      result.mFrameToScan = aFrame->GetFirstPrincipalChild();
+      result.mOverflowFrameToScan =
+        aFrame->GetFirstChild(nsIFrame::kOverflowList);
       NS_WARN_IF_FALSE(!result.mOverflowFrameToScan,
                        "Scanning overflow inline frames is something we should avoid");
-      result.mScanSiblings = PR_TRUE;
-      result.mTextRunCanCrossFrameBoundary = PR_TRUE;
-      result.mLineBreakerCanCrossFrameBoundary = PR_TRUE;
+      result.mScanSiblings = true;
+      result.mTextRunCanCrossFrameBoundary = true;
+      result.mLineBreakerCanCrossFrameBoundary = true;
     } else {
-      result.mFrameToScan = nsnull;
-      result.mOverflowFrameToScan = nsnull;
-      result.mTextRunCanCrossFrameBoundary = PR_FALSE;
-      result.mLineBreakerCanCrossFrameBoundary = PR_FALSE;
+      result.mFrameToScan = nullptr;
+      result.mOverflowFrameToScan = nullptr;
+      result.mTextRunCanCrossFrameBoundary = false;
+      result.mLineBreakerCanCrossFrameBoundary = false;
     }
   }    
   return result;
@@ -1089,12 +1074,12 @@ BuildTextRunsScanner::FindBoundaries(nsIFrame* aFrame, FindBoundaryState* aState
 {
   nsIAtom* frameType = aFrame->GetType();
   nsTextFrame* textFrame = frameType == nsGkAtoms::textFrame
-    ? static_cast<nsTextFrame*>(aFrame) : nsnull;
+    ? static_cast<nsTextFrame*>(aFrame) : nullptr;
   if (textFrame) {
     if (aState->mLastTextFrame &&
         textFrame != aState->mLastTextFrame->GetNextInFlow() &&
         !ContinueTextRunAcrossFrames(aState->mLastTextFrame, textFrame)) {
-      aState->mSeenTextRunBoundaryOnThisLine = PR_TRUE;
+      aState->mSeenTextRunBoundaryOnThisLine = true;
       if (aState->mSeenSpaceForLineBreakingOnThisLine)
         return FB_FOUND_VALID_TEXTRUN_BOUNDARY;
     }
@@ -1110,13 +1095,13 @@ BuildTextRunsScanner::FindBoundaries(nsIFrame* aFrame, FindBoundaryState* aState
   if (textFrame) {
     if (!aState->mSeenSpaceForLineBreakingOnThisLine) {
       const nsTextFragment* frag = textFrame->GetContent()->GetText();
-      PRUint32 start = textFrame->GetContentOffset();
+      uint32_t start = textFrame->GetContentOffset();
       const void* text = frag->Is2b()
           ? static_cast<const void*>(frag->Get2b() + start)
           : static_cast<const void*>(frag->Get1b() + start);
       if (TextContainsLineBreakerWhiteSpace(text, textFrame->GetContentLength(),
                                             frag->Is2b())) {
-        aState->mSeenSpaceForLineBreakingOnThisLine = PR_TRUE;
+        aState->mSeenSpaceForLineBreakingOnThisLine = true;
         if (aState->mSeenTextRunBoundaryOnLaterLine)
           return FB_FOUND_VALID_TEXTRUN_BOUNDARY;
       }
@@ -1127,7 +1112,7 @@ BuildTextRunsScanner::FindBoundaries(nsIFrame* aFrame, FindBoundaryState* aState
   FrameTextTraversal traversal =
     CanTextCrossFrameBoundary(aFrame, frameType);
   if (!traversal.mTextRunCanCrossFrameBoundary) {
-    aState->mSeenTextRunBoundaryOnThisLine = PR_TRUE;
+    aState->mSeenTextRunBoundaryOnThisLine = true;
     if (aState->mSeenSpaceForLineBreakingOnThisLine)
       return FB_FOUND_VALID_TEXTRUN_BOUNDARY;
   }
@@ -1140,7 +1125,7 @@ BuildTextRunsScanner::FindBoundaries(nsIFrame* aFrame, FindBoundaryState* aState
   }
 
   if (!traversal.mTextRunCanCrossFrameBoundary) {
-    aState->mSeenTextRunBoundaryOnThisLine = PR_TRUE;
+    aState->mSeenTextRunBoundaryOnThisLine = true;
     if (aState->mSeenSpaceForLineBreakingOnThisLine)
       return FB_FOUND_VALID_TEXTRUN_BOUNDARY;
   }
@@ -1156,34 +1141,45 @@ BuildTextRunsScanner::FindBoundaries(nsIFrame* aFrame, FindBoundaryState* aState
  * General routine for building text runs. This is hairy because of the need
  * to build text runs that span content nodes.
  * 
- * @param aForFrameLine the line containing aForFrame; if null, we'll figure
- * out the line (slowly)
+ * @param aContext The gfxContext we're using to construct this text run.
+ * @param aForFrame The nsTextFrame for which we're building this text run.
  * @param aLineContainer the line container containing aForFrame; if null,
- * we'll walk the ancestors to find it.  It's required to be non-null when
- * aForFrameLine is non-null.
+ *        we'll walk the ancestors to find it.  It's required to be non-null
+ *        when aForFrameLine is non-null.
+ * @param aForFrameLine the line containing aForFrame; if null, we'll figure
+ *        out the line (slowly)
+ * @param aWhichTextRun The type of text run we want to build. If font inflation
+ *        is enabled, this will be eInflated, otherwise it's eNotInflated.
  */
 static void
 BuildTextRuns(gfxContext* aContext, nsTextFrame* aForFrame,
               nsIFrame* aLineContainer,
-              const nsLineList::iterator* aForFrameLine)
+              const nsLineList::iterator* aForFrameLine,
+              nsTextFrame::TextRunType aWhichTextRun)
 {
   NS_ASSERTION(aForFrame || aLineContainer,
                "One of aForFrame or aLineContainer must be set!");
   NS_ASSERTION(!aForFrameLine || aLineContainer,
                "line but no line container");
   
+  nsIFrame* lineContainerChild = aForFrame;
   if (!aLineContainer) {
-    aLineContainer = FindLineContainer(aForFrame);
+    if (aForFrame->IsFloatingFirstLetterChild()) {
+      lineContainerChild = aForFrame->PresContext()->PresShell()->
+        GetPlaceholderFrameFor(aForFrame->GetParent());
+    }
+    aLineContainer = FindLineContainer(lineContainerChild);
   } else {
     NS_ASSERTION(!aForFrame ||
                  (aLineContainer == FindLineContainer(aForFrame) ||
                   (aLineContainer->GetType() == nsGkAtoms::letterFrame &&
-                   aLineContainer->GetStyleDisplay()->IsFloating())),
+                   aLineContainer->IsFloating())),
                  "Wrong line container hint");
   }
 
   nsPresContext* presContext = aLineContainer->PresContext();
-  BuildTextRunsScanner scanner(presContext, aContext, aLineContainer);
+  BuildTextRunsScanner scanner(presContext, aContext, aLineContainer,
+                               aWhichTextRun);
 
   nsBlockFrame* block = nsLayoutUtils::GetAsBlock(aLineContainer);
 
@@ -1193,26 +1189,26 @@ BuildTextRuns(gfxContext* aContext, nsTextFrame* aForFrame,
     // Just loop through all the children of the linecontainer ... it's really
     // just one line
     scanner.SetAtStartOfLine();
-    scanner.SetCommonAncestorWithLastFrame(nsnull);
-    nsIFrame* child = aLineContainer->GetFirstChild(nsnull);
+    scanner.SetCommonAncestorWithLastFrame(nullptr);
+    nsIFrame* child = aLineContainer->GetFirstPrincipalChild();
     while (child) {
       scanner.ScanFrame(child);
       child = child->GetNextSibling();
     }
     // Set mStartOfLine so FlushFrames knows its textrun ends a line
     scanner.SetAtStartOfLine();
-    scanner.FlushFrames(PR_TRUE, PR_FALSE);
+    scanner.FlushFrames(true, false);
     return;
   }
 
-  // Find the line containing aForFrame
+  // Find the line containing 'lineContainerChild'.
 
-  PRBool isValid = PR_TRUE;
+  bool isValid = true;
   nsBlockInFlowLineIterator backIterator(block, &isValid);
   if (aForFrameLine) {
-    backIterator = nsBlockInFlowLineIterator(block, *aForFrameLine, PR_FALSE);
+    backIterator = nsBlockInFlowLineIterator(block, *aForFrameLine);
   } else {
-    backIterator = nsBlockInFlowLineIterator(block, aForFrame, &isValid);
+    backIterator = nsBlockInFlowLineIterator(block, lineContainerChild, &isValid);
     NS_ASSERTION(isValid, "aForFrame not found in block, someone lied to us");
     NS_ASSERTION(backIterator.GetContainer() == block,
                  "Someone lied to us about the block");
@@ -1233,28 +1229,28 @@ BuildTextRuns(gfxContext* aContext, nsTextFrame* aForFrame,
   // This is a little awkward because we traverse lines in the reverse direction
   // but we traverse the frames in each line in the forward direction.
   nsBlockInFlowLineIterator forwardIterator = backIterator;
-  nsTextFrame* stopAtFrame = aForFrame;
-  nsTextFrame* nextLineFirstTextFrame = nsnull;
-  PRBool seenTextRunBoundaryOnLaterLine = PR_FALSE;
-  PRBool mayBeginInTextRun = PR_TRUE;
-  while (PR_TRUE) {
+  nsIFrame* stopAtFrame = lineContainerChild;
+  nsTextFrame* nextLineFirstTextFrame = nullptr;
+  bool seenTextRunBoundaryOnLaterLine = false;
+  bool mayBeginInTextRun = true;
+  while (true) {
     forwardIterator = backIterator;
     nsBlockFrame::line_iterator line = backIterator.GetLine();
     if (!backIterator.Prev() || backIterator.GetLine()->IsBlock()) {
-      mayBeginInTextRun = PR_FALSE;
+      mayBeginInTextRun = false;
       break;
     }
 
-    BuildTextRunsScanner::FindBoundaryState state = { stopAtFrame, nsnull, nsnull,
-      PRPackedBool(seenTextRunBoundaryOnLaterLine), PR_FALSE, PR_FALSE };
+    BuildTextRunsScanner::FindBoundaryState state = { stopAtFrame, nullptr, nullptr,
+      bool(seenTextRunBoundaryOnLaterLine), false, false };
     nsIFrame* child = line->mFirstChild;
-    PRBool foundBoundary = PR_FALSE;
-    PRInt32 i;
+    bool foundBoundary = false;
+    int32_t i;
     for (i = line->GetChildCount() - 1; i >= 0; --i) {
       BuildTextRunsScanner::FindBoundaryResult result =
           scanner.FindBoundaries(child, &state);
       if (result == BuildTextRunsScanner::FB_FOUND_VALID_TEXTRUN_BOUNDARY) {
-        foundBoundary = PR_TRUE;
+        foundBoundary = true;
         break;
       } else if (result == BuildTextRunsScanner::FB_STOPPED_AT_STOP_FRAME) {
         break;
@@ -1268,11 +1264,11 @@ BuildTextRuns(gfxContext* aContext, nsTextFrame* aForFrame,
       // Found a usable textrun boundary at the end of the line
       if (state.mSeenSpaceForLineBreakingOnThisLine)
         break;
-      seenTextRunBoundaryOnLaterLine = PR_TRUE;
+      seenTextRunBoundaryOnLaterLine = true;
     } else if (state.mSeenTextRunBoundaryOnThisLine) {
-      seenTextRunBoundaryOnLaterLine = PR_TRUE;
+      seenTextRunBoundaryOnLaterLine = true;
     }
-    stopAtFrame = nsnull;
+    stopAtFrame = nullptr;
     if (state.mFirstTextFrame) {
       nextLineFirstTextFrame = state.mFirstTextFrame;
     }
@@ -1283,23 +1279,23 @@ BuildTextRuns(gfxContext* aContext, nsTextFrame* aForFrame,
   // text frames will be accumulated into textRunFrames as we go. When a
   // text run boundary is required we flush textRunFrames ((re)building their
   // gfxTextRuns as necessary).
-  PRBool seenStartLine = PR_FALSE;
-  PRUint32 linesAfterStartLine = 0;
+  bool seenStartLine = false;
+  uint32_t linesAfterStartLine = 0;
   do {
     nsBlockFrame::line_iterator line = forwardIterator.GetLine();
     if (line->IsBlock())
       break;
-    line->SetInvalidateTextRuns(PR_FALSE);
+    line->SetInvalidateTextRuns(false);
     scanner.SetAtStartOfLine();
-    scanner.SetCommonAncestorWithLastFrame(nsnull);
+    scanner.SetCommonAncestorWithLastFrame(nullptr);
     nsIFrame* child = line->mFirstChild;
-    PRInt32 i;
+    int32_t i;
     for (i = line->GetChildCount() - 1; i >= 0; --i) {
       scanner.ScanFrame(child);
       child = child->GetNextSibling();
     }
     if (line.get() == startLine.get()) {
-      seenStartLine = PR_TRUE;
+      seenStartLine = true;
     }
     if (seenStartLine) {
       ++linesAfterStartLine;
@@ -1309,7 +1305,7 @@ BuildTextRuns(gfxContext* aContext, nsTextFrame* aForFrame,
         // Note that we must already have finished the textrun for aForFrame,
         // because we've seen the end of a textrun in a line after the line
         // containing aForFrame.
-        scanner.FlushLineBreaks(nsnull);
+        scanner.FlushLineBreaks(nullptr);
         // This flushes out mMappedFlows and mLineBreakBeforeFrames, which
         // silences assertions in the scanner destructor.
         scanner.ResetRunInfo();
@@ -1320,11 +1316,11 @@ BuildTextRuns(gfxContext* aContext, nsTextFrame* aForFrame,
 
   // Set mStartOfLine so FlushFrames knows its textrun ends a line
   scanner.SetAtStartOfLine();
-  scanner.FlushFrames(PR_TRUE, PR_FALSE);
+  scanner.FlushFrames(true, false);
 }
 
 static PRUnichar*
-ExpandBuffer(PRUnichar* aDest, PRUint8* aSrc, PRUint32 aCount)
+ExpandBuffer(PRUnichar* aDest, uint8_t* aSrc, uint32_t aCount)
 {
   while (aCount) {
     *aDest = *aSrc;
@@ -1335,56 +1331,59 @@ ExpandBuffer(PRUnichar* aDest, PRUint8* aSrc, PRUint32 aCount)
   return aDest;
 }
 
-PRBool BuildTextRunsScanner::IsTextRunValidForMappedFlows(gfxTextRun* aTextRun)
+bool BuildTextRunsScanner::IsTextRunValidForMappedFlows(gfxTextRun* aTextRun)
 {
   if (aTextRun->GetFlags() & nsTextFrameUtils::TEXT_IS_SIMPLE_FLOW)
     return mMappedFlows.Length() == 1 &&
       mMappedFlows[0].mStartFrame == static_cast<nsTextFrame*>(aTextRun->GetUserData()) &&
-      mMappedFlows[0].mEndFrame == nsnull;
+      mMappedFlows[0].mEndFrame == nullptr;
 
   TextRunUserData* userData = static_cast<TextRunUserData*>(aTextRun->GetUserData());
   if (userData->mMappedFlowCount != mMappedFlows.Length())
-    return PR_FALSE;
-  PRUint32 i;
+    return false;
+  uint32_t i;
   for (i = 0; i < mMappedFlows.Length(); ++i) {
     if (userData->mMappedFlows[i].mStartFrame != mMappedFlows[i].mStartFrame ||
-        PRInt32(userData->mMappedFlows[i].mContentLength) !=
+        int32_t(userData->mMappedFlows[i].mContentLength) !=
             mMappedFlows[i].GetContentEnd() - mMappedFlows[i].mStartFrame->GetContentOffset())
-      return PR_FALSE;
+      return false;
   }
-  return PR_TRUE;
+  return true;
 }
 
 /**
  * This gets called when we need to make a text run for the current list of
  * frames.
  */
-void BuildTextRunsScanner::FlushFrames(PRBool aFlushLineBreaks, PRBool aSuppressTrailingBreak)
+void BuildTextRunsScanner::FlushFrames(bool aFlushLineBreaks, bool aSuppressTrailingBreak)
 {
-  gfxTextRun* textRun = nsnull;
+  gfxTextRun* textRun = nullptr;
   if (!mMappedFlows.IsEmpty()) {
     if (!mSkipIncompleteTextRuns && mCurrentFramesAllSameTextRun &&
         ((mCurrentFramesAllSameTextRun->GetFlags() & nsTextFrameUtils::TEXT_INCOMING_WHITESPACE) != 0) ==
         ((mCurrentRunContextInfo & nsTextFrameUtils::INCOMING_WHITESPACE) != 0) &&
-        ((mCurrentFramesAllSameTextRun->GetFlags() & gfxTextRunWordCache::TEXT_INCOMING_ARABICCHAR) != 0) ==
+        ((mCurrentFramesAllSameTextRun->GetFlags() & gfxTextRunFactory::TEXT_INCOMING_ARABICCHAR) != 0) ==
         ((mCurrentRunContextInfo & nsTextFrameUtils::INCOMING_ARABICCHAR) != 0) &&
         IsTextRunValidForMappedFlows(mCurrentFramesAllSameTextRun)) {
       // Optimization: We do not need to (re)build the textrun.
       textRun = mCurrentFramesAllSameTextRun;
 
-      // Feed this run's text into the linebreaker to provide context. This also
-      // updates mNextRunContextInfo appropriately.
-      SetupBreakSinksForTextRun(textRun, PR_TRUE, PR_FALSE);
+      // Feed this run's text into the linebreaker to provide context.
+      if (!SetupLineBreakerContext(textRun)) {
+        return;
+      }
+ 
+      // Update mNextRunContextInfo appropriately
       mNextRunContextInfo = nsTextFrameUtils::INCOMING_NONE;
       if (textRun->GetFlags() & nsTextFrameUtils::TEXT_TRAILING_WHITESPACE) {
         mNextRunContextInfo |= nsTextFrameUtils::INCOMING_WHITESPACE;
       }
-      if (textRun->GetFlags() & gfxTextRunWordCache::TEXT_TRAILING_ARABICCHAR) {
+      if (textRun->GetFlags() & gfxTextRunFactory::TEXT_TRAILING_ARABICCHAR) {
         mNextRunContextInfo |= nsTextFrameUtils::INCOMING_ARABICCHAR;
       }
     } else {
-      nsAutoTArray<PRUint8,BIG_TEXT_NODE_SIZE> buffer;
-      PRUint32 bufferSize = mMaxTextLength*(mDoubleByteText ? 2 : 1);
+      AutoFallibleTArray<uint8_t,BIG_TEXT_NODE_SIZE> buffer;
+      uint32_t bufferSize = mMaxTextLength*(mDoubleByteText ? 2 : 1);
       if (bufferSize < mMaxTextLength || bufferSize == PR_UINT32_MAX ||
           !buffer.AppendElements(bufferSize)) {
         return;
@@ -1394,16 +1393,16 @@ void BuildTextRunsScanner::FlushFrames(PRBool aFlushLineBreaks, PRBool aSuppress
   }
 
   if (aFlushLineBreaks) {
-    FlushLineBreaks(aSuppressTrailingBreak ? nsnull : textRun);
+    FlushLineBreaks(aSuppressTrailingBreak ? nullptr : textRun);
   }
 
-  mCanStopOnThisLine = PR_TRUE;
+  mCanStopOnThisLine = true;
   ResetRunInfo();
 }
 
 void BuildTextRunsScanner::FlushLineBreaks(gfxTextRun* aTrailingTextRun)
 {
-  PRBool trailingLineBreak;
+  bool trailingLineBreak;
   nsresult rv = mLineBreaker.Reset(&trailingLineBreak);
   // textRun may be null for various reasons, including because we constructed
   // a partial textrun just to get the linebreaker and other state set up
@@ -1412,7 +1411,7 @@ void BuildTextRunsScanner::FlushLineBreaks(gfxTextRun* aTrailingTextRun)
     aTrailingTextRun->SetFlagBits(nsTextFrameUtils::TEXT_HAS_TRAILING_BREAK);
   }
 
-  PRUint32 i;
+  uint32_t i;
   for (i = 0; i < mBreakSinks.Length(); ++i) {
     if (!mBreakSinks[i]->mExistingTextRun || mBreakSinks[i]->mChangedBreaks) {
       // TODO cause frames associated with the textrun to be reflowed, if they
@@ -1449,13 +1448,13 @@ void BuildTextRunsScanner::AccumulateRunInfo(nsTextFrame* aFrame)
                mappedFlow->GetContentEnd() == aFrame->GetContentOffset(),
                "Overlapping or discontiguous frames => BAD");
   mappedFlow->mEndFrame = static_cast<nsTextFrame*>(aFrame->GetNextContinuation());
-  if (mCurrentFramesAllSameTextRun != aFrame->GetTextRun()) {
-    mCurrentFramesAllSameTextRun = nsnull;
+  if (mCurrentFramesAllSameTextRun != aFrame->GetTextRun(mWhichTextRun)) {
+    mCurrentFramesAllSameTextRun = nullptr;
   }
 
   if (mStartOfLine) {
     mLineBreakBeforeFrames.AppendElement(aFrame);
-    mStartOfLine = PR_FALSE;
+    mStartOfLine = false;
   }
 }
 
@@ -1468,21 +1467,52 @@ static nscoord StyleToCoord(const nsStyleCoord& aCoord)
   }
 }
 
-static PRBool
+static bool
 HasTerminalNewline(const nsTextFrame* aFrame)
 {
   if (aFrame->GetContentLength() == 0)
-    return PR_FALSE;
+    return false;
   const nsTextFragment* frag = aFrame->GetContent()->GetText();
   return frag->CharAt(aFrame->GetContentEnd() - 1) == '\n';
 }
 
-PRBool
+static nscoord
+LetterSpacing(nsIFrame* aFrame, const nsStyleText* aStyleText = nullptr)
+{
+  if (aFrame->IsSVGText()) {
+    return 0;
+  }
+  if (!aStyleText) {
+    aStyleText = aFrame->GetStyleText();
+  }
+  return StyleToCoord(aStyleText->mLetterSpacing);
+}
+
+static nscoord
+WordSpacing(nsIFrame* aFrame, const nsStyleText* aStyleText = nullptr)
+{
+  if (aFrame->IsSVGText()) {
+    return 0;
+  }
+  if (!aStyleText) {
+    aStyleText = aFrame->GetStyleText();
+  }
+  return aStyleText->mWordSpacing;
+}
+
+bool
 BuildTextRunsScanner::ContinueTextRunAcrossFrames(nsTextFrame* aFrame1, nsTextFrame* aFrame2)
 {
+  // We don't need to check font size inflation, since
+  // |FindLineContainer| above (via |nsIFrame::CanContinueTextRun|)
+  // ensures that text runs never cross block boundaries.  This means
+  // that the font size inflation on all text frames in the text run is
+  // already guaranteed to be the same as each other (and for the line
+  // container).
   if (mBidiEnabled &&
-      NS_GET_EMBEDDING_LEVEL(aFrame1) != NS_GET_EMBEDDING_LEVEL(aFrame2))
-    return PR_FALSE;
+      (NS_GET_EMBEDDING_LEVEL(aFrame1) != NS_GET_EMBEDDING_LEVEL(aFrame2) ||
+       NS_GET_PARAGRAPH_DEPTH(aFrame1) != NS_GET_PARAGRAPH_DEPTH(aFrame2)))
+    return false;
 
   nsStyleContext* sc1 = aFrame1->GetStyleContext();
   const nsStyleText* textStyle1 = sc1->GetStyleText();
@@ -1493,7 +1523,7 @@ BuildTextRunsScanner::ContinueTextRunAcrossFrames(nsTextFrame* aFrame1, nsTextFr
   // until after reflow has broken up the frame into one (or more) frames per
   // line. That's OK though.
   if (textStyle1->NewlineIsSignificant() && HasTerminalNewline(aFrame1))
-    return PR_FALSE;
+    return false;
 
   if (aFrame1->GetContent() == aFrame2->GetContent() &&
       aFrame1->GetNextInFlow() != aFrame2) {
@@ -1503,19 +1533,21 @@ BuildTextRunsScanner::ContinueTextRunAcrossFrames(nsTextFrame* aFrame1, nsTextFr
     // direction. We can't allow these two frames to share the same textrun
     // because that would violate our invariant that two flows in the same
     // textrun have different content elements.
-    return PR_FALSE;
+    return false;
   }
 
   nsStyleContext* sc2 = aFrame2->GetStyleContext();
   if (sc1 == sc2)
-    return PR_TRUE;
+    return true;
+
   const nsStyleFont* fontStyle1 = sc1->GetStyleFont();
   const nsStyleFont* fontStyle2 = sc2->GetStyleFont();
-  const nsStyleText* textStyle2 = sc2->GetStyleText();
+  nscoord letterSpacing1 = LetterSpacing(aFrame1);
+  nscoord letterSpacing2 = LetterSpacing(aFrame2);
   return fontStyle1->mFont.BaseEquals(fontStyle2->mFont) &&
-    sc1->GetStyleVisibility()->mLanguage == sc2->GetStyleVisibility()->mLanguage &&
-    nsLayoutUtils::GetTextRunFlagsForStyle(sc1, textStyle1, fontStyle1) ==
-      nsLayoutUtils::GetTextRunFlagsForStyle(sc2, textStyle2, fontStyle2);
+    sc1->GetStyleFont()->mLanguage == sc2->GetStyleFont()->mLanguage &&
+    nsLayoutUtils::GetTextRunFlagsForStyle(sc1, fontStyle1, letterSpacing1) ==
+      nsLayoutUtils::GetTextRunFlagsForStyle(sc2, fontStyle2, letterSpacing2);
 }
 
 void BuildTextRunsScanner::ScanFrame(nsIFrame* aFrame)
@@ -1546,7 +1578,7 @@ void BuildTextRunsScanner::ScanFrame(nsIFrame* aFrame)
 
     if (mLastFrame) {
       if (!ContinueTextRunAcrossFrames(mLastFrame, frame)) {
-        FlushFrames(PR_FALSE, PR_FALSE);
+        FlushFrames(false, false);
       } else {
         if (mLastFrame->GetContent() == frame->GetContent()) {
           AccumulateRunInfo(frame);
@@ -1564,7 +1596,7 @@ void BuildTextRunsScanner::ScanFrame(nsIFrame* aFrame)
 
     AccumulateRunInfo(frame);
     if (mMappedFlows.Length() == 1) {
-      mCurrentFramesAllSameTextRun = frame->GetTextRun();
+      mCurrentFramesAllSameTextRun = frame->GetTextRun(mWhichTextRun);
       mCurrentRunContextInfo = mNextRunContextInfo;
     }
     return;
@@ -1572,16 +1604,16 @@ void BuildTextRunsScanner::ScanFrame(nsIFrame* aFrame)
 
   FrameTextTraversal traversal =
     CanTextCrossFrameBoundary(aFrame, frameType);
-  PRBool isBR = frameType == nsGkAtoms::brFrame;
+  bool isBR = frameType == nsGkAtoms::brFrame;
   if (!traversal.mLineBreakerCanCrossFrameBoundary) {
     // BR frames are special. We do not need or want to record a break opportunity
     // before a BR frame.
-    FlushFrames(PR_TRUE, isBR);
+    FlushFrames(true, isBR);
     mCommonAncestorWithLastFrame = aFrame;
     mNextRunContextInfo &= ~nsTextFrameUtils::INCOMING_WHITESPACE;
-    mStartOfLine = PR_FALSE;
+    mStartOfLine = false;
   } else if (!traversal.mTextRunCanCrossFrameBoundary) {
-    FlushFrames(PR_FALSE, PR_FALSE);
+    FlushFrames(false, false);
   }
 
   for (nsIFrame* f = traversal.NextFrameToScan(); f;
@@ -1592,44 +1624,45 @@ void BuildTextRunsScanner::ScanFrame(nsIFrame* aFrame)
   if (!traversal.mLineBreakerCanCrossFrameBoundary) {
     // Really if we're a BR frame this is unnecessary since descendInto will be
     // false. In fact this whole "if" statement should move into the descendInto.
-    FlushFrames(PR_TRUE, isBR);
+    FlushFrames(true, isBR);
     mCommonAncestorWithLastFrame = aFrame;
     mNextRunContextInfo &= ~nsTextFrameUtils::INCOMING_WHITESPACE;
   } else if (!traversal.mTextRunCanCrossFrameBoundary) {
-    FlushFrames(PR_FALSE, PR_FALSE);
+    FlushFrames(false, false);
   }
 
   LiftCommonAncestorWithLastFrameToParent(aFrame->GetParent());
 }
 
 nsTextFrame*
-BuildTextRunsScanner::GetNextBreakBeforeFrame(PRUint32* aIndex)
+BuildTextRunsScanner::GetNextBreakBeforeFrame(uint32_t* aIndex)
 {
-  PRUint32 index = *aIndex;
+  uint32_t index = *aIndex;
   if (index >= mLineBreakBeforeFrames.Length())
-    return nsnull;
+    return nullptr;
   *aIndex = index + 1;
   return static_cast<nsTextFrame*>(mLineBreakBeforeFrames.ElementAt(index));
 }
 
-static PRUint32
+static uint32_t
 GetSpacingFlags(nscoord spacing)
 {
   return spacing ? gfxTextRunFactory::TEXT_ENABLE_SPACING : 0;
 }
 
 static gfxFontGroup*
-GetFontGroupForFrame(nsIFrame* aFrame,
-                     nsFontMetrics** aOutFontMetrics = nsnull)
+GetFontGroupForFrame(nsIFrame* aFrame, float aFontSizeInflation,
+                     nsFontMetrics** aOutFontMetrics = nullptr)
 {
   if (aOutFontMetrics)
-    *aOutFontMetrics = nsnull;
+    *aOutFontMetrics = nullptr;
 
   nsRefPtr<nsFontMetrics> metrics;
-  nsLayoutUtils::GetFontMetricsForFrame(aFrame, getter_AddRefs(metrics));
+  nsLayoutUtils::GetFontMetricsForFrame(aFrame, getter_AddRefs(metrics),
+                                        aFontSizeInflation);
 
   if (!metrics)
-    return nsnull;
+    return nullptr;
 
   if (aOutFontMetrics) {
     *aOutFontMetrics = metrics;
@@ -1649,7 +1682,7 @@ GetReferenceRenderingContext(nsTextFrame* aTextFrame, nsRenderingContext* aRC)
   if (!tmp) {
     tmp = aTextFrame->PresContext()->PresShell()->GetReferenceRenderingContext();
     if (!tmp)
-      return nsnull;
+      return nullptr;
   }
 
   gfxContext* ctx = tmp->ThebesContext();
@@ -1658,21 +1691,20 @@ GetReferenceRenderingContext(nsTextFrame* aTextFrame, nsRenderingContext* aRC)
 }
 
 /**
- * The returned textrun must be released via gfxTextRunCache::ReleaseTextRun
- * or gfxTextRunCache::AutoTextRun.
+ * The returned textrun must be deleted when no longer needed.
  */
 static gfxTextRun*
 GetHyphenTextRun(gfxTextRun* aTextRun, gfxContext* aContext, nsTextFrame* aTextFrame)
 {
   nsRefPtr<gfxContext> ctx = aContext;
   if (!ctx) {
-    ctx = GetReferenceRenderingContext(aTextFrame, nsnull);
+    ctx = GetReferenceRenderingContext(aTextFrame, nullptr);
   }
   if (!ctx)
-    return nsnull;
+    return nullptr;
 
   gfxFontGroup* fontGroup = aTextRun->GetFontGroup();
-  PRUint32 flags = gfxFontGroup::TEXT_IS_PERSISTENT;
+  uint32_t flags = gfxFontGroup::TEXT_IS_PERSISTENT;
 
   // only use U+2010 if it is supported by the first font in the group;
   // it's better to use ASCII '-' from the primary font than to fall back to U+2010
@@ -1680,14 +1712,13 @@ GetHyphenTextRun(gfxTextRun* aTextRun, gfxContext* aContext, nsTextFrame* aTextF
   static const PRUnichar unicodeHyphen = 0x2010;
   gfxFont *font = fontGroup->GetFontAt(0);
   if (font && font->HasCharacter(unicodeHyphen)) {
-    return gfxTextRunCache::MakeTextRun(&unicodeHyphen, 1, fontGroup, ctx,
-                                        aTextRun->GetAppUnitsPerDevUnit(), flags);
+    return fontGroup->MakeTextRun(&unicodeHyphen, 1, ctx,
+                                  aTextRun->GetAppUnitsPerDevUnit(), flags);
   }
 
-  static const PRUint8 dash = '-';
-  return gfxTextRunCache::MakeTextRun(&dash, 1, fontGroup, ctx,
-                                      aTextRun->GetAppUnitsPerDevUnit(),
-                                      flags);
+  static const uint8_t dash = '-';
+  return fontGroup->MakeTextRun(&dash, 1, ctx,
+                                aTextRun->GetAppUnitsPerDevUnit(), flags);
 }
 
 static gfxFont::Metrics
@@ -1722,19 +1753,18 @@ BuildTextRunsScanner::BuildTextRunForFrames(void* aTextBuffer)
   gfxSkipCharsBuilder builder;
 
   const void* textPtr = aTextBuffer;
-  PRBool anySmallcapsStyle = PR_FALSE;
-  PRBool anyTextTransformStyle = PR_FALSE;
-  PRInt32 endOfLastContent = 0;
-  PRUint32 textFlags = nsTextFrameUtils::TEXT_NO_BREAKS;
+  bool anySmallcapsStyle = false;
+  bool anyTextTransformStyle = false;
+  uint32_t textFlags = nsTextFrameUtils::TEXT_NO_BREAKS;
 
   if (mCurrentRunContextInfo & nsTextFrameUtils::INCOMING_WHITESPACE) {
     textFlags |= nsTextFrameUtils::TEXT_INCOMING_WHITESPACE;
   }
   if (mCurrentRunContextInfo & nsTextFrameUtils::INCOMING_ARABICCHAR) {
-    textFlags |= gfxTextRunWordCache::TEXT_INCOMING_ARABICCHAR;
+    textFlags |= gfxTextRunFactory::TEXT_INCOMING_ARABICCHAR;
   }
 
-  nsAutoTArray<PRInt32,50> textBreakPoints;
+  nsAutoTArray<int32_t,50> textBreakPoints;
   TextRunUserData dummyData;
   TextRunMappedFlow dummyMappedFlow;
 
@@ -1745,7 +1775,7 @@ BuildTextRunsScanner::BuildTextRunForFrames(void* aTextBuffer)
   if (mMappedFlows.Length() == 1 && !mMappedFlows[0].mEndFrame &&
       mMappedFlows[0].mStartFrame->GetContentOffset() == 0) {
     userData = &dummyData;
-    userDataToDestroy = nsnull;
+    userDataToDestroy = nullptr;
     dummyData.mMappedFlows = &dummyMappedFlow;
   } else {
     userData = static_cast<TextRunUserData*>
@@ -1756,17 +1786,32 @@ BuildTextRunsScanner::BuildTextRunForFrames(void* aTextBuffer)
   userData->mMappedFlowCount = mMappedFlows.Length();
   userData->mLastFlowIndex = 0;
 
-  PRUint32 currentTransformedTextOffset = 0;
+  uint32_t currentTransformedTextOffset = 0;
 
-  PRUint32 nextBreakIndex = 0;
+  uint32_t nextBreakIndex = 0;
   nsTextFrame* nextBreakBeforeFrame = GetNextBreakBeforeFrame(&nextBreakIndex);
-  PRBool enabledJustification = mLineContainer &&
-    mLineContainer->GetStyleText()->mTextAlign == NS_STYLE_TEXT_ALIGN_JUSTIFY;
+  bool enabledJustification = mLineContainer &&
+    (mLineContainer->GetStyleText()->mTextAlign == NS_STYLE_TEXT_ALIGN_JUSTIFY ||
+     mLineContainer->GetStyleText()->mTextAlignLast == NS_STYLE_TEXT_ALIGN_JUSTIFY) &&
+    !mLineContainer->IsSVGText();
 
-  PRUint32 i;
-  const nsStyleText* textStyle = nsnull;
-  const nsStyleFont* fontStyle = nsnull;
-  nsStyleContext* lastStyleContext = nsnull;
+  // for word-break style
+  switch (mLineContainer->GetStyleText()->mWordBreak) {
+    case NS_STYLE_WORDBREAK_BREAK_ALL:
+      mLineBreaker.SetWordBreak(nsILineBreaker::kWordBreak_BreakAll);
+      break;
+    case NS_STYLE_WORDBREAK_KEEP_ALL:
+      mLineBreaker.SetWordBreak(nsILineBreaker::kWordBreak_KeepAll);
+      break;
+    default:
+      mLineBreaker.SetWordBreak(nsILineBreaker::kWordBreak_Normal);
+      break;
+  }
+
+  uint32_t i;
+  const nsStyleText* textStyle = nullptr;
+  const nsStyleFont* fontStyle = nullptr;
+  nsStyleContext* lastStyleContext = nullptr;
   for (i = 0; i < mMappedFlows.Length(); ++i) {
     MappedFlow* mappedFlow = &mMappedFlows[i];
     nsTextFrame* f = mappedFlow->mStartFrame;
@@ -1775,10 +1820,10 @@ BuildTextRunsScanner::BuildTextRunForFrames(void* aTextBuffer)
     // Detect use of text-transform or font-variant anywhere in the run
     textStyle = f->GetStyleText();
     if (NS_STYLE_TEXT_TRANSFORM_NONE != textStyle->mTextTransform) {
-      anyTextTransformStyle = PR_TRUE;
+      anyTextTransformStyle = true;
     }
-    textFlags |= GetSpacingFlags(StyleToCoord(textStyle->mLetterSpacing));
-    textFlags |= GetSpacingFlags(textStyle->mWordSpacing);
+    textFlags |= GetSpacingFlags(LetterSpacing(f));
+    textFlags |= GetSpacingFlags(WordSpacing(f));
     nsTextFrameUtils::CompressionMode compression =
       CSSWhitespaceToCompressionMode[textStyle->mWhiteSpace];
     if (enabledJustification && !textStyle->WhiteSpaceIsSignificant()) {
@@ -1786,15 +1831,15 @@ BuildTextRunsScanner::BuildTextRunForFrames(void* aTextBuffer)
     }
     fontStyle = f->GetStyleFont();
     if (NS_STYLE_FONT_VARIANT_SMALL_CAPS == fontStyle->mFont.variant) {
-      anySmallcapsStyle = PR_TRUE;
+      anySmallcapsStyle = true;
     }
 
     // Figure out what content is included in this flow.
     nsIContent* content = f->GetContent();
     const nsTextFragment* frag = content->GetText();
-    PRInt32 contentStart = mappedFlow->mStartFrame->GetContentOffset();
-    PRInt32 contentEnd = mappedFlow->GetContentEnd();
-    PRInt32 contentLength = contentEnd - contentStart;
+    int32_t contentStart = mappedFlow->mStartFrame->GetContentOffset();
+    int32_t contentEnd = mappedFlow->GetContentEnd();
+    int32_t contentLength = contentEnd - contentStart;
 
     TextRunMappedFlow* newFlow = &userData->mMappedFlows[i];
     newFlow->mStartFrame = mappedFlow->mStartFrame;
@@ -1808,7 +1853,7 @@ BuildTextRunsScanner::BuildTextRunForFrames(void* aTextBuffer)
       nextBreakBeforeFrame = GetNextBreakBeforeFrame(&nextBreakIndex);
     }
 
-    PRUint32 analysisFlags;
+    uint32_t analysisFlags;
     if (frag->Is2b()) {
       NS_ASSERTION(mDoubleByteText, "Wrong buffer char size!");
       PRUnichar* bufStart = static_cast<PRUnichar*>(aTextBuffer);
@@ -1820,21 +1865,21 @@ BuildTextRunsScanner::BuildTextRunForFrames(void* aTextBuffer)
       if (mDoubleByteText) {
         // Need to expand the text. First transform it into a temporary buffer,
         // then expand.
-        nsAutoTArray<PRUint8,BIG_TEXT_NODE_SIZE> tempBuf;
-        if (!tempBuf.AppendElements(contentLength)) {
+        AutoFallibleTArray<uint8_t,BIG_TEXT_NODE_SIZE> tempBuf;
+        uint8_t* bufStart = tempBuf.AppendElements(contentLength);
+        if (!bufStart) {
           DestroyUserData(userDataToDestroy);
-          return nsnull;
+          return nullptr;
         }
-        PRUint8* bufStart = tempBuf.Elements();
-        PRUint8* end = nsTextFrameUtils::TransformText(
-            reinterpret_cast<const PRUint8*>(frag->Get1b()) + contentStart, contentLength,
+        uint8_t* end = nsTextFrameUtils::TransformText(
+            reinterpret_cast<const uint8_t*>(frag->Get1b()) + contentStart, contentLength,
             bufStart, compression, &mNextRunContextInfo, &builder, &analysisFlags);
         aTextBuffer = ExpandBuffer(static_cast<PRUnichar*>(aTextBuffer),
                                    tempBuf.Elements(), end - tempBuf.Elements());
       } else {
-        PRUint8* bufStart = static_cast<PRUint8*>(aTextBuffer);
-        PRUint8* end = nsTextFrameUtils::TransformText(
-            reinterpret_cast<const PRUint8*>(frag->Get1b()) + contentStart, contentLength,
+        uint8_t* bufStart = static_cast<uint8_t*>(aTextBuffer);
+        uint8_t* end = nsTextFrameUtils::TransformText(
+            reinterpret_cast<const uint8_t*>(frag->Get1b()) + contentStart, contentLength,
             bufStart, compression, &mNextRunContextInfo, &builder, &analysisFlags);
         aTextBuffer = end;
       }
@@ -1842,34 +1887,39 @@ BuildTextRunsScanner::BuildTextRunForFrames(void* aTextBuffer)
     textFlags |= analysisFlags;
 
     currentTransformedTextOffset =
-      (static_cast<const PRUint8*>(aTextBuffer) - static_cast<const PRUint8*>(textPtr)) >> mDoubleByteText;
-
-    endOfLastContent = contentEnd;
+      (static_cast<const uint8_t*>(aTextBuffer) - static_cast<const uint8_t*>(textPtr)) >> mDoubleByteText;
   }
 
   // Check for out-of-memory in gfxSkipCharsBuilder
   if (!builder.IsOK()) {
     DestroyUserData(userDataToDestroy);
-    return nsnull;
+    return nullptr;
   }
 
   void* finalUserData;
   if (userData == &dummyData) {
     textFlags |= nsTextFrameUtils::TEXT_IS_SIMPLE_FLOW;
-    userData = nsnull;
+    userData = nullptr;
     finalUserData = mMappedFlows[0].mStartFrame;
   } else {
     finalUserData = userData;
   }
 
-  PRUint32 transformedLength = currentTransformedTextOffset;
+  uint32_t transformedLength = currentTransformedTextOffset;
 
   // Now build the textrun
   nsTextFrame* firstFrame = mMappedFlows[0].mStartFrame;
-  gfxFontGroup* fontGroup = GetFontGroupForFrame(firstFrame);
+  float fontInflation;
+  if (mWhichTextRun == nsTextFrame::eNotInflated) {
+    fontInflation = 1.0f;
+  } else {
+    fontInflation = nsLayoutUtils::FontSizeInflationFor(firstFrame);
+  }
+
+  gfxFontGroup* fontGroup = GetFontGroupForFrame(firstFrame, fontInflation);
   if (!fontGroup) {
     DestroyUserData(userDataToDestroy);
-    return nsnull;
+    return nullptr;
   }
 
   if (textFlags & nsTextFrameUtils::TEXT_HAS_TAB) {
@@ -1885,12 +1935,13 @@ BuildTextRunsScanner::BuildTextRunForFrames(void* aTextBuffer)
     textFlags |= nsTextFrameUtils::TEXT_TRAILING_WHITESPACE;
   }
   if (mNextRunContextInfo & nsTextFrameUtils::INCOMING_ARABICCHAR) {
-    textFlags |= gfxTextRunWordCache::TEXT_TRAILING_ARABICCHAR;
+    textFlags |= gfxTextRunFactory::TEXT_TRAILING_ARABICCHAR;
   }
   // ContinueTextRunAcrossFrames guarantees that it doesn't matter which
-  // frame's style is used, so use the last frame's
+  // frame's style is used, so we use a mixture of the first frame and
+  // last frame's style
   textFlags |= nsLayoutUtils::GetTextRunFlagsForStyle(lastStyleContext,
-      textStyle, fontStyle);
+      fontStyle, LetterSpacing(firstFrame, textStyle));
   // XXX this is a bit of a hack. For performance reasons, if we're favouring
   // performance over quality, don't try to get accurate glyph extents.
   if (!(textFlags & gfxTextRunFactory::TEXT_OPTIMIZE_SPEED)) {
@@ -1903,7 +1954,7 @@ BuildTextRunsScanner::BuildTextRunForFrames(void* aTextBuffer)
   NS_ASSERTION(nextBreakIndex == mLineBreakBeforeFrames.Length(),
                "Didn't find all the frames to break-before...");
   gfxSkipCharsIterator iter(skipChars);
-  nsAutoTArray<PRUint32,50> textBreakPointsAfterTransform;
+  nsAutoTArray<uint32_t,50> textBreakPointsAfterTransform;
   for (i = 0; i < textBreakPoints.Length(); ++i) {
     nsTextFrameUtils::AppendLineBreakOffset(&textBreakPointsAfterTransform, 
             iter.ConvertOriginalToSkipped(textBreakPoints[i]));
@@ -1930,11 +1981,11 @@ BuildTextRunsScanner::BuildTextRunForFrames(void* aTextBuffer)
       nsTextFrame* f;
       for (f = mappedFlow->mStartFrame; f != mappedFlow->mEndFrame;
            f = static_cast<nsTextFrame*>(f->GetNextContinuation())) {
-        PRUint32 offset = iter.GetSkippedOffset();
+        uint32_t offset = iter.GetSkippedOffset();
         iter.AdvanceOriginal(f->GetContentLength());
-        PRUint32 end = iter.GetSkippedOffset();
+        uint32_t end = iter.GetSkippedOffset();
         nsStyleContext* sc = f->GetStyleContext();
-        PRUint32 j;
+        uint32_t j;
         for (j = offset; j < end; ++j) {
           styles.AppendElement(sc);
         }
@@ -1964,7 +2015,7 @@ BuildTextRunsScanner::BuildTextRunForFrames(void* aTextBuffer)
       textRun = MakeTextRun(text, transformedLength, fontGroup, &params, textFlags);
     }
   } else {
-    const PRUint8* text = static_cast<const PRUint8*>(textPtr);
+    const uint8_t* text = static_cast<const uint8_t*>(textPtr);
     textFlags |= gfxFontGroup::TEXT_IS_8BIT;
     if (transformingFactory) {
       textRun = transformingFactory->MakeTextRun(text, transformedLength, &params,
@@ -1979,14 +2030,21 @@ BuildTextRunsScanner::BuildTextRunForFrames(void* aTextBuffer)
   }
   if (!textRun) {
     DestroyUserData(userDataToDestroy);
-    return nsnull;
+    return nullptr;
   }
 
   // We have to set these up after we've created the textrun, because
   // the breaks may be stored in the textrun during this very call.
   // This is a bit annoying because it requires another loop over the frames
   // making up the textrun, but I don't see a way to avoid this.
-  SetupBreakSinksForTextRun(textRun, PR_FALSE, mSkipIncompleteTextRuns);
+  uint32_t flags = 0;
+  if (mDoubleByteText) {
+    flags |= SBS_DOUBLE_BYTE;
+  }
+  if (mSkipIncompleteTextRuns) {
+    flags |= SBS_SUPPRESS_SINK;
+  }
+  SetupBreakSinksForTextRun(textRun, textPtr, flags);
 
   if (mSkipIncompleteTextRuns) {
     mSkipIncompleteTextRuns = !TextContainsLineBreakerWhiteSpace(textPtr,
@@ -1999,64 +2057,193 @@ BuildTextRunsScanner::BuildTextRunForFrames(void* aTextBuffer)
     // not be used (since this textrun will not be used and will be
     // itself deleted soon), but it's always better to not have dangling
     // pointers around.
-    textRun->SetUserData(nsnull);
+    textRun->SetUserData(nullptr);
     DestroyUserData(userDataToDestroy);
-    return nsnull;
+    return nullptr;
   }
 
   // Actually wipe out the textruns associated with the mapped frames and associate
   // those frames with this text run.
-  AssignTextRun(textRun);
+  AssignTextRun(textRun, fontInflation);
   return textRun;
 }
 
-static PRBool
+// This is a cut-down version of BuildTextRunForFrames used to set up
+// context for the line-breaker, when the textrun has already been created.
+// So it does the same walk over the mMappedFlows, but doesn't actually
+// build a new textrun.
+bool
+BuildTextRunsScanner::SetupLineBreakerContext(gfxTextRun *aTextRun)
+{
+  AutoFallibleTArray<uint8_t,BIG_TEXT_NODE_SIZE> buffer;
+  uint32_t bufferSize = mMaxTextLength*(mDoubleByteText ? 2 : 1);
+  if (bufferSize < mMaxTextLength || bufferSize == PR_UINT32_MAX) {
+    return false;
+  }
+  void *textPtr = buffer.AppendElements(bufferSize);
+  if (!textPtr) {
+    return false;
+  }
+
+  gfxSkipCharsBuilder builder;
+
+  nsAutoTArray<int32_t,50> textBreakPoints;
+  TextRunUserData dummyData;
+  TextRunMappedFlow dummyMappedFlow;
+
+  TextRunUserData* userData;
+  TextRunUserData* userDataToDestroy;
+  // If the situation is particularly simple (and common) we don't need to
+  // allocate userData.
+  if (mMappedFlows.Length() == 1 && !mMappedFlows[0].mEndFrame &&
+      mMappedFlows[0].mStartFrame->GetContentOffset() == 0) {
+    userData = &dummyData;
+    userDataToDestroy = nullptr;
+    dummyData.mMappedFlows = &dummyMappedFlow;
+  } else {
+    userData = static_cast<TextRunUserData*>
+      (nsMemory::Alloc(sizeof(TextRunUserData) + mMappedFlows.Length()*sizeof(TextRunMappedFlow)));
+    userDataToDestroy = userData;
+    userData->mMappedFlows = reinterpret_cast<TextRunMappedFlow*>(userData + 1);
+  }
+  userData->mMappedFlowCount = mMappedFlows.Length();
+  userData->mLastFlowIndex = 0;
+
+  uint32_t nextBreakIndex = 0;
+  nsTextFrame* nextBreakBeforeFrame = GetNextBreakBeforeFrame(&nextBreakIndex);
+
+  uint32_t i;
+  const nsStyleText* textStyle = nullptr;
+  for (i = 0; i < mMappedFlows.Length(); ++i) {
+    MappedFlow* mappedFlow = &mMappedFlows[i];
+    nsTextFrame* f = mappedFlow->mStartFrame;
+
+    textStyle = f->GetStyleText();
+    nsTextFrameUtils::CompressionMode compression =
+      CSSWhitespaceToCompressionMode[textStyle->mWhiteSpace];
+
+    // Figure out what content is included in this flow.
+    nsIContent* content = f->GetContent();
+    const nsTextFragment* frag = content->GetText();
+    int32_t contentStart = mappedFlow->mStartFrame->GetContentOffset();
+    int32_t contentEnd = mappedFlow->GetContentEnd();
+    int32_t contentLength = contentEnd - contentStart;
+
+    TextRunMappedFlow* newFlow = &userData->mMappedFlows[i];
+    newFlow->mStartFrame = mappedFlow->mStartFrame;
+    newFlow->mDOMOffsetToBeforeTransformOffset = builder.GetCharCount() -
+      mappedFlow->mStartFrame->GetContentOffset();
+    newFlow->mContentLength = contentLength;
+
+    while (nextBreakBeforeFrame && nextBreakBeforeFrame->GetContent() == content) {
+      textBreakPoints.AppendElement(
+          nextBreakBeforeFrame->GetContentOffset() + newFlow->mDOMOffsetToBeforeTransformOffset);
+      nextBreakBeforeFrame = GetNextBreakBeforeFrame(&nextBreakIndex);
+    }
+
+    uint32_t analysisFlags;
+    if (frag->Is2b()) {
+      NS_ASSERTION(mDoubleByteText, "Wrong buffer char size!");
+      PRUnichar* bufStart = static_cast<PRUnichar*>(textPtr);
+      PRUnichar* bufEnd = nsTextFrameUtils::TransformText(
+          frag->Get2b() + contentStart, contentLength, bufStart,
+          compression, &mNextRunContextInfo, &builder, &analysisFlags);
+      textPtr = bufEnd;
+    } else {
+      if (mDoubleByteText) {
+        // Need to expand the text. First transform it into a temporary buffer,
+        // then expand.
+        AutoFallibleTArray<uint8_t,BIG_TEXT_NODE_SIZE> tempBuf;
+        uint8_t* bufStart = tempBuf.AppendElements(contentLength);
+        if (!bufStart) {
+          DestroyUserData(userDataToDestroy);
+          return false;
+        }
+        uint8_t* end = nsTextFrameUtils::TransformText(
+            reinterpret_cast<const uint8_t*>(frag->Get1b()) + contentStart, contentLength,
+            bufStart, compression, &mNextRunContextInfo, &builder, &analysisFlags);
+        textPtr = ExpandBuffer(static_cast<PRUnichar*>(textPtr),
+                               tempBuf.Elements(), end - tempBuf.Elements());
+      } else {
+        uint8_t* bufStart = static_cast<uint8_t*>(textPtr);
+        uint8_t* end = nsTextFrameUtils::TransformText(
+            reinterpret_cast<const uint8_t*>(frag->Get1b()) + contentStart, contentLength,
+            bufStart, compression, &mNextRunContextInfo, &builder, &analysisFlags);
+        textPtr = end;
+      }
+    }
+  }
+
+  // We have to set these up after we've created the textrun, because
+  // the breaks may be stored in the textrun during this very call.
+  // This is a bit annoying because it requires another loop over the frames
+  // making up the textrun, but I don't see a way to avoid this.
+  uint32_t flags = 0;
+  if (mDoubleByteText) {
+    flags |= SBS_DOUBLE_BYTE;
+  }
+  if (mSkipIncompleteTextRuns) {
+    flags |= SBS_SUPPRESS_SINK;
+  }
+  SetupBreakSinksForTextRun(aTextRun, buffer.Elements(), flags);
+
+  DestroyUserData(userDataToDestroy);
+
+  return true;
+}
+
+static bool
 HasCompressedLeadingWhitespace(nsTextFrame* aFrame, const nsStyleText* aStyleText,
-                               PRInt32 aContentEndOffset,
+                               int32_t aContentEndOffset,
                                const gfxSkipCharsIterator& aIterator)
 {
   if (!aIterator.IsOriginalCharSkipped())
-    return PR_FALSE;
+    return false;
 
   gfxSkipCharsIterator iter = aIterator;
-  PRInt32 frameContentOffset = aFrame->GetContentOffset();
+  int32_t frameContentOffset = aFrame->GetContentOffset();
   const nsTextFragment* frag = aFrame->GetContent()->GetText();
   while (frameContentOffset < aContentEndOffset && iter.IsOriginalCharSkipped()) {
     if (IsTrimmableSpace(frag, frameContentOffset, aStyleText))
-      return PR_TRUE;
+      return true;
     ++frameContentOffset;
     iter.AdvanceOriginal(1);
   }
-  return PR_FALSE;
+  return false;
 }
 
 void
 BuildTextRunsScanner::SetupBreakSinksForTextRun(gfxTextRun* aTextRun,
-                                                PRBool aIsExistingTextRun,
-                                                PRBool aSuppressSink)
+                                                const void* aTextPtr,
+                                                uint32_t    aFlags)
 {
   // textruns have uniform language
-  nsIAtom* language = mMappedFlows[0].mStartFrame->GetStyleVisibility()->mLanguage;
+  const nsStyleFont *styleFont = mMappedFlows[0].mStartFrame->GetStyleFont();
+  // We should only use a language for hyphenation if it was specified
+  // explicitly.
+  nsIAtom* hyphenationLanguage =
+    styleFont->mExplicitLanguage ? styleFont->mLanguage : nullptr;
   // We keep this pointed at the skip-chars data for the current mappedFlow.
   // This lets us cheaply check whether the flow has compressed initial
   // whitespace...
   gfxSkipCharsIterator iter(aTextRun->GetSkipChars());
 
-  PRUint32 i;
+  uint32_t i;
   for (i = 0; i < mMappedFlows.Length(); ++i) {
     MappedFlow* mappedFlow = &mMappedFlows[i];
-    PRUint32 offset = iter.GetSkippedOffset();
+    uint32_t offset = iter.GetSkippedOffset();
     gfxSkipCharsIterator iterNext = iter;
     iterNext.AdvanceOriginal(mappedFlow->GetContentEnd() -
             mappedFlow->mStartFrame->GetContentOffset());
 
     nsAutoPtr<BreakSink>* breakSink = mBreakSinks.AppendElement(
-      new BreakSink(aTextRun, mContext, offset, aIsExistingTextRun));
+      new BreakSink(aTextRun, mContext, offset,
+                    (aFlags & SBS_EXISTING_TEXTRUN) != 0));
     if (!breakSink || !*breakSink)
       return;
 
-    PRUint32 length = iterNext.GetSkippedOffset() - offset;
-    PRUint32 flags = 0;
+    uint32_t length = iterNext.GetSkippedOffset() - offset;
+    uint32_t flags = 0;
     nsIFrame* initialBreakController = mappedFlow->mAncestorControllingInitialBreak;
     if (!initialBreakController) {
       initialBreakController = mLineContainer;
@@ -2085,12 +2272,15 @@ BuildTextRunsScanner::SetupBreakSinksForTextRun(gfxTextRun* aTextRun,
     }
 
     if (length > 0) {
-      BreakSink* sink = aSuppressSink ? nsnull : (*breakSink).get();
-      if (aTextRun->GetFlags() & gfxFontGroup::TEXT_IS_8BIT) {
-        mLineBreaker.AppendText(language, aTextRun->GetText8Bit() + offset,
+      BreakSink* sink =
+        (aFlags & SBS_SUPPRESS_SINK) ? nullptr : (*breakSink).get();
+      if (aFlags & SBS_DOUBLE_BYTE) {
+        const PRUnichar* text = reinterpret_cast<const PRUnichar*>(aTextPtr);
+        mLineBreaker.AppendText(hyphenationLanguage, text + offset,
                                 length, flags, sink);
       } else {
-        mLineBreaker.AppendText(language, aTextRun->GetTextUnicode() + offset,
+        const uint8_t* text = reinterpret_cast<const uint8_t*>(aTextPtr);
+        mLineBreaker.AppendText(hyphenationLanguage, text + offset,
                                 length, flags, sink);
       }
     }
@@ -2104,12 +2294,12 @@ static inline TextRunMappedFlow*
 FindFlowForContent(TextRunUserData* aUserData, nsIContent* aContent)
 {
   // Find the flow that contains us
-  PRInt32 i = aUserData->mLastFlowIndex;
-  PRInt32 delta = 1;
-  PRInt32 sign = 1;
+  int32_t i = aUserData->mLastFlowIndex;
+  int32_t delta = 1;
+  int32_t sign = 1;
   // Search starting at the current position and examine close-by
   // positions first, moving further and further away as we go.
-  while (i >= 0 && PRUint32(i) < aUserData->mMappedFlowCount) {
+  while (i >= 0 && uint32_t(i) < aUserData->mMappedFlowCount) {
     TextRunMappedFlow* flow = &aUserData->mMappedFlows[i];
     if (flow->mStartFrame->GetContent() == aContent) {
       return flow;
@@ -2125,7 +2315,7 @@ FindFlowForContent(TextRunUserData* aUserData, nsIContent* aContent)
   // the |sign| direction.
   i += delta;
   if (sign > 0) {
-    for (; i < PRInt32(aUserData->mMappedFlowCount); ++i) {
+    for (; i < int32_t(aUserData->mMappedFlowCount); ++i) {
       TextRunMappedFlow* flow = &aUserData->mMappedFlows[i];
       if (flow->mStartFrame->GetContent() == aContent) {
         return flow;
@@ -2140,13 +2330,13 @@ FindFlowForContent(TextRunUserData* aUserData, nsIContent* aContent)
     }
   }
 
-  return nsnull;
+  return nullptr;
 }
 
 void
-BuildTextRunsScanner::AssignTextRun(gfxTextRun* aTextRun)
+BuildTextRunsScanner::AssignTextRun(gfxTextRun* aTextRun, float aInflation)
 {
-  PRUint32 i;
+  uint32_t i;
   for (i = 0; i < mMappedFlows.Length(); ++i) {
     MappedFlow* mappedFlow = &mMappedFlows[i];
     nsTextFrame* startFrame = mappedFlow->mStartFrame;
@@ -2155,8 +2345,8 @@ BuildTextRunsScanner::AssignTextRun(gfxTextRun* aTextRun)
     for (f = startFrame; f != endFrame;
          f = static_cast<nsTextFrame*>(f->GetNextContinuation())) {
 #ifdef DEBUG_roc
-      if (f->GetTextRun()) {
-        gfxTextRun* textRun = f->GetTextRun();
+      if (f->GetTextRun(mWhichTextRun)) {
+        gfxTextRun* textRun = f->GetTextRun(mWhichTextRun);
         if (textRun->GetFlags() & nsTextFrameUtils::TEXT_IS_SIMPLE_FLOW) {
           if (mMappedFlows[0].mStartFrame != static_cast<nsTextFrame*>(textRun->GetUserData())) {
             NS_WARNING("REASSIGNING SIMPLE FLOW TEXT RUN!");
@@ -2174,10 +2364,10 @@ BuildTextRunsScanner::AssignTextRun(gfxTextRun* aTextRun)
       }
 #endif
 
-      gfxTextRun* oldTextRun = f->GetTextRun();
+      gfxTextRun* oldTextRun = f->GetTextRun(mWhichTextRun);
       if (oldTextRun) {
-        nsTextFrame* firstFrame = nsnull;
-        PRUint32 startOffset = 0;
+        nsTextFrame* firstFrame = nullptr;
+        uint32_t startOffset = 0;
         if (oldTextRun->GetFlags() & nsTextFrameUtils::TEXT_IS_SIMPLE_FLOW) {
           firstFrame = static_cast<nsTextFrame*>(oldTextRun->GetUserData());
         }
@@ -2197,52 +2387,64 @@ BuildTextRunsScanner::AssignTextRun(gfxTextRun* aTextRun)
 
         // Optimization: if |f| is the first frame in the flow then there are no
         // prev-continuations that use |oldTextRun|.
-        nsTextFrame* clearFrom = nsnull;
+        nsTextFrame* clearFrom = nullptr;
         if (NS_UNLIKELY(f != firstFrame)) {
           // If all the frames in the mapped flow starting at |f| (inclusive)
           // are empty then we let the prev-continuations keep the old text run.
           gfxSkipCharsIterator iter(oldTextRun->GetSkipChars(), startOffset, f->GetContentOffset());
-          PRUint32 textRunOffset = iter.ConvertOriginalToSkipped(f->GetContentOffset());
-          clearFrom = textRunOffset == oldTextRun->GetLength() ? f : nsnull;
+          uint32_t textRunOffset = iter.ConvertOriginalToSkipped(f->GetContentOffset());
+          clearFrom = textRunOffset == oldTextRun->GetLength() ? f : nullptr;
         }
-        f->ClearTextRun(clearFrom);
+        f->ClearTextRun(clearFrom, mWhichTextRun);
 
 #ifdef DEBUG
-        if (firstFrame && !firstFrame->GetTextRun()) {
+        if (firstFrame && !firstFrame->GetTextRun(mWhichTextRun)) {
           // oldTextRun was destroyed - assert that we don't reference it.
-          for (PRUint32 i = 0; i < mBreakSinks.Length(); ++i) {
+          for (uint32_t i = 0; i < mBreakSinks.Length(); ++i) {
             NS_ASSERTION(oldTextRun != mBreakSinks[i]->mTextRun,
                          "destroyed text run is still in use");
           }
         }
 #endif
       }
-      f->SetTextRun(aTextRun);
+      f->SetTextRun(aTextRun, mWhichTextRun, aInflation);
     }
     // Set this bit now; we can't set it any earlier because
     // f->ClearTextRun() might clear it out.
-    startFrame->AddStateBits(TEXT_IN_TEXTRUN_USER_DATA);
+    nsFrameState whichTextRunState =
+      startFrame->GetTextRun(nsTextFrame::eInflated) == aTextRun
+        ? TEXT_IN_TEXTRUN_USER_DATA
+        : TEXT_IN_UNINFLATED_TEXTRUN_USER_DATA;
+    startFrame->AddStateBits(whichTextRunState);
   }
 }
 
+NS_QUERYFRAME_HEAD(nsTextFrame)
+  NS_QUERYFRAME_ENTRY(nsTextFrame)
+NS_QUERYFRAME_TAIL_INHERITING(nsTextFrameBase)
+
 gfxSkipCharsIterator
-nsTextFrame::EnsureTextRun(gfxContext* aReferenceContext, nsIFrame* aLineContainer,
+nsTextFrame::EnsureTextRun(TextRunType aWhichTextRun,
+                           gfxContext* aReferenceContext,
+                           nsIFrame* aLineContainer,
                            const nsLineList::iterator* aLine,
-                           PRUint32* aFlowEndInTextRun)
+                           uint32_t* aFlowEndInTextRun)
 {
-  if (mTextRun && (!aLine || !(*aLine)->GetInvalidateTextRuns())) {
-    if (mTextRun->GetExpirationState()->IsTracked()) {
-      gTextRuns->MarkUsed(mTextRun);
+  gfxTextRun *textRun = GetTextRun(aWhichTextRun);
+  if (textRun && (!aLine || !(*aLine)->GetInvalidateTextRuns())) {
+    if (textRun->GetExpirationState()->IsTracked()) {
+      gTextRuns->MarkUsed(textRun);
     }
   } else {
     nsRefPtr<gfxContext> ctx = aReferenceContext;
     if (!ctx) {
-      ctx = GetReferenceRenderingContext(this, nsnull);
+      ctx = GetReferenceRenderingContext(this, nullptr);
     }
     if (ctx) {
-      BuildTextRuns(ctx, this, aLineContainer, aLine);
+      BuildTextRuns(ctx, this, aLineContainer, aLine, aWhichTextRun);
     }
-    if (!mTextRun) {
+    textRun = GetTextRun(aWhichTextRun);
+    if (!textRun) {
       // A text run was not constructed for this frame. This is bad. The caller
       // will check mTextRun.
       static const gfxSkipChars emptySkipChars;
@@ -2250,29 +2452,29 @@ nsTextFrame::EnsureTextRun(gfxContext* aReferenceContext, nsIFrame* aLineContain
     }
   }
 
-  if (mTextRun->GetFlags() & nsTextFrameUtils::TEXT_IS_SIMPLE_FLOW) {
+  if (textRun->GetFlags() & nsTextFrameUtils::TEXT_IS_SIMPLE_FLOW) {
     if (aFlowEndInTextRun) {
-      *aFlowEndInTextRun = mTextRun->GetLength();
+      *aFlowEndInTextRun = textRun->GetLength();
     }
-    return gfxSkipCharsIterator(mTextRun->GetSkipChars(), 0, mContentOffset);
+    return gfxSkipCharsIterator(textRun->GetSkipChars(), 0, mContentOffset);
   }
 
-  TextRunUserData* userData = static_cast<TextRunUserData*>(mTextRun->GetUserData());
+  TextRunUserData* userData = static_cast<TextRunUserData*>(textRun->GetUserData());
   TextRunMappedFlow* flow = FindFlowForContent(userData, mContent);
   if (flow) {
     // Since textruns can only contain one flow for a given content element,
     // this must be our flow.
-    PRUint32 flowIndex = flow - userData->mMappedFlows;
+    uint32_t flowIndex = flow - userData->mMappedFlows;
     userData->mLastFlowIndex = flowIndex;
-    gfxSkipCharsIterator iter(mTextRun->GetSkipChars(),
+    gfxSkipCharsIterator iter(textRun->GetSkipChars(),
                               flow->mDOMOffsetToBeforeTransformOffset, mContentOffset);
     if (aFlowEndInTextRun) {
       if (flowIndex + 1 < userData->mMappedFlowCount) {
-        gfxSkipCharsIterator end(mTextRun->GetSkipChars());
+        gfxSkipCharsIterator end(textRun->GetSkipChars());
         *aFlowEndInTextRun = end.ConvertOriginalToSkipped(
               flow[1].mStartFrame->GetContentOffset() + flow[1].mDOMOffsetToBeforeTransformOffset);
       } else {
-        *aFlowEndInTextRun = mTextRun->GetLength();
+        *aFlowEndInTextRun = textRun->GetLength();
       }
     }
     return iter;
@@ -2283,9 +2485,9 @@ nsTextFrame::EnsureTextRun(gfxContext* aReferenceContext, nsIFrame* aLineContain
   return gfxSkipCharsIterator(emptySkipChars, 0);
 }
 
-static PRUint32
+static uint32_t
 GetEndOfTrimmedText(const nsTextFragment* aFrag, const nsStyleText* aStyleText,
-                    PRUint32 aStart, PRUint32 aEnd,
+                    uint32_t aStart, uint32_t aEnd,
                     gfxSkipCharsIterator* aIterator)
 {
   aIterator->SetSkippedOffset(aEnd);
@@ -2299,12 +2501,14 @@ GetEndOfTrimmedText(const nsTextFragment* aFrag, const nsStyleText* aStyleText,
 
 nsTextFrame::TrimmedOffsets
 nsTextFrame::GetTrimmedOffsets(const nsTextFragment* aFrag,
-                               PRBool aTrimAfter)
+                               bool aTrimAfter)
 {
   NS_ASSERTION(mTextRun, "Need textrun here");
   // This should not be used during reflow. We need our TEXT_REFLOW_FLAGS
-  // to be set correctly.
-  NS_ASSERTION(!(GetStateBits() & NS_FRAME_FIRST_REFLOW),
+  // to be set correctly.  If our parent wasn't reflowed due to the frame
+  // tree being too deep then the return value doesn't matter.
+  NS_ASSERTION(!(GetStateBits() & NS_FRAME_FIRST_REFLOW) ||
+               (GetParent()->GetStateBits() & NS_FRAME_TOO_DEEP_IN_FRAME_TREE),
                "Can only call this on frames that have been reflowed");
   NS_ASSERTION(!(GetStateBits() & NS_FRAME_IN_REFLOW),
                "Can only call this on frames that are not being reflowed");
@@ -2317,7 +2521,7 @@ nsTextFrame::GetTrimmedOffsets(const nsTextFragment* aFrag,
     return offsets;
 
   if (GetStateBits() & TEXT_START_OF_LINE) {
-    PRInt32 whitespaceCount =
+    int32_t whitespaceCount =
       GetTrimmableWhitespaceCount(aFrag,
                                   offsets.mStart, offsets.mLength, 1);
     offsets.mStart += whitespaceCount;
@@ -2328,7 +2532,7 @@ nsTextFrame::GetTrimmedOffsets(const nsTextFragment* aFrag,
     // This treats a trailing 'pre-line' newline as trimmable. That's fine,
     // it's actually what we want since we want whitespace before it to
     // be trimmed.
-    PRInt32 whitespaceCount =
+    int32_t whitespaceCount =
       GetTrimmableWhitespaceCount(aFrag,
                                   offsets.GetEnd() - 1, offsets.mLength, -1);
     offsets.mLength -= whitespaceCount;
@@ -2343,21 +2547,21 @@ nsTextFrame::GetTrimmedOffsets(const nsTextFragment* aFrag,
  * this function must not include 0xd800 to 0xdbff because these characters
  * are surrogates.
  */
-static PRBool IsJustifiableCharacter(const nsTextFragment* aFrag, PRInt32 aPos,
-                                     PRBool aLangIsCJ)
+static bool IsJustifiableCharacter(const nsTextFragment* aFrag, int32_t aPos,
+                                     bool aLangIsCJ)
 {
   PRUnichar ch = aFrag->CharAt(aPos);
   if (ch == '\n' || ch == '\t' || ch == '\r')
-    return PR_TRUE;
+    return true;
   if (ch == ' ' || ch == CH_NBSP) {
     // Don't justify spaces that are combined with diacriticals
     if (!aFrag->Is2b())
-      return PR_TRUE;
+      return true;
     return !nsTextFrameUtils::IsSpaceCombiningSequenceTail(
         aFrag->Get2b() + aPos + 1, aFrag->GetLength() - (aPos + 1));
   }
   if (ch < 0x2150u)
-    return PR_FALSE;
+    return false;
   if (aLangIsCJ && (
        (0x2150u <= ch && ch <= 0x22ffu) || // Number Forms, Arrows, Mathematical Operators
        (0x2460u <= ch && ch <= 0x24ffu) || // Enclosed Alphanumerics
@@ -2375,8 +2579,8 @@ static PRBool IsJustifiableCharacter(const nsTextFragment* aFrag, PRInt32 aPos,
        (0xf900u <= ch && ch <= 0xfaffu) || // CJK Compatibility Ideographs
        (0xff5eu <= ch && ch <= 0xff9fu)    // Halfwidth and Fullwidth Forms(a part)
      ))
-    return PR_TRUE;
-  return PR_FALSE;
+    return true;
+  return false;
 }
 
 void
@@ -2388,10 +2592,10 @@ nsTextFrame::ClearMetrics(nsHTMLReflowMetrics& aMetrics)
   mAscent = 0;
 }
 
-static PRInt32 FindChar(const nsTextFragment* frag,
-                        PRInt32 aOffset, PRInt32 aLength, PRUnichar ch)
+static int32_t FindChar(const nsTextFragment* frag,
+                        int32_t aOffset, int32_t aLength, PRUnichar ch)
 {
-  PRInt32 i = 0;
+  int32_t i = 0;
   if (frag->Is2b()) {
     const PRUnichar* str = frag->Get2b() + aOffset;
     for (; i < aLength; ++i) {
@@ -2400,7 +2604,7 @@ static PRInt32 FindChar(const nsTextFragment* frag,
       ++str;
     }
   } else {
-    if (PRUint16(ch) <= 0xFF) {
+    if (uint16_t(ch) <= 0xFF) {
       const char* str = frag->Get1b() + aOffset;
       const void* p = memchr(str, ch, aLength);
       if (p)
@@ -2410,11 +2614,11 @@ static PRInt32 FindChar(const nsTextFragment* frag,
   return -1;
 }
 
-static PRBool IsChineseOrJapanese(nsIFrame* aFrame)
+static bool IsChineseOrJapanese(nsIFrame* aFrame)
 {
-  nsIAtom* language = aFrame->GetStyleVisibility()->mLanguage;
+  nsIAtom* language = aFrame->GetStyleFont()->mLanguage;
   if (!language) {
-    return PR_FALSE;
+    return false;
   }
   const PRUnichar *lang = language->GetUTF16String();
   return (!nsCRT::strncmp(lang, NS_LITERAL_STRING("ja").get(), 2) ||
@@ -2423,12 +2627,12 @@ static PRBool IsChineseOrJapanese(nsIFrame* aFrame)
 }
 
 #ifdef DEBUG
-static PRBool IsInBounds(const gfxSkipCharsIterator& aStart, PRInt32 aContentLength,
-                         PRUint32 aOffset, PRUint32 aLength) {
+static bool IsInBounds(const gfxSkipCharsIterator& aStart, int32_t aContentLength,
+                         uint32_t aOffset, uint32_t aLength) {
   if (aStart.GetSkippedOffset() > aOffset)
-    return PR_FALSE;
+    return false;
   if (aContentLength == PR_INT32_MAX)
-    return PR_TRUE;
+    return true;
   gfxSkipCharsIterator iter(aStart);
   iter.AdvanceOriginal(aContentLength);
   return iter.GetSkippedOffset() >= aOffset + aLength;
@@ -2448,21 +2652,23 @@ public:
    */
   PropertyProvider(gfxTextRun* aTextRun, const nsStyleText* aTextStyle,
                    const nsTextFragment* aFrag, nsTextFrame* aFrame,
-                   const gfxSkipCharsIterator& aStart, PRInt32 aLength,
+                   const gfxSkipCharsIterator& aStart, int32_t aLength,
                    nsIFrame* aLineContainer,
-                   nscoord aOffsetFromBlockOriginForTabs)
-    : mTextRun(aTextRun), mFontGroup(nsnull),
+                   nscoord aOffsetFromBlockOriginForTabs,
+                   nsTextFrame::TextRunType aWhichTextRun)
+    : mTextRun(aTextRun), mFontGroup(nullptr),
       mTextStyle(aTextStyle), mFrag(aFrag),
       mLineContainer(aLineContainer),
       mFrame(aFrame), mStart(aStart), mTempIterator(aStart),
-      mTabWidths(nsnull), mTabWidthsAnalyzedLimit(0),
+      mTabWidths(nullptr), mTabWidthsAnalyzedLimit(0),
       mLength(aLength),
-      mWordSpacing(mTextStyle->mWordSpacing),
-      mLetterSpacing(StyleToCoord(mTextStyle->mLetterSpacing)),
+      mWordSpacing(WordSpacing(aFrame, aTextStyle)),
+      mLetterSpacing(LetterSpacing(aFrame, aTextStyle)),
       mJustificationSpacing(0),
       mHyphenWidth(-1),
       mOffsetFromBlockOriginForTabs(aOffsetFromBlockOriginForTabs),
-      mReflowing(PR_TRUE)
+      mReflowing(true),
+      mWhichTextRun(aWhichTextRun)
   {
     NS_ASSERTION(mStart.IsInitialized(), "Start not initialized?");
   }
@@ -2472,42 +2678,44 @@ public:
    * have other data around. Gets everything from the frame. EnsureTextRun
    * *must* be called before this!!!
    */
-  PropertyProvider(nsTextFrame* aFrame, const gfxSkipCharsIterator& aStart)
-    : mTextRun(aFrame->GetTextRun()), mFontGroup(nsnull),
+  PropertyProvider(nsTextFrame* aFrame, const gfxSkipCharsIterator& aStart,
+                   nsTextFrame::TextRunType aWhichTextRun)
+    : mTextRun(aFrame->GetTextRun(aWhichTextRun)), mFontGroup(nullptr),
       mTextStyle(aFrame->GetStyleText()),
       mFrag(aFrame->GetContent()->GetText()),
-      mLineContainer(nsnull),
+      mLineContainer(nullptr),
       mFrame(aFrame), mStart(aStart), mTempIterator(aStart),
-      mTabWidths(nsnull), mTabWidthsAnalyzedLimit(0),
+      mTabWidths(nullptr), mTabWidthsAnalyzedLimit(0),
       mLength(aFrame->GetContentLength()),
-      mWordSpacing(mTextStyle->mWordSpacing),
-      mLetterSpacing(StyleToCoord(mTextStyle->mLetterSpacing)),
+      mWordSpacing(WordSpacing(aFrame)),
+      mLetterSpacing(LetterSpacing(aFrame)),
       mJustificationSpacing(0),
       mHyphenWidth(-1),
       mOffsetFromBlockOriginForTabs(0),
-      mReflowing(PR_FALSE)
+      mReflowing(false),
+      mWhichTextRun(aWhichTextRun)
   {
     NS_ASSERTION(mTextRun, "Textrun not initialized!");
   }
 
   // Call this after construction if you're not going to reflow the text
-  void InitializeForDisplay(PRBool aTrimAfter);
+  void InitializeForDisplay(bool aTrimAfter);
 
-  virtual void GetSpacing(PRUint32 aStart, PRUint32 aLength, Spacing* aSpacing);
+  virtual void GetSpacing(uint32_t aStart, uint32_t aLength, Spacing* aSpacing);
   virtual gfxFloat GetHyphenWidth();
-  virtual void GetHyphenationBreaks(PRUint32 aStart, PRUint32 aLength,
-                                    PRPackedBool* aBreakBefore);
-  virtual PRInt8 GetHyphensOption() {
+  virtual void GetHyphenationBreaks(uint32_t aStart, uint32_t aLength,
+                                    bool* aBreakBefore);
+  virtual int8_t GetHyphensOption() {
     return mTextStyle->mHyphens;
   }
 
-  void GetSpacingInternal(PRUint32 aStart, PRUint32 aLength, Spacing* aSpacing,
-                          PRBool aIgnoreTabs);
+  void GetSpacingInternal(uint32_t aStart, uint32_t aLength, Spacing* aSpacing,
+                          bool aIgnoreTabs);
 
   /**
    * Count the number of justifiable characters in the given DOM range
    */
-  PRUint32 ComputeJustifiableCharacters(PRInt32 aOffset, PRInt32 aLength);
+  uint32_t ComputeJustifiableCharacters(int32_t aOffset, int32_t aLength);
   /**
    * Find the start and end of the justifiable characters. Does not depend on the
    * position of aStart or aEnd, although it's most efficient if they are near the
@@ -2523,7 +2731,7 @@ public:
   // (for the static provider)
   const gfxSkipCharsIterator& GetStart() { return mStart; }
   // May return PR_INT32_MAX if that was given to the constructor
-  PRUint32 GetOriginalLength() {
+  uint32_t GetOriginalLength() {
     NS_ASSERTION(mLength != PR_INT32_MAX, "Length not known");
     return mLength;
   }
@@ -2541,7 +2749,7 @@ public:
     return mFontMetrics;
   }
 
-  void CalcTabWidths(PRUint32 aTransformedStart, PRUint32 aTransformedLength);
+  void CalcTabWidths(uint32_t aTransformedStart, uint32_t aTransformedLength);
 
   const gfxSkipCharsIterator& GetEndHint() { return mTempIterator; }
 
@@ -2549,7 +2757,10 @@ protected:
   void SetupJustificationSpacing();
 
   void InitFontGroupAndFontMetrics() {
-    mFontGroup = GetFontGroupForFrame(mFrame, getter_AddRefs(mFontMetrics));
+    float inflation = (mWhichTextRun == nsTextFrame::eInflated)
+      ? mFrame->GetFontSizeInflation() : 1.0f;
+    mFontGroup = GetFontGroupForFrame(mFrame, inflation,
+                                      getter_AddRefs(mFontMetrics));
   }
 
   gfxTextRun*           mTextRun;
@@ -2566,28 +2777,29 @@ protected:
   TabWidthStore*        mTabWidths;
   // how far we've done tab-width calculation; this is ONLY valid
   // when mTabWidths is NULL (otherwise rely on mTabWidths->mLimit instead)
-  PRUint32              mTabWidthsAnalyzedLimit;
+  uint32_t              mTabWidthsAnalyzedLimit;
 
-  PRInt32               mLength; // DOM string length, may be PR_INT32_MAX
+  int32_t               mLength; // DOM string length, may be PR_INT32_MAX
   gfxFloat              mWordSpacing;     // space for each whitespace char
   gfxFloat              mLetterSpacing;   // space for each letter
   gfxFloat              mJustificationSpacing;
   gfxFloat              mHyphenWidth;
   gfxFloat              mOffsetFromBlockOriginForTabs;
-  PRPackedBool          mReflowing;
+  bool                  mReflowing;
+  nsTextFrame::TextRunType mWhichTextRun;
 };
 
-PRUint32
-PropertyProvider::ComputeJustifiableCharacters(PRInt32 aOffset, PRInt32 aLength)
+uint32_t
+PropertyProvider::ComputeJustifiableCharacters(int32_t aOffset, int32_t aLength)
 {
   // Scan non-skipped characters and count justifiable chars.
   nsSkipCharsRunIterator
     run(mStart, nsSkipCharsRunIterator::LENGTH_INCLUDES_SKIPPED, aLength);
   run.SetOriginalOffset(aOffset);
-  PRUint32 justifiableChars = 0;
-  PRBool isCJK = IsChineseOrJapanese(mFrame);
+  uint32_t justifiableChars = 0;
+  bool isCJK = IsChineseOrJapanese(mFrame);
   while (run.NextRun()) {
-    PRInt32 i;
+    int32_t i;
     for (i = 0; i < run.GetRunLength(); ++i) {
       justifiableChars +=
         IsJustifiableCharacter(mFrag, run.GetOriginalOffset() + i, isCJK);
@@ -2599,7 +2811,7 @@ PropertyProvider::ComputeJustifiableCharacters(PRInt32 aOffset, PRInt32 aLength)
 /**
  * Finds the offset of the first character of the cluster containing aPos
  */
-static void FindClusterStart(gfxTextRun* aTextRun, PRInt32 aOriginalStart,
+static void FindClusterStart(gfxTextRun* aTextRun, int32_t aOriginalStart,
                              gfxSkipCharsIterator* aPos)
 {
   while (aPos->GetOriginalOffset() > aOriginalStart) {
@@ -2614,7 +2826,7 @@ static void FindClusterStart(gfxTextRun* aTextRun, PRInt32 aOriginalStart,
 /**
  * Finds the offset of the last character of the cluster containing aPos
  */
-static void FindClusterEnd(gfxTextRun* aTextRun, PRInt32 aOriginalEnd,
+static void FindClusterEnd(gfxTextRun* aTextRun, int32_t aOriginalEnd,
                            gfxSkipCharsIterator* aPos)
 {
   NS_PRECONDITION(aPos->GetOriginalOffset() < aOriginalEnd,
@@ -2632,29 +2844,29 @@ static void FindClusterEnd(gfxTextRun* aTextRun, PRInt32 aOriginalEnd,
 
 // aStart, aLength in transformed string offsets
 void
-PropertyProvider::GetSpacing(PRUint32 aStart, PRUint32 aLength,
+PropertyProvider::GetSpacing(uint32_t aStart, uint32_t aLength,
                              Spacing* aSpacing)
 {
   GetSpacingInternal(aStart, aLength, aSpacing,
                      (mTextRun->GetFlags() & nsTextFrameUtils::TEXT_HAS_TAB) == 0);
 }
 
-static PRBool
-CanAddSpacingAfter(gfxTextRun* aTextRun, PRUint32 aOffset)
+static bool
+CanAddSpacingAfter(gfxTextRun* aTextRun, uint32_t aOffset)
 {
   if (aOffset + 1 >= aTextRun->GetLength())
-    return PR_TRUE;
+    return true;
   return aTextRun->IsClusterStart(aOffset + 1) &&
     aTextRun->IsLigatureGroupStart(aOffset + 1);
 }
 
 void
-PropertyProvider::GetSpacingInternal(PRUint32 aStart, PRUint32 aLength,
-                                     Spacing* aSpacing, PRBool aIgnoreTabs)
+PropertyProvider::GetSpacingInternal(uint32_t aStart, uint32_t aLength,
+                                     Spacing* aSpacing, bool aIgnoreTabs)
 {
   NS_PRECONDITION(IsInBounds(mStart, mLength, aStart, aLength), "Range out of bounds");
 
-  PRUint32 index;
+  uint32_t index;
   for (index = 0; index < aLength; ++index) {
     aSpacing[index].mBefore = 0.0;
     aSpacing[index].mAfter = 0.0;
@@ -2670,8 +2882,8 @@ PropertyProvider::GetSpacingInternal(PRUint32 aStart, PRUint32 aLength,
     nsSkipCharsRunIterator
       run(start, nsSkipCharsRunIterator::LENGTH_UNSKIPPED_ONLY, aLength);
     while (run.NextRun()) {
-      PRUint32 runOffsetInSubstring = run.GetSkippedOffset() - aStart;
-      PRInt32 i;
+      uint32_t runOffsetInSubstring = run.GetSkippedOffset() - aStart;
+      int32_t i;
       gfxSkipCharsIterator iter = run.GetPos();
       for (i = 0; i < run.GetRunLength(); ++i) {
         if (CanAddSpacingAfter(mTextRun, run.GetSkippedOffset() + i)) {
@@ -2709,24 +2921,24 @@ PropertyProvider::GetSpacingInternal(PRUint32 aStart, PRUint32 aLength,
     gfxFloat halfJustificationSpace = mJustificationSpacing/2;
     // Scan non-skipped characters and adjust justifiable chars, adding
     // justification space on either side of the cluster
-    PRBool isCJK = IsChineseOrJapanese(mFrame);
+    bool isCJK = IsChineseOrJapanese(mFrame);
     gfxSkipCharsIterator justificationStart(mStart), justificationEnd(mStart);
     FindJustificationRange(&justificationStart, &justificationEnd);
 
     nsSkipCharsRunIterator
       run(start, nsSkipCharsRunIterator::LENGTH_UNSKIPPED_ONLY, aLength);
     while (run.NextRun()) {
-      PRInt32 i;
+      int32_t i;
       gfxSkipCharsIterator iter = run.GetPos();
-      PRInt32 runOriginalOffset = run.GetOriginalOffset();
+      int32_t runOriginalOffset = run.GetOriginalOffset();
       for (i = 0; i < run.GetRunLength(); ++i) {
-        PRInt32 iterOriginalOffset = runOriginalOffset + i;
+        int32_t iterOriginalOffset = runOriginalOffset + i;
         if (IsJustifiableCharacter(mFrag, iterOriginalOffset, isCJK)) {
           iter.SetOriginalOffset(iterOriginalOffset);
           FindClusterStart(mTextRun, runOriginalOffset, &iter);
-          PRUint32 clusterFirstChar = iter.GetSkippedOffset();
+          uint32_t clusterFirstChar = iter.GetSkippedOffset();
           FindClusterEnd(mTextRun, runOriginalOffset + run.GetRunLength(), &iter);
-          PRUint32 clusterLastChar = iter.GetSkippedOffset();
+          uint32_t clusterLastChar = iter.GetSkippedOffset();
           // Only apply justification to characters before justificationEnd
           if (clusterFirstChar >= justificationStart.GetSkippedOffset() &&
               clusterLastChar < justificationEnd.GetSkippedOffset()) {
@@ -2748,8 +2960,7 @@ ComputeTabWidthAppUnits(nsIFrame* aFrame, gfxTextRun* aTextRun)
   // Round the space width when converting to appunits the same way
   // textruns do
   gfxFloat spaceWidthAppUnits =
-    NS_round(GetFirstFontMetrics(
-                GetFontGroupForFrame(aFrame)).spaceWidth *
+    NS_round(GetFirstFontMetrics(aTextRun->GetFontGroup()).spaceWidth *
               aTextRun->GetAppUnitsPerDevUnit());
   return textStyle->mTabSize * spaceWidthAppUnits;
 }
@@ -2770,7 +2981,7 @@ AdvanceToNextTab(gfxFloat aX, nsIFrame* aFrame,
 }
 
 void
-PropertyProvider::CalcTabWidths(PRUint32 aStart, PRUint32 aLength)
+PropertyProvider::CalcTabWidths(uint32_t aStart, uint32_t aLength)
 {
   if (!mTabWidths) {
     if (mReflowing && !mLineContainer) {
@@ -2785,8 +2996,8 @@ PropertyProvider::CalcTabWidths(PRUint32 aStart, PRUint32 aLength)
       // If we're not reflowing, we should have already computed the
       // tab widths; check that they're available as far as the last
       // tab character present (if any)
-      for (PRUint32 i = aStart + aLength; i > aStart; --i) {
-        if (mTextRun->GetChar(i - 1) == '\t') {
+      for (uint32_t i = aStart + aLength; i > aStart; --i) {
+        if (mTextRun->CharIsTab(i - 1)) {
           NS_ASSERTION(mTabWidths && mTabWidths->mLimit >= i,
                        "Precomputed tab widths are missing!");
           break;
@@ -2797,8 +3008,8 @@ PropertyProvider::CalcTabWidths(PRUint32 aStart, PRUint32 aLength)
     }
   }
 
-  PRUint32 startOffset = mStart.GetSkippedOffset();
-  PRUint32 tabsEnd = mTabWidths ?
+  uint32_t startOffset = mStart.GetSkippedOffset();
+  uint32_t tabsEnd = mTabWidths ?
     mTabWidths->mLimit : NS_MAX(mTabWidthsAnalyzedLimit, startOffset);
 
   if (tabsEnd < aStart + aLength) {
@@ -2806,20 +3017,20 @@ PropertyProvider::CalcTabWidths(PRUint32 aStart, PRUint32 aLength)
                  "We need precomputed tab widths, but don't have enough.");
 
     gfxFloat tabWidth = -1;
-    for (PRUint32 i = tabsEnd; i < aStart + aLength; ++i) {
+    for (uint32_t i = tabsEnd; i < aStart + aLength; ++i) {
       Spacing spacing;
-      GetSpacingInternal(i, 1, &spacing, PR_TRUE);
+      GetSpacingInternal(i, 1, &spacing, true);
       mOffsetFromBlockOriginForTabs += spacing.mBefore;
 
-      if (mTextRun->GetChar(i) != '\t') {
+      if (!mTextRun->CharIsTab(i)) {
         if (mTextRun->IsClusterStart(i)) {
-          PRUint32 clusterEnd = i + 1;
+          uint32_t clusterEnd = i + 1;
           while (clusterEnd < mTextRun->GetLength() &&
                  !mTextRun->IsClusterStart(clusterEnd)) {
             ++clusterEnd;
           }
           mOffsetFromBlockOriginForTabs +=
-            mTextRun->GetAdvanceWidth(i, clusterEnd - i, nsnull);
+            mTextRun->GetAdvanceWidth(i, clusterEnd - i, nullptr);
         }
       } else {
         if (!mTabWidths) {
@@ -2853,18 +3064,18 @@ gfxFloat
 PropertyProvider::GetHyphenWidth()
 {
   if (mHyphenWidth < 0) {
-    gfxTextRunCache::AutoTextRun hyphenTextRun(GetHyphenTextRun(mTextRun, nsnull, mFrame));
+    nsAutoPtr<gfxTextRun> hyphenTextRun(GetHyphenTextRun(mTextRun, nullptr, mFrame));
     mHyphenWidth = mLetterSpacing;
     if (hyphenTextRun.get()) {
-      mHyphenWidth += hyphenTextRun->GetAdvanceWidth(0, hyphenTextRun->GetLength(), nsnull);
+      mHyphenWidth += hyphenTextRun->GetAdvanceWidth(0, hyphenTextRun->GetLength(), nullptr);
     }
   }
   return mHyphenWidth;
 }
 
 void
-PropertyProvider::GetHyphenationBreaks(PRUint32 aStart, PRUint32 aLength,
-                                       PRPackedBool* aBreakBefore)
+PropertyProvider::GetHyphenationBreaks(uint32_t aStart, uint32_t aLength,
+                                       bool* aBreakBefore)
 {
   NS_PRECONDITION(IsInBounds(mStart, mLength, aStart, aLength), "Range out of bounds");
   NS_PRECONDITION(mLength != PR_INT32_MAX, "Can't call this with undefined length");
@@ -2872,7 +3083,7 @@ PropertyProvider::GetHyphenationBreaks(PRUint32 aStart, PRUint32 aLength,
   if (!mTextStyle->WhiteSpaceCanWrap() ||
       mTextStyle->mHyphens == NS_STYLE_HYPHENS_NONE)
   {
-    memset(aBreakBefore, PR_FALSE, aLength);
+    memset(aBreakBefore, false, aLength*sizeof(bool));
     return;
   }
 
@@ -2883,8 +3094,8 @@ PropertyProvider::GetHyphenationBreaks(PRUint32 aStart, PRUint32 aLength,
   // We need to visit skipped characters so that we can detect SHY
   run.SetVisitSkipped();
 
-  PRInt32 prevTrailingCharOffset = run.GetPos().GetOriginalOffset() - 1;
-  PRBool allowHyphenBreakBeforeNextChar =
+  int32_t prevTrailingCharOffset = run.GetPos().GetOriginalOffset() - 1;
+  bool allowHyphenBreakBeforeNextChar =
     prevTrailingCharOffset >= mStart.GetOriginalOffset() &&
     prevTrailingCharOffset < mStart.GetOriginalOffset() + mLength &&
     mFrag->CharAt(prevTrailingCharOffset) == CH_SHY;
@@ -2898,27 +3109,27 @@ PropertyProvider::GetHyphenationBreaks(PRUint32 aStart, PRUint32 aLength,
       allowHyphenBreakBeforeNextChar =
         mFrag->CharAt(run.GetOriginalOffset() + run.GetRunLength() - 1) == CH_SHY;
     } else {
-      PRInt32 runOffsetInSubstring = run.GetSkippedOffset() - aStart;
-      memset(aBreakBefore + runOffsetInSubstring, PR_FALSE, run.GetRunLength());
+      int32_t runOffsetInSubstring = run.GetSkippedOffset() - aStart;
+      memset(aBreakBefore + runOffsetInSubstring, false, run.GetRunLength()*sizeof(bool));
       // Don't allow hyphen breaks at the start of the line
       aBreakBefore[runOffsetInSubstring] = allowHyphenBreakBeforeNextChar &&
           (!(mFrame->GetStateBits() & TEXT_START_OF_LINE) ||
            run.GetSkippedOffset() > mStart.GetSkippedOffset());
-      allowHyphenBreakBeforeNextChar = PR_FALSE;
+      allowHyphenBreakBeforeNextChar = false;
     }
   }
 
   if (mTextStyle->mHyphens == NS_STYLE_HYPHENS_AUTO) {
-    for (PRUint32 i = 0; i < aLength; ++i) {
+    for (uint32_t i = 0; i < aLength; ++i) {
       if (mTextRun->CanHyphenateBefore(aStart + i)) {
-        aBreakBefore[i] = PR_TRUE;
+        aBreakBefore[i] = true;
       }
     }
   }
 }
 
 void
-PropertyProvider::InitializeForDisplay(PRBool aTrimAfter)
+PropertyProvider::InitializeForDisplay(bool aTrimAfter)
 {
   nsTextFrame::TrimmedOffsets trimmed =
     mFrame->GetTrimmedOffsets(mFrag, aTrimAfter);
@@ -2927,7 +3138,7 @@ PropertyProvider::InitializeForDisplay(PRBool aTrimAfter)
   SetupJustificationSpacing();
 }
 
-static PRUint32 GetSkippedDistance(const gfxSkipCharsIterator& aStart,
+static uint32_t GetSkippedDistance(const gfxSkipCharsIterator& aStart,
                                    const gfxSkipCharsIterator& aEnd)
 {
   return aEnd.GetSkippedOffset() - aStart.GetSkippedOffset();
@@ -2974,15 +3185,15 @@ PropertyProvider::SetupJustificationSpacing()
 
   gfxSkipCharsIterator start(mStart), end(mStart);
   // We can't just use our mLength here; when InitializeForDisplay is
-  // called with PR_FALSE for aTrimAfter, we still shouldn't be assigning
+  // called with false for aTrimAfter, we still shouldn't be assigning
   // justification space to any trailing whitespace.
   nsTextFrame::TrimmedOffsets trimmed =
-    mFrame->GetTrimmedOffsets(mFrag, PR_TRUE);
+    mFrame->GetTrimmedOffsets(mFrag, true);
   end.AdvanceOriginal(trimmed.mLength);
   gfxSkipCharsIterator realEnd(end);
   FindJustificationRange(&start, &end);
 
-  PRInt32 justifiableCharacters =
+  int32_t justifiableCharacters =
     ComputeJustifiableCharacters(start.GetOriginalOffset(),
                                  end.GetOriginalOffset() - start.GetOriginalOffset());
   if (justifiableCharacters == 0) {
@@ -2995,10 +3206,10 @@ PropertyProvider::SetupJustificationSpacing()
     mTextRun->GetAdvanceWidth(mStart.GetSkippedOffset(),
                               GetSkippedDistance(mStart, realEnd), this);
   if (mFrame->GetStateBits() & TEXT_HYPHEN_BREAK) {
-    gfxTextRunCache::AutoTextRun hyphenTextRun(GetHyphenTextRun(mTextRun, nsnull, mFrame));
+    nsAutoPtr<gfxTextRun> hyphenTextRun(GetHyphenTextRun(mTextRun, nullptr, mFrame));
     if (hyphenTextRun.get()) {
       naturalWidth +=
-        hyphenTextRun->GetAdvanceWidth(0, hyphenTextRun->GetLength(), nsnull);
+        hyphenTextRun->GetAdvanceWidth(0, hyphenTextRun->GetLength(), nullptr);
     }
   }
   gfxFloat totalJustificationSpace = mFrame->GetSize().width - naturalWidth;
@@ -3024,9 +3235,9 @@ public:
 
   void AddFrame(nsPresContext* aPresContext, nsIFrame* aFrame);
 
-  PRBool RemoveFrame(nsIFrame* aFrame);
+  bool RemoveFrame(nsIFrame* aFrame);
 
-  PRInt32 FrameCount();
+  int32_t FrameCount();
 
   void Start();
 
@@ -3037,7 +3248,7 @@ public:
   static void AddBlinkFrame(nsPresContext* aPresContext, nsIFrame* aFrame);
   static void RemoveBlinkFrame(nsIFrame* aFrame);
   
-  static PRBool   GetBlinkIsOff() { return sState == 3; }
+  static bool     GetBlinkIsOff() { return sState == 3; }
   
 protected:
 
@@ -3053,7 +3264,7 @@ protected:
 
   class FrameDataComparator {
     public:
-      PRBool Equals(const FrameData& aTimer, nsIFrame* const& aFrame) const {
+      bool Equals(const FrameData& aTimer, nsIFrame* const& aFrame) const {
         return aTimer.mFrame == aFrame;
       }
   };
@@ -3065,12 +3276,12 @@ protected:
 protected:
 
   static nsBlinkTimer* sTextBlinker;
-  static PRUint32      sState; // 0-2 == on; 3 == off
+  static uint32_t      sState; // 0-2 == on; 3 == off
   
 };
 
-nsBlinkTimer* nsBlinkTimer::sTextBlinker = nsnull;
-PRUint32      nsBlinkTimer::sState = 0;
+nsBlinkTimer* nsBlinkTimer::sTextBlinker = nullptr;
+uint32_t      nsBlinkTimer::sState = 0;
 
 #ifdef NOISY_BLINK
 static PRTime gLastTick;
@@ -3083,7 +3294,7 @@ nsBlinkTimer::nsBlinkTimer()
 nsBlinkTimer::~nsBlinkTimer()
 {
   Stop();
-  sTextBlinker = nsnull;
+  sTextBlinker = nullptr;
 }
 
 void nsBlinkTimer::Start()
@@ -3097,9 +3308,9 @@ void nsBlinkTimer::Start()
 
 void nsBlinkTimer::Stop()
 {
-  if (nsnull != mTimer) {
+  if (nullptr != mTimer) {
     mTimer->Cancel();
-    mTimer = nsnull;
+    mTimer = nullptr;
   }
 }
 
@@ -3112,17 +3323,17 @@ void nsBlinkTimer::AddFrame(nsPresContext* aPresContext, nsIFrame* aFrame) {
   }
 }
 
-PRBool nsBlinkTimer::RemoveFrame(nsIFrame* aFrame) {
+bool nsBlinkTimer::RemoveFrame(nsIFrame* aFrame) {
   mFrames.RemoveElement(aFrame, FrameDataComparator());
   
   if (mFrames.IsEmpty()) {
     Stop();
   }
-  return PR_TRUE;
+  return true;
 }
 
-PRInt32 nsBlinkTimer::FrameCount() {
-  return PRInt32(mFrames.Length());
+int32_t nsBlinkTimer::FrameCount() {
+  return int32_t(mFrames.Length());
 }
 
 NS_IMETHODIMP nsBlinkTimer::Notify(nsITimer *timer)
@@ -3145,7 +3356,7 @@ NS_IMETHODIMP nsBlinkTimer::Notify(nsITimer *timer)
   printf("%s\n", buf);
 #endif
 
-  PRUint32 i, n = mFrames.Length();
+  uint32_t i, n = mFrames.Length();
   for (i = 0; i < n; i++) {
     FrameData& frameData = mFrames.ElementAt(i);
 
@@ -3203,57 +3414,74 @@ EnsureDifferentColors(nscolor colorA, nscolor colorB)
 nsTextPaintStyle::nsTextPaintStyle(nsTextFrame* aFrame)
   : mFrame(aFrame),
     mPresContext(aFrame->PresContext()),
-    mInitCommonColors(PR_FALSE),
-    mInitSelectionColors(PR_FALSE)
+    mInitCommonColors(false),
+    mInitSelectionColorsAndShadow(false),
+    mResolveColors(true),
+    mHasSelectionShadow(false)
 {
-  for (PRUint32 i = 0; i < NS_ARRAY_LENGTH(mSelectionStyle); i++)
-    mSelectionStyle[i].mInit = PR_FALSE;
+  for (uint32_t i = 0; i < ArrayLength(mSelectionStyle); i++)
+    mSelectionStyle[i].mInit = false;
 }
 
-PRBool
+bool
 nsTextPaintStyle::EnsureSufficientContrast(nscolor *aForeColor, nscolor *aBackColor)
 {
   InitCommonColors();
 
   // If the combination of selection background color and frame background color
   // is sufficient contrast, don't exchange the selection colors.
-  PRInt32 backLuminosityDifference =
+  int32_t backLuminosityDifference =
             NS_LUMINOSITY_DIFFERENCE(*aBackColor, mFrameBackgroundColor);
   if (backLuminosityDifference >= mSufficientContrast)
-    return PR_FALSE;
+    return false;
 
   // Otherwise, we should use the higher-contrast color for the selection
   // background color.
-  PRInt32 foreLuminosityDifference =
+  int32_t foreLuminosityDifference =
             NS_LUMINOSITY_DIFFERENCE(*aForeColor, mFrameBackgroundColor);
   if (backLuminosityDifference < foreLuminosityDifference) {
     nscolor tmpColor = *aForeColor;
     *aForeColor = *aBackColor;
     *aBackColor = tmpColor;
-    return PR_TRUE;
+    return true;
   }
-  return PR_FALSE;
+  return false;
 }
 
 nscolor
 nsTextPaintStyle::GetTextColor()
 {
+  if (mFrame->IsSVGText()) {
+    if (!mResolveColors)
+      return NS_SAME_AS_FOREGROUND_COLOR;
+
+    const nsStyleSVG* style = mFrame->GetStyleSVG();
+    switch (style->mFill.mType) {
+      case eStyleSVGPaintType_None:
+        return NS_RGBA(0, 0, 0, 0);
+      case eStyleSVGPaintType_Color:
+        return nsLayoutUtils::GetColor(mFrame, eCSSProperty_fill);
+      default:
+        NS_ERROR("cannot resolve SVG paint to nscolor");
+        return NS_RGBA(0, 0, 0, 255);
+    }
+  }
   return nsLayoutUtils::GetColor(mFrame, eCSSProperty_color);
 }
 
-PRBool
+bool
 nsTextPaintStyle::GetSelectionColors(nscolor* aForeColor,
                                      nscolor* aBackColor)
 {
   NS_ASSERTION(aForeColor, "aForeColor is null");
   NS_ASSERTION(aBackColor, "aBackColor is null");
 
-  if (!InitSelectionColors())
-    return PR_FALSE;
+  if (!InitSelectionColorsAndShadow())
+    return false;
 
   *aForeColor = mSelectionTextColor;
   *aBackColor = mSelectionBGColor;
-  return PR_TRUE;
+  return true;
 }
 
 void
@@ -3263,12 +3491,10 @@ nsTextPaintStyle::GetHighlightColors(nscolor* aForeColor,
   NS_ASSERTION(aForeColor, "aForeColor is null");
   NS_ASSERTION(aBackColor, "aBackColor is null");
   
-  nsILookAndFeel* look = mPresContext->LookAndFeel();
-  nscolor foreColor, backColor;
-  look->GetColor(nsILookAndFeel::eColor_TextHighlightBackground,
-                 backColor);
-  look->GetColor(nsILookAndFeel::eColor_TextHighlightForeground,
-                 foreColor);
+  nscolor backColor =
+    LookAndFeel::GetColor(LookAndFeel::eColorID_TextHighlightBackground);
+  nscolor foreColor =
+    LookAndFeel::GetColor(LookAndFeel::eColorID_TextHighlightForeground);
   EnsureSufficientContrast(&foreColor, &backColor);
   *aForeColor = foreColor;
   *aBackColor = backColor;
@@ -3283,14 +3509,14 @@ nsTextPaintStyle::GetURLSecondaryColor(nscolor* aForeColor)
   textColor = NS_RGBA(NS_GET_R(textColor),
                       NS_GET_G(textColor),
                       NS_GET_B(textColor),
-                      (PRUint8)(255 * 0.5f));
+                      (uint8_t)(255 * 0.5f));
   // Don't use true alpha color for readability.
   InitCommonColors();
   *aForeColor = NS_ComposeColors(mFrameBackgroundColor, textColor);
 }
 
 void
-nsTextPaintStyle::GetIMESelectionColors(PRInt32  aIndex,
+nsTextPaintStyle::GetIMESelectionColors(int32_t  aIndex,
                                         nscolor* aForeColor,
                                         nscolor* aBackColor)
 {
@@ -3303,11 +3529,11 @@ nsTextPaintStyle::GetIMESelectionColors(PRInt32  aIndex,
   *aBackColor = selectionStyle->mBGColor;
 }
 
-PRBool
-nsTextPaintStyle::GetSelectionUnderlineForPaint(PRInt32  aIndex,
+bool
+nsTextPaintStyle::GetSelectionUnderlineForPaint(int32_t  aIndex,
                                                 nscolor* aLineColor,
                                                 float*   aRelativeSize,
-                                                PRUint8* aStyle)
+                                                uint8_t* aStyle)
 {
   NS_ASSERTION(aLineColor, "aLineColor is null");
   NS_ASSERTION(aRelativeSize, "aRelativeSize is null");
@@ -3317,12 +3543,12 @@ nsTextPaintStyle::GetSelectionUnderlineForPaint(PRInt32  aIndex,
   if (selectionStyle->mUnderlineStyle == NS_STYLE_BORDER_STYLE_NONE ||
       selectionStyle->mUnderlineColor == NS_TRANSPARENT ||
       selectionStyle->mUnderlineRelativeSize <= 0.0f)
-    return PR_FALSE;
+    return false;
 
   *aLineColor = selectionStyle->mUnderlineColor;
   *aRelativeSize = selectionStyle->mUnderlineRelativeSize;
   *aStyle = selectionStyle->mUnderlineStyle;
-  return PR_TRUE;
+  return true;
 }
 
 void
@@ -3343,21 +3569,19 @@ nsTextPaintStyle::InitCommonColors()
   if (bgFrame->IsThemed()) {
     // Assume a native widget has sufficient contrast always
     mSufficientContrast = 0;
-    mInitCommonColors = PR_TRUE;
+    mInitCommonColors = true;
     return;
   }
 
   NS_ASSERTION(NS_GET_A(defaultBgColor) == 255,
                "default background color is not opaque");
 
-  nsILookAndFeel* look = mPresContext->LookAndFeel();
-  nscolor defaultWindowBackgroundColor, selectionTextColor, selectionBGColor;
-  look->GetColor(nsILookAndFeel::eColor_TextSelectBackground,
-                 selectionBGColor);
-  look->GetColor(nsILookAndFeel::eColor_TextSelectForeground,
-                 selectionTextColor);
-  look->GetColor(nsILookAndFeel::eColor_WindowBackground,
-                 defaultWindowBackgroundColor);
+  nscolor defaultWindowBackgroundColor =
+    LookAndFeel::GetColor(LookAndFeel::eColorID_WindowBackground);
+  nscolor selectionTextColor =
+    LookAndFeel::GetColor(LookAndFeel::eColorID_TextSelectForeground);
+  nscolor selectionBGColor =
+    LookAndFeel::GetColor(LookAndFeel::eColorID_TextSelectBackground);
 
   mSufficientContrast =
     NS_MIN(NS_MIN(NS_SUFFICIENT_LUMINOSITY_DIFFERENCE,
@@ -3366,13 +3590,13 @@ nsTextPaintStyle::InitCommonColors()
                   NS_LUMINOSITY_DIFFERENCE(defaultWindowBackgroundColor,
                                            selectionBGColor));
 
-  mInitCommonColors = PR_TRUE;
+  mInitCommonColors = true;
 }
 
 static Element*
 FindElementAncestorForMozSelection(nsIContent* aContent)
 {
-  NS_ENSURE_TRUE(aContent, nsnull);
+  NS_ENSURE_TRUE(aContent, nullptr);
   while (aContent && aContent->IsInNativeAnonymousSubtree()) {
     aContent = aContent->GetBindingParent();
   }
@@ -3380,26 +3604,26 @@ FindElementAncestorForMozSelection(nsIContent* aContent)
   while (aContent && !aContent->IsElement()) {
     aContent = aContent->GetParent();
   }
-  return aContent ? aContent->AsElement() : nsnull;
+  return aContent ? aContent->AsElement() : nullptr;
 }
 
-PRBool
-nsTextPaintStyle::InitSelectionColors()
+bool
+nsTextPaintStyle::InitSelectionColorsAndShadow()
 {
-  if (mInitSelectionColors)
-    return PR_TRUE;
+  if (mInitSelectionColorsAndShadow)
+    return true;
 
-  PRInt16 selectionFlags;
-  PRInt16 selectionStatus = mFrame->GetSelectionStatus(&selectionFlags);
+  int16_t selectionFlags;
+  int16_t selectionStatus = mFrame->GetSelectionStatus(&selectionFlags);
   if (!(selectionFlags & nsISelectionDisplay::DISPLAY_TEXT) ||
       selectionStatus < nsISelectionController::SELECTION_ON) {
     // Not displaying the normal selection.
     // We're not caching this fact, so every call to GetSelectionColors
     // will come through here. We could avoid this, but it's not really worth it.
-    return PR_FALSE;
+    return false;
   }
 
-  mInitSelectionColors = PR_TRUE;
+  mInitSelectionColorsAndShadow = true;
 
   nsIFrame* nonGeneratedAncestor = nsLayoutUtils::GetNonGeneratedAncestor(mFrame);
   Element* selectionElement =
@@ -3407,7 +3631,7 @@ nsTextPaintStyle::InitSelectionColors()
 
   if (selectionElement &&
       selectionStatus == nsISelectionController::SELECTION_ON) {
-    nsRefPtr<nsStyleContext> sc = nsnull;
+    nsRefPtr<nsStyleContext> sc = nullptr;
     sc = mPresContext->StyleSet()->
       ProbePseudoElementStyle(selectionElement,
                               nsCSSPseudoElements::ePseudo_mozSelection,
@@ -3417,85 +3641,98 @@ nsTextPaintStyle::InitSelectionColors()
       mSelectionBGColor =
         sc->GetVisitedDependentColor(eCSSProperty_background_color);
       mSelectionTextColor = sc->GetVisitedDependentColor(eCSSProperty_color);
-      return PR_TRUE;
+      mHasSelectionShadow =
+        nsRuleNode::HasAuthorSpecifiedRules(sc,
+                                            NS_AUTHOR_SPECIFIED_TEXT_SHADOW,
+                                            true);
+      if (mHasSelectionShadow) {
+        mSelectionShadow = sc->GetStyleText()->mTextShadow;
+      }
+      return true;
     }
   }
 
-  nsILookAndFeel* look = mPresContext->LookAndFeel();
-
-  nscolor selectionBGColor;
-  look->GetColor(nsILookAndFeel::eColor_TextSelectBackground,
-                 selectionBGColor);
+  nscolor selectionBGColor =
+    LookAndFeel::GetColor(LookAndFeel::eColorID_TextSelectBackground);
 
   if (selectionStatus == nsISelectionController::SELECTION_ATTENTION) {
-    look->GetColor(nsILookAndFeel::eColor_TextSelectBackgroundAttention,
-                   mSelectionBGColor);
+    mSelectionBGColor =
+      LookAndFeel::GetColor(
+        LookAndFeel::eColorID_TextSelectBackgroundAttention);
     mSelectionBGColor  = EnsureDifferentColors(mSelectionBGColor,
                                                selectionBGColor);
   } else if (selectionStatus != nsISelectionController::SELECTION_ON) {
-    look->GetColor(nsILookAndFeel::eColor_TextSelectBackgroundDisabled,
-                   mSelectionBGColor);
+    mSelectionBGColor =
+      LookAndFeel::GetColor(LookAndFeel::eColorID_TextSelectBackgroundDisabled);
     mSelectionBGColor  = EnsureDifferentColors(mSelectionBGColor,
                                                selectionBGColor);
   } else {
     mSelectionBGColor = selectionBGColor;
   }
 
-  look->GetColor(nsILookAndFeel::eColor_TextSelectForeground,
-                 mSelectionTextColor);
+  mSelectionTextColor =
+    LookAndFeel::GetColor(LookAndFeel::eColorID_TextSelectForeground);
 
-  // On MacOS X, we don't exchange text color and BG color.
-  if (mSelectionTextColor == NS_DONT_CHANGE_COLOR) {
-    nscoord frameColor = mFrame->GetVisitedDependentColor(eCSSProperty_color);
-    mSelectionTextColor = EnsureDifferentColors(frameColor, mSelectionBGColor);
+  if (mResolveColors) {
+    // On MacOS X, we don't exchange text color and BG color.
+    if (mSelectionTextColor == NS_DONT_CHANGE_COLOR) {
+      nsCSSProperty property = mFrame->IsSVGText() ? eCSSProperty_fill :
+                                                     eCSSProperty_color;
+      nscoord frameColor = mFrame->GetVisitedDependentColor(property);
+      mSelectionTextColor = EnsureDifferentColors(frameColor, mSelectionBGColor);
+    } else {
+      EnsureSufficientContrast(&mSelectionTextColor, &mSelectionBGColor);
+    }
   } else {
-    EnsureSufficientContrast(&mSelectionTextColor, &mSelectionBGColor);
+    if (mSelectionTextColor == NS_DONT_CHANGE_COLOR) {
+      mSelectionTextColor = NS_SAME_AS_FOREGROUND_COLOR;
+    }
   }
-  return PR_TRUE;
+  return true;
 }
 
 nsTextPaintStyle::nsSelectionStyle*
-nsTextPaintStyle::GetSelectionStyle(PRInt32 aIndex)
+nsTextPaintStyle::GetSelectionStyle(int32_t aIndex)
 {
   InitSelectionStyle(aIndex);
   return &mSelectionStyle[aIndex];
 }
 
 struct StyleIDs {
-  nsILookAndFeel::nsColorID mForeground, mBackground, mLine;
-  nsILookAndFeel::nsMetricID mLineStyle;
-  nsILookAndFeel::nsMetricFloatID mLineRelativeSize;
+  LookAndFeel::ColorID mForeground, mBackground, mLine;
+  LookAndFeel::IntID mLineStyle;
+  LookAndFeel::FloatID mLineRelativeSize;
 };
 static StyleIDs SelectionStyleIDs[] = {
-  { nsILookAndFeel::eColor_IMERawInputForeground,
-    nsILookAndFeel::eColor_IMERawInputBackground,
-    nsILookAndFeel::eColor_IMERawInputUnderline,
-    nsILookAndFeel::eMetric_IMERawInputUnderlineStyle,
-    nsILookAndFeel::eMetricFloat_IMEUnderlineRelativeSize },
-  { nsILookAndFeel::eColor_IMESelectedRawTextForeground,
-    nsILookAndFeel::eColor_IMESelectedRawTextBackground,
-    nsILookAndFeel::eColor_IMESelectedRawTextUnderline,
-    nsILookAndFeel::eMetric_IMESelectedRawTextUnderlineStyle,
-    nsILookAndFeel::eMetricFloat_IMEUnderlineRelativeSize },
-  { nsILookAndFeel::eColor_IMEConvertedTextForeground,
-    nsILookAndFeel::eColor_IMEConvertedTextBackground,
-    nsILookAndFeel::eColor_IMEConvertedTextUnderline,
-    nsILookAndFeel::eMetric_IMEConvertedTextUnderlineStyle,
-    nsILookAndFeel::eMetricFloat_IMEUnderlineRelativeSize },
-  { nsILookAndFeel::eColor_IMESelectedConvertedTextForeground,
-    nsILookAndFeel::eColor_IMESelectedConvertedTextBackground,
-    nsILookAndFeel::eColor_IMESelectedConvertedTextUnderline,
-    nsILookAndFeel::eMetric_IMESelectedConvertedTextUnderline,
-    nsILookAndFeel::eMetricFloat_IMEUnderlineRelativeSize },
-  { nsILookAndFeel::eColor_LAST_COLOR,
-    nsILookAndFeel::eColor_LAST_COLOR,
-    nsILookAndFeel::eColor_SpellCheckerUnderline,
-    nsILookAndFeel::eMetric_SpellCheckerUnderlineStyle,
-    nsILookAndFeel::eMetricFloat_SpellCheckerUnderlineRelativeSize }
+  { LookAndFeel::eColorID_IMERawInputForeground,
+    LookAndFeel::eColorID_IMERawInputBackground,
+    LookAndFeel::eColorID_IMERawInputUnderline,
+    LookAndFeel::eIntID_IMERawInputUnderlineStyle,
+    LookAndFeel::eFloatID_IMEUnderlineRelativeSize },
+  { LookAndFeel::eColorID_IMESelectedRawTextForeground,
+    LookAndFeel::eColorID_IMESelectedRawTextBackground,
+    LookAndFeel::eColorID_IMESelectedRawTextUnderline,
+    LookAndFeel::eIntID_IMESelectedRawTextUnderlineStyle,
+    LookAndFeel::eFloatID_IMEUnderlineRelativeSize },
+  { LookAndFeel::eColorID_IMEConvertedTextForeground,
+    LookAndFeel::eColorID_IMEConvertedTextBackground,
+    LookAndFeel::eColorID_IMEConvertedTextUnderline,
+    LookAndFeel::eIntID_IMEConvertedTextUnderlineStyle,
+    LookAndFeel::eFloatID_IMEUnderlineRelativeSize },
+  { LookAndFeel::eColorID_IMESelectedConvertedTextForeground,
+    LookAndFeel::eColorID_IMESelectedConvertedTextBackground,
+    LookAndFeel::eColorID_IMESelectedConvertedTextUnderline,
+    LookAndFeel::eIntID_IMESelectedConvertedTextUnderline,
+    LookAndFeel::eFloatID_IMEUnderlineRelativeSize },
+  { LookAndFeel::eColorID_LAST_COLOR,
+    LookAndFeel::eColorID_LAST_COLOR,
+    LookAndFeel::eColorID_SpellCheckerUnderline,
+    LookAndFeel::eIntID_SpellCheckerUnderlineStyle,
+    LookAndFeel::eFloatID_SpellCheckerUnderlineRelativeSize }
 };
 
 void
-nsTextPaintStyle::InitSelectionStyle(PRInt32 aIndex)
+nsTextPaintStyle::InitSelectionStyle(int32_t aIndex)
 {
   NS_ASSERTION(aIndex >= 0 && aIndex < 5, "aIndex is invalid");
   nsSelectionStyle* selectionStyle = &mSelectionStyle[aIndex];
@@ -3504,17 +3741,16 @@ nsTextPaintStyle::InitSelectionStyle(PRInt32 aIndex)
 
   StyleIDs* styleIDs = &SelectionStyleIDs[aIndex];
 
-  nsILookAndFeel* look = mPresContext->LookAndFeel();
   nscolor foreColor, backColor;
-  if (styleIDs->mForeground == nsILookAndFeel::eColor_LAST_COLOR) {
+  if (styleIDs->mForeground == LookAndFeel::eColorID_LAST_COLOR) {
     foreColor = NS_SAME_AS_FOREGROUND_COLOR;
   } else {
-    look->GetColor(styleIDs->mForeground, foreColor);
+    foreColor = LookAndFeel::GetColor(styleIDs->mForeground);
   }
-  if (styleIDs->mBackground == nsILookAndFeel::eColor_LAST_COLOR) {
+  if (styleIDs->mBackground == LookAndFeel::eColorID_LAST_COLOR) {
     backColor = NS_TRANSPARENT;
   } else {
-    look->GetColor(styleIDs->mBackground, backColor);
+    backColor = LookAndFeel::GetColor(styleIDs->mBackground);
   }
 
   // Convert special color to actual color
@@ -3525,52 +3761,51 @@ nsTextPaintStyle::InitSelectionStyle(PRInt32 aIndex)
   NS_ASSERTION(backColor != NS_40PERCENT_FOREGROUND_COLOR,
                "backColor cannot be NS_40PERCENT_FOREGROUND_COLOR");
 
-  foreColor = GetResolvedForeColor(foreColor, GetTextColor(), backColor);
+  if (mResolveColors) {
+    foreColor = GetResolvedForeColor(foreColor, GetTextColor(), backColor);
 
-  if (NS_GET_A(backColor) > 0)
-    EnsureSufficientContrast(&foreColor, &backColor);
+    if (NS_GET_A(backColor) > 0)
+      EnsureSufficientContrast(&foreColor, &backColor);
+  }
 
   nscolor lineColor;
   float relativeSize;
-  PRUint8 lineStyle;
+  uint8_t lineStyle;
   GetSelectionUnderline(mPresContext, aIndex,
                         &lineColor, &relativeSize, &lineStyle);
-  lineColor = GetResolvedForeColor(lineColor, foreColor, backColor);
+
+  if (mResolveColors)
+    lineColor = GetResolvedForeColor(lineColor, foreColor, backColor);
 
   selectionStyle->mTextColor       = foreColor;
   selectionStyle->mBGColor         = backColor;
   selectionStyle->mUnderlineColor  = lineColor;
   selectionStyle->mUnderlineStyle  = lineStyle;
   selectionStyle->mUnderlineRelativeSize = relativeSize;
-  selectionStyle->mInit            = PR_TRUE;
+  selectionStyle->mInit            = true;
 }
 
-/* static */ PRBool
+/* static */ bool
 nsTextPaintStyle::GetSelectionUnderline(nsPresContext* aPresContext,
-                                        PRInt32 aIndex,
+                                        int32_t aIndex,
                                         nscolor* aLineColor,
                                         float* aRelativeSize,
-                                        PRUint8* aStyle)
+                                        uint8_t* aStyle)
 {
   NS_ASSERTION(aPresContext, "aPresContext is null");
   NS_ASSERTION(aRelativeSize, "aRelativeSize is null");
   NS_ASSERTION(aStyle, "aStyle is null");
   NS_ASSERTION(aIndex >= 0 && aIndex < 5, "Index out of range");
 
-  nsILookAndFeel* look = aPresContext->LookAndFeel();
-
   StyleIDs& styleID = SelectionStyleIDs[aIndex];
-  nscolor color;
-  float size;
-  PRInt32 style;
 
-  look->GetColor(styleID.mLine, color);
-  look->GetMetric(styleID.mLineStyle, style);
+  nscolor color = LookAndFeel::GetColor(styleID.mLine);
+  int32_t style = LookAndFeel::GetInt(styleID.mLineStyle);
   if (style > NS_STYLE_TEXT_DECORATION_STYLE_MAX) {
     NS_ERROR("Invalid underline style value is specified");
     style = NS_STYLE_TEXT_DECORATION_STYLE_SOLID;
   }
-  look->GetMetric(styleID.mLineRelativeSize, size);
+  float size = LookAndFeel::GetFloat(styleID.mLineRelativeSize);
 
   NS_ASSERTION(size, "selection underline relative size must be larger than 0");
 
@@ -3585,12 +3820,27 @@ nsTextPaintStyle::GetSelectionUnderline(nsPresContext* aPresContext,
          size > 0.0f;
 }
 
+bool
+nsTextPaintStyle::GetSelectionShadow(nsCSSShadowArray** aShadow)
+{
+  if (!InitSelectionColorsAndShadow()) {
+    return false;
+  }
+
+  if (mHasSelectionShadow) {
+    *aShadow = mSelectionShadow;
+    return true;
+  }
+
+  return false;
+}
+
 inline nscolor Get40PercentColor(nscolor aForeColor, nscolor aBackColor)
 {
   nscolor foreColor = NS_RGBA(NS_GET_R(aForeColor),
                               NS_GET_G(aForeColor),
                               NS_GET_B(aForeColor),
-                              (PRUint8)(255 * 0.4f));
+                              (uint8_t)(255 * 0.4f));
   // Don't use true alpha color for readability.
   return NS_ComposeColors(aBackColor, foreColor);
 }
@@ -3618,23 +3868,23 @@ nsTextPaintStyle::GetResolvedForeColor(nscolor aColor,
 //-----------------------------------------------------------------------------
 
 #ifdef ACCESSIBILITY
-already_AddRefed<nsAccessible>
+already_AddRefed<Accessible>
 nsTextFrame::CreateAccessible()
 {
   if (IsEmpty()) {
     nsAutoString renderedWhitespace;
-    GetRenderedText(&renderedWhitespace, nsnull, nsnull, 0, 1);
+    GetRenderedText(&renderedWhitespace, nullptr, nullptr, 0, 1);
     if (renderedWhitespace.IsEmpty()) {
-      return nsnull;
+      return nullptr;
     }
   }
 
   nsAccessibilityService* accService = nsIPresShell::AccService();
   if (accService) {
-    return accService->CreateHTMLTextAccessible(mContent,
+    return accService->CreateTextLeafAccessible(mContent,
                                                 PresContext()->PresShell());
   }
-  return nsnull;
+  return nullptr;
 }
 #endif
 
@@ -3658,6 +3908,7 @@ nsTextFrame::Init(nsIContent*      aContent,
 
   // Since our content has a frame now, this flag is no longer needed.
   aContent->UnsetFlags(NS_CREATE_FRAME_IF_NON_WHITESPACE);
+
   // We're not a continuing frame.
   // mContentOffset = 0; not necessary since we get zeroed out at init
   return nsFrame::Init(aContent, aParent, aPrevInFlow);
@@ -3688,9 +3939,9 @@ nsTextFrame::DestroyFrom(nsIFrame* aDestructRoot)
   // We might want to clear NS_CREATE_FRAME_IF_NON_WHITESPACE or
   // NS_REFRAME_IF_WHITESPACE on mContent here, since our parent frame
   // type might be changing.  Not clear whether it's worth it.
-  ClearTextRun(nsnull);
+  ClearTextRuns();
   if (mNextContinuation) {
-    mNextContinuation->SetPrevInFlow(nsnull);
+    mNextContinuation->SetPrevInFlow(nullptr);
   }
   // Let the base class destroy the frame
   nsFrame::DestroyFrom(aDestructRoot);
@@ -3722,7 +3973,7 @@ public:
   }
   virtual nsIFrame* GetPrevInFlowVirtual() const { return GetPrevInFlow(); }
   nsIFrame* GetPrevInFlow() const {
-    return (GetStateBits() & NS_FRAME_IS_FLUID_CONTINUATION) ? mPrevContinuation : nsnull;
+    return (GetStateBits() & NS_FRAME_IS_FLUID_CONTINUATION) ? mPrevContinuation : nullptr;
   }
   NS_IMETHOD SetPrevInFlow(nsIFrame* aPrevInFlow) {
     NS_ASSERTION (!aPrevInFlow || GetType() == aPrevInFlow->GetType(),
@@ -3741,11 +3992,11 @@ public:
   virtual void AddInlinePrefWidth(nsRenderingContext *aRenderingContext,
                                   InlinePrefWidthData *aData);
   
-  virtual nsresult GetRenderedText(nsAString* aString = nsnull,
-                                   gfxSkipChars* aSkipChars = nsnull,
-                                   gfxSkipCharsIterator* aSkipIter = nsnull,
-                                   PRUint32 aSkippedStartOffset = 0,
-                                   PRUint32 aSkippedMaxLength = PR_UINT32_MAX)
+  virtual nsresult GetRenderedText(nsAString* aString = nullptr,
+                                   gfxSkipChars* aSkipChars = nullptr,
+                                   gfxSkipCharsIterator* aSkipIter = nullptr,
+                                   uint32_t aSkippedStartOffset = 0,
+                                   uint32_t aSkippedMaxLength = PR_UINT32_MAX)
   { return NS_ERROR_NOT_IMPLEMENTED; } // Call on a primary text frame only
 
 protected:
@@ -3771,14 +4022,23 @@ nsContinuingTextFrame::Init(nsIContent* aContent,
   aPrevInFlow->SetNextInFlow(this);
   nsTextFrame* prev = static_cast<nsTextFrame*>(aPrevInFlow);
   mContentOffset = prev->GetContentOffset() + prev->GetContentLengthHint();
-  NS_ASSERTION(mContentOffset < PRInt32(aContent->GetText()->GetLength()),
+  NS_ASSERTION(mContentOffset < int32_t(aContent->GetText()->GetLength()),
                "Creating ContinuingTextFrame, but there is no more content");
   if (prev->GetStyleContext() != GetStyleContext()) {
     // We're taking part of prev's text, and its style may be different
     // so clear its textrun which may no longer be valid (and don't set ours)
-    prev->ClearTextRun(nsnull);
+    prev->ClearTextRuns();
   } else {
-    mTextRun = prev->GetTextRun();
+    float inflation = prev->GetFontSizeInflation();
+    SetFontSizeInflation(inflation);
+    mTextRun = prev->GetTextRun(nsTextFrame::eInflated);
+    if (inflation != 1.0f) {
+      gfxTextRun *uninflatedTextRun =
+        prev->GetTextRun(nsTextFrame::eNotInflated);
+      if (uninflatedTextRun) {
+        SetTextRun(uninflatedTextRun, nsTextFrame::eNotInflated, 1.0f);
+      }
+    }
   }
 #ifdef IBMBIDI
   if (aPrevInFlow->GetStateBits() & NS_FRAME_IS_BIDI) {
@@ -3787,8 +4047,10 @@ nsContinuingTextFrame::Init(nsIContent* aContent,
     // advantage of the propTable's cache and simplify the assertion below
     void* embeddingLevel = propTable->Get(aPrevInFlow, EmbeddingLevelProperty());
     void* baseLevel = propTable->Get(aPrevInFlow, BaseLevelProperty());
+    void* paragraphDepth = propTable->Get(aPrevInFlow, ParagraphDepthProperty());
     propTable->Set(this, EmbeddingLevelProperty(), embeddingLevel);
     propTable->Set(this, BaseLevelProperty(), baseLevel);
+    propTable->Set(this, ParagraphDepthProperty(), paragraphDepth);
 
     if (nextContinuation) {
       SetNextContinuation(nextContinuation);
@@ -3798,7 +4060,8 @@ nsContinuingTextFrame::Init(nsIContent* aContent,
              nextContinuation->GetContentOffset() < mContentOffset) {
         NS_ASSERTION(
           embeddingLevel == propTable->Get(nextContinuation, EmbeddingLevelProperty()) &&
-          baseLevel == propTable->Get(nextContinuation, BaseLevelProperty()),
+          baseLevel == propTable->Get(nextContinuation, BaseLevelProperty()) &&
+          paragraphDepth == propTable->Get(nextContinuation, ParagraphDepthProperty()),
           "stealing text from different type of BIDI continuation");
         nextContinuation->mContentOffset = mContentOffset;
         nextContinuation = static_cast<nsTextFrame*>(nextContinuation->GetNextContinuation());
@@ -3826,13 +4089,18 @@ nsContinuingTextFrame::DestroyFrom(nsIFrame* aDestructRoot)
   // we have to clear the textrun because we're going away and the
   // textrun had better not keep a dangling reference to us.
   if ((GetStateBits() & TEXT_IN_TEXTRUN_USER_DATA) ||
-      !mPrevContinuation ||
-      mPrevContinuation->GetStyleContext() != GetStyleContext()) {
-    ClearTextRun(nsnull);
+      (GetStateBits() & TEXT_IN_UNINFLATED_TEXTRUN_USER_DATA) ||
+      (!mPrevContinuation &&
+       !(GetStateBits() & TEXT_STYLE_MATCHES_PREV_CONTINUATION)) ||
+      (mPrevContinuation &&
+       mPrevContinuation->GetStyleContext() != GetStyleContext())) {
+    ClearTextRuns();
     // Clear the previous continuation's text run also, so that it can rebuild
     // the text run to include our text.
     if (mPrevContinuation) {
-      (static_cast<nsTextFrame*>(mPrevContinuation))->ClearTextRun(nsnull);
+      nsTextFrame *prevContinuationText =
+        static_cast<nsTextFrame*>(mPrevContinuation);
+      prevContinuationText->ClearTextRuns();
     }
   }
   nsSplittableFrame::RemoveFromFlow(this);
@@ -3927,8 +4195,8 @@ DestroySelectionDetails(SelectionDetails* aDetails)
 static void
 VerifyNotDirty(nsFrameState state)
 {
-  PRBool isZero = state & NS_FRAME_FIRST_REFLOW;
-  PRBool isDirty = state & NS_FRAME_IS_DIRTY;
+  bool isZero = state & NS_FRAME_FIRST_REFLOW;
+  bool isDirty = state & NS_FRAME_IS_DIRTY;
   if (!isZero && isDirty)
     NS_WARNING("internal offsets may be out-of-sync");
 }
@@ -3972,13 +4240,14 @@ nsTextFrame::GetCursor(const nsPoint& aPoint,
 
     // If tabindex >= 0, use default cursor to indicate it's not selectable
     nsIFrame *ancestorFrame = this;
-    while ((ancestorFrame = ancestorFrame->GetParent()) != nsnull) {
+    while ((ancestorFrame = ancestorFrame->GetParent()) != nullptr) {
       nsIContent *ancestorContent = ancestorFrame->GetContent();
       if (ancestorContent && ancestorContent->HasAttr(kNameSpaceID_None, nsGkAtoms::tabindex)) {
         nsAutoString tabIndexStr;
         ancestorContent->GetAttr(kNameSpaceID_None, nsGkAtoms::tabindex, tabIndexStr);
         if (!tabIndexStr.IsEmpty()) {
-          PRInt32 rv, tabIndexVal = tabIndexStr.ToInteger(&rv);
+          nsresult rv;
+          int32_t tabIndexVal = tabIndexStr.ToInteger(&rv);
           if (NS_SUCCEEDED(rv) && tabIndexVal >= 0) {
             aCursor.mCursor = NS_STYLE_CURSOR_DEFAULT;
             break;
@@ -4012,16 +4281,76 @@ nsTextFrame::GetLastContinuation() const
   return lastInFlow;
 }
 
-void
-nsTextFrame::ClearTextRun(nsTextFrame* aStartContinuation)
+gfxTextRun*
+nsTextFrame::GetUninflatedTextRun()
 {
-  // save textrun because ClearAllTextRunReferences may clear ours
-  gfxTextRun* textRun = mTextRun;
-  
-  if (!textRun)
-    return;
+  return static_cast<gfxTextRun*>(
+           Properties().Get(UninflatedTextRunProperty()));
+}
 
+void
+nsTextFrame::SetTextRun(gfxTextRun* aTextRun, TextRunType aWhichTextRun,
+                        float aInflation)
+{
+  NS_ASSERTION(aTextRun, "must have text run");
+
+  // Our inflated text run is always stored in mTextRun.  In the cases
+  // where our current inflation is not 1.0, however, we store two text
+  // runs, and the uninflated one goes in a frame property.  We never
+  // store a single text run in both.
+  if (aWhichTextRun == eInflated) {
+    if (HasFontSizeInflation() && aInflation == 1.0f) {
+      // FIXME: Probably shouldn't do this within each SetTextRun
+      // method, but it doesn't hurt.
+      ClearTextRun(nullptr, nsTextFrame::eNotInflated);
+    }
+    SetFontSizeInflation(aInflation);
+  } else {
+    NS_ABORT_IF_FALSE(aInflation == 1.0f, "unexpected inflation");
+    if (HasFontSizeInflation()) {
+      Properties().Set(UninflatedTextRunProperty(), aTextRun);
+      return;
+    }
+    // fall through to setting mTextRun
+  }
+
+  mTextRun = aTextRun;
+
+  // FIXME: Add assertions testing the relationship between
+  // GetFontSizeInflation() and whether we have an uninflated text run
+  // (but be aware that text runs can go away).
+}
+
+bool
+nsTextFrame::RemoveTextRun(gfxTextRun* aTextRun)
+{
+  if (aTextRun == mTextRun) {
+    mTextRun = nullptr;
+    return true;
+  }
+  FrameProperties props = Properties();
+  if ((GetStateBits() & TEXT_HAS_FONT_INFLATION) &&
+      props.Get(UninflatedTextRunProperty()) == aTextRun) {
+    props.Delete(UninflatedTextRunProperty());
+    return true;
+  }
+  return false;
+}
+
+void
+nsTextFrame::ClearTextRun(nsTextFrame* aStartContinuation,
+                          TextRunType aWhichTextRun)
+{
+  gfxTextRun* textRun = GetTextRun(aWhichTextRun);
+  if (!textRun) {
+    return;
+  }
+
+  DebugOnly<bool> checkmTextrun = textRun == mTextRun;
   UnhookTextRunFromFrames(textRun, aStartContinuation);
+  MOZ_ASSERT(checkmTextrun ? !mTextRun
+                           : !Properties().Get(UninflatedTextRunProperty()));
+
   // see comments in BuildTextRunForFrames...
 //  if (textRun->GetFlags() & gfxFontGroup::TEXT_IS_PERSISTENT) {
 //    NS_ERROR("Shouldn't reach here for now...");
@@ -4034,8 +4363,7 @@ nsTextFrame::ClearTextRun(nsTextFrame* aStartContinuation)
 //    return;
 //  }
 
-  if (!(textRun->GetFlags() & gfxTextRunWordCache::TEXT_IN_CACHE) &&
-      !textRun->GetUserData()) {
+  if (!textRun->GetUserData()) {
     // Remove it now because it's not doing anything useful
     gTextRuns->RemoveFromCache(textRun);
     delete textRun;
@@ -4054,22 +4382,22 @@ nsTextFrame::CharacterDataChanged(CharacterDataChangeInfo* aInfo)
   // before the text change are completely unaffected.
   nsTextFrame* next;
   nsTextFrame* textFrame = this;
-  while (PR_TRUE) {
+  while (true) {
     next = static_cast<nsTextFrame*>(textFrame->GetNextContinuation());
-    if (!next || next->GetContentOffset() > PRInt32(aInfo->mChangeStart))
+    if (!next || next->GetContentOffset() > int32_t(aInfo->mChangeStart))
       break;
     textFrame = next;
   }
 
-  PRInt32 endOfChangedText = aInfo->mChangeStart + aInfo->mReplaceLength;
-  nsTextFrame* lastDirtiedFrame = nsnull;
+  int32_t endOfChangedText = aInfo->mChangeStart + aInfo->mReplaceLength;
+  nsTextFrame* lastDirtiedFrame = nullptr;
 
   nsIPresShell* shell = PresContext()->GetPresShell();
   do {
     // textFrame contained deleted text (or the insertion point,
     // if this was a pure insertion).
     textFrame->mState &= ~TEXT_WHITESPACE_FLAGS;
-    textFrame->ClearTextRun(nsnull);
+    textFrame->ClearTextRuns();
     if (!lastDirtiedFrame ||
         lastDirtiedFrame->GetParent() != textFrame->GetParent()) {
       // Ask the parent frame to reflow me.
@@ -4095,11 +4423,11 @@ nsTextFrame::CharacterDataChanged(CharacterDataChangeInfo* aInfo)
     }
 
     textFrame = static_cast<nsTextFrame*>(textFrame->GetNextContinuation());
-  } while (textFrame && textFrame->GetContentOffset() < PRInt32(aInfo->mChangeEnd));
+  } while (textFrame && textFrame->GetContentOffset() < int32_t(aInfo->mChangeEnd));
 
   // This is how much the length of the string changed by --- i.e.,
   // how much the trailing unchanged text moved.
-  PRInt32 sizeChange =
+  int32_t sizeChange =
     aInfo->mChangeStart + aInfo->mReplaceLength - aInfo->mChangeEnd;
 
   if (sizeChange) {
@@ -4109,7 +4437,7 @@ nsTextFrame::CharacterDataChanged(CharacterDataChangeInfo* aInfo)
       textFrame->mContentOffset += sizeChange;
       // XXX we could rescue some text runs by adjusting their user data
       // to reflect the change in DOM offsets
-      textFrame->ClearTextRun(nsnull);
+      textFrame->ClearTextRuns();
       textFrame = static_cast<nsTextFrame*>(textFrame->GetNextContinuation());
     }
   }
@@ -4121,14 +4449,14 @@ nsTextFrame::CharacterDataChanged(CharacterDataChangeInfo* aInfo)
 nsTextFrame::DidSetStyleContext(nsStyleContext* aOldStyleContext)
 {
   nsFrame::DidSetStyleContext(aOldStyleContext);
-  ClearTextRun(nsnull);
+  ClearTextRuns();
 } 
 
 class nsDisplayText : public nsCharClipDisplayItem {
 public:
   nsDisplayText(nsDisplayListBuilder* aBuilder, nsTextFrame* aFrame) :
     nsCharClipDisplayItem(aBuilder, aFrame),
-    mDisableSubpixelAA(PR_FALSE) {
+    mDisableSubpixelAA(false) {
     MOZ_COUNT_CTOR(nsDisplayText);
   }
 #ifdef NS_BUILD_REFCNT_LOGGING
@@ -4137,8 +4465,9 @@ public:
   }
 #endif
 
-  virtual nsRect GetBounds(nsDisplayListBuilder* aBuilder) {
-    return mFrame->GetVisualOverflowRect() + ToReferenceFrame();
+  virtual nsRect GetBounds(nsDisplayListBuilder* aBuilder, bool* aSnap) {
+    *aSnap = false;
+    return mFrame->GetVisualOverflowRectRelativeToSelf() + ToReferenceFrame();
   }
   virtual void HitTest(nsDisplayListBuilder* aBuilder, const nsRect& aRect,
                        HitTestState* aState, nsTArray<nsIFrame*> *aOutFrames) {
@@ -4152,17 +4481,19 @@ public:
 
   virtual nsRect GetComponentAlphaBounds(nsDisplayListBuilder* aBuilder)
   {
-    return GetBounds(aBuilder);
+    bool snap;
+    return GetBounds(aBuilder, &snap);
   }
 
-  virtual void DisableComponentAlpha() { mDisableSubpixelAA = PR_TRUE; }
+  virtual void DisableComponentAlpha() { mDisableSubpixelAA = true; }
 
-  PRPackedBool mDisableSubpixelAA;
+  bool mDisableSubpixelAA;
 };
 
 void
 nsDisplayText::Paint(nsDisplayListBuilder* aBuilder,
                      nsRenderingContext* aCtx) {
+  SAMPLE_LABEL("nsDisplayText", "Paint");
   // Add 1 pixel of dirty area around mVisibleRect to allow us to paint
   // antialiased pixels beyond the measured text extents.
   // This is temporary until we do this in the actual calculation of text extents.
@@ -4197,12 +4528,12 @@ nsTextFrame::BuildDisplayList(nsDisplayListBuilder*   aBuilder,
 }
 
 static nsIFrame*
-GetGeneratedContentOwner(nsIFrame* aFrame, PRBool* aIsBefore)
+GetGeneratedContentOwner(nsIFrame* aFrame, bool* aIsBefore)
 {
-  *aIsBefore = PR_FALSE;
+  *aIsBefore = false;
   while (aFrame && (aFrame->GetStateBits() & NS_FRAME_GENERATED_CONTENT)) {
     if (aFrame->GetStyleContext()->GetPseudo() == nsCSSPseudoElements::before) {
-      *aIsBefore = PR_TRUE;
+      *aIsBefore = true;
     }
     aFrame = aFrame->GetParent();
   }
@@ -4213,10 +4544,13 @@ SelectionDetails*
 nsTextFrame::GetSelectionDetails()
 {
   const nsFrameSelection* frameSelection = GetConstFrameSelection();
+  if (frameSelection->GetTableCellSelection()) {
+    return nullptr;
+  }
   if (!(GetStateBits() & NS_FRAME_GENERATED_CONTENT)) {
     SelectionDetails* details =
       frameSelection->LookUpSelection(mContent, GetContentOffset(),
-                                      GetContentLength(), PR_FALSE);
+                                      GetContentLength(), false);
     SelectionDetails* sd;
     for (sd = details; sd; sd = sd->mNext) {
       sd->mStart += mContentOffset;
@@ -4227,14 +4561,14 @@ nsTextFrame::GetSelectionDetails()
 
   // Check if the beginning or end of the element is selected, depending on
   // whether we're :before content or :after content.
-  PRBool isBefore;
+  bool isBefore;
   nsIFrame* owner = GetGeneratedContentOwner(this, &isBefore);
   if (!owner || !owner->GetContent())
-    return nsnull;
+    return nullptr;
 
   SelectionDetails* details =
     frameSelection->LookUpSelection(owner->GetContent(),
-        isBefore ? 0 : owner->GetContent()->GetChildCount(), 0, PR_FALSE);
+        isBefore ? 0 : owner->GetContent()->GetChildCount(), 0, false);
   SelectionDetails* sd;
   for (sd = details; sd; sd = sd->mNext) {
     // The entire text is selected!
@@ -4245,27 +4579,40 @@ nsTextFrame::GetSelectionDetails()
 }
 
 static void
-FillClippedRect(gfxContext* aCtx, nsPresContext* aPresContext,
-                nscolor aColor, const gfxRect& aDirtyRect, const gfxRect& aRect)
+PaintSelectionBackground(gfxContext* aCtx, nsPresContext* aPresContext,
+                         nscolor aColor, const gfxRect& aDirtyRect,
+                         const gfxRect& aRect,
+                         nsTextFrame::DrawPathCallbacks* aCallbacks)
 {
+  if (aCallbacks) {
+    aCallbacks->NotifyBeforeSelectionBackground(aColor);
+  }
+
   gfxRect r = aRect.Intersect(aDirtyRect);
   // For now, we need to put this in pixel coordinates
-  PRInt32 app = aPresContext->AppUnitsPerDevPixel();
+  int32_t app = aPresContext->AppUnitsPerDevPixel();
   aCtx->NewPath();
   // pixel-snap
   aCtx->Rectangle(gfxRect(r.X() / app, r.Y() / app,
-                          r.Width() / app, r.Height() / app), PR_TRUE);
-  aCtx->SetColor(gfxRGBA(aColor));
-  aCtx->Fill();
+                          r.Width() / app, r.Height() / app), true);
+
+  if (aCallbacks) {
+    aCallbacks->NotifySelectionBackgroundPathEmitted();
+  } else {
+    aCtx->SetColor(gfxRGBA(aColor));
+    aCtx->Fill();
+  }
 }
 
 void
-nsTextFrame::GetTextDecorations(nsPresContext* aPresContext,
-                                nsTextFrame::TextDecorations& aDecorations)
+nsTextFrame::GetTextDecorations(
+                    nsPresContext* aPresContext,
+                    nsTextFrame::TextDecorationColorResolution aColorResolution,
+                    nsTextFrame::TextDecorations& aDecorations)
 {
   const nsCompatibility compatMode = aPresContext->CompatibilityMode();
 
-  PRBool useOverride = PR_FALSE;
+  bool useOverride = false;
   nscolor overrideColor;
 
   // frameTopOffset represents the offset to f's top from our baseline in our
@@ -4278,11 +4625,10 @@ nsTextFrame::GetTextDecorations(nsPresContext* aPresContext,
 
   bool nearestBlockFound = false;
 
-  for (nsIFrame* f = this, *fChild = nsnull;
+  for (nsIFrame* f = this, *fChild = nullptr;
        f;
        fChild = f,
-       f = nsLayoutUtils::GetParentOrPlaceholderFor(
-             aPresContext->FrameManager(), f))
+       f = nsLayoutUtils::GetParentOrPlaceholderFor(f))
   {
     nsStyleContext *const context = f->GetStyleContext();
     if (!context->HasTextDecorationLines()) {
@@ -4290,13 +4636,13 @@ nsTextFrame::GetTextDecorations(nsPresContext* aPresContext,
     }
 
     const nsStyleTextReset *const styleText = context->GetStyleTextReset();
-    const PRUint8 textDecorations = styleText->mTextDecorationLine;
+    const uint8_t textDecorations = styleText->mTextDecorationLine;
 
     if (!useOverride &&
         (NS_STYLE_TEXT_DECORATION_LINE_OVERRIDE_ALL & textDecorations)) {
       // This handles the <a href="blah.html"><font color="green">La 
       // la la</font></a> case. The link underline should be green.
-      useOverride = PR_TRUE;
+      useOverride = true;
       overrideColor =
         nsLayoutUtils::GetColor(f, eCSSProperty_text_decoration_color);
     }
@@ -4311,11 +4657,7 @@ nsTextFrame::GetTextDecorations(nsPresContext* aPresContext,
     // that should be set (see nsLineLayout::VerticalAlignLine).
     if (firstBlock) {
       // At this point, fChild can't be null since TextFrames can't be blocks
-      const nsStyleCoord& vAlign =
-        fChild->GetStyleContext()->GetStyleTextReset()->mVerticalAlign;
-      if (vAlign.GetUnit() != eStyleUnit_Enumerated ||
-          vAlign.GetIntValue() != NS_STYLE_VERTICAL_ALIGN_BASELINE)
-      {
+      if (fChild->VerticalAlignEnum() != NS_STYLE_VERTICAL_ALIGN_BASELINE) {
         // Since offset is the offset in the child's coordinate space, we have
         // to undo the accumulation to bring the transform out of the block's
         // coordinate space
@@ -4332,11 +4674,26 @@ nsTextFrame::GetTextDecorations(nsPresContext* aPresContext,
     nearestBlockFound = nearestBlockFound || firstBlock;
     frameTopOffset += f->GetRect().y - f->GetRelativeOffset().y;
 
-    const PRUint8 style = styleText->GetDecorationStyle();
+    const uint8_t style = styleText->GetDecorationStyle();
     // Accumulate only elements that have decorations with a genuine style
     if (textDecorations && style != NS_STYLE_TEXT_DECORATION_STYLE_NONE) {
-      const nscolor color = useOverride ? overrideColor
-        : nsLayoutUtils::GetColor(f, eCSSProperty_text_decoration_color);
+      nscolor color;
+      if (useOverride) {
+        color = overrideColor;
+      } else if (IsSVGText()) {
+        // XXX We might want to do something with text-decoration-color when
+        //     painting SVG text, but it's not clear what we should do.  We
+        //     at least need SVG text decorations to paint with 'fill' if
+        //     text-decoration-color has its initial value currentColor.
+        //     We could choose to interpret currentColor as "currentFill"
+        //     for SVG text, and have e.g. text-decoration-color:red to
+        //     override the fill paint of the decoration.
+        color = aColorResolution == eResolvedColors ?
+                  nsLayoutUtils::GetColor(f, eCSSProperty_fill) :
+                  NS_SAME_AS_FOREGROUND_COLOR;
+      } else {
+        color = nsLayoutUtils::GetColor(f, eCSSProperty_text_decoration_color);
+      }
 
       if (textDecorations & NS_STYLE_TEXT_DECORATION_LINE_UNDERLINE) {
         aDecorations.mUnderlines.AppendElement(
@@ -4354,9 +4711,9 @@ nsTextFrame::GetTextDecorations(nsPresContext* aPresContext,
 
     // In all modes, if we're on an inline-block or inline-table (or
     // inline-stack, inline-box, inline-grid), we're done.
-    const nsStyleDisplay *disp = context->GetStyleDisplay();
-    if (disp->mDisplay != NS_STYLE_DISPLAY_INLINE &&
-        disp->IsInlineOutside()) {
+    uint8_t display = f->GetDisplay();
+    if (display != NS_STYLE_DISPLAY_INLINE &&
+        nsStyleDisplay::IsDisplayTypeInlineOutside(display)) {
       break;
     }
 
@@ -4368,7 +4725,7 @@ nsTextFrame::GetTextDecorations(nsPresContext* aPresContext,
     } else {
       // In standards/almost-standards mode, if we're on an
       // absolutely-positioned element or a floating element, we're done.
-      if (disp->IsFloating() || disp->IsAbsolutelyPositioned()) {
+      if (f->IsFloating() || f->IsAbsolutelyPositioned()) {
         break;
       }
     }
@@ -4377,6 +4734,7 @@ nsTextFrame::GetTextDecorations(nsPresContext* aPresContext,
 
 void
 nsTextFrame::UnionAdditionalOverflow(nsPresContext* aPresContext,
+                                     const nsHTMLReflowState& aBlockReflowState,
                                      PropertyProvider& aProvider,
                                      nsRect* aVisualOverflowRect,
                                      bool aIncludeTextDecorations)
@@ -4389,11 +4747,37 @@ nsTextFrame::UnionAdditionalOverflow(nsPresContext* aPresContext,
   if (IsFloatingFirstLetterChild()) {
     // The underline/overline drawable area must be contained in the overflow
     // rect when this is in floating first letter frame at *both* modes.
-    nsFontMetrics* fm = aProvider.GetFontMetrics();
-    nscoord fontAscent = fm->MaxAscent();
-    nscoord fontHeight = fm->MaxHeight();
-    nsRect fontRect(0, mAscent - fontAscent, GetSize().width, fontHeight);
-    aVisualOverflowRect->UnionRect(*aVisualOverflowRect, fontRect);
+    nsIFrame* firstLetterFrame = aBlockReflowState.frame;
+    uint8_t decorationStyle = firstLetterFrame->GetStyleContext()->
+                                GetStyleTextReset()->GetDecorationStyle();
+    if (decorationStyle != NS_STYLE_TEXT_DECORATION_STYLE_NONE) {
+      nsFontMetrics* fontMetrics = aProvider.GetFontMetrics();
+      nscoord underlineOffset, underlineSize;
+      fontMetrics->GetUnderline(underlineOffset, underlineSize);
+      nscoord maxAscent = fontMetrics->MaxAscent();
+
+      gfxFloat appUnitsPerDevUnit = aPresContext->AppUnitsPerDevPixel();
+      gfxFloat gfxWidth = aVisualOverflowRect->width / appUnitsPerDevUnit;
+      gfxFloat gfxAscent = gfxFloat(mAscent) / appUnitsPerDevUnit;
+      gfxFloat gfxMaxAscent = maxAscent / appUnitsPerDevUnit;
+      gfxFloat gfxUnderlineSize = underlineSize / appUnitsPerDevUnit;
+      gfxFloat gfxUnderlineOffset = underlineOffset / appUnitsPerDevUnit;
+      nsRect underlineRect =
+        nsCSSRendering::GetTextDecorationRect(aPresContext,
+          gfxSize(gfxWidth, gfxUnderlineSize), gfxAscent, gfxUnderlineOffset,
+          NS_STYLE_TEXT_DECORATION_LINE_UNDERLINE, decorationStyle);
+      nsRect overlineRect =
+        nsCSSRendering::GetTextDecorationRect(aPresContext,
+          gfxSize(gfxWidth, gfxUnderlineSize), gfxAscent, gfxMaxAscent,
+          NS_STYLE_TEXT_DECORATION_LINE_OVERLINE, decorationStyle);
+
+      aVisualOverflowRect->UnionRect(*aVisualOverflowRect, underlineRect);
+      aVisualOverflowRect->UnionRect(*aVisualOverflowRect, overlineRect);
+
+      // XXX If strikeoutSize is much thicker than the underlineSize, it may
+      //     cause overflowing from the overflow rect.  However, such case
+      //     isn't realistic, we don't need to compute it now.
+    }
   }
   if (aIncludeTextDecorations) {
     // Since CSS 2.1 requires that text-decoration defined on ancestors maintain
@@ -4401,8 +4785,11 @@ nsTextFrame::UnionAdditionalOverflow(nsPresContext* aPresContext,
     // maxima and minima are required to reliably generate the rectangle for
     // them
     TextDecorations textDecs;
-    GetTextDecorations(aPresContext, textDecs);
+    GetTextDecorations(aPresContext, eResolvedColors, textDecs);
     if (textDecs.HasDecorationLines()) {
+      nscoord inflationMinFontSize =
+        nsLayoutUtils::InflationMinFontSizeFor(aBlockReflowState.frame);
+
       const nscoord width = GetSize().width;
       const gfxFloat appUnitsPerDevUnit = aPresContext->AppUnitsPerDevPixel(),
                      gfxWidth = width / appUnitsPerDevUnit,
@@ -4410,11 +4797,13 @@ nsTextFrame::UnionAdditionalOverflow(nsPresContext* aPresContext,
       nscoord top(nscoord_MAX), bottom(nscoord_MIN);
       // Below we loop through all text decorations and compute the rectangle
       // containing all of them, in this frame's coordinate space
-      for (PRUint32 i = 0; i < textDecs.mUnderlines.Length(); ++i) {
+      for (uint32_t i = 0; i < textDecs.mUnderlines.Length(); ++i) {
         const LineDecoration& dec = textDecs.mUnderlines[i];
 
+        float inflation = nsLayoutUtils::FontSizeInflationInner(dec.mFrame,
+                            inflationMinFontSize);
         const gfxFont::Metrics metrics =
-          GetFirstFontMetrics(GetFontGroupForFrame(dec.mFrame));
+          GetFirstFontMetrics(GetFontGroupForFrame(dec.mFrame, inflation));
 
         const nsRect decorationRect =
           nsCSSRendering::GetTextDecorationRect(aPresContext,
@@ -4426,11 +4815,13 @@ nsTextFrame::UnionAdditionalOverflow(nsPresContext* aPresContext,
         top = NS_MIN(decorationRect.y, top);
         bottom = NS_MAX(decorationRect.YMost(), bottom);
       }
-      for (PRUint32 i = 0; i < textDecs.mOverlines.Length(); ++i) {
+      for (uint32_t i = 0; i < textDecs.mOverlines.Length(); ++i) {
         const LineDecoration& dec = textDecs.mOverlines[i];
 
+        float inflation = nsLayoutUtils::FontSizeInflationInner(dec.mFrame,
+                            inflationMinFontSize);
         const gfxFont::Metrics metrics =
-          GetFirstFontMetrics(GetFontGroupForFrame(dec.mFrame));
+          GetFirstFontMetrics(GetFontGroupForFrame(dec.mFrame, inflation));
 
         const nsRect decorationRect =
           nsCSSRendering::GetTextDecorationRect(aPresContext,
@@ -4442,11 +4833,13 @@ nsTextFrame::UnionAdditionalOverflow(nsPresContext* aPresContext,
         top = NS_MIN(decorationRect.y, top);
         bottom = NS_MAX(decorationRect.YMost(), bottom);
       }
-      for (PRUint32 i = 0; i < textDecs.mStrikes.Length(); ++i) {
+      for (uint32_t i = 0; i < textDecs.mStrikes.Length(); ++i) {
         const LineDecoration& dec = textDecs.mStrikes[i];
 
+        float inflation = nsLayoutUtils::FontSizeInflationInner(dec.mFrame,
+                            inflationMinFontSize);
         const gfxFont::Metrics metrics =
-          GetFirstFontMetrics(GetFontGroupForFrame(dec.mFrame));
+          GetFirstFontMetrics(GetFontGroupForFrame(dec.mFrame, inflation));
 
         const nsRect decorationRect =
           nsCSSRendering::GetTextDecorationRect(aPresContext,
@@ -4464,7 +4857,7 @@ nsTextFrame::UnionAdditionalOverflow(nsPresContext* aPresContext,
   }
   // When this frame is not selected, the text-decoration area must be in
   // frame bounds.
-  if (!(GetStateBits() & NS_FRAME_SELECTED_CONTENT) ||
+  if (!IsSelected() ||
       !CombineSelectionUnderlineRect(aPresContext, *aVisualOverflowRect))
     return;
   AddStateBits(TEXT_SELECTION_UNDERLINE_OVERFLOWED);
@@ -4477,7 +4870,8 @@ ComputeDescentLimitForSelectionUnderline(nsPresContext* aPresContext,
 {
   gfxFloat app = aPresContext->AppUnitsPerDevPixel();
   nscoord lineHeightApp =
-    nsHTMLReflowState::CalcLineHeight(aFrame->GetStyleContext(), NS_AUTOHEIGHT);
+    nsHTMLReflowState::CalcLineHeight(aFrame->GetStyleContext(), NS_AUTOHEIGHT,
+                                      aFrame->GetFontSizeInflation());
   gfxFloat lineHeight = gfxFloat(lineHeightApp) / app;
   if (lineHeight <= aFontMetrics.maxHeight) {
     return aFontMetrics.maxDescent;
@@ -4512,7 +4906,7 @@ ComputeSelectionUnderlineHeight(nsPresContext* aPresContext,
       // the default font size, we should use the actual font size because the
       // computed value from the default font size can be too thick for the
       // current font size.
-      PRInt32 defaultFontSize =
+      int32_t defaultFontSize =
         aPresContext->AppUnitsToDevPixels(nsStyleFont(aPresContext).mFont.size);
       gfxFloat fontSize = NS_MIN(gfxFloat(defaultFontSize),
                                  aFontMetrics.emHeight);
@@ -4525,16 +4919,63 @@ ComputeSelectionUnderlineHeight(nsPresContext* aPresContext,
   }
 }
 
+enum DecorationType {
+  eNormalDecoration,
+  eSelectionDecoration
+};
+
+static void
+PaintDecorationLine(nsIFrame* aFrame,
+                    gfxContext* const aCtx,
+                    const gfxRect& aDirtyRect,
+                    nscolor aColor,
+                    const nscolor* aOverrideColor,
+                    const gfxPoint& aPt,
+                    gfxFloat aXInFrame,
+                    const gfxSize& aLineSize,
+                    gfxFloat aAscent,
+                    gfxFloat aOffset,
+                    uint8_t aDecoration,
+                    uint8_t aStyle,
+                    DecorationType aDecorationType,
+                    nsTextFrame::DrawPathCallbacks* aCallbacks,
+                    gfxFloat aDescentLimit = -1.0)
+{
+  nscolor lineColor = aOverrideColor ? *aOverrideColor : aColor;
+  if (aCallbacks) {
+    if (aDecorationType == eNormalDecoration) {
+      aCallbacks->NotifyBeforeDecorationLine(lineColor);
+    } else {
+      aCallbacks->NotifyBeforeSelectionDecorationLine(lineColor);
+    }
+    nsCSSRendering::DecorationLineToPath(aFrame, aCtx, aDirtyRect, lineColor,
+      aPt, aXInFrame, aLineSize, aAscent, aOffset, aDecoration, aStyle,
+      aDescentLimit);
+    if (aDecorationType == eNormalDecoration) {
+      aCallbacks->NotifyDecorationLinePathEmitted();
+    } else {
+      aCallbacks->NotifySelectionDecorationLinePathEmitted();
+    }
+  } else {
+    nsCSSRendering::PaintDecorationLine(aFrame, aCtx, aDirtyRect, lineColor,
+      aPt, aXInFrame, aLineSize, aAscent, aOffset, aDecoration, aStyle,
+      aDescentLimit);
+  }
+}
+
 /**
  * This, plus SelectionTypesWithDecorations, encapsulates all knowledge about
  * drawing text decoration for selections.
  */
-static void DrawSelectionDecorations(gfxContext* aContext, SelectionType aType,
+static void DrawSelectionDecorations(gfxContext* aContext,
+    const gfxRect& aDirtyRect,
+    SelectionType aType,
     nsTextFrame* aFrame,
     nsTextPaintStyle& aTextPaintStyle,
     const nsTextRangeStyle &aRangeStyle,
-    const gfxPoint& aPt, gfxFloat aWidth,
-    gfxFloat aAscent, const gfxFont::Metrics& aFontMetrics)
+    const gfxPoint& aPt, gfxFloat aXInFrame, gfxFloat aWidth,
+    gfxFloat aAscent, const gfxFont::Metrics& aFontMetrics,
+    nsTextFrame::DrawPathCallbacks* aCallbacks)
 {
   gfxPoint pt(aPt);
   gfxSize size(aWidth,
@@ -4545,11 +4986,11 @@ static void DrawSelectionDecorations(gfxContext* aContext, SelectionType aType,
                                              aFrame, aFontMetrics);
 
   float relativeSize;
-  PRUint8 style;
+  uint8_t style;
   nscolor color;
-  PRInt32 index =
+  int32_t index =
     nsTextPaintStyle::GetUnderlineStyleIndexForSelectionType(aType);
-  PRBool weDefineSelectionUnderline =
+  bool weDefineSelectionUnderline =
     aTextPaintStyle.GetSelectionUnderlineForPaint(index, &color,
                                                   &relativeSize, &style);
 
@@ -4610,9 +5051,10 @@ static void DrawSelectionDecorations(gfxContext* aContext, SelectionType aType,
       return;
   }
   size.height *= relativeSize;
-  nsCSSRendering::PaintDecorationLine(
-    aContext, color, pt, size, aAscent, aFontMetrics.underlineOffset,
-    NS_STYLE_TEXT_DECORATION_LINE_UNDERLINE, style, descentLimit);
+  PaintDecorationLine(aFrame, aContext, aDirtyRect, color, nullptr, pt,
+    pt.x - aPt.x + aXInFrame, size, aAscent, aFontMetrics.underlineOffset,
+    NS_STYLE_TEXT_DECORATION_LINE_UNDERLINE, style, eSelectionDecoration,
+    aCallbacks, descentLimit);
 }
 
 /**
@@ -4623,7 +5065,7 @@ static void DrawSelectionDecorations(gfxContext* aContext, SelectionType aType,
  * @param aBackground the background color to use, or RGBA(0,0,0,0) if no
  * background should be painted
  */
-static PRBool GetSelectionTextColors(SelectionType aType,
+static bool GetSelectionTextColors(SelectionType aType,
                                      nsTextPaintStyle& aTextPaintStyle,
                                      const nsTextRangeStyle &aRangeStyle,
                                      nscolor* aForeground, nscolor* aBackground)
@@ -4633,11 +5075,11 @@ static PRBool GetSelectionTextColors(SelectionType aType,
       return aTextPaintStyle.GetSelectionColors(aForeground, aBackground);
     case nsISelectionController::SELECTION_FIND:
       aTextPaintStyle.GetHighlightColors(aForeground, aBackground);
-      return PR_TRUE;
+      return true;
     case nsISelectionController::SELECTION_URLSECONDARY:
       aTextPaintStyle.GetURLSecondaryColor(aForeground);
       *aBackground = NS_RGBA(0,0,0,0);
-      return PR_TRUE;
+      return true;
     case nsISelectionController::SELECTION_IME_RAWINPUT:
     case nsISelectionController::SELECTION_IME_SELECTEDRAWTEXT:
     case nsISelectionController::SELECTION_IME_CONVERTEDTEXT:
@@ -4647,7 +5089,7 @@ static PRBool GetSelectionTextColors(SelectionType aType,
         *aBackground = NS_RGBA(0,0,0,0);
         if (!aRangeStyle.IsForegroundColorDefined() &&
             !aRangeStyle.IsBackgroundColorDefined()) {
-          return PR_FALSE;
+          return false;
         }
         if (aRangeStyle.IsForegroundColorDefined()) {
           *aForeground = aRangeStyle.mForegroundColor;
@@ -4655,16 +5097,38 @@ static PRBool GetSelectionTextColors(SelectionType aType,
         if (aRangeStyle.IsBackgroundColorDefined()) {
           *aBackground = aRangeStyle.mBackgroundColor;
         }
-        return PR_TRUE;
+        return true;
       }
       aTextPaintStyle.GetIMESelectionColors(
         nsTextPaintStyle::GetUnderlineStyleIndexForSelectionType(aType),
         aForeground, aBackground);
-      return PR_TRUE;
+      return true;
     default:
       *aForeground = aTextPaintStyle.GetTextColor();
       *aBackground = NS_RGBA(0,0,0,0);
-      return PR_FALSE;
+      return false;
+  }
+}
+
+/**
+ * This sets *aShadow to the appropriate shadow, if any, for the given
+ * type of selection. Returns true if *aShadow was set.
+ * If text-shadow was not specified, *aShadow is left untouched
+ * (NOT reset to null), and the function returns false.
+ */
+static bool GetSelectionTextShadow(nsIFrame* aFrame,
+                                   SelectionType aType,
+                                   nsTextPaintStyle& aTextPaintStyle,
+                                   nsCSSShadowArray** aShadow)
+{
+  if (aFrame->IsSVGText()) {
+    return false;
+  }
+  switch (aType) {
+    case nsISelectionController::SELECTION_NORMAL:
+      return aTextPaintStyle.GetSelectionShadow(aShadow);
+    default:
+      return false;
   }
 }
 
@@ -4685,7 +5149,7 @@ public:
    * for RTL)
    */
   SelectionIterator(SelectionDetails** aSelectionDetails,
-                    PRInt32 aStart, PRInt32 aLength,
+                    int32_t aStart, int32_t aLength,
                     PropertyProvider& aProvider, gfxTextRun* aTextRun,
                     gfxFloat aXOffset);
 
@@ -4702,7 +5166,7 @@ public:
    * @param aStyle the selection style for this segment
    * @return false if there are no more segments
    */
-  PRBool GetNextSegment(gfxFloat* aXOffset, PRUint32* aOffset, PRUint32* aLength,
+  bool GetNextSegment(gfxFloat* aXOffset, uint32_t* aOffset, uint32_t* aLength,
                         gfxFloat* aHyphenWidth, SelectionType* aType,
                         nsTextRangeStyle* aStyle);
   void UpdateWithAdvance(gfxFloat aAdvance) {
@@ -4714,13 +5178,13 @@ private:
   PropertyProvider&       mProvider;
   gfxTextRun*             mTextRun;
   gfxSkipCharsIterator    mIterator;
-  PRInt32                 mOriginalStart;
-  PRInt32                 mOriginalEnd;
+  int32_t                 mOriginalStart;
+  int32_t                 mOriginalEnd;
   gfxFloat                mXOffset;
 };
 
 SelectionIterator::SelectionIterator(SelectionDetails** aSelectionDetails,
-    PRInt32 aStart, PRInt32 aLength, PropertyProvider& aProvider,
+    int32_t aStart, int32_t aLength, PropertyProvider& aProvider,
     gfxTextRun* aTextRun, gfxFloat aXOffset)
   : mSelectionDetails(aSelectionDetails), mProvider(aProvider),
     mTextRun(aTextRun), mIterator(aProvider.GetStart()),
@@ -4730,17 +5194,17 @@ SelectionIterator::SelectionIterator(SelectionDetails** aSelectionDetails,
   mIterator.SetOriginalOffset(aStart);
 }
 
-PRBool SelectionIterator::GetNextSegment(gfxFloat* aXOffset,
-    PRUint32* aOffset, PRUint32* aLength, gfxFloat* aHyphenWidth,
+bool SelectionIterator::GetNextSegment(gfxFloat* aXOffset,
+    uint32_t* aOffset, uint32_t* aLength, gfxFloat* aHyphenWidth,
     SelectionType* aType, nsTextRangeStyle* aStyle)
 {
   if (mIterator.GetOriginalOffset() >= mOriginalEnd)
-    return PR_FALSE;
+    return false;
   
   // save offset into transformed string now
-  PRUint32 runOffset = mIterator.GetSkippedOffset();
+  uint32_t runOffset = mIterator.GetSkippedOffset();
   
-  PRInt32 index = mIterator.GetOriginalOffset() - mOriginalStart;
+  int32_t index = mIterator.GetOriginalOffset() - mOriginalStart;
   SelectionDetails* sdptr = mSelectionDetails[index];
   SelectionType type =
     sdptr ? sdptr->mType : nsISelectionController::SELECTION_NONE;
@@ -4761,7 +5225,7 @@ PRBool SelectionIterator::GetNextSegment(gfxFloat* aXOffset,
     mIterator.AdvanceOriginal(1);
   }
 
-  PRBool haveHyphenBreak =
+  bool haveHyphenBreak =
     (mProvider.GetFrame()->GetStateBits() & TEXT_HYPHEN_BREAK) != 0;
   *aOffset = runOffset;
   *aLength = mIterator.GetSkippedOffset() - runOffset;
@@ -4772,7 +5236,7 @@ PRBool SelectionIterator::GetNextSegment(gfxFloat* aXOffset,
   }
   *aType = type;
   *aStyle = style;
-  return PR_TRUE;
+  return true;
 }
 
 static void
@@ -4782,40 +5246,34 @@ AddHyphenToMetrics(nsTextFrame* aTextFrame, gfxTextRun* aBaseTextRun,
                    gfxContext* aContext)
 {
   // Fix up metrics to include hyphen
-  gfxTextRunCache::AutoTextRun hyphenTextRun(
+  nsAutoPtr<gfxTextRun> hyphenTextRun(
     GetHyphenTextRun(aBaseTextRun, aContext, aTextFrame));
   if (!hyphenTextRun.get())
     return;
 
   gfxTextRun::Metrics hyphenMetrics =
     hyphenTextRun->MeasureText(0, hyphenTextRun->GetLength(),
-                               aBoundingBoxType, aContext, nsnull);
+                               aBoundingBoxType, aContext, nullptr);
   aMetrics->CombineWith(hyphenMetrics, aBaseTextRun->IsRightToLeft());
 }
 
 void
-nsTextFrame::PaintOneShadow(PRUint32 aOffset, PRUint32 aLength,
+nsTextFrame::PaintOneShadow(uint32_t aOffset, uint32_t aLength,
                             nsCSSShadowItem* aShadowDetails,
                             PropertyProvider* aProvider, const nsRect& aDirtyRect,
                             const gfxPoint& aFramePt, const gfxPoint& aTextBaselinePt,
                             gfxContext* aCtx, const nscolor& aForegroundColor,
                             const nsCharClipDisplayItem::ClipEdges& aClipEdges,
-                            nscoord aLeftSideOffset)
+                            nscoord aLeftSideOffset, gfxRect& aBoundingBox)
 {
+  SAMPLE_LABEL("nsTextFrame", "PaintOneShadow");
   gfxPoint shadowOffset(aShadowDetails->mXOffset, aShadowDetails->mYOffset);
   nscoord blurRadius = NS_MAX(aShadowDetails->mRadius, 0);
 
-  gfxTextRun::Metrics shadowMetrics =
-    mTextRun->MeasureText(aOffset, aLength, gfxFont::LOOSE_INK_EXTENTS,
-                          nsnull, aProvider);
-  if (GetStateBits() & TEXT_HYPHEN_BREAK) {
-    AddHyphenToMetrics(this, mTextRun, &shadowMetrics, gfxFont::LOOSE_INK_EXTENTS, aCtx);
-  }
-
   // This rect is the box which is equivalent to where the shadow will be painted.
-  // The origin of mBoundingBox is the text baseline left, so we must translate it by
+  // The origin of aBoundingBox is the text baseline left, so we must translate it by
   // that much in order to make the origin the top-left corner of the text bounding box.
-  gfxRect shadowGfxRect = shadowMetrics.mBoundingBox +
+  gfxRect shadowGfxRect = aBoundingBox +
     gfxPoint(aFramePt.x + aLeftSideOffset, aTextBaselinePt.y) + shadowOffset;
   nsRect shadowRect(NSToCoordRound(shadowGfxRect.X()),
                     NSToCoordRound(shadowGfxRect.Y()),
@@ -4825,7 +5283,7 @@ nsTextFrame::PaintOneShadow(PRUint32 aOffset, PRUint32 aLength,
   nsContextBoxBlur contextBoxBlur;
   gfxContext* shadowContext = contextBoxBlur.Init(shadowRect, 0, blurRadius,
                                                   PresContext()->AppUnitsPerDevPixel(),
-                                                  aCtx, aDirtyRect, nsnull);
+                                                  aCtx, aDirtyRect, nullptr);
   if (!shadowContext)
     return;
 
@@ -4836,7 +5294,7 @@ nsTextFrame::PaintOneShadow(PRUint32 aOffset, PRUint32 aLength,
     decorationOverrideColor = &shadowColor;
   } else {
     shadowColor = aForegroundColor;
-    decorationOverrideColor = nsnull;
+    decorationOverrideColor = nullptr;
   }
 
   aCtx->Save();
@@ -4847,10 +5305,14 @@ nsTextFrame::PaintOneShadow(PRUint32 aOffset, PRUint32 aLength,
   // Remember that the box blur context has a device offset on it, so we don't need to
   // translate any coordinates to fit on the surface.
   gfxFloat advanceWidth;
-  DrawText(shadowContext, aFramePt + shadowOffset,
+  gfxRect dirtyRect(aDirtyRect.x, aDirtyRect.y,
+                    aDirtyRect.width, aDirtyRect.height);
+  DrawText(shadowContext, dirtyRect, aFramePt + shadowOffset,
            aTextBaselinePt + shadowOffset, aOffset, aLength, *aProvider,
-           nsTextPaintStyle(this), aClipEdges, advanceWidth,
-           (GetStateBits() & TEXT_HYPHEN_BREAK) != 0, decorationOverrideColor);
+           nsTextPaintStyle(this),
+           aCtx == shadowContext ? shadowColor : NS_RGB(0, 0, 0), aClipEdges,
+           advanceWidth, (GetStateBits() & TEXT_HYPHEN_BREAK) != 0,
+           decorationOverrideColor);
 
   contextBoxBlur.DoPaint();
   aCtx->Restore();
@@ -4863,28 +5325,31 @@ nsTextFrame::PaintTextWithSelectionColors(gfxContext* aCtx,
     const gfxPoint& aFramePt, const gfxPoint& aTextBaselinePt,
     const gfxRect& aDirtyRect,
     PropertyProvider& aProvider,
-    PRUint32 aContentOffset, PRUint32 aContentLength,
+    uint32_t aContentOffset, uint32_t aContentLength,
     nsTextPaintStyle& aTextPaintStyle, SelectionDetails* aDetails,
     SelectionType* aAllTypes,
-    const nsCharClipDisplayItem::ClipEdges& aClipEdges)
+    const nsCharClipDisplayItem::ClipEdges& aClipEdges,
+    nsTextFrame::DrawPathCallbacks* aCallbacks)
 {
   // Figure out which selections control the colors to use for each character.
-  nsAutoTArray<SelectionDetails*,BIG_TEXT_NODE_SIZE> prevailingSelectionsBuffer;
-  if (!prevailingSelectionsBuffer.AppendElements(aContentLength))
+  AutoFallibleTArray<SelectionDetails*,BIG_TEXT_NODE_SIZE> prevailingSelectionsBuffer;
+  SelectionDetails** prevailingSelections =
+    prevailingSelectionsBuffer.AppendElements(aContentLength);
+  if (!prevailingSelections) {
     return false;
-  SelectionDetails** prevailingSelections = prevailingSelectionsBuffer.Elements();
+  }
 
   SelectionType allTypes = 0;
-  for (PRUint32 i = 0; i < aContentLength; ++i) {
-    prevailingSelections[i] = nsnull;
+  for (uint32_t i = 0; i < aContentLength; ++i) {
+    prevailingSelections[i] = nullptr;
   }
 
   SelectionDetails *sdptr = aDetails;
-  PRBool anyBackgrounds = PR_FALSE;
+  bool anyBackgrounds = false;
   while (sdptr) {
-    PRInt32 start = NS_MAX(0, sdptr->mStart - PRInt32(aContentOffset));
-    PRInt32 end = NS_MIN(PRInt32(aContentLength),
-                         sdptr->mEnd - PRInt32(aContentOffset));
+    int32_t start = NS_MAX(0, sdptr->mStart - int32_t(aContentOffset));
+    int32_t end = NS_MIN(int32_t(aContentLength),
+                         sdptr->mEnd - int32_t(aContentOffset));
     SelectionType type = sdptr->mType;
     if (start < end) {
       allTypes |= type;
@@ -4893,9 +5358,9 @@ nsTextFrame::PaintTextWithSelectionColors(gfxContext* aCtx,
       if (GetSelectionTextColors(type, aTextPaintStyle, sdptr->mTextRangeStyle,
                                  &foreground, &background)) {
         if (NS_GET_A(background) > 0) {
-          anyBackgrounds = PR_TRUE;
+          anyBackgrounds = true;
         }
-        for (PRInt32 i = start; i < end; ++i) {
+        for (int32_t i = start; i < end; ++i) {
           // Favour normal selection over IME selections
           if (!prevailingSelections[i] ||
               type < prevailingSelections[i]->mType) {
@@ -4909,19 +5374,13 @@ nsTextFrame::PaintTextWithSelectionColors(gfxContext* aCtx,
   *aAllTypes = allTypes;
 
   if (!allTypes) {
-    // Nothing is selected in the given text range.
-    if (aContentLength == aProvider.GetOriginalLength()) {
-      // It's the full text range so we can remove the FRAME_SELECTED_CONTENT
-      // bit to avoid going through this slow path until something is selected
-      // in this frame again.
-      RemoveStateBits(NS_FRAME_SELECTED_CONTENT);
-    }
+    // Nothing is selected in the given text range. XXX can this still occur?
     return false;
   }
 
   const gfxFloat startXOffset = aTextBaselinePt.x - aFramePt.x;
   gfxFloat xOffset, hyphenWidth;
-  PRUint32 offset, length; // in transformed string
+  uint32_t offset, length; // in transformed string
   SelectionType type;
   nsTextRangeStyle rangeStyle;
   // Draw background colors
@@ -4938,15 +5397,19 @@ nsTextFrame::PaintTextWithSelectionColors(gfxContext* aCtx,
         mTextRun->GetAdvanceWidth(offset, length, &aProvider);
       if (NS_GET_A(background) > 0) {
         gfxFloat x = xOffset - (mTextRun->IsRightToLeft() ? advance : 0);
-        FillClippedRect(aCtx, aTextPaintStyle.PresContext(),
-                        background, aDirtyRect,
-                        gfxRect(aFramePt.x + x, aFramePt.y, advance, GetSize().height));
+        PaintSelectionBackground(aCtx, aTextPaintStyle.PresContext(),
+                                 background, aDirtyRect,
+                                 gfxRect(aFramePt.x + x, aFramePt.y, advance,
+                                 GetSize().height), aCallbacks);
       }
       iterator.UpdateWithAdvance(advance);
     }
   }
   
   // Draw text
+  const nsStyleText* textStyle = GetStyleText();
+  nsRect dirtyRect(aDirtyRect.x, aDirtyRect.y,
+                   aDirtyRect.width, aDirtyRect.height);
   SelectionIterator iterator(prevailingSelections, aContentOffset, aContentLength,
                              aProvider, mTextRun, startXOffset);
   while (iterator.GetNextSegment(&xOffset, &offset, &length, &hyphenWidth,
@@ -4954,13 +5417,39 @@ nsTextFrame::PaintTextWithSelectionColors(gfxContext* aCtx,
     nscolor foreground, background;
     GetSelectionTextColors(type, aTextPaintStyle, rangeStyle,
                            &foreground, &background);
+    gfxPoint textBaselinePt(aFramePt.x + xOffset, aTextBaselinePt.y);
+
+    // Determine what shadow, if any, to draw - either from textStyle
+    // or from the ::-moz-selection pseudo-class if specified there
+    nsCSSShadowArray *shadow = textStyle->GetTextShadow(this);
+    GetSelectionTextShadow(this, type, aTextPaintStyle, &shadow);
+
+    // Draw shadows, if any
+    if (shadow) {
+      gfxTextRun::Metrics shadowMetrics =
+        mTextRun->MeasureText(offset, length, gfxFont::LOOSE_INK_EXTENTS,
+                              nullptr, &aProvider);
+      if (GetStateBits() & TEXT_HYPHEN_BREAK) {
+        AddHyphenToMetrics(this, mTextRun, &shadowMetrics,
+                           gfxFont::LOOSE_INK_EXTENTS, aCtx);
+      }
+      for (uint32_t i = shadow->Length(); i > 0; --i) {
+        PaintOneShadow(offset, length,
+                       shadow->ShadowAt(i - 1), &aProvider,
+                       dirtyRect, aFramePt, textBaselinePt, aCtx,
+                       foreground, aClipEdges, 
+                       xOffset - (mTextRun->IsRightToLeft() ?
+                                  shadowMetrics.mBoundingBox.width : 0),
+                       shadowMetrics.mBoundingBox);
+      }
+    }
+
     // Draw text segment
-    aCtx->SetColor(gfxRGBA(foreground));
     gfxFloat advance;
 
-    DrawText(aCtx, aFramePt, gfxPoint(aFramePt.x + xOffset, aTextBaselinePt.y),
-             offset, length, aProvider, aTextPaintStyle, aClipEdges, advance,
-             hyphenWidth > 0);
+    DrawText(aCtx, aDirtyRect, aFramePt, textBaselinePt,
+             offset, length, aProvider, aTextPaintStyle, foreground, aClipEdges,
+             advance, hyphenWidth > 0, nullptr, aCallbacks);
     if (hyphenWidth) {
       advance += hyphenWidth;
     }
@@ -4974,30 +5463,33 @@ nsTextFrame::PaintTextSelectionDecorations(gfxContext* aCtx,
     const gfxPoint& aFramePt,
     const gfxPoint& aTextBaselinePt, const gfxRect& aDirtyRect,
     PropertyProvider& aProvider,
-    PRUint32 aContentOffset, PRUint32 aContentLength,
+    uint32_t aContentOffset, uint32_t aContentLength,
     nsTextPaintStyle& aTextPaintStyle, SelectionDetails* aDetails,
-    SelectionType aSelectionType)
+    SelectionType aSelectionType,
+    nsTextFrame::DrawPathCallbacks* aCallbacks)
 {
   // Hide text decorations if we're currently hiding @font-face fallback text
   if (aProvider.GetFontGroup()->ShouldSkipDrawing())
     return;
 
   // Figure out which characters will be decorated for this selection.
-  nsAutoTArray<SelectionDetails*, BIG_TEXT_NODE_SIZE> selectedCharsBuffer;
-  if (!selectedCharsBuffer.AppendElements(aContentLength))
+  AutoFallibleTArray<SelectionDetails*, BIG_TEXT_NODE_SIZE> selectedCharsBuffer;
+  SelectionDetails** selectedChars =
+    selectedCharsBuffer.AppendElements(aContentLength);
+  if (!selectedChars) {
     return;
-  SelectionDetails** selectedChars = selectedCharsBuffer.Elements();
-  for (PRUint32 i = 0; i < aContentLength; ++i) {
-    selectedChars[i] = nsnull;
+  }
+  for (uint32_t i = 0; i < aContentLength; ++i) {
+    selectedChars[i] = nullptr;
   }
 
   SelectionDetails *sdptr = aDetails;
   while (sdptr) {
     if (sdptr->mType == aSelectionType) {
-      PRInt32 start = NS_MAX(0, sdptr->mStart - PRInt32(aContentOffset));
-      PRInt32 end = NS_MIN(PRInt32(aContentLength),
-                           sdptr->mEnd - PRInt32(aContentOffset));
-      for (PRInt32 i = start; i < end; ++i) {
+      int32_t start = NS_MAX(0, sdptr->mStart - int32_t(aContentOffset));
+      int32_t end = NS_MIN(int32_t(aContentLength),
+                           sdptr->mEnd - int32_t(aContentOffset));
+      for (int32_t i = start; i < end; ++i) {
         selectedChars[i] = sdptr;
       }
     }
@@ -5015,10 +5507,12 @@ nsTextFrame::PaintTextSelectionDecorations(gfxContext* aCtx,
   SelectionIterator iterator(selectedChars, aContentOffset, aContentLength,
                              aProvider, mTextRun, startXOffset);
   gfxFloat xOffset, hyphenWidth;
-  PRUint32 offset, length;
-  PRInt32 app = aTextPaintStyle.PresContext()->AppUnitsPerDevPixel();
+  uint32_t offset, length;
+  int32_t app = aTextPaintStyle.PresContext()->AppUnitsPerDevPixel();
   // XXX aTextBaselinePt is in AppUnits, shouldn't it be nsFloatPoint?
   gfxPoint pt(0.0, (aTextBaselinePt.y - mAscent) / app);
+  gfxRect dirtyRect(aDirtyRect.x / app, aDirtyRect.y / app,
+                    aDirtyRect.width / app, aDirtyRect.height / app);
   SelectionType type;
   nsTextRangeStyle selectedStyle;
   while (iterator.GetNextSegment(&xOffset, &offset, &length, &hyphenWidth,
@@ -5029,9 +5523,11 @@ nsTextFrame::PaintTextSelectionDecorations(gfxContext* aCtx,
       pt.x = (aFramePt.x + xOffset -
              (mTextRun->IsRightToLeft() ? advance : 0)) / app;
       gfxFloat width = NS_ABS(advance) / app;
-      DrawSelectionDecorations(aCtx, aSelectionType, this, aTextPaintStyle,
-                               selectedStyle,
-                               pt, width, mAscent / app, decorationMetrics);
+      gfxFloat xInFrame = pt.x - (aFramePt.x / app);
+      DrawSelectionDecorations(aCtx, dirtyRect, aSelectionType, this,
+                               aTextPaintStyle, selectedStyle, pt, xInFrame,
+                               width, mAscent / app, decorationMetrics,
+                               aCallbacks);
     }
     iterator.UpdateWithAdvance(advance);
   }
@@ -5042,18 +5538,15 @@ nsTextFrame::PaintTextWithSelection(gfxContext* aCtx,
     const gfxPoint& aFramePt,
     const gfxPoint& aTextBaselinePt, const gfxRect& aDirtyRect,
     PropertyProvider& aProvider,
-    PRUint32 aContentOffset, PRUint32 aContentLength,
+    uint32_t aContentOffset, uint32_t aContentLength,
     nsTextPaintStyle& aTextPaintStyle,
-    const nsCharClipDisplayItem::ClipEdges& aClipEdges)
+    const nsCharClipDisplayItem::ClipEdges& aClipEdges,
+    nsTextFrame::DrawPathCallbacks* aCallbacks)
 {
+  NS_ASSERTION(GetContent()->IsSelectionDescendant(), "wrong paint path");
+
   SelectionDetails* details = GetSelectionDetails();
   if (!details) {
-    if (aContentLength == aProvider.GetOriginalLength()) {
-      // It's the full text range so we can remove the FRAME_SELECTED_CONTENT
-      // bit to avoid going through this slow path until something is selected
-      // in this frame again.
-      RemoveStateBits(NS_FRAME_SELECTED_CONTENT);
-    }
     return false;
   }
 
@@ -5061,12 +5554,11 @@ nsTextFrame::PaintTextWithSelection(gfxContext* aCtx,
   if (!PaintTextWithSelectionColors(aCtx, aFramePt, aTextBaselinePt, aDirtyRect,
                                     aProvider, aContentOffset, aContentLength,
                                     aTextPaintStyle, details, &allTypes,
-                                    aClipEdges))
-  {
+                                    aClipEdges, aCallbacks)) {
     DestroySelectionDetails(details);
     return false;
   }
-  PRInt32 i;
+  int32_t i;
   // Iterate through just the selection types that paint decorations and
   // paint decorations for any that actually occur in this frame. Paint
   // higher-numbered selection types below lower-numered ones on the
@@ -5080,7 +5572,8 @@ nsTextFrame::PaintTextWithSelection(gfxContext* aCtx,
       // PaintTextSelectionDecorations will exit early).
       PaintTextSelectionDecorations(aCtx, aFramePt, aTextBaselinePt, aDirtyRect,
                                     aProvider, aContentOffset, aContentLength,
-                                    aTextPaintStyle, details, type);
+                                    aTextPaintStyle, details, type,
+                                    aCallbacks);
     }
   }
 
@@ -5089,37 +5582,52 @@ nsTextFrame::PaintTextWithSelection(gfxContext* aCtx,
 }
 
 nscolor
-nsTextFrame::GetCaretColorAt(PRInt32 aOffset)
+nsTextFrame::GetCaretColorAt(int32_t aOffset)
 {
   NS_PRECONDITION(aOffset >= 0, "aOffset must be positive");
 
-  gfxSkipCharsIterator iter = EnsureTextRun();
-  PropertyProvider provider(this, iter);
-  PRInt32 contentOffset = provider.GetStart().GetOriginalOffset();
-  PRInt32 contentLength = provider.GetOriginalLength();
+  nscolor result = nsFrame::GetCaretColorAt(aOffset);
+  gfxSkipCharsIterator iter = EnsureTextRun(nsTextFrame::eInflated);
+  PropertyProvider provider(this, iter, nsTextFrame::eInflated);
+  int32_t contentOffset = provider.GetStart().GetOriginalOffset();
+  int32_t contentLength = provider.GetOriginalLength();
   NS_PRECONDITION(aOffset >= contentOffset &&
                   aOffset <= contentOffset + contentLength,
                   "aOffset must be in the frame's range");
-  PRInt32 offsetInFrame = aOffset - contentOffset;
+  int32_t offsetInFrame = aOffset - contentOffset;
   if (offsetInFrame < 0 || offsetInFrame >= contentLength) {
-    return nsFrame::GetCaretColorAt(aOffset);
+    return result;
+  }
+
+  bool isSolidTextColor = true;
+  if (IsSVGText()) {
+    const nsStyleSVG* style = GetStyleSVG();
+    if (style->mFill.mType != eStyleSVGPaintType_None &&
+        style->mFill.mType != eStyleSVGPaintType_Color) {
+      isSolidTextColor = false;
+    }
   }
 
   nsTextPaintStyle textPaintStyle(this);
+  textPaintStyle.SetResolveColors(isSolidTextColor);
   SelectionDetails* details = GetSelectionDetails();
   SelectionDetails* sdptr = details;
-  nscolor result = nsFrame::GetCaretColorAt(aOffset);
   SelectionType type = 0;
   while (sdptr) {
-    PRInt32 start = NS_MAX(0, sdptr->mStart - contentOffset);
-    PRInt32 end = NS_MIN(contentLength, sdptr->mEnd - contentOffset);
+    int32_t start = NS_MAX(0, sdptr->mStart - contentOffset);
+    int32_t end = NS_MIN(contentLength, sdptr->mEnd - contentOffset);
     if (start <= offsetInFrame && offsetInFrame < end &&
         (type == 0 || sdptr->mType < type)) {
       nscolor foreground, background;
       if (GetSelectionTextColors(sdptr->mType, textPaintStyle,
                                  sdptr->mTextRangeStyle,
                                  &foreground, &background)) {
-        result = foreground;
+        if (!isSolidTextColor &&
+            NS_IS_SELECTION_SPECIAL_COLOR(foreground)) {
+          result = NS_RGBA(0, 0, 0, 255);
+        } else {
+          result = foreground;
+        }
         type = sdptr->mType;
       }
     }
@@ -5130,45 +5638,44 @@ nsTextFrame::GetCaretColorAt(PRInt32 aOffset)
   return result;
 }
 
-static PRUint32
+static uint32_t
 ComputeTransformedLength(PropertyProvider& aProvider)
 {
   gfxSkipCharsIterator iter(aProvider.GetStart());
-  PRUint32 start = iter.GetSkippedOffset();
+  uint32_t start = iter.GetSkippedOffset();
   iter.AdvanceOriginal(aProvider.GetOriginalLength());
   return iter.GetSkippedOffset() - start;
 }
 
 bool
-nsTextFrame::MeasureCharClippedText(gfxContext* aCtx,
-                                    nscoord aLeftEdge, nscoord aRightEdge,
+nsTextFrame::MeasureCharClippedText(nscoord aLeftEdge, nscoord aRightEdge,
                                     nscoord* aSnappedLeftEdge,
                                     nscoord* aSnappedRightEdge)
 {
-  // Don't pass in aRenderingContext here, because we need a *reference*
-  // context and aRenderingContext might have some transform in it
+  // We need a *reference* rendering context (not one that might have a
+  // transform), so we don't have a rendering context argument.
   // XXX get the block and line passed to us somehow! This is slow!
-  gfxSkipCharsIterator iter = EnsureTextRun();
+  gfxSkipCharsIterator iter = EnsureTextRun(nsTextFrame::eInflated);
   if (!mTextRun)
     return false;
 
-  PropertyProvider provider(this, iter);
+  PropertyProvider provider(this, iter, nsTextFrame::eInflated);
   // Trim trailing whitespace
-  provider.InitializeForDisplay(PR_TRUE);
+  provider.InitializeForDisplay(true);
 
-  PRUint32 startOffset = provider.GetStart().GetSkippedOffset();
-  PRUint32 maxLength = ComputeTransformedLength(provider);
-  return MeasureCharClippedText(aCtx, provider, aLeftEdge, aRightEdge,
+  uint32_t startOffset = provider.GetStart().GetSkippedOffset();
+  uint32_t maxLength = ComputeTransformedLength(provider);
+  return MeasureCharClippedText(provider, aLeftEdge, aRightEdge,
                                 &startOffset, &maxLength,
                                 aSnappedLeftEdge, aSnappedRightEdge);
 }
 
-static PRUint32 GetClusterLength(gfxTextRun* aTextRun,
-                                 PRUint32    aStartOffset,
-                                 PRUint32    aMaxLength,
+static uint32_t GetClusterLength(gfxTextRun* aTextRun,
+                                 uint32_t    aStartOffset,
+                                 uint32_t    aMaxLength,
                                  bool        aIsRTL)
 {
-  PRUint32 clusterLength = aIsRTL ? 0 : 1;
+  uint32_t clusterLength = aIsRTL ? 0 : 1;
   while (clusterLength < aMaxLength) {
     if (aTextRun->IsClusterStart(aStartOffset + clusterLength)) {
       if (aIsRTL) {
@@ -5182,11 +5689,10 @@ static PRUint32 GetClusterLength(gfxTextRun* aTextRun,
 }
 
 bool
-nsTextFrame::MeasureCharClippedText(gfxContext* aCtx,
-                                    PropertyProvider& aProvider,
+nsTextFrame::MeasureCharClippedText(PropertyProvider& aProvider,
                                     nscoord aLeftEdge, nscoord aRightEdge,
-                                    PRUint32* aStartOffset,
-                                    PRUint32* aMaxLength,
+                                    uint32_t* aStartOffset,
+                                    uint32_t* aMaxLength,
                                     nscoord*  aSnappedLeftEdge,
                                     nscoord*  aSnappedRightEdge)
 {
@@ -5196,16 +5702,16 @@ nsTextFrame::MeasureCharClippedText(gfxContext* aCtx,
     return true;
   }
 
-  PRUint32 offset = *aStartOffset;
-  PRUint32 maxLength = *aMaxLength;
+  uint32_t offset = *aStartOffset;
+  uint32_t maxLength = *aMaxLength;
   const nscoord frameWidth = GetSize().width;
-  const PRBool rtl = mTextRun->IsRightToLeft();
+  const bool rtl = mTextRun->IsRightToLeft();
   gfxFloat advanceWidth = 0;
   const nscoord startEdge = rtl ? aRightEdge : aLeftEdge;
   if (startEdge > 0) {
     const gfxFloat maxAdvance = gfxFloat(startEdge);
     while (maxLength > 0) {
-      PRUint32 clusterLength =
+      uint32_t clusterLength =
         GetClusterLength(mTextRun, offset, maxLength, rtl);
       advanceWidth +=
         mTextRun->GetAdvanceWidth(offset, clusterLength, &aProvider);
@@ -5224,7 +5730,7 @@ nsTextFrame::MeasureCharClippedText(gfxContext* aCtx,
   if (endEdge > 0) {
     const gfxFloat maxAdvance = gfxFloat(frameWidth - endEdge);
     while (maxLength > 0) {
-      PRUint32 clusterLength =
+      uint32_t clusterLength =
         GetClusterLength(mTextRun, offset, maxLength, rtl);
       gfxFloat nextAdvance = advanceWidth +
         mTextRun->GetAdvanceWidth(offset, clusterLength, &aProvider);
@@ -5247,29 +5753,30 @@ nsTextFrame::MeasureCharClippedText(gfxContext* aCtx,
 void
 nsTextFrame::PaintText(nsRenderingContext* aRenderingContext, nsPoint aPt,
                        const nsRect& aDirtyRect,
-                       const nsCharClipDisplayItem& aItem)
+                       const nsCharClipDisplayItem& aItem,
+                       nsTextFrame::DrawPathCallbacks* aCallbacks)
 {
   // Don't pass in aRenderingContext here, because we need a *reference*
   // context and aRenderingContext might have some transform in it
   // XXX get the block and line passed to us somehow! This is slow!
-  gfxSkipCharsIterator iter = EnsureTextRun();
+  gfxSkipCharsIterator iter = EnsureTextRun(nsTextFrame::eInflated);
   if (!mTextRun)
     return;
 
-  PropertyProvider provider(this, iter);
+  PropertyProvider provider(this, iter, nsTextFrame::eInflated);
   // Trim trailing whitespace
-  provider.InitializeForDisplay(PR_TRUE);
+  provider.InitializeForDisplay(true);
 
   gfxContext* ctx = aRenderingContext->ThebesContext();
-  const PRBool rtl = mTextRun->IsRightToLeft();
+  const bool rtl = mTextRun->IsRightToLeft();
   const nscoord frameWidth = GetSize().width;
   gfxPoint framePt(aPt.x, aPt.y);
   gfxPoint textBaselinePt(rtl ? gfxFloat(aPt.x + frameWidth) : framePt.x,
              nsLayoutUtils::GetSnappedBaselineY(this, ctx, aPt.y, mAscent));
-  PRUint32 startOffset = provider.GetStart().GetSkippedOffset();
-  PRUint32 maxLength = ComputeTransformedLength(provider);
+  uint32_t startOffset = provider.GetStart().GetSkippedOffset();
+  uint32_t maxLength = ComputeTransformedLength(provider);
   nscoord snappedLeftEdge, snappedRightEdge;
-  if (!MeasureCharClippedText(ctx, provider, aItem.mLeftEdge, aItem.mRightEdge,
+  if (!MeasureCharClippedText(provider, aItem.mLeftEdge, aItem.mRightEdge,
          &startOffset, &maxLength, &snappedLeftEdge, &snappedRightEdge)) {
     return;
   }
@@ -5277,81 +5784,117 @@ nsTextFrame::PaintText(nsRenderingContext* aRenderingContext, nsPoint aPt,
   nsCharClipDisplayItem::ClipEdges clipEdges(aItem, snappedLeftEdge,
                                              snappedRightEdge);
   nsTextPaintStyle textPaintStyle(this);
-  nscolor foregroundColor = textPaintStyle.GetTextColor();
-
-  // Paint the text shadow before doing any foreground stuff
-  const nsStyleText* textStyle = GetStyleText();
-  if (textStyle->mTextShadow) {
-    // Text shadow happens with the last value being painted at the back,
-    // ie. it is painted first.
-    for (PRUint32 i = textStyle->mTextShadow->Length(); i > 0; --i) {
-      PaintOneShadow(startOffset, maxLength,
-                     textStyle->mTextShadow->ShadowAt(i - 1), &provider,
-                     aDirtyRect, framePt, textBaselinePt, ctx,
-                     foregroundColor, clipEdges, snappedLeftEdge);
-    }
-  }
+  textPaintStyle.SetResolveColors(!aCallbacks);
 
   gfxRect dirtyRect(aDirtyRect.x, aDirtyRect.y,
                     aDirtyRect.width, aDirtyRect.height);
   // Fork off to the (slower) paint-with-selection path if necessary.
-  if (nsLayoutUtils::GetNonGeneratedAncestor(this)->GetStateBits() & NS_FRAME_SELECTED_CONTENT) {
+  if (IsSelected()) {
     gfxSkipCharsIterator tmp(provider.GetStart());
-    PRInt32 contentOffset = tmp.ConvertSkippedToOriginal(startOffset);
-    PRInt32 contentLength =
+    int32_t contentOffset = tmp.ConvertSkippedToOriginal(startOffset);
+    int32_t contentLength =
       tmp.ConvertSkippedToOriginal(startOffset + maxLength) - contentOffset;
     if (PaintTextWithSelection(ctx, framePt, textBaselinePt, dirtyRect,
                                provider, contentOffset, contentLength,
-                               textPaintStyle, clipEdges))
+                               textPaintStyle, clipEdges, aCallbacks)) {
       return;
+    }
   }
 
-  ctx->SetColor(gfxRGBA(foregroundColor));
+  nscolor foregroundColor = textPaintStyle.GetTextColor();
+  if (!aCallbacks) {
+    const nsStyleText* textStyle = GetStyleText();
+    if (textStyle->HasTextShadow(this)) {
+      // Text shadow happens with the last value being painted at the back,
+      // ie. it is painted first.
+      gfxTextRun::Metrics shadowMetrics = 
+        mTextRun->MeasureText(startOffset, maxLength, gfxFont::LOOSE_INK_EXTENTS,
+                              nullptr, &provider);
+      for (uint32_t i = textStyle->mTextShadow->Length(); i > 0; --i) {
+        PaintOneShadow(startOffset, maxLength,
+                       textStyle->mTextShadow->ShadowAt(i - 1), &provider,
+                       aDirtyRect, framePt, textBaselinePt, ctx,
+                       foregroundColor, clipEdges,
+                       snappedLeftEdge, shadowMetrics.mBoundingBox);
+      }
+    }
+  }
 
   gfxFloat advanceWidth;
-  DrawText(ctx, framePt, textBaselinePt, startOffset, maxLength, provider,
-           textPaintStyle, clipEdges, advanceWidth,
-           (GetStateBits() & TEXT_HYPHEN_BREAK) != 0);
+  DrawText(ctx, dirtyRect, framePt, textBaselinePt, startOffset, maxLength, provider,
+           textPaintStyle, foregroundColor, clipEdges, advanceWidth,
+           (GetStateBits() & TEXT_HYPHEN_BREAK) != 0,
+           nullptr, aCallbacks);
+}
+
+static void
+DrawTextRun(gfxTextRun* aTextRun,
+            gfxContext* const aCtx,
+            const gfxPoint& aTextBaselinePt,
+            uint32_t aOffset, uint32_t aLength,
+            PropertyProvider* aProvider,
+            nscolor aTextColor,
+            gfxFloat* aAdvanceWidth,
+            nsTextFrame::DrawPathCallbacks* aCallbacks)
+{
+  gfxFont::DrawMode drawMode = aCallbacks ? gfxFont::GLYPH_PATH :
+                                            gfxFont::GLYPH_FILL;
+  if (aCallbacks) {
+    aCallbacks->NotifyBeforeText(aTextColor);
+    aTextRun->Draw(aCtx, aTextBaselinePt, drawMode, aOffset, aLength,
+                   aProvider, aAdvanceWidth, nullptr, aCallbacks);
+    aCallbacks->NotifyAfterText();
+  } else {
+    aCtx->SetColor(gfxRGBA(aTextColor));
+    aTextRun->Draw(aCtx, aTextBaselinePt, drawMode, aOffset, aLength,
+                   aProvider, aAdvanceWidth, nullptr);
+  }
 }
 
 void
 nsTextFrame::DrawTextRun(gfxContext* const aCtx,
                          const gfxPoint& aTextBaselinePt,
-                         PRUint32 aOffset, PRUint32 aLength,
+                         uint32_t aOffset, uint32_t aLength,
                          PropertyProvider& aProvider,
+                         nscolor aTextColor,
                          gfxFloat& aAdvanceWidth,
-                         PRBool aDrawSoftHyphen)
+                         bool aDrawSoftHyphen,
+                         nsTextFrame::DrawPathCallbacks* aCallbacks)
 {
-  mTextRun->Draw(aCtx, aTextBaselinePt, aOffset, aLength,
-                 &aProvider, &aAdvanceWidth);
+  ::DrawTextRun(mTextRun, aCtx, aTextBaselinePt, aOffset, aLength, &aProvider,
+                aTextColor, &aAdvanceWidth, aCallbacks);
 
   if (aDrawSoftHyphen) {
     // Don't use ctx as the context, because we need a reference context here,
     // ctx may be transformed.
-    gfxTextRunCache::AutoTextRun hyphenTextRun(GetHyphenTextRun(mTextRun, nsnull, this));
+    nsAutoPtr<gfxTextRun> hyphenTextRun(GetHyphenTextRun(mTextRun, nullptr, this));
     if (hyphenTextRun.get()) {
       // For right-to-left text runs, the soft-hyphen is positioned at the left
       // of the text, minus its own width
       gfxFloat hyphenBaselineX = aTextBaselinePt.x + mTextRun->GetDirection() * aAdvanceWidth -
-        (mTextRun->IsRightToLeft() ? hyphenTextRun->GetAdvanceWidth(0, hyphenTextRun->GetLength(), nsnull) : 0);
-      hyphenTextRun->Draw(aCtx, gfxPoint(hyphenBaselineX, aTextBaselinePt.y),
-                          0, hyphenTextRun->GetLength(), nsnull, nsnull);
+        (mTextRun->IsRightToLeft() ? hyphenTextRun->GetAdvanceWidth(0, hyphenTextRun->GetLength(), nullptr) : 0);
+      ::DrawTextRun(hyphenTextRun.get(), aCtx,
+                    gfxPoint(hyphenBaselineX, aTextBaselinePt.y),
+                    0, hyphenTextRun->GetLength(),
+                    nullptr, aTextColor, nullptr, aCallbacks);
     }
   }
 }
 
 void
 nsTextFrame::DrawTextRunAndDecorations(
-    gfxContext* const aCtx,
+    gfxContext* const aCtx, const gfxRect& aDirtyRect,
     const gfxPoint& aFramePt, const gfxPoint& aTextBaselinePt,
-    PRUint32 aOffset, PRUint32 aLength,
+    uint32_t aOffset, uint32_t aLength,
     PropertyProvider& aProvider,
     const nsTextPaintStyle& aTextStyle,
+    nscolor aTextColor,
     const nsCharClipDisplayItem::ClipEdges& aClipEdges,
     gfxFloat& aAdvanceWidth,
-    PRBool aDrawSoftHyphen,
+    bool aDrawSoftHyphen,
     const TextDecorations& aDecorations,
-    const nscolor* const aDecorationOverrideColor)
+    const nscolor* const aDecorationOverrideColor,
+    nsTextFrame::DrawPathCallbacks* aCallbacks)
 {
     const gfxFloat app = aTextStyle.PresContext()->AppUnitsPerDevPixel();
 
@@ -5365,89 +5908,106 @@ nsTextFrame::DrawTextRunAndDecorations(
     const gfxFloat ascent = gfxFloat(mAscent) / app;
     const gfxFloat frameTop = aFramePt.y;
 
+    gfxRect dirtyRect(aDirtyRect.x / app, aDirtyRect.y / app,
+                      aDirtyRect.Width() / app, aDirtyRect.Height() / app);
+
+    nscoord inflationMinFontSize =
+      nsLayoutUtils::InflationMinFontSizeFor(this);
+
     // Underlines
-    for (PRUint32 i = aDecorations.mUnderlines.Length(); i-- > 0; ) {
+    for (uint32_t i = aDecorations.mUnderlines.Length(); i-- > 0; ) {
       const LineDecoration& dec = aDecorations.mUnderlines[i];
 
+      float inflation = nsLayoutUtils::FontSizeInflationInner(dec.mFrame,
+                          inflationMinFontSize);
       const gfxFont::Metrics metrics =
-        GetFirstFontMetrics(GetFontGroupForFrame(dec.mFrame));
+        GetFirstFontMetrics(GetFontGroupForFrame(dec.mFrame, inflation));
 
       decSize.height = metrics.underlineSize;
       decPt.y = (frameTop - dec.mBaselineOffset) / app;
 
-      const nscolor lineColor = aDecorationOverrideColor ? *aDecorationOverrideColor : dec.mColor;
-      nsCSSRendering::PaintDecorationLine(aCtx, lineColor, decPt, decSize, ascent,
+      PaintDecorationLine(this, aCtx, dirtyRect, dec.mColor,
+        aDecorationOverrideColor, decPt, 0.0, decSize, ascent,
         metrics.underlineOffset, NS_STYLE_TEXT_DECORATION_LINE_UNDERLINE,
-        dec.mStyle);
+        dec.mStyle, eNormalDecoration, aCallbacks);
     }
     // Overlines
-    for (PRUint32 i = aDecorations.mOverlines.Length(); i-- > 0; ) {
+    for (uint32_t i = aDecorations.mOverlines.Length(); i-- > 0; ) {
       const LineDecoration& dec = aDecorations.mOverlines[i];
 
+      float inflation = nsLayoutUtils::FontSizeInflationInner(dec.mFrame,
+                          inflationMinFontSize);
       const gfxFont::Metrics metrics =
-        GetFirstFontMetrics(GetFontGroupForFrame(dec.mFrame));
+        GetFirstFontMetrics(GetFontGroupForFrame(dec.mFrame, inflation));
 
       decSize.height = metrics.underlineSize;
       decPt.y = (frameTop - dec.mBaselineOffset) / app;
 
-      const nscolor lineColor = aDecorationOverrideColor ? *aDecorationOverrideColor : dec.mColor;
-      nsCSSRendering::PaintDecorationLine(aCtx, lineColor, decPt, decSize, ascent,
-        metrics.maxAscent, NS_STYLE_TEXT_DECORATION_LINE_OVERLINE, dec.mStyle);
+      PaintDecorationLine(this, aCtx, dirtyRect, dec.mColor,
+        aDecorationOverrideColor, decPt, 0.0, decSize, ascent,
+        metrics.maxAscent, NS_STYLE_TEXT_DECORATION_LINE_OVERLINE, dec.mStyle,
+        eNormalDecoration, aCallbacks);
     }
 
     // CSS 2.1 mandates that text be painted after over/underlines, and *then*
     // line-throughs
-    DrawTextRun(aCtx, aTextBaselinePt, aOffset, aLength, aProvider, aAdvanceWidth,
-                aDrawSoftHyphen);
+    DrawTextRun(aCtx, aTextBaselinePt, aOffset, aLength, aProvider, aTextColor,
+                aAdvanceWidth, aDrawSoftHyphen, aCallbacks);
 
     // Line-throughs
-    for (PRUint32 i = aDecorations.mStrikes.Length(); i-- > 0; ) {
+    for (uint32_t i = aDecorations.mStrikes.Length(); i-- > 0; ) {
       const LineDecoration& dec = aDecorations.mStrikes[i];
 
+      float inflation = nsLayoutUtils::FontSizeInflationInner(dec.mFrame,
+                          inflationMinFontSize);
       const gfxFont::Metrics metrics =
-        GetFirstFontMetrics(GetFontGroupForFrame(dec.mFrame));
+        GetFirstFontMetrics(GetFontGroupForFrame(dec.mFrame, inflation));
 
       decSize.height = metrics.strikeoutSize;
       decPt.y = (frameTop - dec.mBaselineOffset) / app;
 
-      const nscolor lineColor = aDecorationOverrideColor ? *aDecorationOverrideColor : dec.mColor;
-      nsCSSRendering::PaintDecorationLine(aCtx, lineColor, decPt, decSize, ascent,
+      PaintDecorationLine(this, aCtx, dirtyRect, dec.mColor,
+        aDecorationOverrideColor, decPt, 0.0, decSize, ascent,
         metrics.strikeoutOffset, NS_STYLE_TEXT_DECORATION_LINE_LINE_THROUGH,
-        dec.mStyle);
+        dec.mStyle, eNormalDecoration, aCallbacks);
     }
 }
 
 void
 nsTextFrame::DrawText(
-    gfxContext* const aCtx,
+    gfxContext* const aCtx, const gfxRect& aDirtyRect,
     const gfxPoint& aFramePt, const gfxPoint& aTextBaselinePt,
-    PRUint32 aOffset, PRUint32 aLength,
+    uint32_t aOffset, uint32_t aLength,
     PropertyProvider& aProvider,
     const nsTextPaintStyle& aTextStyle,
+    nscolor aTextColor,
     const nsCharClipDisplayItem::ClipEdges& aClipEdges,
     gfxFloat& aAdvanceWidth,
-    PRBool aDrawSoftHyphen,
-    const nscolor* const aDecorationOverrideColor)
+    bool aDrawSoftHyphen,
+    const nscolor* const aDecorationOverrideColor,
+    nsTextFrame::DrawPathCallbacks* aCallbacks)
 {
   TextDecorations decorations;
-  GetTextDecorations(aTextStyle.PresContext(), decorations);
+  GetTextDecorations(aTextStyle.PresContext(),
+                     aCallbacks ? eUnresolvedColors : eResolvedColors,
+                     decorations);
 
   // Hide text decorations if we're currently hiding @font-face fallback text
   const bool drawDecorations = !aProvider.GetFontGroup()->ShouldSkipDrawing() &&
                                decorations.HasDecorationLines();
   if (drawDecorations) {
-    DrawTextRunAndDecorations(aCtx, aFramePt, aTextBaselinePt, aOffset, aLength,
-                              aProvider, aTextStyle, aClipEdges, aAdvanceWidth,
+    DrawTextRunAndDecorations(aCtx, aDirtyRect, aFramePt, aTextBaselinePt, aOffset, aLength,
+                              aProvider, aTextStyle, aTextColor, aClipEdges, aAdvanceWidth,
                               aDrawSoftHyphen, decorations,
-                              aDecorationOverrideColor);
+                              aDecorationOverrideColor, aCallbacks);
   } else {
     DrawTextRun(aCtx, aTextBaselinePt, aOffset, aLength, aProvider,
-                aAdvanceWidth, aDrawSoftHyphen);
+                aTextColor, aAdvanceWidth, aDrawSoftHyphen, aCallbacks);
   }
 }
 
-PRInt16
-nsTextFrame::GetSelectionStatus(PRInt16* aSelectionFlags)
+int16_t
+nsTextFrame::GetSelectionStatus(int16_t* aSelectionFlags)
 {
   // get the selection controller
   nsCOMPtr<nsISelectionController> selectionController;
@@ -5458,22 +6018,21 @@ nsTextFrame::GetSelectionStatus(PRInt16* aSelectionFlags)
 
   selectionController->GetSelectionFlags(aSelectionFlags);
 
-  PRInt16 selectionValue;
+  int16_t selectionValue;
   selectionController->GetDisplaySelection(&selectionValue);
 
   return selectionValue;
 }
 
-PRBool
+bool
 nsTextFrame::IsVisibleInSelection(nsISelection* aSelection)
 {
   // Check the quick way first
-  PRBool isSelected = (mState & NS_FRAME_SELECTED_CONTENT) == NS_FRAME_SELECTED_CONTENT;
-  if (!isSelected)
-    return PR_FALSE;
+  if (!GetContent()->IsSelectionDescendant())
+    return false;
     
   SelectionDetails* details = GetSelectionDetails();
-  PRBool found = PR_FALSE;
+  bool found = false;
     
   // where are the selection points "really"
   SelectionDetails *sdptr = details;
@@ -5481,7 +6040,7 @@ nsTextFrame::IsVisibleInSelection(nsISelection* aSelection)
     if (sdptr->mEnd > GetContentOffset() &&
         sdptr->mStart < GetContentEnd() &&
         sdptr->mType == nsISelectionController::SELECTION_NORMAL) {
-      found = PR_TRUE;
+      found = true;
       break;
     }
     sdptr = sdptr->mNext;
@@ -5495,14 +6054,14 @@ nsTextFrame::IsVisibleInSelection(nsISelection* aSelection)
  * Compute the longest prefix of text whose width is <= aWidth. Return
  * the length of the prefix. Also returns the width of the prefix in aFitWidth.
  */
-static PRUint32
-CountCharsFit(gfxTextRun* aTextRun, PRUint32 aStart, PRUint32 aLength,
+static uint32_t
+CountCharsFit(gfxTextRun* aTextRun, uint32_t aStart, uint32_t aLength,
               gfxFloat aWidth, PropertyProvider* aProvider,
               gfxFloat* aFitWidth)
 {
-  PRUint32 last = 0;
+  uint32_t last = 0;
   gfxFloat width = 0;
-  PRUint32 i;
+  uint32_t i;
   for (i = 1; i <= aLength; ++i) {
     if (i == aLength || aTextRun->IsClusterStart(aStart + i)) {
       gfxFloat nextWidth = width +
@@ -5520,36 +6079,36 @@ CountCharsFit(gfxTextRun* aTextRun, PRUint32 aStart, PRUint32 aLength,
 nsIFrame::ContentOffsets
 nsTextFrame::CalcContentOffsetsFromFramePoint(nsPoint aPoint)
 {
-  return GetCharacterOffsetAtFramePointInternal(aPoint, PR_TRUE);
+  return GetCharacterOffsetAtFramePointInternal(aPoint, true);
 }
 
 nsIFrame::ContentOffsets
 nsTextFrame::GetCharacterOffsetAtFramePoint(const nsPoint &aPoint)
 {
-  return GetCharacterOffsetAtFramePointInternal(aPoint, PR_FALSE);
+  return GetCharacterOffsetAtFramePointInternal(aPoint, false);
 }
 
 nsIFrame::ContentOffsets
 nsTextFrame::GetCharacterOffsetAtFramePointInternal(const nsPoint &aPoint,
-                                                    PRBool aForInsertionPoint)
+                                                    bool aForInsertionPoint)
 {
   ContentOffsets offsets;
   
-  gfxSkipCharsIterator iter = EnsureTextRun();
+  gfxSkipCharsIterator iter = EnsureTextRun(nsTextFrame::eInflated);
   if (!mTextRun)
     return offsets;
   
-  PropertyProvider provider(this, iter);
+  PropertyProvider provider(this, iter, nsTextFrame::eInflated);
   // Trim leading but not trailing whitespace if possible
-  provider.InitializeForDisplay(PR_FALSE);
+  provider.InitializeForDisplay(false);
   gfxFloat width = mTextRun->IsRightToLeft() ? mRect.width - aPoint.x : aPoint.x;
   gfxFloat fitWidth;
-  PRUint32 skippedLength = ComputeTransformedLength(provider);
+  uint32_t skippedLength = ComputeTransformedLength(provider);
 
-  PRUint32 charsFit = CountCharsFit(mTextRun,
+  uint32_t charsFit = CountCharsFit(mTextRun,
       provider.GetStart().GetSkippedOffset(), skippedLength, width, &provider, &fitWidth);
 
-  PRInt32 selectedOffset;
+  int32_t selectedOffset;
   if (charsFit < skippedLength) {
     // charsFit characters fitted, but no more could fit. See if we're
     // more than halfway through the cluster.. If we are, choose the next
@@ -5590,21 +6149,22 @@ nsTextFrame::GetCharacterOffsetAtFramePointInternal(const nsPoint &aPoint,
   return offsets;
 }
 
-PRBool
+bool
 nsTextFrame::CombineSelectionUnderlineRect(nsPresContext* aPresContext,
                                            nsRect& aRect)
 {
   if (aRect.IsEmpty())
-    return PR_FALSE;
+    return false;
 
   nsRect givenRect = aRect;
 
   nsRefPtr<nsFontMetrics> fm;
-  nsLayoutUtils::GetFontMetricsForFrame(this, getter_AddRefs(fm));
+  nsLayoutUtils::GetFontMetricsForFrame(this, getter_AddRefs(fm),
+                                        GetFontSizeInflation());
   gfxFontGroup* fontGroup = fm->GetThebesFontGroup();
   gfxFont* firstFont = fontGroup->GetFontAt(0);
   if (!firstFont)
-    return PR_FALSE; // OOM
+    return false; // OOM
   const gfxFont::Metrics& metrics = firstFont->GetMetrics();
   gfxFloat underlineOffset = fontGroup->GetUnderlineOffset();
   gfxFloat ascent = aPresContext->AppUnitsToGfxUnits(mAscent);
@@ -5616,12 +6176,12 @@ nsTextFrame::CombineSelectionUnderlineRect(nsPresContext* aPresContext,
     if (sd->mStart == sd->mEnd || !(sd->mType & SelectionTypesWithDecorations))
       continue;
 
-    PRUint8 style;
+    uint8_t style;
     float relativeSize;
-    PRInt32 index =
+    int32_t index =
       nsTextPaintStyle::GetUnderlineStyleIndexForSelectionType(sd->mType);
     if (sd->mType == nsISelectionController::SELECTION_SPELLCHECK) {
-      if (!nsTextPaintStyle::GetSelectionUnderline(aPresContext, index, nsnull,
+      if (!nsTextPaintStyle::GetSelectionUnderline(aPresContext, index, nullptr,
                                                    &relativeSize, &style)) {
         continue;
       }
@@ -5636,7 +6196,7 @@ nsTextFrame::CombineSelectionUnderlineRect(nsPresContext* aPresContext,
         style = rangeStyle.mLineStyle;
         relativeSize = rangeStyle.mIsBoldLine ? 2.0f : 1.0f;
       } else if (!nsTextPaintStyle::GetSelectionUnderline(aPresContext, index,
-                                                          nsnull, &relativeSize,
+                                                          nullptr, &relativeSize,
                                                           &style)) {
         continue;
       }
@@ -5658,17 +6218,17 @@ nsTextFrame::CombineSelectionUnderlineRect(nsPresContext* aPresContext,
   return !aRect.IsEmpty() && !givenRect.Contains(aRect);
 }
 
-void
-nsTextFrame::SetSelected(PRBool        aSelected,
-                         SelectionType aType)
+bool
+nsTextFrame::IsFrameSelected() const
 {
-  SetSelectedRange(0, mContent->GetText()->GetLength(), aSelected, aType);
+  NS_ASSERTION(!GetContent() || GetContent()->IsSelectionDescendant(),
+               "use the public IsSelected() instead");
+  return nsRange::IsNodeSelected(GetContent(), GetContentOffset(),
+                                 GetContentEnd());
 }
 
 void
-nsTextFrame::SetSelectedRange(PRUint32 aStart,
-                              PRUint32 aEnd,
-                              PRBool aSelected,
+nsTextFrame::SetSelectedRange(uint32_t aStart, uint32_t aEnd, bool aSelected,
                               SelectionType aType)
 {
   NS_ASSERTION(!GetPrevContinuation(), "Should only be called for primary frame");
@@ -5678,47 +6238,21 @@ nsTextFrame::SetSelectedRange(PRUint32 aStart,
   if (aStart == aEnd)
     return;
 
-  if (aType == nsISelectionController::SELECTION_NORMAL) {
-    // check whether style allows selection
-    PRBool selectable;
-    IsSelectable(&selectable, nsnull);
-    if (!selectable)
-      return;
-  }
-
-  PRBool anySelected = PR_FALSE;
-
   nsTextFrame* f = this;
-  while (f && f->GetContentEnd() <= PRInt32(aStart)) {
-    if (f->GetStateBits() & NS_FRAME_SELECTED_CONTENT) {
-      anySelected = PR_TRUE;
-    }
+  while (f && f->GetContentEnd() <= int32_t(aStart)) {
     f = static_cast<nsTextFrame*>(f->GetNextContinuation());
   }
 
   nsPresContext* presContext = PresContext();
-  while (f && f->GetContentOffset() < PRInt32(aEnd)) {
-    if (aSelected) {
-      f->AddStateBits(NS_FRAME_SELECTED_CONTENT);
-      anySelected = PR_TRUE;
-    } else { // we need to see if any other selection is available.
-      SelectionDetails *details = f->GetSelectionDetails();
-      if (details) {
-        anySelected = PR_TRUE;
-        DestroySelectionDetails(details);
-      } else {
-        f->RemoveStateBits(NS_FRAME_SELECTED_CONTENT);
-      }
-    }
-
+  while (f && f->GetContentOffset() < int32_t(aEnd)) {
     // We may need to reflow to recompute the overflow area for
     // spellchecking or IME underline if their underline is thicker than
     // the normal decoration line.
     if (aType & SelectionTypesWithDecorations) {
-      PRBool didHaveOverflowingSelection =
+      bool didHaveOverflowingSelection =
         (f->GetStateBits() & TEXT_SELECTION_UNDERLINE_OVERFLOWED) != 0;
       nsRect r(nsPoint(0, 0), GetSize());
-      PRBool willHaveOverflowingSelection =
+      bool willHaveOverflowingSelection =
         aSelected && f->CombineSelectionUnderlineRect(presContext, r);
       if (didHaveOverflowingSelection || willHaveOverflowingSelection) {
         presContext->PresShell()->FrameNeedsReflow(f,
@@ -5731,26 +6265,10 @@ nsTextFrame::SetSelectedRange(PRUint32 aStart,
 
     f = static_cast<nsTextFrame*>(f->GetNextContinuation());
   }
-
-  // Scan remaining continuations to see if any are selected
-  while (f && !anySelected) {
-    if (f->GetStateBits() & NS_FRAME_SELECTED_CONTENT) {
-      anySelected = PR_TRUE;
-    }
-    f = static_cast<nsTextFrame*>(f->GetNextContinuation());
-  }
-
-  if (anySelected) {
-    mContent->SetFlags(NS_TEXT_IN_SELECTION);
-  } else {
-    // This is only legal because there is only one presentation for the
-    // content with a selection
-    mContent->UnsetFlags(NS_TEXT_IN_SELECTION);
-  }
 }
 
 NS_IMETHODIMP
-nsTextFrame::GetPointFromOffset(PRInt32 inOffset,
+nsTextFrame::GetPointFromOffset(int32_t inOffset,
                                 nsPoint* outPoint)
 {
   if (!outPoint)
@@ -5767,14 +6285,14 @@ nsTextFrame::GetPointFromOffset(PRInt32 inOffset,
     return NS_OK;
   }
 
-  gfxSkipCharsIterator iter = EnsureTextRun();
+  gfxSkipCharsIterator iter = EnsureTextRun(nsTextFrame::eInflated);
   if (!mTextRun)
     return NS_ERROR_FAILURE;
 
-  PropertyProvider properties(this, iter);
+  PropertyProvider properties(this, iter, nsTextFrame::eInflated);
   // Don't trim trailing whitespace, we want the caret to appear in the right
   // place if it's positioned there
-  properties.InitializeForDisplay(PR_FALSE);  
+  properties.InitializeForDisplay(false);  
 
   if (inOffset < GetContentOffset()){
     NS_WARNING("offset before this frame's content");
@@ -5783,8 +6301,8 @@ nsTextFrame::GetPointFromOffset(PRInt32 inOffset,
     NS_WARNING("offset after this frame's content");
     inOffset = GetContentEnd();
   }
-  PRInt32 trimmedOffset = properties.GetStart().GetOriginalOffset();
-  PRInt32 trimmedEnd = trimmedOffset + properties.GetOriginalLength();
+  int32_t trimmedOffset = properties.GetStart().GetOriginalOffset();
+  int32_t trimmedEnd = trimmedOffset + properties.GetOriginalLength();
   inOffset = NS_MAX(inOffset, trimmedOffset);
   inOffset = NS_MIN(inOffset, trimmedEnd);
 
@@ -5814,9 +6332,9 @@ nsTextFrame::GetPointFromOffset(PRInt32 inOffset,
 }
 
 NS_IMETHODIMP
-nsTextFrame::GetChildFrameContainingOffset(PRInt32   aContentOffset,
-                                           PRBool    aHint,
-                                           PRInt32*  aOutOffset,
+nsTextFrame::GetChildFrameContainingOffset(int32_t   aContentOffset,
+                                           bool      aHint,
+                                           int32_t*  aOutOffset,
                                            nsIFrame**aOutFrame)
 {
   DEBUG_VERIFY_NOT_DIRTY(mState);
@@ -5835,7 +6353,7 @@ nsTextFrame::GetChildFrameContainingOffset(PRInt32   aContentOffset,
   }
 
   nsTextFrame* f = this;
-  PRInt32 offset = mContentOffset;
+  int32_t offset = mContentOffset;
 
   // Try to look up the offset to frame property
   nsTextFrame* cachedFrame = static_cast<nsTextFrame*>
@@ -5850,7 +6368,7 @@ nsTextFrame::GetChildFrameContainingOffset(PRInt32   aContentOffset,
 
   if ((aContentOffset >= offset) &&
       (aHint || aContentOffset != offset)) {
-    while (PR_TRUE) {
+    while (true) {
       nsTextFrame* next = static_cast<nsTextFrame*>(f->GetNextContinuation());
       if (!next || aContentOffset < next->GetContentOffset())
         break;
@@ -5863,7 +6381,7 @@ nsTextFrame::GetChildFrameContainingOffset(PRInt32   aContentOffset,
       f = next;
     }
   } else {
-    while (PR_TRUE) {
+    while (true) {
       nsTextFrame* prev = static_cast<nsTextFrame*>(f->GetPrevContinuation());
       if (!prev || aContentOffset > f->GetContentOffset())
         break;
@@ -5887,16 +6405,16 @@ nsTextFrame::GetChildFrameContainingOffset(PRInt32   aContentOffset,
   return NS_OK;
 }
 
-PRBool
-nsTextFrame::PeekOffsetNoAmount(PRBool aForward, PRInt32* aOffset)
+bool
+nsTextFrame::PeekOffsetNoAmount(bool aForward, int32_t* aOffset)
 {
   NS_ASSERTION(aOffset && *aOffset <= GetContentLength(), "aOffset out of range");
 
-  gfxSkipCharsIterator iter = EnsureTextRun();
+  gfxSkipCharsIterator iter = EnsureTextRun(nsTextFrame::eInflated);
   if (!mTextRun)
-    return PR_FALSE;
+    return false;
 
-  TrimmedOffsets trimmed = GetTrimmedOffsets(mContent->GetText(), PR_TRUE);
+  TrimmedOffsets trimmed = GetTrimmedOffsets(mContent->GetText(), true);
   // Check whether there are nonskipped characters in the trimmmed range
   return iter.ConvertOriginalToSkipped(trimmed.GetEnd()) >
          iter.ConvertOriginalToSkipped(trimmed.mStart);
@@ -5912,85 +6430,81 @@ nsTextFrame::PeekOffsetNoAmount(PRBool aForward, PRInt32* aOffset)
  */
 class NS_STACK_CLASS ClusterIterator {
 public:
-  ClusterIterator(nsTextFrame* aTextFrame, PRInt32 aPosition, PRInt32 aDirection,
+  ClusterIterator(nsTextFrame* aTextFrame, int32_t aPosition, int32_t aDirection,
                   nsString& aContext);
 
-  PRBool NextCluster();
-  PRBool IsWhitespace();
-  PRBool IsPunctuation();
-  PRBool HaveWordBreakBefore() { return mHaveWordBreak; }
-  PRInt32 GetAfterOffset();
-  PRInt32 GetBeforeOffset();
+  bool NextCluster();
+  bool IsWhitespace();
+  bool IsPunctuation();
+  bool HaveWordBreakBefore() { return mHaveWordBreak; }
+  int32_t GetAfterOffset();
+  int32_t GetBeforeOffset();
 
 private:
-  nsCOMPtr<nsIUGenCategory>   mCategories;
   gfxSkipCharsIterator        mIterator;
   const nsTextFragment*       mFrag;
   nsTextFrame*                mTextFrame;
-  PRInt32                     mDirection;
-  PRInt32                     mCharIndex;
+  int32_t                     mDirection;
+  int32_t                     mCharIndex;
   nsTextFrame::TrimmedOffsets mTrimmed;
-  nsTArray<PRPackedBool>      mWordBreaks;
-  PRPackedBool                mHaveWordBreak;
+  nsTArray<bool>      mWordBreaks;
+  bool                        mHaveWordBreak;
 };
 
-static PRBool
+static bool
 IsAcceptableCaretPosition(const gfxSkipCharsIterator& aIter,
-                          PRBool aRespectClusters,
+                          bool aRespectClusters,
                           gfxTextRun* aTextRun,
                           nsIFrame* aFrame)
 {
   if (aIter.IsOriginalCharSkipped())
-    return PR_FALSE;
-  PRUint32 index = aIter.GetSkippedOffset();
+    return false;
+  uint32_t index = aIter.GetSkippedOffset();
   if (aRespectClusters && !aTextRun->IsClusterStart(index))
-    return PR_FALSE;
+    return false;
   if (index > 0) {
     // Check whether the proposed position is in between the two halves of a
     // surrogate pair; if so, this is not a valid character boundary.
     // (In the case where we are respecting clusters, we won't actually get
     // this far because the low surrogate is also marked as non-clusterStart
     // so we'll return FALSE above.)
-    // If the textrun is 8-bit it can't have any surrogates, so we only need
-    // to check the actual characters if GetTextUnicode() returns non-null.
-    const PRUnichar *txt = aTextRun->GetTextUnicode();
-    if (txt && NS_IS_LOW_SURROGATE(txt[index]) &&
-               NS_IS_HIGH_SURROGATE(txt[index-1]))
-      return PR_FALSE;
+    if (aTextRun->CharIsLowSurrogate(index)) {
+      return false;
+    }
   }
-  return PR_TRUE;
+  return true;
 }
 
-PRBool
-nsTextFrame::PeekOffsetCharacter(PRBool aForward, PRInt32* aOffset,
-                                 PRBool aRespectClusters)
+bool
+nsTextFrame::PeekOffsetCharacter(bool aForward, int32_t* aOffset,
+                                 bool aRespectClusters)
 {
-  PRInt32 contentLength = GetContentLength();
+  int32_t contentLength = GetContentLength();
   NS_ASSERTION(aOffset && *aOffset <= contentLength, "aOffset out of range");
 
-  PRBool selectable;
-  PRUint8 selectStyle;  
+  bool selectable;
+  uint8_t selectStyle;  
   IsSelectable(&selectable, &selectStyle);
   if (selectStyle == NS_STYLE_USER_SELECT_ALL)
-    return PR_FALSE;
+    return false;
 
-  gfxSkipCharsIterator iter = EnsureTextRun();
+  gfxSkipCharsIterator iter = EnsureTextRun(nsTextFrame::eInflated);
   if (!mTextRun)
-    return PR_FALSE;
+    return false;
 
-  TrimmedOffsets trimmed = GetTrimmedOffsets(mContent->GetText(), PR_FALSE);
+  TrimmedOffsets trimmed = GetTrimmedOffsets(mContent->GetText(), false);
 
   // A negative offset means "end of frame".
-  PRInt32 startOffset = GetContentOffset() + (*aOffset < 0 ? contentLength : *aOffset);
+  int32_t startOffset = GetContentOffset() + (*aOffset < 0 ? contentLength : *aOffset);
 
   if (!aForward) {
     // If at the beginning of the line, look at the previous continuation
-    for (PRInt32 i = NS_MIN(trimmed.GetEnd(), startOffset) - 1;
+    for (int32_t i = NS_MIN(trimmed.GetEnd(), startOffset) - 1;
          i >= trimmed.mStart; --i) {
       iter.SetOriginalOffset(i);
       if (IsAcceptableCaretPosition(iter, aRespectClusters, mTextRun, this)) {
         *aOffset = i - mContentOffset;
-        return PR_TRUE;
+        return true;
       }
     }
     *aOffset = 0;
@@ -6001,66 +6515,65 @@ nsTextFrame::PeekOffsetCharacter(PRBool aForward, PRInt32* aOffset,
         !(startOffset < trimmed.GetEnd() &&
           GetStyleText()->NewlineIsSignificant() &&
           iter.GetSkippedOffset() < mTextRun->GetLength() &&
-          mTextRun->GetChar(iter.GetSkippedOffset()) == '\n')) {
-      for (PRInt32 i = startOffset + 1; i <= trimmed.GetEnd(); ++i) {
+          mTextRun->CharIsNewline(iter.GetSkippedOffset()))) {
+      for (int32_t i = startOffset + 1; i <= trimmed.GetEnd(); ++i) {
         iter.SetOriginalOffset(i);
         if (i == trimmed.GetEnd() ||
             IsAcceptableCaretPosition(iter, aRespectClusters, mTextRun, this)) {
           *aOffset = i - mContentOffset;
-          return PR_TRUE;
+          return true;
         }
       }
     }
     *aOffset = contentLength;
   }
   
-  return PR_FALSE;
+  return false;
 }
 
-PRBool
+bool
 ClusterIterator::IsWhitespace()
 {
   NS_ASSERTION(mCharIndex >= 0, "No cluster selected");
   return IsSelectionSpace(mFrag, mCharIndex);
 }
 
-PRBool
+bool
 ClusterIterator::IsPunctuation()
 {
   NS_ASSERTION(mCharIndex >= 0, "No cluster selected");
-  if (!mCategories)
-    return PR_FALSE;
-  nsIUGenCategory::nsUGenCategory c = mCategories->Get(mFrag->CharAt(mCharIndex));
+  nsIUGenCategory::nsUGenCategory c =
+    mozilla::unicode::GetGenCategory(mFrag->CharAt(mCharIndex));
   return c == nsIUGenCategory::kPunctuation || c == nsIUGenCategory::kSymbol;
 }
 
-PRInt32
+int32_t
 ClusterIterator::GetBeforeOffset()
 {
   NS_ASSERTION(mCharIndex >= 0, "No cluster selected");
   return mCharIndex + (mDirection > 0 ? 0 : 1);
 }
 
-PRInt32
+int32_t
 ClusterIterator::GetAfterOffset()
 {
   NS_ASSERTION(mCharIndex >= 0, "No cluster selected");
   return mCharIndex + (mDirection > 0 ? 1 : 0);
 }
 
-PRBool
+bool
 ClusterIterator::NextCluster()
 {
   if (!mDirection)
-    return PR_FALSE;
-  gfxTextRun* textRun = mTextFrame->GetTextRun();
+    return false;
+  gfxTextRun* textRun = mTextFrame->GetTextRun(nsTextFrame::eInflated);
 
-  mHaveWordBreak = PR_FALSE;
-  while (PR_TRUE) {
-    PRBool keepGoing = PR_FALSE;
+  mHaveWordBreak = false;
+  while (true) {
+    bool keepGoing = false;
     if (mDirection > 0) {
       if (mIterator.GetOriginalOffset() >= mTrimmed.GetEnd())
-        return PR_FALSE;
+        return false;
       keepGoing = mIterator.IsOriginalCharSkipped() ||
           mIterator.GetOriginalOffset() < mTrimmed.mStart ||
           !textRun->IsClusterStart(mIterator.GetSkippedOffset());
@@ -6068,7 +6581,7 @@ ClusterIterator::NextCluster()
       mIterator.AdvanceOriginal(1);
     } else {
       if (mIterator.GetOriginalOffset() <= mTrimmed.mStart)
-        return PR_FALSE;
+        return false;
       mIterator.AdvanceOriginal(-1);
       keepGoing = mIterator.IsOriginalCharSkipped() ||
           mIterator.GetOriginalOffset() >= mTrimmed.GetEnd() ||
@@ -6077,48 +6590,46 @@ ClusterIterator::NextCluster()
     }
 
     if (mWordBreaks[GetBeforeOffset() - mTextFrame->GetContentOffset()]) {
-      mHaveWordBreak = PR_TRUE;
+      mHaveWordBreak = true;
     }
     if (!keepGoing)
-      return PR_TRUE;
+      return true;
   }
 }
 
-ClusterIterator::ClusterIterator(nsTextFrame* aTextFrame, PRInt32 aPosition,
-                                 PRInt32 aDirection, nsString& aContext)
+ClusterIterator::ClusterIterator(nsTextFrame* aTextFrame, int32_t aPosition,
+                                 int32_t aDirection, nsString& aContext)
   : mTextFrame(aTextFrame), mDirection(aDirection), mCharIndex(-1)
 {
-  mIterator = aTextFrame->EnsureTextRun();
-  if (!aTextFrame->GetTextRun()) {
+  mIterator = aTextFrame->EnsureTextRun(nsTextFrame::eInflated);
+  if (!aTextFrame->GetTextRun(nsTextFrame::eInflated)) {
     mDirection = 0; // signal failure
     return;
   }
   mIterator.SetOriginalOffset(aPosition);
 
-  mCategories = do_GetService(NS_UNICHARCATEGORY_CONTRACTID);
-  
   mFrag = aTextFrame->GetContent()->GetText();
-  mTrimmed = aTextFrame->GetTrimmedOffsets(mFrag, PR_TRUE);
+  mTrimmed = aTextFrame->GetTrimmedOffsets(mFrag, true);
 
-  PRInt32 textOffset = aTextFrame->GetContentOffset();
-  PRInt32 textLen = aTextFrame->GetContentLength();
+  int32_t textOffset = aTextFrame->GetContentOffset();
+  int32_t textLen = aTextFrame->GetContentLength();
   if (!mWordBreaks.AppendElements(textLen + 1)) {
     mDirection = 0; // signal failure
     return;
   }
-  memset(mWordBreaks.Elements(), PR_FALSE, textLen + 1);
-  PRInt32 textStart;
+  memset(mWordBreaks.Elements(), false, (textLen + 1)*sizeof(bool));
+  int32_t textStart;
   if (aDirection > 0) {
     if (aContext.IsEmpty()) {
       // No previous context, so it must be the start of a line or text run
-      mWordBreaks[0] = PR_TRUE;
+      mWordBreaks[0] = true;
     }
     textStart = aContext.Length();
     mFrag->AppendTo(aContext, textOffset, textLen);
   } else {
     if (aContext.IsEmpty()) {
       // No following context, so it must be the end of a line or text run
-      mWordBreaks[textLen] = PR_TRUE;
+      mWordBreaks[textLen] = true;
     }
     textStart = 0;
     nsAutoString str;
@@ -6126,9 +6637,9 @@ ClusterIterator::ClusterIterator(nsTextFrame* aTextFrame, PRInt32 aPosition,
     aContext.Insert(str, 0);
   }
   nsIWordBreaker* wordBreaker = nsContentUtils::WordBreaker();
-  PRInt32 i;
+  int32_t i;
   for (i = 0; i <= textLen; ++i) {
-    PRInt32 indexInText = i + textStart;
+    int32_t indexInText = i + textStart;
     mWordBreaks[i] |=
       wordBreaker->BreakInBetween(aContext.get(), indexInText,
                                   aContext.get() + indexInText,
@@ -6136,29 +6647,29 @@ ClusterIterator::ClusterIterator(nsTextFrame* aTextFrame, PRInt32 aPosition,
   }
 }
 
-PRBool
-nsTextFrame::PeekOffsetWord(PRBool aForward, PRBool aWordSelectEatSpace, PRBool aIsKeyboardSelect,
-                            PRInt32* aOffset, PeekWordState* aState)
+bool
+nsTextFrame::PeekOffsetWord(bool aForward, bool aWordSelectEatSpace, bool aIsKeyboardSelect,
+                            int32_t* aOffset, PeekWordState* aState)
 {
-  PRInt32 contentLength = GetContentLength();
+  int32_t contentLength = GetContentLength();
   NS_ASSERTION (aOffset && *aOffset <= contentLength, "aOffset out of range");
 
-  PRBool selectable;
-  PRUint8 selectStyle;
+  bool selectable;
+  uint8_t selectStyle;
   IsSelectable(&selectable, &selectStyle);
   if (selectStyle == NS_STYLE_USER_SELECT_ALL)
-    return PR_FALSE;
+    return false;
 
-  PRInt32 offset = GetContentOffset() + (*aOffset < 0 ? contentLength : *aOffset);
+  int32_t offset = GetContentOffset() + (*aOffset < 0 ? contentLength : *aOffset);
   ClusterIterator cIter(this, offset, aForward ? 1 : -1, aState->mContext);
 
   if (!cIter.NextCluster())
-    return PR_FALSE;
+    return false;
 
   do {
-    PRBool isPunctuation = cIter.IsPunctuation();
-    PRBool isWhitespace = cIter.IsWhitespace();
-    PRBool isWordBreakBefore = cIter.HaveWordBreakBefore();
+    bool isPunctuation = cIter.IsPunctuation();
+    bool isWhitespace = cIter.IsWhitespace();
+    bool isWordBreakBefore = cIter.HaveWordBreakBefore();
     if (aWordSelectEatSpace == isWhitespace && !aState->mSawBeforeType) {
       aState->SetSawBeforeType();
       aState->Update(isPunctuation, isWhitespace);
@@ -6166,7 +6677,7 @@ nsTextFrame::PeekOffsetWord(PRBool aForward, PRBool aWordSelectEatSpace, PRBool 
     }
     // See if we can break before the current cluster
     if (!aState->mAtStart) {
-      PRBool canBreak;
+      bool canBreak;
       if (isPunctuation != aState->mLastCharWasPunctuation) {
         canBreak = BreakWordBetweenPunctuation(aState, aForward,
                      isPunctuation, isWhitespace, aIsKeyboardSelect);
@@ -6177,27 +6688,27 @@ nsTextFrame::PeekOffsetWord(PRBool aForward, PRBool aWordSelectEatSpace, PRBool 
         // a white space in this case. This case happens in some languages
         // that their words are not separated by white spaces. E.g.,
         // Japanese and Chinese.
-        canBreak = PR_TRUE;
+        canBreak = true;
       } else {
         canBreak = isWordBreakBefore && aState->mSawBeforeType;
       }
       if (canBreak) {
         *aOffset = cIter.GetBeforeOffset() - mContentOffset;
-        return PR_TRUE;
+        return true;
       }
     }
     aState->Update(isPunctuation, isWhitespace);
   } while (cIter.NextCluster());
 
   *aOffset = cIter.GetAfterOffset() - mContentOffset;
-  return PR_FALSE;
+  return false;
 }
 
  // TODO this needs to be deCOMtaminated with the interface fixed in
 // nsIFrame.h, but we won't do that until the old textframe is gone.
 NS_IMETHODIMP
-nsTextFrame::CheckVisibility(nsPresContext* aContext, PRInt32 aStartIndex,
-    PRInt32 aEndIndex, PRBool aRecurse, PRBool *aFinished, PRBool *aRetval)
+nsTextFrame::CheckVisibility(nsPresContext* aContext, int32_t aStartIndex,
+    int32_t aEndIndex, bool aRecurse, bool *aFinished, bool *aRetval)
 {
   if (!aRetval)
     return NS_ERROR_NULL_POINTER;
@@ -6207,37 +6718,37 @@ nsTextFrame::CheckVisibility(nsPresContext* aContext, PRInt32 aStartIndex,
   // or one of its continuations.
   for (nsTextFrame* f = this; f;
        f = static_cast<nsTextFrame*>(GetNextContinuation())) {
-    PRInt32 dummyOffset = 0;
-    if (f->PeekOffsetNoAmount(PR_TRUE, &dummyOffset)) {
-      *aRetval = PR_TRUE;
+    int32_t dummyOffset = 0;
+    if (f->PeekOffsetNoAmount(true, &dummyOffset)) {
+      *aRetval = true;
       return NS_OK;
     }
   }
 
-  *aRetval = PR_FALSE;
+  *aRetval = false;
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsTextFrame::GetOffsets(PRInt32 &start, PRInt32 &end) const
+nsTextFrame::GetOffsets(int32_t &start, int32_t &end) const
 {
   start = GetContentOffset();
   end = GetContentEnd();
   return NS_OK;
 }
 
-static PRInt32
+static int32_t
 FindEndOfPunctuationRun(const nsTextFragment* aFrag,
                         gfxTextRun* aTextRun,
                         gfxSkipCharsIterator* aIter,
-                        PRInt32 aOffset,
-                        PRInt32 aStart,
-                        PRInt32 aEnd)
+                        int32_t aOffset,
+                        int32_t aStart,
+                        int32_t aEnd)
 {
-  PRInt32 i;
+  int32_t i;
 
   for (i = aStart; i < aEnd - aOffset; ++i) {
-    if (nsContentUtils::IsPunctuationMarkAt(aFrag, aOffset + i)) {
+    if (nsContentUtils::IsFirstLetterPunctuationAt(aFrag, aOffset + i)) {
       aIter->SetOriginalOffset(aOffset + i);
       FindClusterEnd(aTextRun, aEnd, aIter);
       i = aIter->GetOriginalOffset() - aOffset;
@@ -6249,9 +6760,9 @@ FindEndOfPunctuationRun(const nsTextFragment* aFrag,
 }
 
 /**
- * Returns PR_TRUE if this text frame completes the first-letter, PR_FALSE
+ * Returns true if this text frame completes the first-letter, false
  * if it does not contain a true "letter".
- * If returns PR_TRUE, then it also updates aLength to cover just the first-letter
+ * If returns true, then it also updates aLength to cover just the first-letter
  * text.
  *
  * XXX :first-letter should be handled during frame construction
@@ -6261,15 +6772,15 @@ FindEndOfPunctuationRun(const nsTextFragment* aFrag,
  * return, on exit returns length of the first-letter fragment (which may
  * include leading and trailing punctuation, for example)
  */
-static PRBool
+static bool
 FindFirstLetterRange(const nsTextFragment* aFrag,
                      gfxTextRun* aTextRun,
-                     PRInt32 aOffset, const gfxSkipCharsIterator& aIter,
-                     PRInt32* aLength)
+                     int32_t aOffset, const gfxSkipCharsIterator& aIter,
+                     int32_t* aLength)
 {
-  PRInt32 i;
-  PRInt32 length = *aLength;
-  PRInt32 endOffset = aOffset + length;
+  int32_t i;
+  int32_t length = *aLength;
+  int32_t endOffset = aOffset + length;
   gfxSkipCharsIterator iter(aIter);
 
   // skip leading whitespace, then consume clusters that start with punctuation
@@ -6277,13 +6788,13 @@ FindFirstLetterRange(const nsTextFragment* aFrag,
                               GetTrimmableWhitespaceCount(aFrag, aOffset, length, 1),
                               endOffset);
   if (i == length)
-    return PR_FALSE;
+    return false;
 
   // If the next character is not a letter or number, there is no first-letter.
-  // Return PR_TRUE so that we don't go on looking, but set aLength to 0.
+  // Return true so that we don't go on looking, but set aLength to 0.
   if (!nsContentUtils::IsAlphanumericAt(aFrag, aOffset + i)) {
     *aLength = 0;
-    return PR_TRUE;
+    return true;
   }
 
   // consume another cluster (the actual first letter)
@@ -6291,21 +6802,21 @@ FindFirstLetterRange(const nsTextFragment* aFrag,
   FindClusterEnd(aTextRun, endOffset, &iter);
   i = iter.GetOriginalOffset() - aOffset;
   if (i + 1 == length)
-    return PR_TRUE;
+    return true;
 
   // consume clusters that start with punctuation
   i = FindEndOfPunctuationRun(aFrag, aTextRun, &iter, aOffset, i + 1, endOffset);
   if (i < length)
     *aLength = i;
-  return PR_TRUE;
+  return true;
 }
 
-static PRUint32
+static uint32_t
 FindStartAfterSkippingWhitespace(PropertyProvider* aProvider,
                                  nsIFrame::InlineIntrinsicWidthData* aData,
                                  const nsStyleText* aTextStyle,
                                  gfxSkipCharsIterator* aIterator,
-                                 PRUint32 aFlowEndInTextRun)
+                                 uint32_t aFlowEndInTextRun)
 {
   if (aData->skipWhitespace) {
     while (aIterator->GetSkippedOffset() < aFlowEndInTextRun &&
@@ -6316,10 +6827,45 @@ FindStartAfterSkippingWhitespace(PropertyProvider* aProvider,
   return aIterator->GetSkippedOffset();
 }
 
+union VoidPtrOrFloat {
+  VoidPtrOrFloat() : p(nullptr) {}
+
+  void *p;
+  float f;
+};
+
+float
+nsTextFrame::GetFontSizeInflation() const
+{
+  if (!HasFontSizeInflation()) {
+    return 1.0f;
+  }
+  VoidPtrOrFloat u;
+  u.p = Properties().Get(FontSizeInflationProperty());
+  return u.f;
+}
+
+void
+nsTextFrame::SetFontSizeInflation(float aInflation)
+{
+  if (aInflation == 1.0f) {
+    if (HasFontSizeInflation()) {
+      RemoveStateBits(TEXT_HAS_FONT_INFLATION);
+      Properties().Delete(FontSizeInflationProperty());
+    }
+    return;
+  }
+
+  AddStateBits(TEXT_HAS_FONT_INFLATION);
+  VoidPtrOrFloat u;
+  u.f = aInflation;
+  Properties().Set(FontSizeInflationProperty(), u.p);
+}
+
 /* virtual */ 
 void nsTextFrame::MarkIntrinsicWidthsDirty()
 {
-  ClearTextRun(nsnull);
+  ClearTextRuns();
   nsFrame::MarkIntrinsicWidthsDirty();
 }
 
@@ -6327,13 +6873,16 @@ void nsTextFrame::MarkIntrinsicWidthsDirty()
 // temporarily override the "current line ending" settings.
 void
 nsTextFrame::AddInlineMinWidthForFlow(nsRenderingContext *aRenderingContext,
-                                      nsIFrame::InlineMinWidthData *aData)
+                                      nsIFrame::InlineMinWidthData *aData,
+                                      TextRunType aTextRunType)
 {
-  PRUint32 flowEndInTextRun;
+  uint32_t flowEndInTextRun;
   gfxContext* ctx = aRenderingContext->ThebesContext();
   gfxSkipCharsIterator iter =
-    EnsureTextRun(ctx, aData->lineContainer, aData->line, &flowEndInTextRun);
-  if (!mTextRun)
+    EnsureTextRun(aTextRunType, ctx, aData->lineContainer,
+                  aData->line, &flowEndInTextRun);
+  gfxTextRun *textRun = GetTextRun(aTextRunType);
+  if (!textRun)
     return;
 
   // Pass null for the line container. This will disable tab spacing, but that's
@@ -6343,28 +6892,28 @@ nsTextFrame::AddInlineMinWidthForFlow(nsRenderingContext *aRenderingContext,
 
   // If we're hyphenating, the PropertyProvider needs the actual length;
   // otherwise we can just pass PR_INT32_MAX to mean "all the text"
-  PRInt32 len = PR_INT32_MAX;
-  PRBool hyphenating = frag->GetLength() > 0 &&
+  int32_t len = PR_INT32_MAX;
+  bool hyphenating = frag->GetLength() > 0 &&
     (textStyle->mHyphens == NS_STYLE_HYPHENS_AUTO ||
      (textStyle->mHyphens == NS_STYLE_HYPHENS_MANUAL &&
-      (mTextRun->GetFlags() & gfxTextRunFactory::TEXT_ENABLE_HYPHEN_BREAKS) != 0));
+      (textRun->GetFlags() & gfxTextRunFactory::TEXT_ENABLE_HYPHEN_BREAKS) != 0));
   if (hyphenating) {
     gfxSkipCharsIterator tmp(iter);
-    len = NS_MIN<PRInt32>(GetContentOffset() + GetInFlowContentLength(),
+    len = NS_MIN<int32_t>(GetContentOffset() + GetInFlowContentLength(),
                  tmp.ConvertSkippedToOriginal(flowEndInTextRun)) - iter.GetOriginalOffset();
   }
-  PropertyProvider provider(mTextRun, textStyle, frag, this,
-                            iter, len, nsnull, 0);
+  PropertyProvider provider(textRun, textStyle, frag, this,
+                            iter, len, nullptr, 0, aTextRunType);
 
-  PRBool collapseWhitespace = !textStyle->WhiteSpaceIsSignificant();
-  PRBool preformatNewlines = textStyle->NewlineIsSignificant();
-  PRBool preformatTabs = textStyle->WhiteSpaceIsSignificant();
+  bool collapseWhitespace = !textStyle->WhiteSpaceIsSignificant();
+  bool preformatNewlines = textStyle->NewlineIsSignificant();
+  bool preformatTabs = textStyle->WhiteSpaceIsSignificant();
   gfxFloat tabWidth = -1;
-  PRUint32 start =
+  uint32_t start =
     FindStartAfterSkippingWhitespace(&provider, aData, textStyle, &iter, flowEndInTextRun);
 
-  nsAutoTArray<PRPackedBool,BIG_TEXT_NODE_SIZE> hyphBuffer;
-  PRPackedBool *hyphBreakBefore = nsnull;
+  AutoFallibleTArray<bool,BIG_TEXT_NODE_SIZE> hyphBuffer;
+  bool *hyphBreakBefore = nullptr;
   if (hyphenating) {
     hyphBreakBefore = hyphBuffer.AppendElements(flowEndInTextRun - start);
     if (hyphBreakBefore) {
@@ -6373,16 +6922,16 @@ nsTextFrame::AddInlineMinWidthForFlow(nsRenderingContext *aRenderingContext,
     }
   }
 
-  for (PRUint32 i = start, wordStart = start; i <= flowEndInTextRun; ++i) {
-    PRBool preformattedNewline = PR_FALSE;
-    PRBool preformattedTab = PR_FALSE;
+  for (uint32_t i = start, wordStart = start; i <= flowEndInTextRun; ++i) {
+    bool preformattedNewline = false;
+    bool preformattedTab = false;
     if (i < flowEndInTextRun) {
       // XXXldb Shouldn't we be including the newline as part of the
       // segment that it ends rather than part of the segment that it
       // starts?
-      preformattedNewline = preformatNewlines && mTextRun->GetChar(i) == '\n';
-      preformattedTab = preformatTabs && mTextRun->GetChar(i) == '\t';
-      if (!mTextRun->CanBreakLineBefore(i) &&
+      preformattedNewline = preformatNewlines && textRun->CharIsNewline(i);
+      preformattedTab = preformatTabs && textRun->CharIsTab(i);
+      if (!textRun->CanBreakLineBefore(i) &&
           !preformattedNewline &&
           !preformattedTab &&
           (!hyphBreakBefore || !hyphBreakBefore[i - start]))
@@ -6394,12 +6943,12 @@ nsTextFrame::AddInlineMinWidthForFlow(nsRenderingContext *aRenderingContext,
 
     if (i > wordStart) {
       nscoord width =
-        NSToCoordCeilClamped(mTextRun->GetAdvanceWidth(wordStart, i - wordStart, &provider));
+        NSToCoordCeilClamped(textRun->GetAdvanceWidth(wordStart, i - wordStart, &provider));
       aData->currentLine = NSCoordSaturatingAdd(aData->currentLine, width);
-      aData->atStartOfLine = PR_FALSE;
+      aData->atStartOfLine = false;
 
       if (collapseWhitespace) {
-        PRUint32 trimStart = GetEndOfTrimmedText(frag, textStyle, wordStart, i, &iter);
+        uint32_t trimStart = GetEndOfTrimmedText(frag, textStyle, wordStart, i, &iter);
         if (trimStart == start) {
           // This is *all* trimmable whitespace, so whatever trailingWhitespace
           // we saw previously is still trailing...
@@ -6407,7 +6956,7 @@ nsTextFrame::AddInlineMinWidthForFlow(nsRenderingContext *aRenderingContext,
         } else {
           // Some non-whitespace so the old trailingWhitespace is no longer trailing
           aData->trailingWhitespace =
-            NSToCoordCeilClamped(mTextRun->GetAdvanceWidth(trimStart, i - trimStart, &provider));
+            NSToCoordCeilClamped(textRun->GetAdvanceWidth(trimStart, i - trimStart, &provider));
         }
       } else {
         aData->trailingWhitespace = 0;
@@ -6420,12 +6969,12 @@ nsTextFrame::AddInlineMinWidthForFlow(nsRenderingContext *aRenderingContext,
       aData->currentLine += nscoord(spacing.mBefore);
       gfxFloat afterTab =
         AdvanceToNextTab(aData->currentLine, this,
-                         mTextRun, &tabWidth);
+                         textRun, &tabWidth);
       aData->currentLine = nscoord(afterTab + spacing.mAfter);
       wordStart = i + 1;
     } else if (i < flowEndInTextRun ||
-        (i == mTextRun->GetLength() &&
-         (mTextRun->GetFlags() & nsTextFrameUtils::TEXT_HAS_TRAILING_BREAK))) {
+        (i == textRun->GetLength() &&
+         (textRun->GetFlags() & nsTextFrameUtils::TEXT_HAS_TRAILING_BREAK))) {
       if (preformattedNewline) {
         aData->ForceBreak(aRenderingContext);
       } else if (i < flowEndInTextRun && hyphBreakBefore &&
@@ -6433,7 +6982,7 @@ nsTextFrame::AddInlineMinWidthForFlow(nsRenderingContext *aRenderingContext,
       {
         aData->OptionallyBreak(aRenderingContext, 
                                NSToCoordRound(provider.GetHyphenWidth()));
-      } {
+      } else {
         aData->OptionallyBreak(aRenderingContext);
       }
       wordStart = i;
@@ -6449,33 +6998,46 @@ nsTextFrame::AddInlineMinWidthForFlow(nsRenderingContext *aRenderingContext,
   }
 }
 
+bool nsTextFrame::IsCurrentFontInflation(float aInflation) const {
+  return fabsf(aInflation - GetFontSizeInflation()) < 1e-6;
+}
+
 // XXX Need to do something here to avoid incremental reflow bugs due to
 // first-line and first-letter changing min-width
 /* virtual */ void
 nsTextFrame::AddInlineMinWidth(nsRenderingContext *aRenderingContext,
                                nsIFrame::InlineMinWidthData *aData)
 {
+  float inflation = nsLayoutUtils::FontSizeInflationFor(this);
+  TextRunType trtype = (inflation == 1.0f) ? eNotInflated : eInflated;
+
+  if (trtype == eInflated && !IsCurrentFontInflation(inflation)) {
+    // FIXME: Ideally, if we already have a text run, we'd move it to be
+    // the uninflated text run.
+    ClearTextRun(nullptr, nsTextFrame::eInflated);
+  }
+
   nsTextFrame* f;
-  gfxTextRun* lastTextRun = nsnull;
+  gfxTextRun* lastTextRun = nullptr;
   // nsContinuingTextFrame does nothing for AddInlineMinWidth; all text frames
   // in the flow are handled right here.
   for (f = this; f; f = static_cast<nsTextFrame*>(f->GetNextContinuation())) {
-    // f->mTextRun could be null if we haven't set up textruns yet for f.
-    // Except in OOM situations, lastTextRun will only be null for the first
-    // text frame.
-    if (f == this || f->mTextRun != lastTextRun) {
+    // f->GetTextRun(nsTextFrame::eNotInflated) could be null if we
+    // haven't set up textruns yet for f.  Except in OOM situations,
+    // lastTextRun will only be null for the first text frame.
+    if (f == this || f->GetTextRun(trtype) != lastTextRun) {
       nsIFrame* lc;
       if (aData->lineContainer &&
           aData->lineContainer != (lc = FindLineContainer(f))) {
         NS_ASSERTION(f != this, "wrong InlineMinWidthData container"
                                 " for first continuation");
-        aData->line = nsnull;
+        aData->line = nullptr;
         aData->lineContainer = lc;
       }
 
       // This will process all the text frames that share the same textrun as f.
-      f->AddInlineMinWidthForFlow(aRenderingContext, aData);
-      lastTextRun = f->mTextRun;
+      f->AddInlineMinWidthForFlow(aRenderingContext, aData, trtype);
+      lastTextRun = f->GetTextRun(trtype);
     }
   }
 }
@@ -6484,13 +7046,16 @@ nsTextFrame::AddInlineMinWidth(nsRenderingContext *aRenderingContext,
 // temporarily override the "current line ending" settings.
 void
 nsTextFrame::AddInlinePrefWidthForFlow(nsRenderingContext *aRenderingContext,
-                                       nsIFrame::InlinePrefWidthData *aData)
+                                       nsIFrame::InlinePrefWidthData *aData,
+                                       TextRunType aTextRunType)
 {
-  PRUint32 flowEndInTextRun;
+  uint32_t flowEndInTextRun;
   gfxContext* ctx = aRenderingContext->ThebesContext();
   gfxSkipCharsIterator iter =
-    EnsureTextRun(ctx, aData->lineContainer, aData->line, &flowEndInTextRun);
-  if (!mTextRun)
+    EnsureTextRun(aTextRunType, ctx, aData->lineContainer,
+                  aData->line, &flowEndInTextRun);
+  gfxTextRun *textRun = GetTextRun(aTextRunType);
+  if (!textRun)
     return;
 
   // Pass null for the line container. This will disable tab spacing, but that's
@@ -6498,30 +7063,30 @@ nsTextFrame::AddInlinePrefWidthForFlow(nsRenderingContext *aRenderingContext,
   
   const nsStyleText* textStyle = GetStyleText();
   const nsTextFragment* frag = mContent->GetText();
-  PropertyProvider provider(mTextRun, textStyle, frag, this,
-                            iter, PR_INT32_MAX, nsnull, 0);
+  PropertyProvider provider(textRun, textStyle, frag, this,
+                            iter, PR_INT32_MAX, nullptr, 0, aTextRunType);
 
-  PRBool collapseWhitespace = !textStyle->WhiteSpaceIsSignificant();
-  PRBool preformatNewlines = textStyle->NewlineIsSignificant();
-  PRBool preformatTabs = textStyle->WhiteSpaceIsSignificant();
+  bool collapseWhitespace = !textStyle->WhiteSpaceIsSignificant();
+  bool preformatNewlines = textStyle->NewlineIsSignificant();
+  bool preformatTabs = textStyle->WhiteSpaceIsSignificant();
   gfxFloat tabWidth = -1;
-  PRUint32 start =
+  uint32_t start =
     FindStartAfterSkippingWhitespace(&provider, aData, textStyle, &iter, flowEndInTextRun);
 
   // XXX Should we consider hyphenation here?
   // If newlines and tabs aren't preformatted, nothing to do inside
   // the loop so make i skip to the end
-  PRUint32 loopStart = (preformatNewlines || preformatTabs) ? start : flowEndInTextRun;
-  for (PRUint32 i = loopStart, lineStart = start; i <= flowEndInTextRun; ++i) {
-    PRBool preformattedNewline = PR_FALSE;
-    PRBool preformattedTab = PR_FALSE;
+  uint32_t loopStart = (preformatNewlines || preformatTabs) ? start : flowEndInTextRun;
+  for (uint32_t i = loopStart, lineStart = start; i <= flowEndInTextRun; ++i) {
+    bool preformattedNewline = false;
+    bool preformattedTab = false;
     if (i < flowEndInTextRun) {
       // XXXldb Shouldn't we be including the newline as part of the
       // segment that it ends rather than part of the segment that it
       // starts?
       NS_ASSERTION(preformatNewlines, "We can't be here unless newlines are hard breaks");
-      preformattedNewline = preformatNewlines && mTextRun->GetChar(i) == '\n';
-      preformattedTab = preformatTabs && mTextRun->GetChar(i) == '\t';
+      preformattedNewline = preformatNewlines && textRun->CharIsNewline(i);
+      preformattedTab = preformatTabs && textRun->CharIsTab(i);
       if (!preformattedNewline && !preformattedTab) {
         // we needn't break here (and it's not the end of the flow)
         continue;
@@ -6530,11 +7095,11 @@ nsTextFrame::AddInlinePrefWidthForFlow(nsRenderingContext *aRenderingContext,
 
     if (i > lineStart) {
       nscoord width =
-        NSToCoordCeilClamped(mTextRun->GetAdvanceWidth(lineStart, i - lineStart, &provider));
+        NSToCoordCeilClamped(textRun->GetAdvanceWidth(lineStart, i - lineStart, &provider));
       aData->currentLine = NSCoordSaturatingAdd(aData->currentLine, width);
 
       if (collapseWhitespace) {
-        PRUint32 trimStart = GetEndOfTrimmedText(frag, textStyle, lineStart, i, &iter);
+        uint32_t trimStart = GetEndOfTrimmedText(frag, textStyle, lineStart, i, &iter);
         if (trimStart == start) {
           // This is *all* trimmable whitespace, so whatever trailingWhitespace
           // we saw previously is still trailing...
@@ -6542,7 +7107,7 @@ nsTextFrame::AddInlinePrefWidthForFlow(nsRenderingContext *aRenderingContext,
         } else {
           // Some non-whitespace so the old trailingWhitespace is no longer trailing
           aData->trailingWhitespace =
-            NSToCoordCeilClamped(mTextRun->GetAdvanceWidth(trimStart, i - trimStart, &provider));
+            NSToCoordCeilClamped(textRun->GetAdvanceWidth(trimStart, i - trimStart, &provider));
         }
       } else {
         aData->trailingWhitespace = 0;
@@ -6555,7 +7120,7 @@ nsTextFrame::AddInlinePrefWidthForFlow(nsRenderingContext *aRenderingContext,
       aData->currentLine += nscoord(spacing.mBefore);
       gfxFloat afterTab =
         AdvanceToNextTab(aData->currentLine, this,
-                         mTextRun, &tabWidth);
+                         textRun, &tabWidth);
       aData->currentLine = nscoord(afterTab + spacing.mAfter);
       lineStart = i + 1;
     } else if (preformattedNewline) {
@@ -6579,27 +7144,36 @@ nsTextFrame::AddInlinePrefWidthForFlow(nsRenderingContext *aRenderingContext,
 nsTextFrame::AddInlinePrefWidth(nsRenderingContext *aRenderingContext,
                                 nsIFrame::InlinePrefWidthData *aData)
 {
+  float inflation = nsLayoutUtils::FontSizeInflationFor(this);
+  TextRunType trtype = (inflation == 1.0f) ? eNotInflated : eInflated;
+
+  if (trtype == eInflated && !IsCurrentFontInflation(inflation)) {
+    // FIXME: Ideally, if we already have a text run, we'd move it to be
+    // the uninflated text run.
+    ClearTextRun(nullptr, nsTextFrame::eInflated);
+  }
+
   nsTextFrame* f;
-  gfxTextRun* lastTextRun = nsnull;
+  gfxTextRun* lastTextRun = nullptr;
   // nsContinuingTextFrame does nothing for AddInlineMinWidth; all text frames
   // in the flow are handled right here.
   for (f = this; f; f = static_cast<nsTextFrame*>(f->GetNextContinuation())) {
-    // f->mTextRun could be null if we haven't set up textruns yet for f.
-    // Except in OOM situations, lastTextRun will only be null for the first
-    // text frame.
-    if (f == this || f->mTextRun != lastTextRun) {
+    // f->GetTextRun(nsTextFrame::eNotInflated) could be null if we
+    // haven't set up textruns yet for f.  Except in OOM situations,
+    // lastTextRun will only be null for the first text frame.
+    if (f == this || f->GetTextRun(trtype) != lastTextRun) {
       nsIFrame* lc;
       if (aData->lineContainer &&
           aData->lineContainer != (lc = FindLineContainer(f))) {
         NS_ASSERTION(f != this, "wrong InlinePrefWidthData container"
                                 " for first continuation");
-        aData->line = nsnull;
+        aData->line = nullptr;
         aData->lineContainer = lc;
       }
 
       // This will process all the text frames that share the same textrun as f.
-      f->AddInlinePrefWidthForFlow(aRenderingContext, aData);
-      lastTextRun = f->mTextRun;
+      f->AddInlinePrefWidthForFlow(aRenderingContext, aData, trtype);
+      lastTextRun = f->GetTextRun(trtype);
     }
   }
 }
@@ -6608,7 +7182,7 @@ nsTextFrame::AddInlinePrefWidth(nsRenderingContext *aRenderingContext,
 nsTextFrame::ComputeSize(nsRenderingContext *aRenderingContext,
                          nsSize aCBSize, nscoord aAvailableWidth,
                          nsSize aMargin, nsSize aBorder, nsSize aPadding,
-                         PRBool aShrinkWrap)
+                         uint32_t aFlags)
 {
   // Inlines and text don't compute size before reflow.
   return nsSize(NS_UNCONSTRAINEDSIZE, NS_UNCONSTRAINEDSIZE);
@@ -6628,20 +7202,21 @@ RoundOut(const gfxRect& aRect)
 nsRect
 nsTextFrame::ComputeTightBounds(gfxContext* aContext) const
 {
-  if ((GetStyleContext()->HasTextDecorationLines() &&
-       eCompatibility_NavQuirks == PresContext()->CompatibilityMode()) ||
+  if (GetStyleContext()->HasTextDecorationLines() ||
       (GetStateBits() & TEXT_HYPHEN_BREAK)) {
     // This is conservative, but OK.
     return GetVisualOverflowRect();
   }
 
-  gfxSkipCharsIterator iter = const_cast<nsTextFrame*>(this)->EnsureTextRun();
+  gfxSkipCharsIterator iter =
+    const_cast<nsTextFrame*>(this)->EnsureTextRun(nsTextFrame::eInflated);
   if (!mTextRun)
     return nsRect(0, 0, 0, 0);
 
-  PropertyProvider provider(const_cast<nsTextFrame*>(this), iter);
+  PropertyProvider provider(const_cast<nsTextFrame*>(this), iter,
+                            nsTextFrame::eInflated);
   // Trim trailing whitespace
-  provider.InitializeForDisplay(PR_TRUE);
+  provider.InitializeForDisplay(true);
 
   gfxTextRun::Metrics metrics =
         mTextRun->MeasureText(provider.GetStart().GetSkippedOffset(),
@@ -6653,33 +7228,92 @@ nsTextFrame::ComputeTightBounds(gfxContext* aContext) const
   return RoundOut(metrics.mBoundingBox) + nsPoint(0, mAscent);
 }
 
-static PRBool
+static bool
 HasSoftHyphenBefore(const nsTextFragment* aFrag, gfxTextRun* aTextRun,
-                    PRInt32 aStartOffset, const gfxSkipCharsIterator& aIter)
+                    int32_t aStartOffset, const gfxSkipCharsIterator& aIter)
 {
   if (aIter.GetSkippedOffset() < aTextRun->GetLength() &&
       aTextRun->CanHyphenateBefore(aIter.GetSkippedOffset())) {
-    return PR_TRUE;
+    return true;
   }
   if (!(aTextRun->GetFlags() & nsTextFrameUtils::TEXT_HAS_SHY))
-    return PR_FALSE;
+    return false;
   gfxSkipCharsIterator iter = aIter;
   while (iter.GetOriginalOffset() > aStartOffset) {
     iter.AdvanceOriginal(-1);
     if (!iter.IsOriginalCharSkipped())
       break;
     if (aFrag->CharAt(iter.GetOriginalOffset()) == CH_SHY)
-      return PR_TRUE;
+      return true;
   }
-  return PR_FALSE;
+  return false;
+}
+
+static void
+RemoveInFlows(nsTextFrame* aFrame, nsTextFrame* aFirstToNotRemove)
+{
+  NS_PRECONDITION(aFrame != aFirstToNotRemove, "This will go very badly");
+  // We have to be careful here, because some RemoveFrame implementations
+  // remove and destroy not only the passed-in frame but also all its following
+  // in-flows (and sometimes all its following continuations in general).  So
+  // we remove |f| and everything up to but not including firstToNotRemove from
+  // the flow first, to make sure that only the things we want destroyed are
+  // destroyed.
+
+  // This sadly duplicates some of the logic from
+  // nsSplittableFrame::RemoveFromFlow.  We can get away with not duplicating
+  // all of it, because we know that the prev-continuation links of
+  // firstToNotRemove and f are fluid, and non-null.
+  NS_ASSERTION(aFirstToNotRemove->GetPrevContinuation() ==
+               aFirstToNotRemove->GetPrevInFlow() &&
+               aFirstToNotRemove->GetPrevInFlow() != nullptr,
+               "aFirstToNotRemove should have a fluid prev continuation");
+  NS_ASSERTION(aFrame->GetPrevContinuation() ==
+               aFrame->GetPrevInFlow() &&
+               aFrame->GetPrevInFlow() != nullptr,
+               "aFrame should have a fluid prev continuation");
+  
+  nsIFrame* prevContinuation = aFrame->GetPrevContinuation();
+  nsIFrame* lastRemoved = aFirstToNotRemove->GetPrevContinuation();
+
+  // Clear the text run on the first frame we'll remove to make sure none of
+  // the frames we keep shares its text run.  We need to do this now, before
+  // we unlink the frames to remove from the flow, because DestroyFrom calls
+  // ClearTextRuns() and that will start at the first frame with the text
+  // run and walk the continuations.  We only need to care about the first
+  // and last frames we remove since text runs are contiguous.
+  aFrame->ClearTextRuns();
+  if (aFrame != lastRemoved) {
+    // Clear the text run on the last frame we'll remove for the same reason.
+    static_cast<nsTextFrame*>(lastRemoved)->ClearTextRuns();
+  }
+
+  prevContinuation->SetNextInFlow(aFirstToNotRemove);
+  aFirstToNotRemove->SetPrevInFlow(prevContinuation);
+
+  aFrame->SetPrevInFlow(nullptr);
+  lastRemoved->SetNextInFlow(nullptr);
+
+  nsIFrame* parent = aFrame->GetParent();
+  nsBlockFrame* parentBlock = nsLayoutUtils::GetAsBlock(parent);
+  if (parentBlock) {
+    // Manually call DoRemoveFrame so we can tell it that we're
+    // removing empty frames; this will keep it from blowing away
+    // text runs.
+    parentBlock->DoRemoveFrame(aFrame, nsBlockFrame::FRAMES_ARE_EMPTY);
+  } else {
+    // Just remove it normally; use kNoReflowPrincipalList to avoid posting
+    // new reflows.
+    parent->RemoveFrame(nsIFrame::kNoReflowPrincipalList, aFrame);
+  }
 }
 
 void
-nsTextFrame::SetLength(PRInt32 aLength, nsLineLayout* aLineLayout,
-                       PRUint32 aSetLengthFlags)
+nsTextFrame::SetLength(int32_t aLength, nsLineLayout* aLineLayout,
+                       uint32_t aSetLengthFlags)
 {
   mContentLengthHint = aLength;
-  PRInt32 end = GetContentOffset() + aLength;
+  int32_t end = GetContentOffset() + aLength;
   nsTextFrame* f = static_cast<nsTextFrame*>(GetNextInFlow());
   if (!f)
     return;
@@ -6720,15 +7354,15 @@ nsTextFrame::SetLength(PRInt32 aLength, nsLineLayout* aLineLayout,
       if (NS_SUCCEEDED(rv)) {
         nsTextFrame* next = static_cast<nsTextFrame*>(newFrame);
         nsFrameList temp(next, next);
-        GetParent()->InsertFrames(nsGkAtoms::nextBidi, this, temp);
+        GetParent()->InsertFrames(kNoReflowPrincipalList, this, temp);
         f = next;
       }
     }
 
     f->mContentOffset = end;
-    if (f->GetTextRun() != mTextRun) {
-      ClearTextRun(nsnull);
-      f->ClearTextRun(nsnull);
+    if (f->GetTextRun(nsTextFrame::eInflated) != mTextRun) {
+      ClearTextRuns();
+      f->ClearTextRuns();
     }
     return;
   }
@@ -6737,11 +7371,15 @@ nsTextFrame::SetLength(PRInt32 aLength, nsLineLayout* aLineLayout,
   // We don't dirty those lines. That's OK, because when we reflow
   // our empty next-in-flow, it will take text from its next-in-flow and
   // dirty that line.
+
+  // Note that in the process we may end up removing some frames from
+  // the flow if they end up empty.
+  nsTextFrame* framesToRemove = nullptr;
   while (f && f->mContentOffset < end) {
     f->mContentOffset = end;
-    if (f->GetTextRun() != mTextRun) {
-      ClearTextRun(nsnull);
-      f->ClearTextRun(nsnull);
+    if (f->GetTextRun(nsTextFrame::eInflated) != mTextRun) {
+      ClearTextRuns();
+      f->ClearTextRuns();
     }
     nsTextFrame* next = static_cast<nsTextFrame*>(f->GetNextInFlow());
     // Note: the "f->GetNextSibling() == next" check below is to restrict
@@ -6752,24 +7390,39 @@ nsTextFrame::SetLength(PRInt32 aLength, nsLineLayout* aLineLayout,
         (aSetLengthFlags & ALLOW_FRAME_CREATION_AND_DESTRUCTION)) {
       // |f| is now empty.  We may as well remove it, instead of copying all
       // the text from |next| into it instead; the latter leads to use
-      // rebuilding textruns for all following continuations.  We have to be
-      // careful here, though, because some RemoveFrame implementations remove
-      // and destroy not only the passed-in frame but also all its following
-      // in-flows (and sometimes all its following continuations in general).
-      // So we remove |f| from the flow first, to make sure that only |f| is
-      // destroyed.
+      // rebuilding textruns for all following continuations.
       // We skip this optimization if we were called during bidi resolution,
       // since the bidi resolver may try to handle the destroyed frame later
       // and crash
-      nsSplittableFrame::RemoveFromFlow(f);
-      f->GetParent()->RemoveFrame(nsGkAtoms::nextBidi, f);
+      if (!framesToRemove) {
+        // Remember that we have to remove this frame.
+        framesToRemove = f;
+      }
+
+      // Important: if |f| has the same style context as its prev continuation,
+      // mark it accordingly so we can skip clearing textruns as needed.  Note
+      // that at this point f always has a prev continuation.
+      if (f->GetStyleContext() == f->GetPrevContinuation()->GetStyleContext()) {
+        f->AddStateBits(TEXT_STYLE_MATCHES_PREV_CONTINUATION);
+      }
+    } else if (framesToRemove) {
+      RemoveInFlows(framesToRemove, f);
+      framesToRemove = nullptr;
     }
     f = next;
+  }
+  NS_POSTCONDITION(!framesToRemove || (f && f->mContentOffset == end),
+                   "How did we exit the loop if we null out framesToRemove if "
+                   "!next || next->mContentOffset > end ?");
+  if (framesToRemove) {
+    // We are guaranteed that we exited the loop with f not null, per the
+    // postcondition above
+    RemoveInFlows(framesToRemove, f);
   }
 
 #ifdef DEBUG
   f = this;
-  PRInt32 iterations = 0;
+  int32_t iterations = 0;
   while (f && iterations < 10) {
     f->GetContentLength(); // Assert if negative length
     f = static_cast<nsTextFrame*>(f->GetNextContinuation());
@@ -6785,21 +7438,18 @@ nsTextFrame::SetLength(PRInt32 aLength, nsLineLayout* aLineLayout,
 #endif
 }
 
-PRBool
-nsTextFrame::IsFloatingFirstLetterChild()
+bool
+nsTextFrame::IsFloatingFirstLetterChild() const
 {
-  if (!(GetStateBits() & TEXT_FIRST_LETTER))
-    return PR_FALSE;
   nsIFrame* frame = GetParent();
-  if (!frame || frame->GetType() != nsGkAtoms::letterFrame)
-    return PR_FALSE;
-  return frame->GetStyleDisplay()->IsFloating();
+  return frame && frame->IsFloating() &&
+         frame->GetType() == nsGkAtoms::letterFrame;
 }
 
 struct NewlineProperty {
-  PRInt32 mStartOffset;
+  int32_t mStartOffset;
   // The offset of the first \n after mStartOffset, or -1 if there is none
-  PRInt32 mNewlineOffset;
+  int32_t mNewlineOffset;
 
   static void Destroy(void* aObject, nsIAtom* aPropertyName,
                       void* aPropertyValue, void* aData)
@@ -6834,10 +7484,38 @@ nsTextFrame::Reflow(nsPresContext*           aPresContext,
   return NS_OK;
 }
 
+#ifdef ACCESSIBILITY
+/**
+ * Notifies accessibility about text reflow. Used by nsTextFrame::ReflowText.
+ */
+class NS_STACK_CLASS ReflowTextA11yNotifier
+{
+public:
+  ReflowTextA11yNotifier(nsPresContext* aPresContext, nsIContent* aContent) :
+    mContent(aContent), mPresContext(aPresContext)
+  {
+  }
+  ~ReflowTextA11yNotifier()
+  {
+    nsAccessibilityService* accService = nsIPresShell::AccService();
+    if (accService) {
+      accService->UpdateText(mPresContext->PresShell(), mContent);
+    }
+  }
+private:
+  ReflowTextA11yNotifier();
+  ReflowTextA11yNotifier(const ReflowTextA11yNotifier&);
+  ReflowTextA11yNotifier& operator =(const ReflowTextA11yNotifier&);
+
+  nsIContent* mContent;
+  nsPresContext* mPresContext;
+};
+#endif
+
 void
 nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
                         nsRenderingContext* aRenderingContext,
-                        PRBool aShouldBlink,
+                        bool aShouldBlink,
                         nsHTMLReflowMetrics& aMetrics,
                         nsReflowStatus& aStatus)
 {
@@ -6847,6 +7525,11 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
 #endif
 
   nsPresContext* presContext = PresContext();
+
+#ifdef ACCESSIBILITY
+  // Schedule the update of accessible tree since rendered text might be changed.
+  ReflowTextA11yNotifier(presContext, mContent);
+#endif
 
   /////////////////////////////////////////////////////////////////////
   // Set up flags and clear out state
@@ -6861,7 +7544,7 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
   // so that when doing reflow our styles prevail over any part of the
   // textrun we look at. Note that next-in-flows may be mapping the same
   // content; gfxTextRun construction logic will ensure that we take priority.
-  PRInt32 maxContentLength = GetInFlowContentLength();
+  int32_t maxContentLength = GetInFlowContentLength();
 
   // We don't need to reflow if there is no content.
   if (!maxContentLength) {
@@ -6889,12 +7572,12 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
 
   const nsStyleText* textStyle = GetStyleText();
 
-  PRBool atStartOfLine = aLineLayout.LineAtStart();
+  bool atStartOfLine = aLineLayout.LineAtStart();
   if (atStartOfLine) {
     AddStateBits(TEXT_START_OF_LINE);
   }
 
-  PRUint32 flowEndInTextRun;
+  uint32_t flowEndInTextRun;
   nsIFrame* lineContainer = aLineLayout.GetLineContainerFrame();
   gfxContext* ctx = aRenderingContext->ThebesContext();
   const nsTextFragment* frag = mContent->GetText();
@@ -6902,14 +7585,14 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
   // DOM offsets of the text range we need to measure, after trimming
   // whitespace, restricting to first-letter, and restricting preformatted text
   // to nearest newline
-  PRInt32 length = maxContentLength;
-  PRInt32 offset = GetContentOffset();
+  int32_t length = maxContentLength;
+  int32_t offset = GetContentOffset();
 
   // Restrict preformatted text to the nearest newline
-  PRInt32 newLineOffset = -1; // this will be -1 or a content offset
-  PRInt32 contentNewLineOffset = -1;
+  int32_t newLineOffset = -1; // this will be -1 or a content offset
+  int32_t contentNewLineOffset = -1;
   // Pointer to the nsGkAtoms::newline set on this frame's element
-  NewlineProperty* cachedNewlineOffset = nsnull;
+  NewlineProperty* cachedNewlineOffset = nullptr;
   if (textStyle->NewlineIsSignificant()) {
     cachedNewlineOffset =
       static_cast<NewlineProperty*>(mContent->GetProperty(nsGkAtoms::newline));
@@ -6933,17 +7616,18 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
       length = newLineOffset + 1 - offset;
     }
   }
-  if (atStartOfLine && !textStyle->WhiteSpaceIsSignificant()) {
+  if ((atStartOfLine && !textStyle->WhiteSpaceIsSignificant()) ||
+      (GetStateBits() & TEXT_FORCE_TRIM_WHITESPACE)) {
     // Skip leading whitespace. Make sure we don't skip a 'pre-line'
     // newline if there is one.
-    PRInt32 skipLength = newLineOffset >= 0 ? length - 1 : length;
-    PRInt32 whitespaceCount =
+    int32_t skipLength = newLineOffset >= 0 ? length - 1 : length;
+    int32_t whitespaceCount =
       GetTrimmableWhitespaceCount(frag, offset, skipLength, 1);
     offset += whitespaceCount;
     length -= whitespaceCount;
   }
 
-  PRBool completedFirstLetter = PR_FALSE;
+  bool completedFirstLetter = false;
   // Layout dependent styles are a problem because we need to reconstruct
   // the gfxTextRun based on our layout.
   if (aLineLayout.GetInFirstLetter() || aLineLayout.GetInFirstLine()) {
@@ -6954,13 +7638,16 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
       // floating first-letter boundaries are significant in textrun
       // construction, so clear the textrun out every time we hit a first-letter
       // and have changed our length (which controls the first-letter boundary)
-      ClearTextRun(nsnull);
+      ClearTextRuns();
       // Find the length of the first-letter. We need a textrun for this.
+      // REVIEW: maybe-bogus inflation should be ok (fixed below)
       gfxSkipCharsIterator iter =
-        EnsureTextRun(ctx, lineContainer, aLineLayout.GetLine(), &flowEndInTextRun);
+        EnsureTextRun(nsTextFrame::eInflated, ctx,
+                      lineContainer, aLineLayout.GetLine(),
+                      &flowEndInTextRun);
 
       if (mTextRun) {
-        PRInt32 firstLetterLength = length;
+        int32_t firstLetterLength = length;
         if (aLineLayout.GetFirstLetterStyleOK()) {
           completedFirstLetter =
             FindFirstLetterRange(frag, mTextRun, offset, iter, &firstLetterLength);
@@ -6971,7 +7658,7 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
               // There is no text to be consumed by the first-letter before the
               // preformatted newline. Note that the first letter is therefore
               // complete (FindFirstLetterRange will have returned false).
-              completedFirstLetter = PR_TRUE;
+              completedFirstLetter = true;
             }
           }
         } else {
@@ -6981,7 +7668,7 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
           // we're not actually supposed to have first-letter style. So
           // just make a zero-length first-letter.
           firstLetterLength = 0;
-          completedFirstLetter = PR_TRUE;
+          completedFirstLetter = true;
         }
         length = firstLetterLength;
         if (length) {
@@ -6993,22 +7680,35 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
         SetLength(offset + length - GetContentOffset(), &aLineLayout,
                   ALLOW_FRAME_CREATION_AND_DESTRUCTION);
         // Ensure that the textrun will be rebuilt
-        ClearTextRun(nsnull);
+        ClearTextRuns();
       }
     } 
   }
 
+  float fontSizeInflation = nsLayoutUtils::FontSizeInflationFor(this);
+
+  if (!IsCurrentFontInflation(fontSizeInflation)) {
+    // FIXME: Ideally, if we already have a text run, we'd move it to be
+    // the uninflated text run.
+    ClearTextRun(nullptr, nsTextFrame::eInflated);
+  }
+
   gfxSkipCharsIterator iter =
-    EnsureTextRun(ctx, lineContainer, aLineLayout.GetLine(), &flowEndInTextRun);
+    EnsureTextRun(nsTextFrame::eInflated, ctx,
+                  lineContainer, aLineLayout.GetLine(), &flowEndInTextRun);
+
+  NS_ABORT_IF_FALSE(IsCurrentFontInflation(fontSizeInflation),
+                    "EnsureTextRun should have set font size inflation");
 
   if (mTextRun && iter.GetOriginalEnd() < offset + length) {
     // The textrun does not map enough text for this frame. This can happen
     // when the textrun was ended in the middle of a text node because a
     // preformatted newline was encountered, and prev-in-flow frames have
     // consumed all the text of the textrun. We need a new textrun.
-    ClearTextRun(nsnull);
-    iter = EnsureTextRun(ctx, lineContainer,
-                         aLineLayout.GetLine(), &flowEndInTextRun);
+    ClearTextRuns();
+    iter = EnsureTextRun(nsTextFrame::eInflated, ctx,
+                         lineContainer, aLineLayout.GetLine(),
+                         &flowEndInTextRun);
   }
 
   if (!mTextRun) {
@@ -7031,9 +7731,9 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
        lineContainer->GetUsedBorderAndPadding().left)
     : -1;
   PropertyProvider provider(mTextRun, textStyle, frag, this, iter, length,
-      lineContainer, xOffsetForTabs);
+      lineContainer, xOffsetForTabs, nsTextFrame::eInflated);
 
-  PRUint32 transformedOffset = provider.GetStart().GetSkippedOffset();
+  uint32_t transformedOffset = provider.GetStart().GetSkippedOffset();
 
   // The metrics for the text go in here
   gfxTextRun::Metrics textMetrics;
@@ -7043,9 +7743,9 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
   NS_ASSERTION(!(NS_REFLOW_CALC_BOUNDING_METRICS & aMetrics.mFlags),
                "We shouldn't be passed NS_REFLOW_CALC_BOUNDING_METRICS anymore");
 
-  PRInt32 limitLength = length;
-  PRInt32 forceBreak = aLineLayout.GetForcedBreakPosition(mContent);
-  PRBool forceBreakAfter = PR_FALSE;
+  int32_t limitLength = length;
+  int32_t forceBreak = aLineLayout.GetForcedBreakPosition(mContent);
+  bool forceBreakAfter = false;
   if (forceBreak >= offset + length) {
     forceBreakAfter = forceBreak == offset + length;
     // The break is not within the text considered for this textframe.
@@ -7057,9 +7757,9 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
   }
   // This is the heart of text reflow right here! We don't know where
   // to break, so we need to see how much text fits in the available width.
-  PRUint32 transformedLength;
-  if (offset + limitLength >= PRInt32(frag->GetLength())) {
-    NS_ASSERTION(offset + limitLength == PRInt32(frag->GetLength()),
+  uint32_t transformedLength;
+  if (offset + limitLength >= int32_t(frag->GetLength())) {
+    NS_ASSERTION(offset + limitLength == int32_t(frag->GetLength()),
                  "Content offset/length out of bounds");
     NS_ASSERTION(flowEndInTextRun >= transformedOffset,
                  "Negative flow length?");
@@ -7071,20 +7771,21 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
     iter.SetOriginalOffset(offset + limitLength);
     transformedLength = iter.GetSkippedOffset() - transformedOffset;
   }
-  PRUint32 transformedLastBreak = 0;
-  PRBool usedHyphenation;
+  uint32_t transformedLastBreak = 0;
+  bool usedHyphenation;
   gfxFloat trimmedWidth = 0;
   gfxFloat availWidth = aAvailableWidth;
-  PRBool canTrimTrailingWhitespace = !textStyle->WhiteSpaceIsSignificant();
-  PRInt32 unusedOffset;  
+  bool canTrimTrailingWhitespace = !textStyle->WhiteSpaceIsSignificant() ||
+                                   (GetStateBits() & TEXT_FORCE_TRIM_WHITESPACE);
+  int32_t unusedOffset;  
   gfxBreakPriority breakPriority;
   aLineLayout.GetLastOptionalBreakPosition(&unusedOffset, &breakPriority);
-  PRUint32 transformedCharsFit =
+  uint32_t transformedCharsFit =
     mTextRun->BreakAndMeasureText(transformedOffset, transformedLength,
                                   (GetStateBits() & TEXT_START_OF_LINE) != 0,
                                   availWidth,
                                   &provider, !aLineLayout.LineIsBreakable(),
-                                  canTrimTrailingWhitespace ? &trimmedWidth : nsnull,
+                                  canTrimTrailingWhitespace ? &trimmedWidth : nullptr,
                                   &textMetrics, boundingBoxType, ctx,
                                   &usedHyphenation, &transformedLastBreak,
                                   textStyle->WordCanWrap(), &breakPriority);
@@ -7102,7 +7803,7 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
   // after we've computed charsFit.
   gfxSkipCharsIterator end(provider.GetEndHint());
   end.SetSkippedOffset(transformedOffset + transformedCharsFit);
-  PRInt32 charsFit = end.GetOriginalOffset() - offset;
+  int32_t charsFit = end.GetOriginalOffset() - offset;
   if (offset + charsFit == newLineOffset) {
     // We broke before a trailing preformatted '\n'. The newline should
     // be assigned to this frame. Note that newLineOffset will be -1 if
@@ -7113,7 +7814,7 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
   // That might have taken us beyond our assigned content range (because
   // we might have advanced over some skipped chars that extend outside
   // this frame), so get back in.
-  PRInt32 lastBreak = -1;
+  int32_t lastBreak = -1;
   if (charsFit >= limitLength) {
     charsFit = limitLength;
     if (transformedLastBreak != PR_UINT32_MAX) {
@@ -7126,7 +7827,7 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
     // note that this is a hyphenation break.
     if ((forceBreak >= 0 || forceBreakAfter) &&
         HasSoftHyphenBefore(frag, mTextRun, offset, end)) {
-      usedHyphenation = PR_TRUE;
+      usedHyphenation = true;
     }
   }
   if (usedHyphenation) {
@@ -7136,7 +7837,7 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
   }
 
   gfxFloat trimmableWidth = 0;
-  PRBool brokeText = forceBreak >= 0 || transformedCharsFit < transformedLength;
+  bool brokeText = forceBreak >= 0 || transformedCharsFit < transformedLength;
   if (canTrimTrailingWhitespace) {
     // Optimization: if we trimmed trailing whitespace, and we can be sure
     // this frame will be at the end of the line, then leave it trimmed off.
@@ -7144,11 +7845,12 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
     // the line. (If we actually do end up at the end of the line, we'll have
     // to trim it off again in TrimTrailingWhiteSpace, and we'd like to avoid
     // having to re-do it.)
-    if (brokeText) {
+    if (brokeText ||
+        (GetStateBits() & TEXT_FORCE_TRIM_WHITESPACE)) {
       // We're definitely going to break so our trailing whitespace should
-      // definitely be timmed. Record that we've already done it.
+      // definitely be trimmed. Record that we've already done it.
       AddStateBits(TEXT_TRIMMED_TRAILING_WHITESPACE);
-    } else {
+    } else if (!(GetStateBits() & TEXT_FORCE_TRIM_WHITESPACE)) {
       // We might not be at the end of the line. (Note that even if this frame
       // ends in breakable whitespace, it might not be at the end of the line
       // because it might be followed by breakable, but preformatted, whitespace.)
@@ -7168,10 +7870,10 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
     // record the last break opportunity
     NS_ASSERTION(textMetrics.mAdvanceWidth - trimmableWidth <= aAvailableWidth,
                  "If the text doesn't fit, and we have a break opportunity, why didn't MeasureText use it?");
-    aLineLayout.NotifyOptionalBreakPosition(mContent, lastBreak, PR_TRUE, breakPriority);
+    aLineLayout.NotifyOptionalBreakPosition(mContent, lastBreak, true, breakPriority);
   }
 
-  PRInt32 contentLength = offset + charsFit - GetContentOffset();
+  int32_t contentLength = offset + charsFit - GetContentOffset();
 
   /////////////////////////////////////////////////////////////////////
   // Compute output metrics
@@ -7188,7 +7890,7 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
   // Disallow negative widths
   aMetrics.width = NSToCoordCeil(NS_MAX(gfxFloat(0.0), textMetrics.mAdvanceWidth));
 
-  if (completedFirstLetter && transformedCharsFit == 0 && !usedHyphenation) {
+  if (transformedCharsFit == 0 && !usedHyphenation) {
     aMetrics.ascent = 0;
     aMetrics.height = 0;
   } else if (boundingBoxType != gfxFont::LOOSE_INK_EXTENTS) {
@@ -7220,8 +7922,8 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
   // When we have text decorations, we don't need to compute their overflow now
   // because we're guaranteed to do it later
   // (see nsLineLayout::RelativePositionFrames)
-  UnionAdditionalOverflow(presContext, provider, &aMetrics.VisualOverflow(),
-                          false);
+  UnionAdditionalOverflow(presContext, *aLineLayout.GetLineContainerRS(),
+                          provider, &aMetrics.VisualOverflow(), false);
 
   /////////////////////////////////////////////////////////////////////
   // Clean up, update state
@@ -7244,9 +7946,9 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
         textMetrics.mAdvanceWidth + provider.GetHyphenWidth() <= availWidth,
                                            eNormalBreak);
   }
-  PRBool breakAfter = forceBreakAfter;
+  bool breakAfter = forceBreakAfter;
   // length == 0 means either the text is empty or it's all collapsed away
-  PRBool emptyTextAtStartOfLine = atStartOfLine && length == 0;
+  bool emptyTextAtStartOfLine = atStartOfLine && length == 0;
   if (!breakAfter && charsFit == length && !emptyTextAtStartOfLine &&
       transformedOffset + transformedLength == mTextRun->GetLength() &&
       (mTextRun->GetFlags() & nsTextFrameUtils::TEXT_HAS_TRAILING_BREAK)) {
@@ -7259,10 +7961,10 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
     // trailing whitespace. So we need to subtract trimmableWidth here
     // because if we did break at this point, that much width would be trimmed.
     if (textMetrics.mAdvanceWidth - trimmableWidth > availWidth) {
-      breakAfter = PR_TRUE;
+      breakAfter = true;
     } else {
       aLineLayout.NotifyOptionalBreakPosition(mContent, offset + length,
-                                              PR_TRUE, eNormalBreak);
+                                              true, eNormalBreak);
     }
   }
 
@@ -7276,12 +7978,12 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
   } else if (contentLength > 0 && mContentOffset + contentLength - 1 == newLineOffset) {
     // Ends in \n
     aStatus = NS_INLINE_LINE_BREAK_AFTER(aStatus);
-    aLineLayout.SetLineEndsInBR(PR_TRUE);
+    aLineLayout.SetLineEndsInBR(true);
   } else if (breakAfter) {
     aStatus = NS_INLINE_LINE_BREAK_AFTER(aStatus);
   }
   if (completedFirstLetter) {
-    aLineLayout.SetFirstLetterStyleOK(PR_FALSE);
+    aLineLayout.SetFirstLetterStyleOK(false);
     aStatus |= NS_INLINE_BREAK_FIRST_LETTER_COMPLETE;
   }
 
@@ -7295,7 +7997,7 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
       if (NS_FAILED(mContent->SetProperty(nsGkAtoms::newline, cachedNewlineOffset,
                                           NewlineProperty::Destroy))) {
         delete cachedNewlineOffset;
-        cachedNewlineOffset = nsnull;
+        cachedNewlineOffset = nullptr;
       }
     }
     if (cachedNewlineOffset) {
@@ -7308,10 +8010,12 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
 
   // Compute space and letter counts for justification, if required
   if (!textStyle->WhiteSpaceIsSignificant() &&
-      lineContainer->GetStyleText()->mTextAlign == NS_STYLE_TEXT_ALIGN_JUSTIFY) {
+      (lineContainer->GetStyleText()->mTextAlign == NS_STYLE_TEXT_ALIGN_JUSTIFY ||
+       lineContainer->GetStyleText()->mTextAlignLast == NS_STYLE_TEXT_ALIGN_JUSTIFY) &&
+      !lineContainer->IsSVGText()) {
     AddStateBits(TEXT_JUSTIFICATION_ENABLED);    // This will include a space for trailing whitespace, if any is present.
     // This is corrected for in nsLineLayout::TrimWhiteSpaceIn.
-    PRInt32 numJustifiableCharacters =
+    int32_t numJustifiableCharacters =
       provider.ComputeJustifiableCharacters(offset, charsFit);
 
     NS_ASSERTION(numJustifiableCharacters <= charsFit,
@@ -7322,16 +8026,6 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
 
   SetLength(contentLength, &aLineLayout, ALLOW_FRAME_CREATION_AND_DESTRUCTION);
 
-  if (mContent->HasFlag(NS_TEXT_IN_SELECTION)) {
-    SelectionDetails* details = GetSelectionDetails();
-    if (details) {
-      AddStateBits(NS_FRAME_SELECTED_CONTENT);
-      DestroySelectionDetails(details);
-    } else {
-      RemoveStateBits(NS_FRAME_SELECTED_CONTENT);
-    }
-  }
-
   Invalidate(aMetrics.VisualOverflow());
 
 #ifdef NOISY_REFLOW
@@ -7340,67 +8034,60 @@ nsTextFrame::ReflowText(nsLineLayout& aLineLayout, nscoord aAvailableWidth,
          aMetrics.width, aMetrics.height, aMetrics.ascent,
          aStatus);
 #endif
-
-#ifdef ACCESSIBILITY
-  // Schedule the update of accessible tree when rendered text might be changed.
-  nsAccessibilityService* accService = nsIPresShell::AccService();
-  if (accService) {
-    accService->UpdateText(presContext->PresShell(), mContent);
-  }
-#endif
 }
 
-/* virtual */ PRBool
+/* virtual */ bool
 nsTextFrame::CanContinueTextRun() const
 {
   // We can continue a text run through a text frame
-  return PR_TRUE;
+  return true;
 }
 
 nsTextFrame::TrimOutput
 nsTextFrame::TrimTrailingWhiteSpace(nsRenderingContext* aRC)
 {
   TrimOutput result;
-  result.mChanged = PR_FALSE;
-  result.mLastCharIsJustifiable = PR_FALSE;
+  result.mChanged = false;
+  result.mLastCharIsJustifiable = false;
   result.mDeltaWidth = 0;
 
   AddStateBits(TEXT_END_OF_LINE);
 
-  PRInt32 contentLength = GetContentLength();
+  int32_t contentLength = GetContentLength();
   if (!contentLength)
     return result;
 
   gfxContext* ctx = aRC->ThebesContext();
-  gfxSkipCharsIterator start = EnsureTextRun(ctx);
+  gfxSkipCharsIterator start =
+    EnsureTextRun(nsTextFrame::eInflated, ctx);
   NS_ENSURE_TRUE(mTextRun, result);
 
-  PRUint32 trimmedStart = start.GetSkippedOffset();
+  uint32_t trimmedStart = start.GetSkippedOffset();
 
   const nsTextFragment* frag = mContent->GetText();
-  TrimmedOffsets trimmed = GetTrimmedOffsets(frag, PR_TRUE);
+  TrimmedOffsets trimmed = GetTrimmedOffsets(frag, true);
   gfxSkipCharsIterator trimmedEndIter = start;
   const nsStyleText* textStyle = GetStyleText();
   gfxFloat delta = 0;
-  PRUint32 trimmedEnd = trimmedEndIter.ConvertOriginalToSkipped(trimmed.GetEnd());
+  uint32_t trimmedEnd = trimmedEndIter.ConvertOriginalToSkipped(trimmed.GetEnd());
   
   if (GetStateBits() & TEXT_TRIMMED_TRAILING_WHITESPACE) {
     // We pre-trimmed this frame, so the last character is justifiable
-    result.mLastCharIsJustifiable = PR_TRUE;
+    result.mLastCharIsJustifiable = true;
   } else if (trimmed.GetEnd() < GetContentEnd()) {
     gfxSkipCharsIterator end = trimmedEndIter;
-    PRUint32 endOffset = end.ConvertOriginalToSkipped(GetContentOffset() + contentLength);
+    uint32_t endOffset = end.ConvertOriginalToSkipped(GetContentOffset() + contentLength);
     if (trimmedEnd < endOffset) {
       // We can't be dealing with tabs here ... they wouldn't be trimmed. So it's
       // OK to pass null for the line container.
       PropertyProvider provider(mTextRun, textStyle, frag, this, start, contentLength,
-                                nsnull, 0);
+                                nullptr, 0, nsTextFrame::eInflated);
       delta = mTextRun->GetAdvanceWidth(trimmedEnd, endOffset - trimmedEnd, &provider);
       // non-compressed whitespace being skipped at end of line -> justifiable
       // XXX should we actually *count* justifiable characters that should be
       // removed from the overall count? I think so...
-      result.mLastCharIsJustifiable = PR_TRUE;
-      result.mChanged = PR_TRUE;
+      result.mLastCharIsJustifiable = true;
+      result.mChanged = true;
     }
   }
 
@@ -7408,25 +8095,25 @@ nsTextFrame::TrimTrailingWhiteSpace(nsRenderingContext* aRC)
       (GetStateBits() & TEXT_JUSTIFICATION_ENABLED)) {
     // Check if any character in the last cluster is justifiable
     PropertyProvider provider(mTextRun, textStyle, frag, this, start, contentLength,
-                              nsnull, 0);
-    PRBool isCJK = IsChineseOrJapanese(this);
+                              nullptr, 0, nsTextFrame::eInflated);
+    bool isCJK = IsChineseOrJapanese(this);
     gfxSkipCharsIterator justificationStart(start), justificationEnd(trimmedEndIter);
     provider.FindJustificationRange(&justificationStart, &justificationEnd);
 
-    PRInt32 i;
+    int32_t i;
     for (i = justificationEnd.GetOriginalOffset(); i < trimmed.GetEnd(); ++i) {
       if (IsJustifiableCharacter(frag, i, isCJK)) {
-        result.mLastCharIsJustifiable = PR_TRUE;
+        result.mLastCharIsJustifiable = true;
       }
     }
   }
 
   gfxFloat advanceDelta;
   mTextRun->SetLineBreaks(trimmedStart, trimmedEnd - trimmedStart,
-                          (GetStateBits() & TEXT_START_OF_LINE) != 0, PR_TRUE,
+                          (GetStateBits() & TEXT_START_OF_LINE) != 0, true,
                           &advanceDelta, ctx);
   if (advanceDelta != 0) {
-    result.mChanged = PR_TRUE;
+    result.mChanged = true;
   }
 
   // aDeltaWidth is *subtracted* from our width.
@@ -7458,30 +8145,31 @@ nsTextFrame::TrimTrailingWhiteSpace(nsRenderingContext* aRC)
 }
 
 nsOverflowAreas
-nsTextFrame::RecomputeOverflow()
+nsTextFrame::RecomputeOverflow(const nsHTMLReflowState& aBlockReflowState)
 {
   nsRect bounds(nsPoint(0, 0), GetSize());
   nsOverflowAreas result(bounds, bounds);
 
-  gfxSkipCharsIterator iter = EnsureTextRun();
+  gfxSkipCharsIterator iter = EnsureTextRun(nsTextFrame::eInflated);
   if (!mTextRun)
     return result;
 
-  PropertyProvider provider(this, iter);
-  provider.InitializeForDisplay(PR_TRUE);
+  PropertyProvider provider(this, iter, nsTextFrame::eInflated);
+  provider.InitializeForDisplay(true);
 
   gfxTextRun::Metrics textMetrics =
     mTextRun->MeasureText(provider.GetStart().GetSkippedOffset(),
                           ComputeTransformedLength(provider),
-                          gfxFont::LOOSE_INK_EXTENTS, nsnull,
+                          gfxFont::LOOSE_INK_EXTENTS, nullptr,
                           &provider);
   nsRect &vis = result.VisualOverflow();
   vis.UnionRect(vis, RoundOut(textMetrics.mBoundingBox) + nsPoint(0, mAscent));
-  UnionAdditionalOverflow(PresContext(), provider, &vis, true);
+  UnionAdditionalOverflow(PresContext(), aBlockReflowState, provider,
+                          &vis, true);
   return result;
 }
 static PRUnichar TransformChar(const nsStyleText* aStyle, gfxTextRun* aTextRun,
-                               PRUint32 aSkippedOffset, PRUnichar aChar)
+                               uint32_t aSkippedOffset, PRUnichar aChar)
 {
   if (aChar == '\n') {
     return aStyle->NewlineIsSignificant() ? aChar : ' ';
@@ -7506,32 +8194,38 @@ static PRUnichar TransformChar(const nsStyleText* aStyle, gfxTextRun* aTextRun,
 nsresult nsTextFrame::GetRenderedText(nsAString* aAppendToString,
                                       gfxSkipChars* aSkipChars,
                                       gfxSkipCharsIterator* aSkipIter,
-                                      PRUint32 aSkippedStartOffset,
-                                      PRUint32 aSkippedMaxLength)
+                                      uint32_t aSkippedStartOffset,
+                                      uint32_t aSkippedMaxLength)
 {
   // The handling of aSkippedStartOffset and aSkippedMaxLength could be more efficient...
   gfxSkipCharsBuilder skipCharsBuilder;
   nsTextFrame* textFrame;
   const nsTextFragment* textFrag = mContent->GetText();
-  PRUint32 keptCharsLength = 0;
-  PRUint32 validCharsLength = 0;
+  uint32_t keptCharsLength = 0;
+  uint32_t validCharsLength = 0;
 
   // Build skipChars and copy text, for each text frame in this continuation block
   for (textFrame = this; textFrame;
        textFrame = static_cast<nsTextFrame*>(textFrame->GetNextContinuation())) {
     // For each text frame continuation in this block ...
 
+    if (textFrame->GetStateBits() & NS_FRAME_IS_DIRTY) {
+      // We don't trust dirty frames, expecially when computing rendered text.
+      break;
+    }
+
     // Ensure the text run and grab the gfxSkipCharsIterator for it
-    gfxSkipCharsIterator iter = textFrame->EnsureTextRun();
+    gfxSkipCharsIterator iter =
+      textFrame->EnsureTextRun(nsTextFrame::eInflated);
     if (!textFrame->mTextRun)
       return NS_ERROR_FAILURE;
 
     // Skip to the start of the text run, past ignored chars at start of line
     // XXX In the future we may decide to trim extra spaces before a hard line
     // break, in which case we need to accurately detect those sitations and 
-    // call GetTrimmedOffsets() with PR_TRUE to trim whitespace at the line's end
-    TrimmedOffsets trimmedContentOffsets = textFrame->GetTrimmedOffsets(textFrag, PR_FALSE);
-    PRInt32 startOfLineSkipChars = trimmedContentOffsets.mStart - textFrame->mContentOffset;
+    // call GetTrimmedOffsets() with true to trim whitespace at the line's end
+    TrimmedOffsets trimmedContentOffsets = textFrame->GetTrimmedOffsets(textFrag, false);
+    int32_t startOfLineSkipChars = trimmedContentOffsets.mStart - textFrame->mContentOffset;
     if (startOfLineSkipChars > 0) {
       skipCharsBuilder.SkipChars(startOfLineSkipChars);
       iter.SetOriginalOffset(trimmedContentOffsets.mStart);
@@ -7575,7 +8269,7 @@ nsresult nsTextFrame::GetRenderedText(nsAString* aAppendToString,
 #ifdef DEBUG
 // Translate the mapped content into a string that's printable
 void
-nsTextFrame::ToCString(nsCString& aBuf, PRInt32* aTotalContentLength) const
+nsTextFrame::ToCString(nsCString& aBuf, int32_t* aTotalContentLength) const
 {
   // Get the frames text content
   const nsTextFragment* frag = mContent->GetText();
@@ -7586,13 +8280,13 @@ nsTextFrame::ToCString(nsCString& aBuf, PRInt32* aTotalContentLength) const
   // Compute the total length of the text content.
   *aTotalContentLength = frag->GetLength();
 
-  PRInt32 contentLength = GetContentLength();
+  int32_t contentLength = GetContentLength();
   // Set current fragment and current fragment offset
   if (0 == contentLength) {
     return;
   }
-  PRInt32 fragOffset = GetContentOffset();
-  PRInt32 n = fragOffset + contentLength;
+  int32_t fragOffset = GetContentOffset();
+  int32_t n = fragOffset + contentLength;
   while (fragOffset < n) {
     PRUnichar ch = frag->CharAt(fragOffset++);
     if (ch == '\r') {
@@ -7616,7 +8310,7 @@ nsTextFrame::GetType() const
   return nsGkAtoms::textFrame;
 }
 
-/* virtual */ PRBool
+/* virtual */ bool
 nsTextFrame::IsEmpty()
 {
   NS_ASSERTION(!(mState & TEXT_IS_ONLY_WHITESPACE) ||
@@ -7627,18 +8321,18 @@ nsTextFrame::IsEmpty()
   const nsStyleText* textStyle = GetStyleText();
   if (textStyle->WhiteSpaceIsSignificant()) {
     // XXX shouldn't we return true if the length is zero?
-    return PR_FALSE;
+    return false;
   }
 
   if (mState & TEXT_ISNOT_ONLY_WHITESPACE) {
-    return PR_FALSE;
+    return false;
   }
 
   if (mState & TEXT_IS_ONLY_WHITESPACE) {
-    return PR_TRUE;
+    return true;
   }
   
-  PRBool isEmpty = IsAllWhitespace(mContent->GetText(),
+  bool isEmpty = IsAllWhitespace(mContent->GetText(),
           textStyle->mWhiteSpace != NS_STYLE_WHITESPACE_PRE_LINE);
   mState |= (isEmpty ? TEXT_IS_ONLY_WHITESPACE : TEXT_ISNOT_ONLY_WHITESPACE);
   return isEmpty;
@@ -7648,7 +8342,13 @@ nsTextFrame::IsEmpty()
 NS_IMETHODIMP
 nsTextFrame::GetFrameName(nsAString& aResult) const
 {
-  return MakeFrameName(NS_LITERAL_STRING("Text"), aResult);
+  MakeFrameName(NS_LITERAL_STRING("Text"), aResult);
+  int32_t totalContentLength;
+  nsCAutoString tmp;
+  ToCString(tmp, &totalContentLength);
+  tmp.SetLength(NS_MIN(tmp.Length(), 50u));
+  aResult += NS_LITERAL_STRING("\"") + NS_ConvertASCIItoUTF16(tmp) + NS_LITERAL_STRING("\"");
+  return NS_OK;
 }
 
 NS_IMETHODIMP_(nsFrameState)
@@ -7660,7 +8360,7 @@ nsTextFrame::GetDebugStateBits() const
 }
 
 NS_IMETHODIMP
-nsTextFrame::List(FILE* out, PRInt32 aIndent) const
+nsTextFrame::List(FILE* out, int32_t aIndent) const
 {
   // Output the tag
   IndentBy(out, aIndent);
@@ -7670,12 +8370,8 @@ nsTextFrame::List(FILE* out, PRInt32 aIndent) const
   }
   fprintf(out, " [run=%p]", static_cast<void*>(mTextRun));
 
-  PRInt32 totalContentLength;
-  nsCAutoString tmp;
-  ToCString(tmp, &totalContentLength);
-
   // Output the first/last content offset and prev/next in flow info
-  PRBool isComplete = GetContentEnd() == totalContentLength;
+  bool isComplete = uint32_t(GetContentEnd()) == GetContent()->TextLength();
   fprintf(out, "[%d,%d,%c] ", 
           GetContentOffset(), GetContentLength(),
           isComplete ? 'T':'F');
@@ -7684,21 +8380,18 @@ nsTextFrame::List(FILE* out, PRInt32 aIndent) const
     fprintf(out, " next=%p", static_cast<void*>(GetNextSibling()));
   }
   nsIFrame* prevContinuation = GetPrevContinuation();
-  if (nsnull != prevContinuation) {
+  if (nullptr != prevContinuation) {
     fprintf(out, " prev-continuation=%p", static_cast<void*>(prevContinuation));
   }
-  if (nsnull != mNextContinuation) {
+  if (nullptr != mNextContinuation) {
     fprintf(out, " next-continuation=%p", static_cast<void*>(mNextContinuation));
   }
 
   // Output the rect and state
   fprintf(out, " {%d,%d,%d,%d}", mRect.x, mRect.y, mRect.width, mRect.height);
-  if (0 != mState) {
-    if (mState & NS_FRAME_SELECTED_CONTENT) {
-      fprintf(out, " [state=%016llx] SELECTED", mState);
-    } else {
-      fprintf(out, " [state=%016llx]", mState);
-    }
+  fprintf(out, " [state=%016llx]", (unsigned long long)mState);
+  if (IsSelected()) {
+    fprintf(out, " SELECTED");
   }
   fprintf(out, " [content=%p]", static_cast<void*>(mContent));
   if (HasOverflowAreas()) {
@@ -7719,26 +8412,13 @@ nsTextFrame::List(FILE* out, PRInt32 aIndent) const
     fprintf(out, " pst=%s",
             NS_LossyConvertUTF16toASCII(atomString).get());
   }
-  fputs("<\n", out);
-
-  // Output the text
-  aIndent++;
-
-  IndentBy(out, aIndent);
-  fputs("\"", out);
-  fputs(tmp.get(), out);
-  fputs("\"\n", out);
-
-  aIndent--;
-  IndentBy(out, aIndent);
-  fputs(">\n", out);
-
+  fputs("\n", out);
   return NS_OK;
 }
 #endif
 
 void
-nsTextFrame::AdjustOffsetsForBidi(PRInt32 aStart, PRInt32 aEnd)
+nsTextFrame::AdjustOffsetsForBidi(int32_t aStart, int32_t aEnd)
 {
   AddStateBits(NS_FRAME_IS_BIDI);
   mContent->DeleteProperty(nsGkAtoms::flowlength);
@@ -7748,20 +8428,20 @@ nsTextFrame::AdjustOffsetsForBidi(PRInt32 aStart, PRInt32 aEnd)
    * This is called during bidi resolution from the block container, so we
    * shouldn't be holding a local reference to a textrun anywhere.
    */
-  ClearTextRun(nsnull);
+  ClearTextRuns();
 
   nsTextFrame* prev = static_cast<nsTextFrame*>(GetPrevContinuation());
   if (prev) {
     // the bidi resolver can be very evil when columns/pages are involved. Don't
     // let it violate our invariants.
-    PRInt32 prevOffset = prev->GetContentOffset();
+    int32_t prevOffset = prev->GetContentOffset();
     aStart = NS_MAX(aStart, prevOffset);
     aEnd = NS_MAX(aEnd, prevOffset);
-    prev->ClearTextRun(nsnull);
+    prev->ClearTextRuns();
   }
 
   mContentOffset = aStart;
-  SetLength(aEnd - aStart, nsnull, 0);
+  SetLength(aEnd - aStart, nullptr, 0);
 
   /**
    * After inserting text the caret Bidi level must be set to the level of the
@@ -7778,16 +8458,16 @@ nsTextFrame::AdjustOffsetsForBidi(PRInt32 aStart, PRInt32 aEnd)
 }
 
 /**
- * @return PR_TRUE if this text frame ends with a newline character.  It should return
- * PR_FALSE if it is not a text frame.
+ * @return true if this text frame ends with a newline character.  It should return
+ * false if it is not a text frame.
  */
-PRBool
+bool
 nsTextFrame::HasTerminalNewline() const
 {
   return ::HasTerminalNewline(this);
 }
 
-PRBool
+bool
 nsTextFrame::IsAtEndOfLine() const
 {
   return (GetStateBits() & TEXT_END_OF_LINE) != 0;
@@ -7799,13 +8479,13 @@ nsTextFrame::GetBaseline() const
   return mAscent;
 }
 
-PRBool
+bool
 nsTextFrame::HasAnyNoncollapsedCharacters()
 {
-  gfxSkipCharsIterator iter = EnsureTextRun();
-  PRInt32 offset = GetContentOffset(),
+  gfxSkipCharsIterator iter = EnsureTextRun(nsTextFrame::eInflated);
+  int32_t offset = GetContentOffset(),
           offsetEnd = GetContentEnd();
-  PRInt32 skippedOffset = iter.ConvertOriginalToSkipped(offset);
-  PRInt32 skippedOffsetEnd = iter.ConvertOriginalToSkipped(offsetEnd);
+  int32_t skippedOffset = iter.ConvertOriginalToSkipped(offset);
+  int32_t skippedOffsetEnd = iter.ConvertOriginalToSkipped(offsetEnd);
   return skippedOffset != skippedOffsetEnd;
 }

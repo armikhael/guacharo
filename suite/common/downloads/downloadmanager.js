@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the SeaMonkey internet suite code.
- *
- * The Initial Developer of the Original Code is
- * the SeaMonkey project at mozilla.org.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Robert Kaiser <kairo@kairo.at>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://gre/modules/PluralForm.jsm");
 Components.utils.import("resource:///modules/DownloadTaskbarIntegration.jsm");
@@ -199,10 +166,8 @@ function openDownload(aDownload)
   var file = aDownload.targetFile;
 
   if (file.isExecutable()) {
-    var alertOnEXEOpen = true;
-    try {
-      alertOnEXEOpen = gPrefService.getBoolPref("browser.download.manager.alertOnEXEOpen");
-    } catch (e) { }
+    var alertOnEXEOpen = GetBoolPref("browser.download.manager.alertOnEXEOpen",
+                                     true);
 
     // On Vista and above, we rely on native security prompting for
     // downloaded content unless it's disabled.
@@ -371,7 +336,7 @@ function onUpdateProgress()
   var base = 0;
   var dls = gDownloadManager.activeDownloads;
   while (dls.hasMoreElements()) {
-    var dl = dls.getNext().QueryInterface(Components.interfaces.nsIDownload);
+    var dl = dls.getNext();
     if (dl.percentComplete < 100 && dl.size > 0) {
       mean += dl.amountTransferred;
       base += dl.size;
@@ -401,6 +366,30 @@ function onUpdateProgress()
 
     document.title = title;
   }
+}
+
+function handlePaste() {
+  let trans = Components.classes["@mozilla.org/widget/transferable;1"]
+                        .createInstance(Components.interfaces.nsITransferable);
+  let flavors = ["text/x-moz-url", "text/unicode"];
+  flavors.forEach(trans.addDataFlavor);
+
+  Services.clipboard.getData(trans, Services.clipboard.kGlobalClipboard);
+
+  // Getting the data or creating the nsIURI might fail
+  try {
+    let data = {};
+    trans.getAnyTransferData({}, data, {});
+    let [url, name] = data.value.QueryInterface(Components.interfaces
+                                .nsISupportsString).data.split("\n");
+
+    if (!url)
+      return;
+
+    let uri = Services.io.newURI(url, null, null);
+
+    saveURL(uri.spec, name || uri.spec, null, true, true);
+  } catch (ex) {}
 }
 
 var gDownloadObserver = {
@@ -434,6 +423,7 @@ var dlTreeController = {
       case "cmd_openReferrer":
       case "cmd_copyLocation":
       case "cmd_properties":
+      case "cmd_paste":
       case "cmd_selectAll":
       case "cmd_clearList":
         return true;
@@ -535,6 +525,8 @@ var dlTreeController = {
         return gDownloadTreeView.rowCount != selectionCount;
       case "cmd_clearList":
         return gDownloadTreeView.rowCount && gDownloadManager.canCleanUp;
+      case "cmd_paste":
+        return true;
       default:
         return false;
     }
@@ -623,7 +615,7 @@ var dlTreeController = {
         var uris = [];
         for each (let dldata in selItemData)
           uris.push(dldata.uri);
-        clipboard.copyString(uris.join("\n"));
+        clipboard.copyString(uris.join("\n"), document);
         break;
       case "cmd_properties":
         showProperties(selItemData[0].dlid);
@@ -651,6 +643,9 @@ var dlTreeController = {
         gSearchBox.value = "";
         searchDownloads("");
         gDownloadTree.focus();
+        break;
+      case "cmd_paste":
+        handlePaste();
         break;
     }
   },
@@ -716,4 +711,4 @@ var gDownloadDNDObserver = {
     if (url)
       saveURL(url, name, null, true, true);
   }
-}
+};

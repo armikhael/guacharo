@@ -1,41 +1,13 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "mozilla/Util.h"
+
 #include "nsIDOMHTMLTableCellElement.h"
 #include "nsIDOMHTMLTableRowElement.h"
+#include "nsHTMLTableElement.h"
 #include "nsIDOMHTMLCollection.h"
 #include "nsIDOMEventTarget.h"
 #include "nsMappedAttributes.h"
@@ -44,8 +16,10 @@
 #include "nsStyleConsts.h"
 #include "nsPresContext.h"
 #include "nsRuleData.h"
-#include "nsIDocument.h"
+#include "nsRuleWalker.h"
 #include "celldata.h"
+
+using namespace mozilla;
 
 class nsHTMLTableCellElement : public nsGenericHTMLElement,
                                public nsIDOMHTMLTableCellElement
@@ -69,22 +43,23 @@ public:
   // nsIDOMHTMLTableCellElement
   NS_DECL_NSIDOMHTMLTABLECELLELEMENT
 
-  virtual PRBool ParseAttribute(PRInt32 aNamespaceID,
-                                nsIAtom* aAttribute,
-                                const nsAString& aValue,
-                                nsAttrValue& aResult);
+  virtual bool ParseAttribute(int32_t aNamespaceID,
+                              nsIAtom* aAttribute,
+                              const nsAString& aValue,
+                              nsAttrValue& aResult);
   virtual nsMapRuleToAttributesFunc GetAttributeMappingFunction() const;
   NS_IMETHOD WalkContentStyleRules(nsRuleWalker* aRuleWalker);
-  NS_IMETHOD_(PRBool) IsAttributeMapped(const nsIAtom* aAttribute) const;
+  NS_IMETHOD_(bool) IsAttributeMapped(const nsIAtom* aAttribute) const;
 
   virtual nsresult Clone(nsINodeInfo *aNodeInfo, nsINode **aResult) const;
 
   virtual nsXPCClassInfo* GetClassInfo();
+
+  virtual nsIDOMNode* AsDOMNode() { return this; }
 protected:
-  // This does not return a nsresult since all we care about is if we
-  // found the row element that this cell is in or not.
-  void GetRow(nsIDOMHTMLTableRowElement** aRow);
-  nsIContent * GetTable();
+  nsHTMLTableElement* GetTable() const;
+
+  already_AddRefed<nsIDOMHTMLTableRowElement> GetRow() const;
 };
 
 
@@ -120,51 +95,48 @@ NS_IMPL_ELEMENT_CLONE(nsHTMLTableCellElement)
 
 
 // protected method
-void
-nsHTMLTableCellElement::GetRow(nsIDOMHTMLTableRowElement** aRow)
+already_AddRefed<nsIDOMHTMLTableRowElement>
+nsHTMLTableCellElement::GetRow() const
 {
-  *aRow = nsnull;
-
-  nsCOMPtr<nsIDOMNode> rowNode;
-  GetParentNode(getter_AddRefs(rowNode));
-
-  if (rowNode) {
-    CallQueryInterface(rowNode, aRow);
-  }
+  nsCOMPtr<nsIDOMHTMLTableRowElement> row = do_QueryInterface(GetParent());
+  return row.forget();
 }
 
 // protected method
-nsIContent*
-nsHTMLTableCellElement::GetTable()
+nsHTMLTableElement*
+nsHTMLTableCellElement::GetTable() const
 {
-  nsIContent *result = nsnull;
-
   nsIContent *parent = GetParent();
-  if (parent) {  // GetParent() should be a row
-    nsIContent* section = parent->GetParent();
-    if (section) {
-      if (section->IsHTML() &&
-          section->NodeInfo()->Equals(nsGkAtoms::table)) {
-        // XHTML, without a row group
-        result = section;
-      } else {
-        // we have a row group.
-        result = section->GetParent();
-      }
-    }
+  if (!parent) {
+    return nullptr;
   }
-  return result;
+
+  // parent should be a row.
+  nsIContent* section = parent->GetParent();
+  if (!section) {
+    return nullptr;
+  }
+
+  if (section->IsHTML(nsGkAtoms::table)) {
+    // XHTML, without a row group.
+    return static_cast<nsHTMLTableElement*>(section);
+  }
+
+  // We have a row group.
+  nsIContent* result = section->GetParent();
+  if (result && result->IsHTML(nsGkAtoms::table)) {
+    return static_cast<nsHTMLTableElement*>(result);
+  }
+
+  return nullptr;
 }
 
 NS_IMETHODIMP
-nsHTMLTableCellElement::GetCellIndex(PRInt32* aCellIndex)
+nsHTMLTableCellElement::GetCellIndex(int32_t* aCellIndex)
 {
   *aCellIndex = -1;
 
-  nsCOMPtr<nsIDOMHTMLTableRowElement> row;
-
-  GetRow(getter_AddRefs(row));
-
+  nsCOMPtr<nsIDOMHTMLTableRowElement> row = GetRow();
   if (!row) {
     return NS_OK;
   }
@@ -177,19 +149,16 @@ nsHTMLTableCellElement::GetCellIndex(PRInt32* aCellIndex)
     return NS_OK;
   }
 
-  PRUint32 numCells;
+  uint32_t numCells;
   cells->GetLength(&numCells);
 
-  PRBool found = PR_FALSE;
-  PRUint32 i;
-
-  for (i = 0; (i < numCells) && !found; i++) {
+  for (uint32_t i = 0; i < numCells; i++) {
     nsCOMPtr<nsIDOMNode> node;
     cells->Item(i, getter_AddRefs(node));
 
     if (node.get() == static_cast<nsIDOMNode *>(this)) {
       *aCellIndex = i;
-      found = PR_TRUE;
+      break;
     }
   }
 
@@ -203,19 +172,14 @@ nsHTMLTableCellElement::WalkContentStyleRules(nsRuleWalker* aRuleWalker)
   nsresult rv = nsGenericHTMLElement::WalkContentStyleRules(aRuleWalker);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  // Add style information from the mapped attributes of the table
-  // element.  This depends on the strange behavior of the
-  // |MapAttributesIntoRule| in nsHTMLTableElement.cpp, which is
-  // technically incorrect since it's violating the nsIStyleRule
-  // contract.  However, things are OK (except for the incorrect
-  // dependence on display type rather than tag) since tables and cells
-  // match different, less specific, rules.
-  nsIContent* table = GetTable();
-  if (table) {
-    rv = table->WalkContentStyleRules(aRuleWalker);
+  if (nsHTMLTableElement* table = GetTable()) {
+    nsMappedAttributes* tableInheritedAttributes =
+      table->GetAttributesMappedForCell();
+    if (tableInheritedAttributes) {
+      aRuleWalker->Forward(tableInheritedAttributes);
+    }
   }
-
-  return rv;
+  return NS_OK;
 }
 
 
@@ -239,10 +203,7 @@ nsHTMLTableCellElement::GetAlign(nsAString& aValue)
 {
   if (!GetAttr(kNameSpaceID_None, nsGkAtoms::align, aValue)) {
     // There's no align attribute, ask the row for the alignment.
-
-    nsCOMPtr<nsIDOMHTMLTableRowElement> row;
-    GetRow(getter_AddRefs(row));
-
+    nsCOMPtr<nsIDOMHTMLTableRowElement> row = GetRow();
     if (row) {
       return row->GetAlign(aValue);
     }
@@ -254,7 +215,7 @@ nsHTMLTableCellElement::GetAlign(nsAString& aValue)
 NS_IMETHODIMP
 nsHTMLTableCellElement::SetAlign(const nsAString& aValue)
 {
-  return SetAttr(kNameSpaceID_None, nsGkAtoms::align, aValue, PR_TRUE);
+  return SetAttr(kNameSpaceID_None, nsGkAtoms::align, aValue, true);
 }
 
 
@@ -266,8 +227,8 @@ static const nsAttrValue::EnumTable kCellScopeTable[] = {
   { 0 }
 };
 
-PRBool
-nsHTMLTableCellElement::ParseAttribute(PRInt32 aNamespaceID,
+bool
+nsHTMLTableCellElement::ParseAttribute(int32_t aNamespaceID,
                                        nsIAtom* aAttribute,
                                        const nsAString& aValue,
                                        nsAttrValue& aResult)
@@ -281,24 +242,24 @@ nsHTMLTableCellElement::ParseAttribute(PRInt32 aNamespaceID,
       return aResult.ParseIntWithBounds(aValue, 0);
     }
     if (aAttribute == nsGkAtoms::colspan) {
-      PRBool res = aResult.ParseIntWithBounds(aValue, -1);
+      bool res = aResult.ParseIntWithBounds(aValue, -1);
       if (res) {
-        PRInt32 val = aResult.GetIntegerValue();
+        int32_t val = aResult.GetIntegerValue();
         // reset large colspan values as IE and opera do
         // quirks mode does not honor the special html 4 value of 0
         if (val > MAX_COLSPAN || val < 0 ||
-            (0 == val && InNavQuirksMode(GetOwnerDoc()))) {
+            (0 == val && InNavQuirksMode(OwnerDoc()))) {
           aResult.SetTo(1);
         }
       }
       return res;
     }
     if (aAttribute == nsGkAtoms::rowspan) {
-      PRBool res = aResult.ParseIntWithBounds(aValue, -1, MAX_ROWSPAN);
+      bool res = aResult.ParseIntWithBounds(aValue, -1, MAX_ROWSPAN);
       if (res) {
-        PRInt32 val = aResult.GetIntegerValue();
+        int32_t val = aResult.GetIntegerValue();
         // quirks mode does not honor the special html 4 value of 0
-        if (val < 0 || (0 == val && InNavQuirksMode(GetOwnerDoc()))) {
+        if (val < 0 || (0 == val && InNavQuirksMode(OwnerDoc()))) {
           aResult.SetTo(1);
         }
       }
@@ -317,14 +278,17 @@ nsHTMLTableCellElement::ParseAttribute(PRInt32 aNamespaceID,
       return aResult.ParseColor(aValue);
     }
     if (aAttribute == nsGkAtoms::scope) {
-      return aResult.ParseEnumValue(aValue, kCellScopeTable, PR_FALSE);
+      return aResult.ParseEnumValue(aValue, kCellScopeTable, false);
     }
     if (aAttribute == nsGkAtoms::valign) {
       return ParseTableVAlignValue(aValue, aResult);
     }
   }
 
-  return nsGenericHTMLElement::ParseAttribute(aNamespaceID, aAttribute, aValue,
+  return nsGenericHTMLElement::ParseBackgroundAttribute(aNamespaceID,
+                                                        aAttribute, aValue,
+                                                        aResult) ||
+         nsGenericHTMLElement::ParseAttribute(aNamespaceID, aAttribute, aValue,
                                               aResult);
 }
 
@@ -403,7 +367,7 @@ void MapAttributesIntoRule(const nsMappedAttributes* aAttributes,
   nsGenericHTMLElement::MapCommonAttributesInto(aAttributes, aData);
 }
 
-NS_IMETHODIMP_(PRBool)
+NS_IMETHODIMP_(bool)
 nsHTMLTableCellElement::IsAttributeMapped(const nsIAtom* aAttribute) const
 {
   static const MappedAttributeEntry attributes[] = {
@@ -420,7 +384,7 @@ nsHTMLTableCellElement::IsAttributeMapped(const nsIAtom* aAttribute) const
 #endif
     { &nsGkAtoms::width },
     { &nsGkAtoms::height },
-    { nsnull }
+    { nullptr }
   };
 
   static const MappedAttributeEntry* const map[] = {
@@ -429,7 +393,7 @@ nsHTMLTableCellElement::IsAttributeMapped(const nsIAtom* aAttribute) const
     sBackgroundAttributeMap,
   };
 
-  return FindAttributeDependence(aAttribute, map, NS_ARRAY_LENGTH(map));
+  return FindAttributeDependence(aAttribute, map);
 }
 
 nsMapRuleToAttributesFunc

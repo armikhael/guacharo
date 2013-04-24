@@ -1,56 +1,25 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  * vim: sw=2 ts=8 et :
  */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at:
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Code.
- *
- * The Initial Developer of the Original Code is
- *   The Mozilla Foundation
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Chris Jones <jones.chris.g@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <vector>
 
-#include "ShadowLayersParent.h"
-#include "ShadowLayerParent.h"
-#include "ShadowLayers.h"
-
-#include "mozilla/unused.h"
-
-#include "mozilla/layout/RenderFrameParent.h"
-
+#include "AutoOpenSurface.h"
+#include "CompositorParent.h"
 #include "gfxSharedImageSurface.h"
-
 #include "ImageLayers.h"
+#include "mozilla/layout/RenderFrameParent.h"
+#include "mozilla/unused.h"
+#include "RenderTrace.h"
+#include "ShadowLayerParent.h"
+#include "ShadowLayersParent.h"
+#include "ShadowLayers.h"
+#include "ShadowLayerUtils.h"
+#include "TiledLayerBuffer.h"
+#include "gfxPlatform.h" 
 
 typedef std::vector<mozilla::layers::EditReply> EditReplyVector;
 
@@ -119,13 +88,44 @@ ShadowChild(const OpRemoveChild& op)
   return cast(op.childLayerParent());
 }
 
+static ShadowLayerParent*
+ShadowContainer(const OpRepositionChild& op)
+{
+  return cast(op.containerParent());
+}
+static ShadowLayerParent*
+ShadowChild(const OpRepositionChild& op)
+{
+  return cast(op.childLayerParent());
+}
+static ShadowLayerParent*
+ShadowAfter(const OpRepositionChild& op)
+{
+  return cast(op.afterParent());
+}
+
+static ShadowLayerParent*
+ShadowContainer(const OpRaiseToTopChild& op)
+{
+  return cast(op.containerParent());
+}
+static ShadowLayerParent*
+ShadowChild(const OpRaiseToTopChild& op)
+{
+  return cast(op.childLayerParent());
+}
+
 //--------------------------------------------------
 // ShadowLayersParent
-ShadowLayersParent::ShadowLayersParent(ShadowLayerManager* aManager)
-  : mDestroyed(false)
+ShadowLayersParent::ShadowLayersParent(ShadowLayerManager* aManager,
+                                       ShadowLayersManager* aLayersManager,
+                                       uint64_t aId)
+  : mLayerManager(aManager)
+  , mShadowLayersManager(aLayersManager)
+  , mId(aId)
+  , mDestroyed(false)
 {
   MOZ_COUNT_CTOR(ShadowLayersParent);
-  mLayerManager = aManager;
 }
 
 ShadowLayersParent::~ShadowLayersParent()
@@ -144,10 +144,28 @@ ShadowLayersParent::Destroy()
   }
 }
 
+/* virtual */
+bool
+ShadowLayersParent::RecvUpdateNoSwap(const InfallibleTArray<Edit>& cset,
+                                     const TargetConfig& targetConfig,
+                                     const bool& isFirstPaint)
+{
+  InfallibleTArray<EditReply> noReplies;
+  bool success = RecvUpdate(cset, targetConfig, isFirstPaint, &noReplies);
+  NS_ABORT_IF_FALSE(noReplies.Length() == 0, "RecvUpdateNoSwap requires a sync Update to carry Edits");
+  return success;
+}
+
 bool
 ShadowLayersParent::RecvUpdate(const InfallibleTArray<Edit>& cset,
+                               const TargetConfig& targetConfig,
+                               const bool& isFirstPaint,
                                InfallibleTArray<EditReply>* reply)
 {
+#ifdef COMPOSITOR_PERFORMANCE_WARNING
+  TimeStamp updateStart = TimeStamp::Now();
+#endif
+
   MOZ_LAYERS_LOG(("[ParentSide] received txn with %d edits", cset.Length()));
 
   if (mDestroyed || layer_manager()->IsDestroyed()) {
@@ -184,7 +202,6 @@ ShadowLayersParent::RecvUpdate(const InfallibleTArray<Edit>& cset,
 
       nsRefPtr<ShadowImageLayer> layer =
         layer_manager()->CreateShadowImageLayer();
-      layer->SetAllocator(this);
       AsShadowLayer(edit.get_OpCreateImageLayer())->Bind(layer);
       break;
     }
@@ -204,73 +221,13 @@ ShadowLayersParent::RecvUpdate(const InfallibleTArray<Edit>& cset,
       AsShadowLayer(edit.get_OpCreateCanvasLayer())->Bind(layer);
       break;
     }
-    case Edit::TOpCreateThebesBuffer: {
-      MOZ_LAYERS_LOG(("[ParentSide] CreateThebesBuffer"));
+    case Edit::TOpCreateRefLayer: {
+      MOZ_LAYERS_LOG(("[ParentSide] CreateRefLayer"));
 
-      const OpCreateThebesBuffer& otb = edit.get_OpCreateThebesBuffer();
-      ShadowThebesLayer* thebes = static_cast<ShadowThebesLayer*>(
-        AsShadowLayer(otb)->AsLayer());
-
-      thebes->SetFrontBuffer(otb.initialFront(), otb.frontValidRegion());
-
-      break;
-    }
-    case Edit::TOpCreateCanvasBuffer: {
-      MOZ_LAYERS_LOG(("[ParentSide] CreateCanvasBuffer"));
-
-      const OpCreateCanvasBuffer& ocb = edit.get_OpCreateCanvasBuffer();
-      ShadowCanvasLayer* canvas = static_cast<ShadowCanvasLayer*>(
-        AsShadowLayer(ocb)->AsLayer());
-
-      canvas->Init(ocb.initialFront(), ocb.size(), ocb.needYFlip());
-
-      break;
-    }
-    case Edit::TOpCreateImageBuffer: {
-      MOZ_LAYERS_LOG(("[ParentSide] CreateImageBuffer"));
-
-      const OpCreateImageBuffer ocb = edit.get_OpCreateImageBuffer();
-      ShadowImageLayer* image = static_cast<ShadowImageLayer*>(
-        AsShadowLayer(ocb)->AsLayer());
-
-      image->Init(ocb.initialFront(), ocb.size());
-
-      break;
-    }
-    case Edit::TOpDestroyThebesFrontBuffer: {
-      MOZ_LAYERS_LOG(("[ParentSide] DestroyThebesFrontBuffer"));
-
-      const OpDestroyThebesFrontBuffer& odfb =
-        edit.get_OpDestroyThebesFrontBuffer();
-      ShadowThebesLayer* thebes = static_cast<ShadowThebesLayer*>(
-        AsShadowLayer(odfb)->AsLayer());
-
-      thebes->DestroyFrontBuffer();
-
-      break;
-    }
-    case Edit::TOpDestroyCanvasFrontBuffer: {
-      MOZ_LAYERS_LOG(("[ParentSide] DestroyCanvasFrontBuffer"));
-
-      const OpDestroyCanvasFrontBuffer& odfb =
-        edit.get_OpDestroyCanvasFrontBuffer();
-      ShadowCanvasLayer* canvas = static_cast<ShadowCanvasLayer*>(
-        AsShadowLayer(odfb)->AsLayer());
-
-      canvas->DestroyFrontBuffer();
-
-      break;
-    }
-    case Edit::TOpDestroyImageFrontBuffer: {
-      MOZ_LAYERS_LOG(("[ParentSide] DestroyImageFrontBuffer"));
-
-      const OpDestroyImageFrontBuffer& odfb =
-        edit.get_OpDestroyImageFrontBuffer();
-      ShadowImageLayer* image = static_cast<ShadowImageLayer*>(
-        AsShadowLayer(odfb)->AsLayer());
-
-      image->DestroyFrontBuffer();
-
+      nsRefPtr<ShadowRefLayer> layer =
+        layer_manager()->CreateShadowRefLayer();
+      layer->SetAllocator(this);
+      AsShadowLayer(edit.get_OpCreateRefLayer())->Bind(layer);
       break;
     }
 
@@ -287,12 +244,19 @@ ShadowLayersParent::RecvUpdate(const InfallibleTArray<Edit>& cset,
       layer->SetContentFlags(common.contentFlags());
       layer->SetOpacity(common.opacity());
       layer->SetClipRect(common.useClipRect() ? &common.clipRect() : NULL);
-      layer->SetTransform(common.transform());
-      layer->SetTileSourceRect(common.useTileSourceRect() ? &common.tileSourceRect() : NULL);
+      layer->SetBaseTransform(common.transform().value());
+      layer->SetPostScale(common.postXScale(), common.postYScale());
       static bool fixedPositionLayersEnabled = getenv("MOZ_ENABLE_FIXED_POSITION_LAYERS") != 0;
       if (fixedPositionLayersEnabled) {
         layer->SetIsFixedPosition(common.isFixedPosition());
+        layer->SetFixedPositionAnchor(common.fixedPositionAnchor());
       }
+      if (PLayerParent* maskLayer = common.maskLayerParent()) {
+        layer->SetMaskLayer(cast(maskLayer)->AsLayer());
+      } else {
+        layer->SetMaskLayer(NULL);
+      }
+      layer->SetAnimations(common.animations());
 
       typedef SpecificLayerAttributes Specific;
       const SpecificLayerAttributes& specific = attrs.specific();
@@ -312,18 +276,22 @@ ShadowLayersParent::RecvUpdate(const InfallibleTArray<Edit>& cset,
 
         break;
       }
-      case Specific::TContainerLayerAttributes:
+      case Specific::TContainerLayerAttributes: {
         MOZ_LAYERS_LOG(("[ParentSide]   container layer"));
 
-        static_cast<ContainerLayer*>(layer)->SetFrameMetrics(
-          specific.get_ContainerLayerAttributes().metrics());
+        ContainerLayer* containerLayer =
+          static_cast<ContainerLayer*>(layer);
+        const ContainerLayerAttributes& attrs =
+          specific.get_ContainerLayerAttributes();
+        containerLayer->SetFrameMetrics(attrs.metrics());
+        containerLayer->SetPreScale(attrs.preXScale(), attrs.preYScale());
         break;
-
+      }
       case Specific::TColorLayerAttributes:
         MOZ_LAYERS_LOG(("[ParentSide]   color layer"));
 
         static_cast<ColorLayer*>(layer)->SetColor(
-          specific.get_ColorLayerAttributes().color());
+          specific.get_ColorLayerAttributes().color().value());
         break;
 
       case Specific::TCanvasLayerAttributes:
@@ -333,13 +301,22 @@ ShadowLayersParent::RecvUpdate(const InfallibleTArray<Edit>& cset,
           specific.get_CanvasLayerAttributes().filter());
         break;
 
-      case Specific::TImageLayerAttributes:
-        MOZ_LAYERS_LOG(("[ParentSide]   image layer"));
+      case Specific::TRefLayerAttributes:
+        MOZ_LAYERS_LOG(("[ParentSide]   ref layer"));
 
-        static_cast<ImageLayer*>(layer)->SetFilter(
-          specific.get_ImageLayerAttributes().filter());
+        static_cast<RefLayer*>(layer)->SetReferentId(
+          specific.get_RefLayerAttributes().id());
         break;
 
+      case Specific::TImageLayerAttributes: {
+        MOZ_LAYERS_LOG(("[ParentSide]   image layer"));
+
+        ImageLayer* imageLayer = static_cast<ImageLayer*>(layer);
+        const ImageLayerAttributes& attrs = specific.get_ImageLayerAttributes();
+        imageLayer->SetFilter(attrs.filter());
+        imageLayer->SetForceSingleTile(attrs.forceSingleTile());
+        break;
+      }
       default:
         NS_RUNTIMEABORT("not reached");
       }
@@ -377,7 +354,37 @@ ShadowLayersParent::RecvUpdate(const InfallibleTArray<Edit>& cset,
       ShadowContainer(orc)->AsContainer()->RemoveChild(childLayer);
       break;
     }
+    case Edit::TOpRepositionChild: {
+      MOZ_LAYERS_LOG(("[ParentSide] RepositionChild"));
 
+      const OpRepositionChild& orc = edit.get_OpRepositionChild();
+      ShadowContainer(orc)->AsContainer()->RepositionChild(
+        ShadowChild(orc)->AsLayer(), ShadowAfter(orc)->AsLayer());
+      break;
+    }
+    case Edit::TOpRaiseToTopChild: {
+      MOZ_LAYERS_LOG(("[ParentSide] RaiseToTopChild"));
+
+      const OpRaiseToTopChild& rtc = edit.get_OpRaiseToTopChild();
+      ShadowContainer(rtc)->AsContainer()->RepositionChild(
+        ShadowChild(rtc)->AsLayer(), NULL);
+      break;
+    }
+
+    case Edit::TOpPaintTiledLayerBuffer: {
+      MOZ_LAYERS_LOG(("[ParentSide] Paint TiledLayerBuffer"));
+      const OpPaintTiledLayerBuffer& op = edit.get_OpPaintTiledLayerBuffer();
+      ShadowLayerParent* shadow = AsShadowLayer(op);
+
+      ShadowThebesLayer* shadowLayer = static_cast<ShadowThebesLayer*>(shadow->AsLayer());
+      TiledLayerComposer* tileComposer = shadowLayer->AsTiledLayerComposer();
+
+      NS_ASSERTION(tileComposer, "shadowLayer is not a tile composer");
+
+      BasicTiledLayerBuffer* p = (BasicTiledLayerBuffer*)op.tiledLayerBuffer();
+      tileComposer->PaintedTiledLayerBuffer(p);
+      break;
+    }
     case Edit::TOpPaintThebesBuffer: {
       MOZ_LAYERS_LOG(("[ParentSide] Paint ThebesLayer"));
 
@@ -387,7 +394,9 @@ ShadowLayersParent::RecvUpdate(const InfallibleTArray<Edit>& cset,
         static_cast<ShadowThebesLayer*>(shadow->AsLayer());
       const ThebesBuffer& newFront = op.newFrontBuffer();
 
-      ThebesBuffer newBack;
+      RenderTraceInvalidateStart(thebes, "FF00FF", op.updatedRegion().GetBounds());
+
+      OptionalThebesBuffer newBack;
       nsIntRegion newValidRegion;
       OptionalThebesBuffer readonlyFront;
       nsIntRegion frontUpdatedRegion;
@@ -399,6 +408,8 @@ ShadowLayersParent::RecvUpdate(const InfallibleTArray<Edit>& cset,
           shadow, NULL,
           newBack, newValidRegion,
           readonlyFront, frontUpdatedRegion));
+
+      RenderTraceInvalidateEnd(thebes, "FF00FF");
       break;
     }
     case Edit::TOpPaintCanvas: {
@@ -409,18 +420,16 @@ ShadowLayersParent::RecvUpdate(const InfallibleTArray<Edit>& cset,
       ShadowCanvasLayer* canvas =
         static_cast<ShadowCanvasLayer*>(shadow->AsLayer());
 
-      SurfaceDescriptor newFront = op.newFrontBuffer();
-      SurfaceDescriptor newBack;
-      canvas->Swap(op.newFrontBuffer(), &newBack);
-      if (newFront == newBack) {
-        newFront = SurfaceDescriptor();
-      }
+      RenderTraceInvalidateStart(canvas, "FF00FF", canvas->GetVisibleRegion().GetBounds());
 
+      canvas->SetAllocator(this);
+      CanvasSurface newBack;
+      canvas->Swap(op.newFrontBuffer(), op.needYFlip(), &newBack);
       canvas->Updated();
-
       replyv.push_back(OpBufferSwap(shadow, NULL,
                                     newBack));
 
+      RenderTraceInvalidateEnd(canvas, "FF00FF");
       break;
     }
     case Edit::TOpPaintImage: {
@@ -431,16 +440,15 @@ ShadowLayersParent::RecvUpdate(const InfallibleTArray<Edit>& cset,
       ShadowImageLayer* image =
         static_cast<ShadowImageLayer*>(shadow->AsLayer());
 
-      SharedImage newFront = op.newFrontBuffer();
+      RenderTraceInvalidateStart(image, "FF00FF", image->GetVisibleRegion().GetBounds());
+
+      image->SetAllocator(this);
       SharedImage newBack;
       image->Swap(op.newFrontBuffer(), &newBack);
-      if (newFront == newBack) {
-        newFront = SharedImage();
-      }
-
       replyv.push_back(OpImageSwap(shadow, NULL,
                                    newBack));
 
+      RenderTraceInvalidateEnd(image, "FF00FF");
       break;
     }
 
@@ -449,7 +457,7 @@ ShadowLayersParent::RecvUpdate(const InfallibleTArray<Edit>& cset,
     }
   }
 
-  layer_manager()->EndTransaction(NULL, NULL);
+  layer_manager()->EndTransaction(NULL, NULL, LayerManager::END_NO_IMMEDIATE_REDRAW);
 
   reply->SetCapacity(replyv.size());
   if (replyv.size() > 0) {
@@ -461,16 +469,65 @@ ShadowLayersParent::RecvUpdate(const InfallibleTArray<Edit>& cset,
   // other's buffer contents.
   ShadowLayerManager::PlatformSyncBeforeReplyUpdate();
 
-  Frame()->ShadowLayersUpdated();
+  mShadowLayersManager->ShadowLayersUpdated(this, targetConfig, isFirstPaint);
+
+#ifdef COMPOSITOR_PERFORMANCE_WARNING
+  int compositeTime = (int)(mozilla::TimeStamp::Now() - updateStart).ToMilliseconds();
+  if (compositeTime > 15) {
+    printf_stderr("Compositor: Layers update took %i ms (blocking gecko).\n", compositeTime);
+  }
+#endif
 
   return true;
 }
 
 bool
-ShadowLayersParent::RecvGetParentType(LayersBackend* aBackend)
+ShadowLayersParent::RecvDrawToSurface(const SurfaceDescriptor& surfaceIn,
+                                      SurfaceDescriptor* surfaceOut)
 {
-  *aBackend = layer_manager()->GetBackendType();
+  *surfaceOut = surfaceIn;
+  if (mDestroyed || layer_manager()->IsDestroyed()) {
+    return true;
+  }
+
+  AutoOpenSurface sharedSurface(OPEN_READ_WRITE, surfaceIn);
+
+  nsRefPtr<gfxASurface> localSurface =
+    gfxPlatform::GetPlatform()->CreateOffscreenSurface(sharedSurface.Size(),
+                                                       sharedSurface.ContentType());
+  nsRefPtr<gfxContext> context = new gfxContext(localSurface);
+
+  layer_manager()->BeginTransactionWithTarget(context);
+  layer_manager()->EndTransaction(NULL, NULL);
+  nsRefPtr<gfxContext> contextForCopy = new gfxContext(sharedSurface.Get());
+  contextForCopy->SetOperator(gfxContext::OPERATOR_SOURCE);
+  contextForCopy->DrawSurface(localSurface, localSurface->GetSize());
   return true;
+}
+
+PGrallocBufferParent*
+ShadowLayersParent::AllocPGrallocBuffer(const gfxIntSize& aSize,
+                                        const gfxContentType& aContent,
+                                        MaybeMagicGrallocBufferHandle* aOutHandle)
+{
+#ifdef MOZ_HAVE_SURFACEDESCRIPTORGRALLOC
+  return GrallocBufferActor::Create(aSize, aContent, aOutHandle);
+#else
+  NS_RUNTIMEABORT("No gralloc buffers for you");
+  return nullptr;
+#endif
+}
+
+bool
+ShadowLayersParent::DeallocPGrallocBuffer(PGrallocBufferParent* actor)
+{
+#ifdef MOZ_HAVE_SURFACEDESCRIPTORGRALLOC
+  delete actor;
+  return true;
+#else
+  NS_RUNTIMEABORT("Um, how did we get here?");
+  return false;
+#endif
 }
 
 PLayerParent*
@@ -486,10 +543,16 @@ ShadowLayersParent::DeallocPLayer(PLayerParent* actor)
   return true;
 }
 
-RenderFrameParent*
-ShadowLayersParent::Frame()
+void
+ShadowLayersParent::DestroySharedSurface(gfxSharedImageSurface* aSurface)
 {
-  return static_cast<RenderFrameParent*>(Manager());
+  layer_manager()->DestroySharedSurface(aSurface, this);
+}
+
+void
+ShadowLayersParent::DestroySharedSurface(SurfaceDescriptor* aSurface)
+{
+  layer_manager()->DestroySharedSurface(aSurface, this);
 }
 
 } // namespace layers

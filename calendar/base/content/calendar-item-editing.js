@@ -1,43 +1,10 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Oracle Corporation code.
- *
- * The Initial Developer of the Original Code is Oracle Corporation
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Stuart Parmenter <stuart.parmenter@oracle.com>
- *   Robin Edrenius <robin.edrenius@gmail.com>
- *   Philipp Kewisch <mozilla@kewis.ch>
- *   Daniel Boelzle <daniel.boelzle@sun.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://calendar/modules/calAlarmUtils.jsm");
+Components.utils.import("resource://calendar/modules/calUtils.jsm");
+Components.utils.import("resource://gre/modules/Services.jsm");
 
 /**
  * Takes a job and makes sure the dispose function on it is called. If there is
@@ -285,21 +252,43 @@ function openEventDialog(calendarItem, calendar, mode, callback, job, initialDat
     // Filter out calendars that don't support the given calendar item
     calendars = calendars.filter(isItemSupported);
 
-    if (mode == "new" && calendars.length < 1 &&
-        (!isCalendarWritable(calendar) || !isItemSupported(calendar))) {
-        // There are no writable calendars or no calendar supports the given
-        // item. Don't show the dialog.
-        disposeJob(job);
-        return;
-    } else if (mode == "new" &&
-               (!isCalendarWritable(calendar) || !isItemSupported(calendar))) {
-        // Pick the first calendar that supports the item and is writable
-        calendar = calendars[0];
-        if (calendarItem) {
-            // XXX The dialog currently uses the items calendar as a first
-            // choice. Since we are shortly before a release to keep regression
-            // risk low, explicitly set the item's calendar here.
-            calendarItem.calendar = calendars[0];
+    // Filter out calendar/items that we cannot write to/modify
+    if (mode == "new") {
+        calendars = calendars.filter(userCanAddItemsToCalendar);
+    } else { /* modify */
+        function calendarCanModifyItems(aCalendar) {
+            /* If the calendar is the item calendar, we check that the item
+             * can be modified. If the calendar is NOT the item calendar, we
+             * check that the user can remove items from that calendar and
+             * add items to the current one.
+             */
+            return (((calendarItem.calendar != aCalendar)
+                     && userCanDeleteItemsFromCalendar(calendarItem.calendar)
+                     && userCanAddItemsToCalendar(aCalendar))
+                    || ((calendarItem.calendar == aCalendar)
+                        && userCanModifyItem(calendarItem)));
+        }
+        calendars = calendars.filter(calendarCanModifyItems);
+    }
+
+    if (mode == "new"
+        && (!isCalendarWritable(calendar)
+            || !userCanAddItemsToCalendar(calendar)
+            || !isItemSupported(calendar))) {
+        if (calendars.length < 1) {
+            // There are no writable calendars or no calendar supports the given
+            // item. Don't show the dialog.
+            disposeJob(job);
+            return;
+        } else  {
+            // Pick the first calendar that supports the item and is writable
+            calendar = calendars[0];
+            if (calendarItem) {
+                // XXX The dialog currently uses the items calendar as a first
+                // choice. Since we are shortly before a release to keep
+                // regression risk low, explicitly set the item's calendar here.
+                calendarItem.calendar = calendars[0];
+            }
         }
     }
 
@@ -330,13 +319,29 @@ function openEventDialog(calendarItem, calendar, mode, callback, job, initialDat
     if (calInstanceOf(calendar, Components.interfaces.calISchedulingSupport)) {
         isInvitation = calendar.isInvitation(calendarItem);
     }
-
     // open the dialog modeless
-    var url = "chrome://calendar/content/calendar-event-dialog.xul";
-    if ((mode != "new" && isInvitation) || !isCalendarWritable(calendar)) {
+    let url;
+    if (isCalendarWritable(calendar)
+        && (mode == "new"
+            || (mode == "modify" && !isInvitation && userCanModifyItem((calendarItem))))) {
+        url = "chrome://calendar/content/calendar-event-dialog.xul";
+    } else {
         url = "chrome://calendar/content/calendar-summary-dialog.xul";
     }
-    openDialog(url, "_blank", "chrome,titlebar,resizable", args);
+
+    // reminder: event dialog should not be modal (cf bug 122671)
+    var features;
+    // keyword "dependent" should not be used (cf bug 752206)
+    if (Services.appinfo.OS == "WINNT") {
+        features = "chrome,titlebar,resizable";
+    } else if (Services.appinfo.OS == "Darwin") {
+        features = "chrome,titlebar,resizable,minimizable=no";
+    } else {
+        // All other targets, mostly Linux flavors using gnome.
+        features = "chrome,titlebar,resizable,minimizable=no,dialog=no";
+    }
+
+    openDialog(url, "_blank", features, args);
 }
 
 /**
@@ -527,6 +532,10 @@ function setContextPartstat(value, scope, items) {
     startBatchTransaction();
     try {
         for each (let oldItem in items) {
+            // Skip this item if its calendar is read only.
+            if (oldItem.calendar.readOnly) {
+                continue;
+            }
             if (scope == "all-occurrences") {
                 oldItem = oldItem.parentItem;
             }

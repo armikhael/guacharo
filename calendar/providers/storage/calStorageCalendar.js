@@ -1,47 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Oracle Corporation code.
- *
- * The Initial Developer of the Original Code is
- *  Oracle Corporation
- * Portions created by the Initial Developer are Copyright (C) 2005, 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Vladimir Vukicevic <vladimir.vukicevic@oracle.com>
- *   Joey Minta <jminta@gmail.com>
- *   Dan Mosedale <dan.mosedale@oracle.com>
- *   Thomas Benisch <thomas.benisch@sun.com>
- *   Matthew Willis <lilmatt@mozilla.com>
- *   Philipp Kewisch <mozilla@kewis.ch>
- *   Daniel Boelzle <daniel.boelzle@sun.com>
- *   Sebastian Schwieger <sebo.moz@googlemail.com>
- *   Fred Jendrzejewski <fred.jen@web.de>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://gre/modules/XPCOMUtils.jsm");
 Components.utils.import("resource://gre/modules/Services.jsm");
@@ -70,25 +29,28 @@ function calStorageCalendar() {
 calStorageCalendar.prototype = {
     __proto__: cal.ProviderBase.prototype,
 
+    //
+    // nsIClassInfo interface
+    //
     classID: Components.ID("{b3eaa1c4-5dfe-4c0a-b62a-b3a514218461}"),
     contractID: "@mozilla.org/calendar/calendar;1?type=storage",
     classDescription: "Calendar Storage Provider",
     getInterfaces: function (count) {
         let ifaces = [
             Components.interfaces.nsISupports,
-            Components.interfaces.calICalendarManager,
-            Components.interfaces.calIStartupService,
-            Components.interfaces.nsIObserver,
+            Components.interfaces.calICalendar,
+            Components.interfaces.calICalendarProvider,
+            Components.interfaces.calIOfflineStorage,
+            Components.interfaces.calISchedulingSupport,
+            Components.interfaces.calISyncWriteCalendar,
             Components.interfaces.nsIClassInfo
         ];
         count.value = ifaces.length;
         return ifaces;
     },
-
     getHelperForLanguage: function (language) {
         return null;
     },
-
     implementationLanguage: Components.interfaces.nsIProgrammingLanguage.JAVASCRIPT,
     flags: 0,
 
@@ -106,10 +68,7 @@ calStorageCalendar.prototype = {
     // nsISupports interface
     //
     QueryInterface: function (aIID) {
-        return cal.doQueryInterface(this, calStorageCalendar.prototype, aIID,
-                                   [Components.interfaces.calICalendarProvider,
-                                    Components.interfaces.calIOfflineStorage,
-                                    Components.interfaces.calISyncWriteCalendar]);
+        return cal.doQueryInterface(this, calStorageCalendar.prototype, aIID, null, this);
     },
 
     //
@@ -133,7 +92,7 @@ calStorageCalendar.prototype = {
         for each (let stmt in this.mDeleteEventExtras) {
             try {
                 this.prepareStatement(stmt);
-                stmt.execute();
+                stmt.executeStep();
             } finally {
                 stmt.reset();
             }
@@ -142,7 +101,7 @@ calStorageCalendar.prototype = {
         for each (let stmt in this.mDeleteTodoExtras) {
             try {
                 this.prepareStatement(stmt);
-                stmt.execute();
+                stmt.executeStep();
             } finally {
                 stmt.reset();
             }
@@ -150,21 +109,21 @@ calStorageCalendar.prototype = {
 
         try {
             this.prepareStatement(this.mDeleteAllEvents);
-            this.mDeleteAllEvents.execute();
+            this.mDeleteAllEvents.executeStep();
         } finally {
             this.mDeleteAllEvents.reset();
         }
 
         try {
             this.prepareStatement(this.mDeleteAllTodos);
-            this.mDeleteAllTodos.execute();
+            this.mDeleteAllTodos.executeStep();
         } finally {
             this.mDeleteAllTodos.reset();
         }
 
         try {
             this.prepareStatement(this.mDeleteAllMetaData);
-            this.mDeleteAllMetaData.execute();
+            this.mDeleteAllMetaData.executeStep();
         } finally {
             this.mDeleteAllMetaData.reset();
         }
@@ -267,15 +226,19 @@ calStorageCalendar.prototype = {
             if (this.mDB.tableExists("cal_events")) {
                 cal.LOG("[calStorageCalendar] Migrating storage.sdb -> local.sqlite");
                 upgradeDB(this.mDB); // upgrade schema before migating data
-                let attachStatement = createStatement(this.mDB, "ATTACH DATABASE :file_path AS local_sqlite");
+
+                let attachStatement;
                 try {
+                    attachStatement = this.mDB.createStatement("ATTACH DATABASE :file_path AS local_sqlite");
                     attachStatement.params.file_path = localDB.databaseFile.path;
-                    attachStatement.execute();
+                    attachStatement.executeStep();
                 } catch (exc) {
                     this.logError("prepareInitDB attachStatement.execute exception", exc);
                     throw exc;
                 } finally {
-                    attachStatement.reset();
+                    if (attachStatement) {
+                        attachStatement.reset();
+                    }
                 }
                 try {
                     // hold lock on storage.sdb until we've migrated data from storage.sdb:
@@ -337,12 +300,12 @@ calStorageCalendar.prototype = {
                                           "cal_todos"]) {
                         let stmt;
                         try {
-                            stmt = createStatement(db, "UPDATE " + tbl +
-                                                       "   SET cal_id = :cal_id" +
-                                                       " WHERE cal_id = :old_cal_id");
+                            stmt = db.createStatement("UPDATE " + tbl +
+                                                      "   SET cal_id = :cal_id" +
+                                                      " WHERE cal_id = :old_cal_id");
                             stmt.params.cal_id = newCalId;
                             stmt.params.old_cal_id = oldCalId;
-                            stmt.execute();
+                            stmt.executeStep();
                         } catch (e) {
                             // Pass error through to enclosing try/catch block
                             throw e;
@@ -397,17 +360,23 @@ calStorageCalendar.prototype = {
             // New style uri, no need for migration here
             let localDB = cal.getCalendarDirectory();
             localDB.append("local.sqlite");
-            localDB = Services.storage.openDatabase(localDB);
 
-            this.mDB = localDB;
+            this.mDB = Services.storage.openDatabase(localDB);
             upgradeDB(this.mDB);
         } else {
             throw new Components.Exception("Invalid Scheme " + this.uri.spec);
         }
 
         this.initDB();
+        Services.obs.addObserver(this, "profile-before-change", false);
     },
 
+    observe: function cSC_observe(aSubject, aTopic, aData) {
+        if (aTopic == "profile-before-change") {
+            Services.obs.removeObserver(this, "profile-before-change");
+            this.shutdownDB();
+        }
+    },
 
     /**
      * Takes care of necessary preparations for most of our statements.
@@ -420,6 +389,26 @@ calStorageCalendar.prototype = {
             this.mLastStatement = aStmt;
         } catch (e) {
             this.logError("prepareStatement exception", e);
+        }
+    },
+
+    /**
+     * Executes a statement using an item as a parameter.
+     *
+     * @param aStmt         The statement to execute.
+     * @param aIdParam      The name of the parameter refering to the item id.
+     * @param aId           The id of the item.
+     */
+    executeItemStatement: function cSC_executeItemStatement(aStmt, aIdParam, aId) {
+        try {
+            aStmt.params.cal_id = this.id;
+            aStmt.params[aIdParam] = aId;
+            aStmt.executeStep();
+        } catch (e) {
+            this.logError("executeItemStatement exception", e);
+            throw e;
+        } finally {
+            aStmt.reset();
         }
     },
 
@@ -452,7 +441,7 @@ calStorageCalendar.prototype = {
             if (olditem) {
                 if (this.relaxedMode) {
                     // we possibly want to interact with the user before deleting
-                    this.deleteItemById(aItem.id);
+                    this.deleteItemById(aItem.id, true);
                 } else {
                     this.notifyOperationComplete(aListener,
                                                  Components.interfaces.calIErrors.DUPLICATE_ID,
@@ -531,9 +520,17 @@ calStorageCalendar.prototype = {
             return reportError("ID for modifyItem item is null");
         }
 
+        let modifiedItem = aNewItem.parentItem.clone();
+        if (this.getProperty("capabilities.propagate-sequence")) {
+            // Ensure the exception, its parent and the other exceptions have the
+            // same sequence number, to make sure we can send our changes to the
+            // server if the event has been updated via the blue bar
+            let newSequence = aNewItem.getProperty("SEQUENCE");
+            this._propagateSequence(modifiedItem, newSequence);
+        }
+
         // Ensure that we're looking at the base item if we were given an
         // occurrence.  Later we can optimize this.
-        let modifiedItem = aNewItem.parentItem.clone();
         if (aNewItem.parentItem != aNewItem) {
             modifiedItem.recurrenceInfo.modifyException(aNewItem, false);
         }
@@ -575,7 +572,7 @@ calStorageCalendar.prototype = {
         }
 
         modifiedItem.makeImmutable();
-        this.flushItem (modifiedItem, aOldItem);
+        this.flushItem(modifiedItem, aOldItem);
         this.setOfflineJournalFlag(aNewItem, oldOfflineFlag);
 
         this.notifyOperationComplete(aListener,
@@ -843,7 +840,7 @@ calStorageCalendar.prototype = {
                 else if (wantOfflineCreatedItems) sp.offline_journal = cICL.OFFLINE_FLAG_CREATED_RECORD;
                 else if (wantOfflineModifiedItems) sp.offline_journal = cICL.OFFLINE_FLAG_MODIFIED_RECORD;
 
-                while (this.mSelectNonRecurringEventsByRange.step()) {
+                while (this.mSelectNonRecurringEventsByRange.executeStep()) {
                     let row = this.mSelectNonRecurringEventsByRange.row;
                     resultItems.push(this.getEventFromRow(row, {}));
                 }
@@ -894,7 +891,7 @@ calStorageCalendar.prototype = {
                 if (wantOfflineDeletedItems) sp.offline_journal = cICL.OFFLINE_FLAG_DELETED_RECORD;
                 if (wantOfflineModifiedItems) sp.offline_journal = cICL.OFFLINE_FLAG_MODIFIED_RECORD;
 
-                while (this.mSelectNonRecurringTodosByRange.step()) {
+                while (this.mSelectNonRecurringTodosByRange.executeStep()) {
                     let row = this.mSelectNonRecurringTodosByRange.row;
                     resultItems.push(this.getTodoFromRow(row, {}));
                 }
@@ -977,11 +974,11 @@ calStorageCalendar.prototype = {
             if (cal.isEvent(aItem)) {
                 this.prepareStatement(this.mSelectEvent);
                 this.mSelectEvent.params.id = aID;
-                this.mSelectEvent.statement.executeAsync(listener);
+                this.mSelectEvent.executeAsync(listener);
             } else if (cal.isToDo(aItem)) {
                 this.prepareStatement(this.mSelectTodo);
                 this.mSelectTodo.params.id = aID;
-                this.mSelectTodo.statement.executeAsync(listener);
+                this.mSelectTodo.executeAsync(listener);
             }
         }
     },
@@ -993,7 +990,7 @@ calStorageCalendar.prototype = {
             this.mEditEventOfflineFlag.params.id = aID;
             this.mEditEventOfflineFlag.params.offline_journal = flag || null;
             try {
-                this.mEditEventOfflineFlag.execute();
+                this.mEditEventOfflineFlag.executeStep();
             } catch (e) {
                 this.logError("Error setting offline journal flag for "  + aItem.title, e);
             } finally {
@@ -1005,11 +1002,11 @@ calStorageCalendar.prototype = {
             this.mEditTodoOfflineFlag.params.id = aID;
             this.mEditTodoOfflineFlag.params.offline_journal = flag || null;
             try {
-                this.mEditTodoOfflineFlag.execute();
+                this.mEditTodoOfflineFlag.executeStep();
             } catch (e) {
                 this.logError("Error setting offline journal flag for "  + aItem.title, e);
             } finally {
-                this.mEditEventOfflineFlag.reset();
+                this.mEditTodoOfflineFlag.reset();
             }
         }
     },
@@ -1036,8 +1033,7 @@ calStorageCalendar.prototype = {
                 let newOfflineJournalFlag = cICL.OFFLINE_FLAG_MODIFIED_RECORD;
                 if (oldOfflineJournalFlag == cICL.OFFLINE_FLAG_CREATED_RECORD || oldOfflineJournalFlag == cICL.OFFLINE_FLAG_DELETED_RECORD) {
                     // Do nothing since a flag of "created" or "deleted" exists
-                }
-                else {
+                } else {
                     this_.setOfflineJournalFlag(aItem, newOfflineJournalFlag);
                 }
                 this_.notifyOperationComplete(aListener,
@@ -1062,8 +1058,7 @@ calStorageCalendar.prototype = {
                     // Delete item if flag is c
                     if (oldOfflineJournalFlag == cICL.OFFLINE_FLAG_CREATED_RECORD) {
                         this_.deleteItemById(aItem.id);
-                    }
-                    else if (oldOfflineJournalFlag == cICL.OFFLINE_FLAG_MODIFIED_RECORD) {
+                    } else if (oldOfflineJournalFlag == cICL.OFFLINE_FLAG_MODIFIED_RECORD) {
                         this_.setOfflineJournalFlag(aItem, cICL.OFFLINE_FLAG_DELETED_RECORD);
                     }
                 } else {
@@ -1101,385 +1096,402 @@ calStorageCalendar.prototype = {
     initDB: function cSC_initDB() {
         cal.ASSERT(this.mDB, "Database has not been opened!", true);
 
-        this.mSelectEvent = createStatement (
-            this.mDB,
-            "SELECT * FROM cal_events " +
-            "WHERE id = :id AND cal_id = :cal_id " +
-            " AND recurrence_id IS NULL " +
-            "LIMIT 1"
-            );
-
-        this.mSelectTodo = createStatement (
-            this.mDB,
-            "SELECT * FROM cal_todos " +
-            "WHERE id = :id AND cal_id = :cal_id " +
-            " AND recurrence_id IS NULL " +
-            "LIMIT 1"
-            );
-
-        // The more readable version of the next where-clause is:
-        //   WHERE  ((event_end > :range_start OR
-        //           (event_end = :range_start AND
-        //           event_start = :range_start))
-        //          AND event_start < :range_end)
-        //
-        // but that doesn't work with floating start or end times. The logic
-        // is the same though.
-        // For readability, a few helpers:
-        var floatingEventStart = "event_start_tz = 'floating' AND event_start"
-        var nonFloatingEventStart = "event_start_tz != 'floating' AND event_start"
-        var floatingEventEnd = "event_end_tz = 'floating' AND event_end"
-        var nonFloatingEventEnd = "event_end_tz != 'floating' AND event_end"
-        // The query needs to take both floating and non floating into account
-        this.mSelectNonRecurringEventsByRange = createStatement(
-            this.mDB,
-            "SELECT * FROM cal_events " +
-            "WHERE " +
-            " (("+floatingEventEnd+" > :range_start + :start_offset) OR " +
-            "  ("+nonFloatingEventEnd+" > :range_start) OR " +
-            "  ((("+floatingEventEnd+" = :range_start + :start_offset) OR " +
-            "    ("+nonFloatingEventEnd+" = :range_start)) AND " +
-            "   (("+floatingEventStart+" = :range_start + :start_offset) OR " +
-            "    ("+nonFloatingEventStart+" = :range_start)))) " +
-            " AND " +
-            "  (("+floatingEventStart+" < :range_end + :end_offset) OR " +
-            "   ("+nonFloatingEventStart+" < :range_end)) " +
-            " AND cal_id = :cal_id AND flags & 16 == 0 AND recurrence_id IS NULL" +
-            " AND ((:offline_journal IS NULL " +
-            " AND  (offline_journal IS NULL " +
-            "  OR   offline_journal != " + cICL.OFFLINE_FLAG_DELETED_RECORD + ")) " +
-            "  OR (offline_journal == :offline_journal))"
-            );
-       /**
-        * WHERE (due > rangeStart AND start < rangeEnd) OR
-        *       (due = rangeStart AND start = rangeStart) OR
-        *       (due IS NULL AND ((start >= rangeStart AND start < rangeEnd) OR
-        *                         (start IS NULL AND
-        *                          (completed > rangeStart OR completed IS NULL))) OR
-        *       (start IS NULL AND due >= rangeStart AND due < rangeEnd)
-        */
-
-        var floatingTodoEntry = "todo_entry_tz = 'floating' AND todo_entry";
-        var nonFloatingTodoEntry = "todo_entry_tz != 'floating' AND todo_entry";
-        var floatingTodoDue = "todo_due_tz = 'floating' AND todo_due";
-        var nonFloatingTodoDue = "todo_due_tz != 'floating' AND todo_due";
-        var floatingCompleted = "todo_completed_tz = 'floating' AND todo_completed";
-        var nonFloatingCompleted = "todo_completed_tz != 'floating' AND todo_completed";
-
-        this.mSelectNonRecurringTodosByRange = createStatement(
-            this.mDB,
-            "SELECT * FROM cal_todos " +
-            "WHERE " +
-            "(((("+floatingTodoDue+" > :range_start + :start_offset) OR " +
-            "   ("+nonFloatingTodoDue+" > :range_start)) AND " +
-            "  (("+floatingTodoEntry+" < :range_end + :end_offset) OR " +
-            "   ("+nonFloatingTodoEntry+" < :range_end))) OR " +
-            " ((("+floatingTodoDue+" = :range_start + :start_offset) OR " +
-            "   ("+nonFloatingTodoDue+" = :range_start)) AND " +
-            "  (("+floatingTodoEntry+" = :range_start + :start_offset) OR " +
-            "   ("+nonFloatingTodoEntry+" = :range_start))) OR " +
-            " ((todo_due IS NULL) AND " +
-            "  ((("+floatingTodoEntry+" >= :range_start + :start_offset) OR " +
-            "    ("+nonFloatingTodoEntry+" >= :range_start)) AND " +
-            "    (("+floatingTodoEntry+" < :range_end + :end_offset) OR " +
-            "     ("+nonFloatingTodoEntry+" < :range_end)))) OR " +
-            " ((todo_entry IS NULL) AND " +
-            "  ((("+floatingCompleted+" > :range_start + :start_offset) OR " +
-            "    ("+nonFloatingCompleted+" > :range_start)) OR " +
-            "   (todo_completed IS NULL)))) " +
-            " AND cal_id = :cal_id AND flags & 16 == 0 AND recurrence_id IS NULL " +
-            " AND ((:offline_journal IS NULL" +
-            " AND  (offline_journal IS NULL" +
-            "  OR   offline_journal != " + cICL.OFFLINE_FLAG_DELETED_RECORD + ")) " +
-            "  OR (offline_journal == :offline_journal))"
-            );
-
-        this.mSelectEventsWithRecurrence = createStatement(
-            this.mDB,
-            "SELECT * FROM cal_events " +
-            " WHERE flags & 16 == 16 " +
-            "   AND cal_id = :cal_id AND recurrence_id is NULL"
-            );
-
-        this.mSelectTodosWithRecurrence = createStatement(
-            this.mDB,
-            "SELECT * FROM cal_todos " +
-            " WHERE flags & 16 == 16 " +
-            "   AND cal_id = :cal_id AND recurrence_id IS NULL"
-            );
-
-        this.mSelectEventExceptions = createStatement (
-            this.mDB,
-            "SELECT * FROM cal_events " +
-            "WHERE id = :id AND cal_id = :cal_id" +
-            " AND recurrence_id IS NOT NULL"
-            );
-
-        this.mSelectTodoExceptions = createStatement (
-            this.mDB,
-            "SELECT * FROM cal_todos " +
-            "WHERE id = :id AND cal_id = :cal_id" +
-            " AND recurrence_id IS NOT NULL"
-            );
-
-        // For the extra-item data, we used to use mDBTwo, so that
-        // these could be executed while a selectItems was running.
-        // This no longer seems to be needed and actually causes
-        // havoc when transactions are in use.
-        this.mSelectAttendeesForItem = createStatement(
-            this.mDB,
-            "SELECT * FROM cal_attendees " +
-            "WHERE item_id = :item_id AND cal_id = :cal_id" +
-            " AND recurrence_id IS NULL"
-            );
-
-        this.mSelectAttendeesForItemWithRecurrenceId = createStatement(
-            this.mDB,
-            "SELECT * FROM cal_attendees " +
-            "WHERE item_id = :item_id AND cal_id = :cal_id" +
-            " AND recurrence_id = :recurrence_id" +
-            " AND recurrence_id_tz = :recurrence_id_tz"
-            );
-
-        this.mSelectPropertiesForItem = createStatement(
-            this.mDB,
-            "SELECT * FROM cal_properties" +
-            " WHERE item_id = :item_id" +
-            "   AND cal_id = :cal_id" +
-            "   AND recurrence_id IS NULL"
-            );
-
-        this.mSelectPropertiesForItemWithRecurrenceId = createStatement(
-            this.mDB,
-            "SELECT * FROM cal_properties " +
-            "WHERE item_id = :item_id AND cal_id = :cal_id" +
-            "  AND recurrence_id = :recurrence_id" +
-            "  AND recurrence_id_tz = :recurrence_id_tz"
-            );
-
-        this.mSelectRecurrenceForItem = createStatement(
-            this.mDB,
-            "SELECT * FROM cal_recurrence " +
-            "WHERE item_id = :item_id AND cal_id = :cal_id" +
-            " ORDER BY recur_index"
-            );
-
-        this.mSelectAttachmentsForItem = createStatement(
-            this.mDB,
-            "SELECT * FROM cal_attachments " +
-            "WHERE item_id = :item_id AND cal_id = :cal_id" +
-            " AND recurrence_id IS NULL"
-            );
-        this.mSelectAttachmentsForItemWithRecurrenceId = createStatement(
-            this.mDB,
-            "SELECT * FROM cal_attachments" +
-            " WHERE item_id = :item_id AND cal_id = :cal_id" +
-            " AND recurrence_id = :recurrence_id" +
-            " AND recurrence_id_tz = :recurrence_id_tz"
-            );
-
-        this.mSelectRelationsForItem = createStatement(
-            this.mDB,
-            "SELECT * FROM cal_relations " +
-            "WHERE item_id = :item_id AND cal_id = :cal_id" +
-            " AND recurrence_id IS NULL"
-            );
-        this.mSelectRelationsForItemWithRecurrenceId = createStatement(
-            this.mDB,
-            "SELECT * FROM cal_relations" +
-            " WHERE item_id = :item_id AND cal_id = :cal_id" +
-            " AND recurrence_id = :recurrence_id" +
-            " AND recurrence_id_tz = :recurrence_id_tz"
-            );
-
-        this.mSelectMetaData = createStatement(
-            this.mDB,
-            "SELECT * FROM cal_metadata"
-            + " WHERE item_id = :item_id AND cal_id = :cal_id");
-
-        this.mSelectAllMetaData = createStatement(
-            this.mDB,
-            "SELECT * FROM cal_metadata"
-            + " WHERE cal_id = :cal_id");
-
-        this.mSelectAlarmsForItem = createStatement(
-            this.mDB,
-            "SELECT icalString FROM cal_alarms"
-            + " WHERE item_id = :item_id AND cal_id = :cal_id" +
-            " AND recurrence_id IS NULL"
-            );
-
-        this.mSelectAlarmsForItemWithRecurrenceId = createStatement(
-            this.mDB,
-            "SELECT icalString FROM cal_alarms" +
-            " WHERE item_id = :item_id AND cal_id = :cal_id" +
-            " AND recurrence_id = :recurrence_id" +
-            " AND recurrence_id_tz = :recurrence_id_tz"
-            );
-
-        // insert statements
-        this.mInsertEvent = createStatement (
-            this.mDB,
-            "INSERT INTO cal_events " +
-            "  (cal_id, id, time_created, last_modified, " +
-            "   title, priority, privacy, ical_status, flags, " +
-            "   event_start, event_start_tz, event_end, event_end_tz, event_stamp, " +
-            "   recurrence_id, recurrence_id_tz, alarm_last_ack) " +
-            "VALUES (:cal_id, :id, :time_created, :last_modified, " +
-            "        :title, :priority, :privacy, :ical_status, :flags, " +
-            "        :event_start, :event_start_tz, :event_end, :event_end_tz, :event_stamp, " +
-            "        :recurrence_id, :recurrence_id_tz, :alarm_last_ack)"
-            );
-
-        this.mInsertTodo = createStatement (
-            this.mDB,
-            "INSERT INTO cal_todos " +
-            "  (cal_id, id, time_created, last_modified, " +
-            "   title, priority, privacy, ical_status, flags, " +
-            "   todo_entry, todo_entry_tz, todo_due, todo_due_tz, todo_stamp, " +
-            "   todo_completed, todo_completed_tz, todo_complete, " +
-            "   recurrence_id, recurrence_id_tz, alarm_last_ack)" +
-            "VALUES (:cal_id, :id, :time_created, :last_modified, " +
-            "        :title, :priority, :privacy, :ical_status, :flags, " +
-            "        :todo_entry, :todo_entry_tz, :todo_due, :todo_due_tz, :todo_stamp, " +
-            "        :todo_completed, :todo_completed_tz, :todo_complete, " +
-            "        :recurrence_id, :recurrence_id_tz, :alarm_last_ack)"
-            );
-        this.mInsertProperty = createStatement (
-            this.mDB,
-            "INSERT INTO cal_properties (cal_id, item_id, recurrence_id, recurrence_id_tz, key, value) " +
-            "VALUES (:cal_id, :item_id, :recurrence_id, :recurrence_id_tz, :key, :value)"
-            );
-        this.mInsertAttendee = createStatement (
-            this.mDB,
-            "INSERT INTO cal_attendees " +
-            "  (cal_id, item_id, recurrence_id, recurrence_id_tz, attendee_id, common_name, rsvp, role, status, type, is_organizer, properties) " +
-            "VALUES (:cal_id, :item_id, :recurrence_id, :recurrence_id_tz, :attendee_id, :common_name, :rsvp, :role, :status, :type, :is_organizer, :properties)"
-            );
-        this.mInsertRecurrence = createStatement (
-            this.mDB,
-            "INSERT INTO cal_recurrence " +
-            "  (cal_id, item_id, recur_index, recur_type, is_negative, dates, count, end_date, interval, second, minute, hour, day, monthday, yearday, weekno, month, setpos) " +
-            "VALUES (:cal_id, :item_id, :recur_index, :recur_type, :is_negative, :dates, :count, :end_date, :interval, :second, :minute, :hour, :day, :monthday, :yearday, :weekno, :month, :setpos)"
-            );
-
-        this.mInsertAttachment = createStatement (
-            this.mDB,
-            "INSERT INTO cal_attachments " +
-            " (cal_id, item_id, data, format_type, encoding, recurrence_id, recurrence_id_tz) " +
-            "VALUES (:cal_id, :item_id, :data, :format_type, :encoding, :recurrence_id, :recurrence_id_tz)"
-            );
-
-        this.mInsertRelation = createStatement (
-            this.mDB,
-            "INSERT INTO cal_relations " +
-            " (cal_id, item_id, rel_type, rel_id, recurrence_id, recurrence_id_tz) " +
-            "VALUES (:cal_id, :item_id, :rel_type, :rel_id, :recurrence_id, :recurrence_id_tz)"
-            );
-
-        this.mInsertMetaData = createStatement(
-            this.mDB,
-            "INSERT INTO cal_metadata"
-            + " (cal_id, item_id, value)"
-            + " VALUES (:cal_id, :item_id, :value)");
-
-        this.mInsertAlarm = createStatement(
-            this.mDB,
-            "INSERT INTO cal_alarms " +
-            "  (cal_id, item_id, icalString, recurrence_id, recurrence_id_tz) " +
-            "VALUES  (:cal_id, :item_id, :icalString, :recurrence_id, :recurrence_id_tz)  "
-            );
-        //Offline Operations
-        this.mEditEventOfflineFlag = createStatement(
-            this.mDB,
-            "UPDATE cal_events SET offline_journal = :offline_journal" +
-            " WHERE id = :id AND cal_id = :cal_id"
-        );
-
-        this.mEditTodoOfflineFlag = createStatement(
-            this.mDB,
-            "UPDATE cal_todos SET offline_journal = :offline_journal" +
-            " WHERE id = :id AND cal_id = :cal_id"
-        );
-
-        // delete statements
-        this.mDeleteEvent = createStatement (
-            this.mDB,
-            "DELETE FROM cal_events WHERE id = :id AND cal_id = :cal_id"
-            );
-        this.mDeleteTodo = createStatement (
-            this.mDB,
-            "DELETE FROM cal_todos WHERE id = :id AND cal_id = :cal_id"
-            );
-        this.mDeleteAttendees = createStatement (
-            this.mDB,
-            "DELETE FROM cal_attendees WHERE item_id = :item_id AND cal_id = :cal_id"
-            );
-        this.mDeleteProperties = createStatement (
-            this.mDB,
-            "DELETE FROM cal_properties WHERE item_id = :item_id AND cal_id = :cal_id"
-            );
-        this.mDeleteRecurrence = createStatement (
-            this.mDB,
-            "DELETE FROM cal_recurrence WHERE item_id = :item_id AND cal_id = :cal_id"
-            );
-        this.mDeleteAttachments = createStatement (
-            this.mDB,
-            "DELETE FROM cal_attachments WHERE item_id = :item_id AND cal_id = :cal_id"
-            );
-        this.mDeleteRelations = createStatement (
-            this.mDB,
-            "DELETE FROM cal_relations WHERE item_id = :item_id AND cal_id = :cal_id"
-            );
-        this.mDeleteMetaData = createStatement(
-            this.mDB,
-            "DELETE FROM cal_metadata WHERE item_id = :item_id AND cal_id = :cal_id"
-            );
-        this.mDeleteAlarms = createStatement (
-            this.mDB,
-            "DELETE FROM cal_alarms WHERE item_id = :item_id AND cal_id = :cal_id"
-            );
-
-        // These are only used when deleting an entire calendar
-        var extrasTables = [ "cal_attendees", "cal_properties",
-                             "cal_recurrence", "cal_attachments",
-                             "cal_metadata", "cal_relations",
-                             "cal_alarms"];
-
-        this.mDeleteEventExtras = new Array();
-        this.mDeleteTodoExtras = new Array();
-
-        for (var table in extrasTables) {
-            this.mDeleteEventExtras[table] = createStatement (
-                this.mDB,
-                "DELETE FROM " + extrasTables[table] + " WHERE item_id IN" +
-                "  (SELECT id FROM cal_events WHERE cal_id = :cal_id)" +
-                " AND cal_id = :cal_id"
+        try {
+            this.mSelectEvent = this.mDB.createStatement(
+                "SELECT * FROM cal_events " +
+                "WHERE id = :id AND cal_id = :cal_id " +
+                " AND recurrence_id IS NULL " +
+                "LIMIT 1"
                 );
-            this.mDeleteTodoExtras[table] = createStatement (
-                this.mDB,
-                "DELETE FROM " + extrasTables[table] + " WHERE item_id IN" +
-                "  (SELECT id FROM cal_todos WHERE cal_id = :cal_id)" +
-                " AND cal_id = :cal_id"
+
+            this.mSelectTodo = this.mDB.createStatement(
+                "SELECT * FROM cal_todos " +
+                "WHERE id = :id AND cal_id = :cal_id " +
+                " AND recurrence_id IS NULL " +
+                "LIMIT 1"
                 );
+
+            // The more readable version of the next where-clause is:
+            //   WHERE  ((event_end > :range_start OR
+            //           (event_end = :range_start AND
+            //           event_start = :range_start))
+            //          AND event_start < :range_end)
+            //
+            // but that doesn't work with floating start or end times. The logic
+            // is the same though.
+            // For readability, a few helpers:
+            var floatingEventStart = "event_start_tz = 'floating' AND event_start"
+            var nonFloatingEventStart = "event_start_tz != 'floating' AND event_start"
+            var floatingEventEnd = "event_end_tz = 'floating' AND event_end"
+            var nonFloatingEventEnd = "event_end_tz != 'floating' AND event_end"
+            // The query needs to take both floating and non floating into account
+            this.mSelectNonRecurringEventsByRange = this.mDB.createStatement(
+                "SELECT * FROM cal_events " +
+                "WHERE " +
+                " (("+floatingEventEnd+" > :range_start + :start_offset) OR " +
+                "  ("+nonFloatingEventEnd+" > :range_start) OR " +
+                "  ((("+floatingEventEnd+" = :range_start + :start_offset) OR " +
+                "    ("+nonFloatingEventEnd+" = :range_start)) AND " +
+                "   (("+floatingEventStart+" = :range_start + :start_offset) OR " +
+                "    ("+nonFloatingEventStart+" = :range_start)))) " +
+                " AND " +
+                "  (("+floatingEventStart+" < :range_end + :end_offset) OR " +
+                "   ("+nonFloatingEventStart+" < :range_end)) " +
+                " AND cal_id = :cal_id AND flags & 16 == 0 AND recurrence_id IS NULL" +
+                " AND ((:offline_journal IS NULL " +
+                " AND  (offline_journal IS NULL " +
+                "  OR   offline_journal != " + cICL.OFFLINE_FLAG_DELETED_RECORD + ")) " +
+                "  OR (offline_journal == :offline_journal))"
+                );
+           /**
+            * WHERE (due > rangeStart AND start < rangeEnd) OR
+            *       (due = rangeStart AND start = rangeStart) OR
+            *       (due IS NULL AND ((start >= rangeStart AND start < rangeEnd) OR
+            *                         (start IS NULL AND
+            *                          (completed > rangeStart OR completed IS NULL))) OR
+            *       (start IS NULL AND due >= rangeStart AND due < rangeEnd)
+            */
+
+            var floatingTodoEntry = "todo_entry_tz = 'floating' AND todo_entry";
+            var nonFloatingTodoEntry = "todo_entry_tz != 'floating' AND todo_entry";
+            var floatingTodoDue = "todo_due_tz = 'floating' AND todo_due";
+            var nonFloatingTodoDue = "todo_due_tz != 'floating' AND todo_due";
+            var floatingCompleted = "todo_completed_tz = 'floating' AND todo_completed";
+            var nonFloatingCompleted = "todo_completed_tz != 'floating' AND todo_completed";
+
+            this.mSelectNonRecurringTodosByRange = this.mDB.createStatement(
+                "SELECT * FROM cal_todos " +
+                "WHERE " +
+                "(((("+floatingTodoDue+" > :range_start + :start_offset) OR " +
+                "   ("+nonFloatingTodoDue+" > :range_start)) AND " +
+                "  (("+floatingTodoEntry+" < :range_end + :end_offset) OR " +
+                "   ("+nonFloatingTodoEntry+" < :range_end))) OR " +
+                " ((("+floatingTodoDue+" = :range_start + :start_offset) OR " +
+                "   ("+nonFloatingTodoDue+" = :range_start)) AND " +
+                "  (("+floatingTodoEntry+" = :range_start + :start_offset) OR " +
+                "   ("+nonFloatingTodoEntry+" = :range_start))) OR " +
+                " ((todo_due IS NULL) AND " +
+                "  ((("+floatingTodoEntry+" >= :range_start + :start_offset) OR " +
+                "    ("+nonFloatingTodoEntry+" >= :range_start)) AND " +
+                "    (("+floatingTodoEntry+" < :range_end + :end_offset) OR " +
+                "     ("+nonFloatingTodoEntry+" < :range_end)))) OR " +
+                " ((todo_entry IS NULL) AND " +
+                "  ((("+floatingCompleted+" > :range_start + :start_offset) OR " +
+                "    ("+nonFloatingCompleted+" > :range_start)) OR " +
+                "   (todo_completed IS NULL)))) " +
+                " AND cal_id = :cal_id AND flags & 16 == 0 AND recurrence_id IS NULL " +
+                " AND ((:offline_journal IS NULL" +
+                " AND  (offline_journal IS NULL" +
+                "  OR   offline_journal != " + cICL.OFFLINE_FLAG_DELETED_RECORD + ")) " +
+                "  OR (offline_journal == :offline_journal))"
+                );
+
+            this.mSelectEventsWithRecurrence = this.mDB.createStatement(
+                "SELECT * FROM cal_events " +
+                " WHERE flags & 16 == 16 " +
+                "   AND cal_id = :cal_id AND recurrence_id is NULL"
+                );
+
+            this.mSelectTodosWithRecurrence = this.mDB.createStatement(
+                "SELECT * FROM cal_todos " +
+                " WHERE flags & 16 == 16 " +
+                "   AND cal_id = :cal_id AND recurrence_id IS NULL"
+                );
+
+            this.mSelectEventExceptions = this.mDB.createStatement(
+                "SELECT * FROM cal_events " +
+                "WHERE id = :id AND cal_id = :cal_id" +
+                " AND recurrence_id IS NOT NULL"
+                );
+
+            this.mSelectTodoExceptions = this.mDB.createStatement(
+                "SELECT * FROM cal_todos " +
+                "WHERE id = :id AND cal_id = :cal_id" +
+                " AND recurrence_id IS NOT NULL"
+                );
+
+            // For the extra-item data, we used to use mDBTwo, so that
+            // these could be executed while a selectItems was running.
+            // This no longer seems to be needed and actually causes
+            // havoc when transactions are in use.
+            this.mSelectAttendeesForItem = this.mDB.createStatement(
+                "SELECT * FROM cal_attendees " +
+                "WHERE item_id = :item_id AND cal_id = :cal_id" +
+                " AND recurrence_id IS NULL"
+                );
+
+            this.mSelectAttendeesForItemWithRecurrenceId = this.mDB.createStatement(
+                "SELECT * FROM cal_attendees " +
+                "WHERE item_id = :item_id AND cal_id = :cal_id" +
+                " AND recurrence_id = :recurrence_id" +
+                " AND recurrence_id_tz = :recurrence_id_tz"
+                );
+
+            this.mSelectPropertiesForItem = this.mDB.createStatement(
+                "SELECT * FROM cal_properties" +
+                " WHERE item_id = :item_id" +
+                "   AND cal_id = :cal_id" +
+                "   AND recurrence_id IS NULL"
+                );
+
+            this.mSelectPropertiesForItemWithRecurrenceId = this.mDB.createStatement(
+                "SELECT * FROM cal_properties " +
+                "WHERE item_id = :item_id AND cal_id = :cal_id" +
+                "  AND recurrence_id = :recurrence_id" +
+                "  AND recurrence_id_tz = :recurrence_id_tz"
+                );
+
+            this.mSelectRecurrenceForItem = this.mDB.createStatement(
+                "SELECT * FROM cal_recurrence " +
+                "WHERE item_id = :item_id AND cal_id = :cal_id" +
+                " ORDER BY recur_index"
+                );
+
+            this.mSelectAttachmentsForItem = this.mDB.createStatement(
+                "SELECT * FROM cal_attachments " +
+                "WHERE item_id = :item_id AND cal_id = :cal_id" +
+                " AND recurrence_id IS NULL"
+                );
+            this.mSelectAttachmentsForItemWithRecurrenceId = this.mDB.createStatement(
+                "SELECT * FROM cal_attachments" +
+                " WHERE item_id = :item_id AND cal_id = :cal_id" +
+                " AND recurrence_id = :recurrence_id" +
+                " AND recurrence_id_tz = :recurrence_id_tz"
+                );
+
+            this.mSelectRelationsForItem = this.mDB.createStatement(
+                "SELECT * FROM cal_relations " +
+                "WHERE item_id = :item_id AND cal_id = :cal_id" +
+                " AND recurrence_id IS NULL"
+                );
+            this.mSelectRelationsForItemWithRecurrenceId = this.mDB.createStatement(
+                "SELECT * FROM cal_relations" +
+                " WHERE item_id = :item_id AND cal_id = :cal_id" +
+                " AND recurrence_id = :recurrence_id" +
+                " AND recurrence_id_tz = :recurrence_id_tz"
+                );
+
+            this.mSelectMetaData = this.mDB.createStatement(
+                "SELECT * FROM cal_metadata"
+                + " WHERE item_id = :item_id AND cal_id = :cal_id");
+
+            this.mSelectAllMetaData = this.mDB.createStatement(
+                "SELECT * FROM cal_metadata"
+                + " WHERE cal_id = :cal_id");
+
+            this.mSelectAlarmsForItem = this.mDB.createStatement(
+                "SELECT icalString FROM cal_alarms"
+                + " WHERE item_id = :item_id AND cal_id = :cal_id" +
+                " AND recurrence_id IS NULL"
+                );
+
+            this.mSelectAlarmsForItemWithRecurrenceId = this.mDB.createStatement(
+                "SELECT icalString FROM cal_alarms" +
+                " WHERE item_id = :item_id AND cal_id = :cal_id" +
+                " AND recurrence_id = :recurrence_id" +
+                " AND recurrence_id_tz = :recurrence_id_tz"
+                );
+
+            // insert statements
+            this.mInsertEvent = this.mDB.createStatement(
+                "INSERT INTO cal_events " +
+                "  (cal_id, id, time_created, last_modified, " +
+                "   title, priority, privacy, ical_status, flags, " +
+                "   event_start, event_start_tz, event_end, event_end_tz, event_stamp, " +
+                "   recurrence_id, recurrence_id_tz, alarm_last_ack) " +
+                "VALUES (:cal_id, :id, :time_created, :last_modified, " +
+                "        :title, :priority, :privacy, :ical_status, :flags, " +
+                "        :event_start, :event_start_tz, :event_end, :event_end_tz, :event_stamp, " +
+                "        :recurrence_id, :recurrence_id_tz, :alarm_last_ack)"
+                );
+
+            this.mInsertTodo = this.mDB.createStatement(
+                "INSERT INTO cal_todos " +
+                "  (cal_id, id, time_created, last_modified, " +
+                "   title, priority, privacy, ical_status, flags, " +
+                "   todo_entry, todo_entry_tz, todo_due, todo_due_tz, todo_stamp, " +
+                "   todo_completed, todo_completed_tz, todo_complete, " +
+                "   recurrence_id, recurrence_id_tz, alarm_last_ack)" +
+                "VALUES (:cal_id, :id, :time_created, :last_modified, " +
+                "        :title, :priority, :privacy, :ical_status, :flags, " +
+                "        :todo_entry, :todo_entry_tz, :todo_due, :todo_due_tz, :todo_stamp, " +
+                "        :todo_completed, :todo_completed_tz, :todo_complete, " +
+                "        :recurrence_id, :recurrence_id_tz, :alarm_last_ack)"
+                );
+            this.mInsertProperty = this.mDB.createStatement(
+                "INSERT INTO cal_properties (cal_id, item_id, recurrence_id, recurrence_id_tz, key, value) " +
+                "VALUES (:cal_id, :item_id, :recurrence_id, :recurrence_id_tz, :key, :value)"
+                );
+            this.mInsertAttendee = this.mDB.createStatement(
+                "INSERT INTO cal_attendees " +
+                "  (cal_id, item_id, recurrence_id, recurrence_id_tz, attendee_id, common_name, rsvp, role, status, type, is_organizer, properties) " +
+                "VALUES (:cal_id, :item_id, :recurrence_id, :recurrence_id_tz, :attendee_id, :common_name, :rsvp, :role, :status, :type, :is_organizer, :properties)"
+                );
+            this.mInsertRecurrence = this.mDB.createStatement(
+                "INSERT INTO cal_recurrence " +
+                "  (cal_id, item_id, recur_index, recur_type, is_negative, dates, count, end_date, interval, second, minute, hour, day, monthday, yearday, weekno, month, setpos) " +
+                "VALUES (:cal_id, :item_id, :recur_index, :recur_type, :is_negative, :dates, :count, :end_date, :interval, :second, :minute, :hour, :day, :monthday, :yearday, :weekno, :month, :setpos)"
+                );
+
+            this.mInsertAttachment = this.mDB.createStatement(
+                "INSERT INTO cal_attachments " +
+                " (cal_id, item_id, data, format_type, encoding, recurrence_id, recurrence_id_tz) " +
+                "VALUES (:cal_id, :item_id, :data, :format_type, :encoding, :recurrence_id, :recurrence_id_tz)"
+                );
+
+            this.mInsertRelation = this.mDB.createStatement(
+                "INSERT INTO cal_relations " +
+                " (cal_id, item_id, rel_type, rel_id, recurrence_id, recurrence_id_tz) " +
+                "VALUES (:cal_id, :item_id, :rel_type, :rel_id, :recurrence_id, :recurrence_id_tz)"
+                );
+
+            this.mInsertMetaData = this.mDB.createStatement(
+                "INSERT INTO cal_metadata"
+                + " (cal_id, item_id, value)"
+                + " VALUES (:cal_id, :item_id, :value)");
+
+            this.mInsertAlarm = this.mDB.createStatement(
+                "INSERT INTO cal_alarms " +
+                "  (cal_id, item_id, icalString, recurrence_id, recurrence_id_tz) " +
+                "VALUES  (:cal_id, :item_id, :icalString, :recurrence_id, :recurrence_id_tz)  "
+                );
+            //Offline Operations
+            this.mEditEventOfflineFlag = this.mDB.createStatement(
+                "UPDATE cal_events SET offline_journal = :offline_journal" +
+                " WHERE id = :id AND cal_id = :cal_id"
+            );
+
+            this.mEditTodoOfflineFlag = this.mDB.createStatement(
+                "UPDATE cal_todos SET offline_journal = :offline_journal" +
+                " WHERE id = :id AND cal_id = :cal_id"
+            );
+
+            // delete statements
+            this.mDeleteEvent = this.mDB.createStatement(
+                "DELETE FROM cal_events WHERE id = :id AND cal_id = :cal_id"
+                );
+            this.mDeleteTodo = this.mDB.createStatement(
+                "DELETE FROM cal_todos WHERE id = :id AND cal_id = :cal_id"
+                );
+            this.mDeleteAttendees = this.mDB.createStatement(
+                "DELETE FROM cal_attendees WHERE item_id = :item_id AND cal_id = :cal_id"
+                );
+            this.mDeleteProperties = this.mDB.createStatement(
+                "DELETE FROM cal_properties WHERE item_id = :item_id AND cal_id = :cal_id"
+                );
+            this.mDeleteRecurrence = this.mDB.createStatement(
+                "DELETE FROM cal_recurrence WHERE item_id = :item_id AND cal_id = :cal_id"
+                );
+            this.mDeleteAttachments = this.mDB.createStatement(
+                "DELETE FROM cal_attachments WHERE item_id = :item_id AND cal_id = :cal_id"
+                );
+            this.mDeleteRelations = this.mDB.createStatement(
+                "DELETE FROM cal_relations WHERE item_id = :item_id AND cal_id = :cal_id"
+                );
+            this.mDeleteMetaData = this.mDB.createStatement(
+                "DELETE FROM cal_metadata WHERE item_id = :item_id AND cal_id = :cal_id"
+                );
+            this.mDeleteAlarms = this.mDB.createStatement(
+                "DELETE FROM cal_alarms WHERE item_id = :item_id AND cal_id = :cal_id"
+                );
+
+            // These are only used when deleting an entire calendar
+            var extrasTables = [ "cal_attendees", "cal_properties",
+                                 "cal_recurrence", "cal_attachments",
+                                 "cal_metadata", "cal_relations",
+                                 "cal_alarms"];
+
+            this.mDeleteEventExtras = new Array();
+            this.mDeleteTodoExtras = new Array();
+
+            for (var table in extrasTables) {
+                this.mDeleteEventExtras[table] = this.mDB.createStatement(
+                    "DELETE FROM " + extrasTables[table] + " WHERE item_id IN" +
+                    "  (SELECT id FROM cal_events WHERE cal_id = :cal_id)" +
+                    " AND cal_id = :cal_id"
+                    );
+                this.mDeleteTodoExtras[table] = this.mDB.createStatement(
+                    "DELETE FROM " + extrasTables[table] + " WHERE item_id IN" +
+                    "  (SELECT id FROM cal_todos WHERE cal_id = :cal_id)" +
+                    " AND cal_id = :cal_id"
+                    );
+            }
+
+            // Note that you must delete the "extras" _first_ using the above two
+            // statements, before you delete the events themselves.
+            this.mDeleteAllEvents = this.mDB.createStatement(
+                "DELETE from cal_events WHERE cal_id = :cal_id"
+                );
+            this.mDeleteAllTodos = this.mDB.createStatement(
+                "DELETE from cal_todos WHERE cal_id = :cal_id"
+                );
+
+            this.mDeleteAllMetaData = this.mDB.createStatement(
+                "DELETE FROM cal_metadata" +
+                " WHERE cal_id = :cal_id"
+                );
+        } catch (e) {
+            this.logError("Error initializing statements.", e);
         }
+    },
 
-        // Note that you must delete the "extras" _first_ using the above two
-        // statements, before you delete the events themselves.
-        this.mDeleteAllEvents = createStatement (
-            this.mDB,
-            "DELETE from cal_events WHERE cal_id = :cal_id"
-            );
-        this.mDeleteAllTodos = createStatement (
-            this.mDB,
-            "DELETE from cal_todos WHERE cal_id = :cal_id"
-            );
+    shutdownDB: function cSC_shutdownDB() {
+        try {
+            if (this.mDeleteAlarms) { this.mDeleteAlarms.finalize(); }
+            if (this.mDeleteAllEvents) { this.mDeleteAllEvents.finalize(); }
+            if (this.mDeleteAllMetaData) { this.mDeleteAllMetaData.finalize(); }
+            if (this.mDeleteAllTodos) { this.mDeleteAllTodos.finalize(); }
+            if (this.mDeleteAttachments) { this.mDeleteAttachments.finalize(); }
+            if (this.mDeleteAttendees) { this.mDeleteAttendees.finalize(); }
+            if (this.mDeleteEvent) { this.mDeleteEvent.finalize(); }
+            if (this.mDeleteMetaData) { this.mDeleteMetaData.finalize(); }
+            if (this.mDeleteProperties) { this.mDeleteProperties.finalize(); }
+            if (this.mDeleteRecurrence) { this.mDeleteRecurrence.finalize(); }
+            if (this.mDeleteRelations) { this.mDeleteRelations.finalize(); }
+            if (this.mDeleteTodo) { this.mDeleteTodo.finalize(); }
+            if (this.mEditEventOfflineFlag) { this.mEditEventOfflineFlag.finalize(); }
+            if (this.mEditTodoOfflineFlag) { this.mEditTodoOfflineFlag.finalize(); }
+            if (this.mInsertAlarm) { this.mInsertAlarm.finalize(); }
+            if (this.mInsertAttachment) { this.mInsertAttachment.finalize(); }
+            if (this.mInsertAttendee) { this.mInsertAttendee.finalize(); }
+            if (this.mInsertEvent) { this.mInsertEvent.finalize(); }
+            if (this.mInsertMetaData) { this.mInsertMetaData.finalize(); }
+            if (this.mInsertProperty) { this.mInsertProperty.finalize(); }
+            if (this.mInsertRecurrence) { this.mInsertRecurrence.finalize(); }
+            if (this.mInsertRelation) { this.mInsertRelation.finalize(); }
+            if (this.mInsertTodo) { this.mInsertTodo.finalize(); }
+            if (this.mSelectAlarmsForItem) { this.mSelectAlarmsForItem.finalize(); }
+            if (this.mSelectAlarmsForItemWithRecurrenceId) { this.mSelectAlarmsForItemWithRecurrenceId.finalize(); }
+            if (this.mSelectAllMetaData) { this.mSelectAllMetaData.finalize(); }
+            if (this.mSelectAttachmentsForItem) { this.mSelectAttachmentsForItem.finalize(); }
+            if (this.mSelectAttachmentsForItemWithRecurrenceId) { this.mSelectAttachmentsForItemWithRecurrenceId.finalize(); }
+            if (this.mSelectAttendeesForItem) { this.mSelectAttendeesForItem.finalize(); }
+            if (this.mSelectAttendeesForItemWithRecurrenceId) { this.mSelectAttendeesForItemWithRecurrenceId.finalize(); }
+            if (this.mSelectEvent) { this.mSelectEvent.finalize(); }
+            if (this.mSelectEventExceptions) { this.mSelectEventExceptions.finalize(); }
+            if (this.mSelectEventsWithRecurrence) { this.mSelectEventsWithRecurrence.finalize(); }
+            if (this.mSelectMetaData) { this.mSelectMetaData.finalize(); }
+            if (this.mSelectNonRecurringEventsByRange) { this.mSelectNonRecurringEventsByRange.finalize(); }
+            if (this.mSelectNonRecurringTodosByRange) { this.mSelectNonRecurringTodosByRange.finalize(); }
+            if (this.mSelectPropertiesForItem) { this.mSelectPropertiesForItem.finalize(); }
+            if (this.mSelectPropertiesForItemWithRecurrenceId) { this.mSelectPropertiesForItemWithRecurrenceId.finalize(); }
+            if (this.mSelectRecurrenceForItem) { this.mSelectRecurrenceForItem.finalize(); }
+            if (this.mSelectRelationsForItem) { this.mSelectRelationsForItem.finalize(); }
+            if (this.mSelectRelationsForItemWithRecurrenceId) { this.mSelectRelationsForItemWithRecurrenceId.finalize(); }
+            if (this.mSelectTodo) { this.mSelectTodo.finalize(); }
+            if (this.mSelectTodoExceptions) { this.mSelectTodoExceptions.finalize(); }
+            if (this.mSelectTodosWithRecurrence) { this.mSelectTodosWithRecurrence.finalize(); }
+            if (this.mDeleteEventExtras) {
+                for each (let stmt in this.mDeleteEventExtras) { stmt.finalize(); }
+            }
+            if (this.mDeleteTodoExtras) {
+                for each (let stmt in this.mDeleteTodoExtras) { stmt.finalize(); }
+            }
 
-        this.mDeleteAllMetaData = createStatement(
-            this.mDB,
-            "DELETE FROM cal_metadata" +
-            " WHERE cal_id = :cal_id"
-            );
+            if (this.mDB) { this.mDB.asyncClose(); this.mDB = null; }
+        } catch (e) {
+            cal.ERROR("Error closing storage database: " + e);
+        }
     },
 
     //
@@ -1550,7 +1562,7 @@ calStorageCalendar.prototype = {
         try {
             this.prepareStatement(this.mSelectEventsWithRecurrence);
             let sp = this.mSelectEventsWithRecurrence.params;
-            while (this.mSelectEventsWithRecurrence.step()) {
+            while (this.mSelectEventsWithRecurrence.executeStep()) {
                 let row = this.mSelectEventsWithRecurrence.row;
                 let item = this.getEventFromRow(row, {});
                 this.mRecEventCache[item.id] = item;
@@ -1565,7 +1577,7 @@ calStorageCalendar.prototype = {
         try {
             this.prepareStatement(this.mSelectTodosWithRecurrence);
             sp = this.mSelectTodosWithRecurrence.params;
-            while (this.mSelectTodosWithRecurrence.step()) {
+            while (this.mSelectTodosWithRecurrence.executeStep()) {
                 var row = this.mSelectTodosWithRecurrence.row;
                 var item = this.getTodoFromRow(row, {});
                 this.mRecTodoCache[item.id] = item;
@@ -1659,9 +1671,9 @@ calStorageCalendar.prototype = {
 
         if (flags & CAL_ITEM_FLAG.HAS_ATTENDEES) {
             var selectItem = null;
-            if (item.recurrenceId == null)
+            if (item.recurrenceId == null) {
                 selectItem = this.mSelectAttendeesForItem;
-            else {
+            } else {
                 selectItem = this.mSelectAttendeesForItemWithRecurrenceId;
                 this.setDateParamHelper(selectItem.params, "recurrence_id", item.recurrenceId);
             }
@@ -1669,12 +1681,17 @@ calStorageCalendar.prototype = {
             try {
                 this.prepareStatement(selectItem);
                 selectItem.params.item_id = item.id;
-                while (selectItem.step()) {
+                while (selectItem.executeStep()) {
                     var attendee = this.getAttendeeFromRow(selectItem.row);
-                    if (attendee.isOrganizer) {
-                        item.organizer = attendee;
+                    if (attendee && attendee.id) {
+                        if (attendee.isOrganizer) {
+                            item.organizer = attendee;
+                        } else {
+                            item.addAttendee(attendee);
+                        }
                     } else {
-                        item.addAttendee(attendee);
+                        cal.WARN("[calStorageCalendar] Skipping invalid attendee for item '" +
+                                 item.title + "' (" + item.id + ").");
                     }
                 }
             } catch (e) {
@@ -1688,9 +1705,9 @@ calStorageCalendar.prototype = {
         var row;
         if (flags & CAL_ITEM_FLAG.HAS_PROPERTIES) {
             var selectItem = null;
-            if (item.recurrenceId == null)
+            if (item.recurrenceId == null) {
                 selectItem = this.mSelectPropertiesForItem;
-            else {
+            } else {
                 selectItem = this.mSelectPropertiesForItemWithRecurrenceId;
                 this.setDateParamHelper(selectItem.params, "recurrence_id", item.recurrenceId);
             }
@@ -1698,7 +1715,7 @@ calStorageCalendar.prototype = {
             try {
                 this.prepareStatement(selectItem);
                 selectItem.params.item_id = item.id;
-                while (selectItem.step()) {
+                while (selectItem.executeStep()) {
                     row = selectItem.row;
                     var name = row.key;
                     switch (name) {
@@ -1733,7 +1750,7 @@ calStorageCalendar.prototype = {
             try {
                 this.prepareStatement(this.mSelectRecurrenceForItem);
                 this.mSelectRecurrenceForItem.params.item_id = item.id;
-                while (this.mSelectRecurrenceForItem.step()) {
+                while (this.mSelectRecurrenceForItem.executeStep()) {
                     row = this.mSelectRecurrenceForItem.row;
 
                     var ritem = null;
@@ -1764,10 +1781,17 @@ calStorageCalendar.prototype = {
                             } catch (exc) {
                             }
                         } else {
-                            if (row.end_date)
-                                ritem.untilDate = newDateTime(row.end_date, "UTC");
-                            else
+                            if (row.end_date) {
+                                let dtstart = item.startDate || item.entryDate;
+                                let allday = dtstart.isDate && dtstart.timezone == "floating";
+                                let untilDate = newDateTime(row.end_date, allday ? "" : "UTC");
+                                if (allday) {
+                                    untilDate.isDate = true;
+                                }
+                                ritem.untilDate = untilDate;
+                            } else {
                                 ritem.untilDate = null;
+                            }
                         }
                         try {
                             ritem.interval = row.interval;
@@ -1832,7 +1856,7 @@ calStorageCalendar.prototype = {
                 this.mSelectEventExceptions.params.id = item.id;
                 this.prepareStatement(this.mSelectEventExceptions);
                 try {
-                    while (this.mSelectEventExceptions.step()) {
+                    while (this.mSelectEventExceptions.executeStep()) {
                         var row = this.mSelectEventExceptions.row;
                         var exc = this.getEventFromRow(row, {}, true /*isException*/);
                         rec.modifyException(exc, true);
@@ -1847,7 +1871,7 @@ calStorageCalendar.prototype = {
                 this.mSelectTodoExceptions.params.id = item.id;
                 this.prepareStatement(this.mSelectTodoExceptions);
                 try {
-                    while (this.mSelectTodoExceptions.step()) {
+                    while (this.mSelectTodoExceptions.executeStep()) {
                         var row = this.mSelectTodoExceptions.row;
                         var exc = this.getTodoFromRow(row, {}, true /*isException*/);
                         rec.modifyException(exc, true);
@@ -1872,7 +1896,7 @@ calStorageCalendar.prototype = {
             try {
                 this.prepareStatement(selectAttachment);
                 selectAttachment.params.item_id = item.id;
-                while (selectAttachment.step()) {
+                while (selectAttachment.executeStep()) {
                     let row = selectAttachment.row;
                     let attachment = this.getAttachmentFromRow(row);
                     item.addAttachment(attachment);
@@ -1894,7 +1918,7 @@ calStorageCalendar.prototype = {
             try {
                 this.prepareStatement(selectRelation);
                 selectRelation.params.item_id = item.id;
-                while (selectRelation.step()) {
+                while (selectRelation.executeStep()) {
                     let row = selectRelation.row;
                     let relation = this.getRelationFromRow(row);
                     item.addRelation(relation);
@@ -1916,7 +1940,7 @@ calStorageCalendar.prototype = {
             try {
                 selectAlarm.params.item_id = item.id;
                 this.prepareStatement(selectAlarm);
-                while (selectAlarm.step()) {
+                while (selectAlarm.executeStep()) {
                     let row = selectAlarm.row;
                     let alarm = cal.createAlarm();
                     alarm.icalString = row.icalString;
@@ -2000,7 +2024,7 @@ calStorageCalendar.prototype = {
             // try events first
             this.prepareStatement(this.mSelectEvent);
             this.mSelectEvent.params.id = aID;
-            if (this.mSelectEvent.step()) {
+            if (this.mSelectEvent.executeStep()) {
                 item = this.getEventFromRow(this.mSelectEvent.row, flags);
             }
         } catch (e) {
@@ -2014,7 +2038,7 @@ calStorageCalendar.prototype = {
             try {
                 this.prepareStatement(this.mSelectTodo);
                 this.mSelectTodo.params.id = aID;
-                if (this.mSelectTodo.step()) {
+                if (this.mSelectTodo.executeStep()) {
                     item = this.getTodoFromRow(this.mSelectTodo.row, flags);
                 }
             } catch (e) {
@@ -2053,7 +2077,7 @@ calStorageCalendar.prototype = {
         ASSERT(!item.recurrenceId, "no parent item passed!", true);
 
         try {
-            this.deleteItemById(olditem ? olditem.id : item.id);
+            this.deleteItemById(olditem ? olditem.id : item.id, true);
             this.acquireTransaction();
             this.writeItem(item, olditem);
         } catch (e) {
@@ -2110,7 +2134,7 @@ calStorageCalendar.prototype = {
 
             ip.flags = flags;
 
-            this.mInsertEvent.execute();
+            this.mInsertEvent.executeStep();
         } finally {
             this.mInsertEvent.reset();
         }
@@ -2140,7 +2164,7 @@ calStorageCalendar.prototype = {
 
             ip.flags = flags;
 
-            this.mInsertTodo.execute();
+            this.mInsertTodo.executeStep();
         } finally {
             this.mInsertTodo.reset();
         }
@@ -2216,7 +2240,7 @@ calStorageCalendar.prototype = {
                         ap.properties = props;
                     }
 
-                    this.mInsertAttendee.execute();
+                    this.mInsertAttendee.executeStep();
                 } finally {
                     this.mInsertAttendee.reset();
                 }
@@ -2249,7 +2273,7 @@ calStorageCalendar.prototype = {
             }
             pp.item_id = item.id;
             this.setDateParamHelper(pp, "recurrence_id", item.recurrenceId);
-            this.mInsertProperty.execute();
+            this.mInsertProperty.executeStep();
         } finally {
             this.mInsertProperty.reset();
         }
@@ -2311,10 +2335,11 @@ calStorageCalendar.prototype = {
                     } else if (calInstanceOf(ritem, Components.interfaces.calIRecurrenceRule)) {
                         ap.recur_type = ritem.type;
 
-                        if (ritem.isByCount)
+                        if (ritem.isByCount) {
                             ap.count = ritem.count;
-                        else
+                        } else {
                             ap.end_date = ritem.untilDate ? ritem.untilDate.nativeTime : null;
+                        }
 
                         ap.interval = ritem.interval;
 
@@ -2339,7 +2364,7 @@ calStorageCalendar.prototype = {
                         dump ("##### Don't know how to serialize recurrence item " + ritem + "!\n");
                     }
 
-                    this.mInsertRecurrence.execute();
+                    this.mInsertRecurrence.executeStep();
                 } finally {
                     this.mInsertRecurrence.reset();
                 }
@@ -2379,7 +2404,7 @@ calStorageCalendar.prototype = {
                     ap.format_type = att.formatType;
                     ap.encoding = att.encoding;
 
-                    this.mInsertAttachment.execute();
+                    this.mInsertAttachment.executeStep();
                 } finally {
                     this.mInsertAttachment.reset();
                 }
@@ -2401,7 +2426,7 @@ calStorageCalendar.prototype = {
                     rp.rel_type = rel.relType;
                     rp.rel_id = rel.relId;
 
-                    this.mInsertRelation.execute();
+                    this.mInsertRelation.executeStep();
                 } finally {
                     this.mInsertRelation.reset();
                 }
@@ -2424,7 +2449,7 @@ calStorageCalendar.prototype = {
                 this.setDateParamHelper(pp, "recurrence_id", item.recurrenceId);
                 pp.item_id = item.id;
                 pp.icalString = alarm.icalString;
-                this.mInsertAlarm.execute();
+                this.mInsertAlarm.executeStep();
             } catch (e) {
                 this.logError("Error writing alarm for item " + item.title + " (" + item.id + ")", e);
             } finally {
@@ -2439,20 +2464,22 @@ calStorageCalendar.prototype = {
      * Deletes the item with the given item id.
      *
      * @param aID           The id of the item to delete.
+     * @param aIsModify     If true, then leave in metadata for the item
      */
-    deleteItemById: function cSC_deleteItemById(aID) {
+    deleteItemById: function cSC_deleteItemById(aID, aIsModify) {
         this.acquireTransaction();
         try {
-            this.mDeleteAttendees(aID, this.id);
-            this.mDeleteProperties(aID, this.id);
-            this.mDeleteRecurrence(aID, this.id);
-            this.mDeleteEvent(aID, this.id);
-            this.mDeleteTodo(aID, this.id);
-            this.mDeleteAttachments(aID, this.id);
-            this.mDeleteRelations(aID, this.id);
-            this.mDeleteMetaData(aID, this.id);
-            //this.mDeleteAllMetaData(aID, this.id);
-            this.mDeleteAlarms(aID, this.id);
+            this.executeItemStatement(this.mDeleteAttendees, "item_id", aID);
+            this.executeItemStatement(this.mDeleteProperties, "item_id", aID);
+            this.executeItemStatement(this.mDeleteRecurrence, "item_id", aID);
+            this.executeItemStatement(this.mDeleteEvent, "id", aID);
+            this.executeItemStatement(this.mDeleteTodo, "id", aID);
+            this.executeItemStatement(this.mDeleteAttachments, "item_id", aID);
+            this.executeItemStatement(this.mDeleteRelations, "item_id", aID);
+            if (!aIsModify) {
+                this.executeItemStatement(this.mDeleteMetaData, "item_id", aID);
+            }
+            this.executeItemStatement(this.mDeleteAlarms, "item_id", aID);
         } catch (e) {
             this.releaseTransaction(e);
             throw e;
@@ -2491,29 +2518,25 @@ calStorageCalendar.prototype = {
     //
 
     setMetaData: function cSC_setMetaData(id, value) {
-
-        this.mDeleteMetaData(id, this.id);
+        this.executeItemStatement(this.mDeleteMetaData, "item_id", id);
         try {
             this.prepareStatement(this.mInsertMetaData);
-            var sp = this.mInsertMetaData.params;
+            let sp = this.mInsertMetaData.params;
             sp.item_id = id;
             sp.value = value;
-            this.mInsertMetaData.execute();
-        } catch (e) {
+            this.mInsertMetaData.executeStep();
+        } catch (e if e.result != Components.results.NS_ERROR_ILLEGAL_VALUE) {
             // The storage service throws an NS_ERROR_ILLEGAL_VALUE in
             // case pval is something complex (i.e not a string or
             // number). Swallow this error, leaving the value empty.
-            if (e.result != Components.results.NS_ERROR_ILLEGAL_VALUE) {
-                this.logError("Error setting metadata for id " + id + "!", e);
-                throw e;
-            }
+            this.logError("Error setting metadata for id " + id + "!", e);
         } finally {
             this.mInsertMetaData.reset();
         }
     },
 
     deleteMetaData: function cSC_deleteMetaData(id) {
-        this.mDeleteMetaData(id, this.id);
+        this.executeItemStatement(this.mDeleteMetaData, "item_id", id);
     },
 
     getMetaData: function cSC_getMetaData(id) {
@@ -2523,7 +2546,7 @@ calStorageCalendar.prototype = {
             this.prepareStatement(query);
             query.params.item_id = id;
 
-            if (query.step()) {
+            if (query.executeStep()) {
                 value = query.row.value;
             }
         } catch (e) {
@@ -2543,7 +2566,7 @@ calStorageCalendar.prototype = {
             this.prepareStatement(query);
             let ids = [];
             let values = [];
-            while (query.step()) {
+            while (query.executeStep()) {
                 ids.push(query.row.item_id);
                 values.push(query.row.value);
             }
@@ -2600,6 +2623,30 @@ calStorageCalendar.prototype = {
             logMessage += "\nException: " + exception;
         }
         cal.ERROR("[calStorageCalendar] " + logMessage + "\n" + cal.STACK(10));
+    },
+    /**
+     * propagate the given sequence in exceptions. It may be needed by some calendar implementations
+     */
+    _propagateSequence: function cSC__propagateSequence(aItem, newSequence) {
+        if (newSequence) {
+            aItem.setProperty("SEQUENCE", newSequence);
+        } else {
+            aItem.deleteProperty("SEQUENCE");
+        }
+        var rec = aItem.recurrenceInfo;
+        if (rec) {
+            var exceptions = rec.getExceptionIds ({});
+            if (exceptions.length > 0) {
+                for each (exid in exceptions) {
+                    let ex = rec.getExceptionFor(exid);
+                    if (newSequence) {
+                        ex.setProperty("SEQUENCE", newSequence);
+                    } else {
+                        ex.deleteProperty("SEQUENCE");
+                    }
+                }
+            }
+        }
     }
 };
 

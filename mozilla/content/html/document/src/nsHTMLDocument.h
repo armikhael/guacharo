@@ -1,40 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set ts=2 sw=2 et tw=80: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #ifndef nsHTMLDocument_h___
 #define nsHTMLDocument_h___
 
@@ -63,7 +31,7 @@ class nsIEditorDocShell;
 class nsIParser;
 class nsIURI;
 class nsIMarkupDocumentViewer;
-class nsIDocumentCharsetInfo;
+class nsIDocShell;
 class nsICachingChannel;
 
 class nsHTMLDocument : public nsDocument,
@@ -72,6 +40,7 @@ class nsHTMLDocument : public nsDocument,
 {
 public:
   using nsDocument::SetDocumentURI;
+  using nsDocument::GetPlugins;
 
   nsHTMLDocument();
   virtual nsresult Init();
@@ -95,8 +64,8 @@ public:
                                      nsILoadGroup* aLoadGroup,
                                      nsISupports* aContainer,
                                      nsIStreamListener **aDocListener,
-                                     PRBool aReset = PR_TRUE,
-                                     nsIContentSink* aSink = nsnull);
+                                     bool aReset = true,
+                                     nsIContentSink* aSink = nullptr);
   virtual void StopDocumentLoad();
 
   virtual void BeginLoad();
@@ -105,13 +74,10 @@ public:
 
   virtual void SetCompatibilityMode(nsCompatibility aMode);
 
-  virtual PRBool IsWriting()
+  virtual bool IsWriting()
   {
-    return mWriteLevel != PRUint32(0);
+    return mWriteLevel != uint32_t(0);
   }
-
-  virtual PRBool GetIsFrameset() { return mIsFrameset; }
-  virtual void SetIsFrameset(PRBool aFrameset) { mIsFrameset = aFrameset; }
 
   virtual NS_HIDDEN_(nsContentList*) GetForms();
  
@@ -135,33 +101,30 @@ public:
                                     nsWrapperCache **aCache,
                                     nsresult *aResult);
 
-  nsIContent *GetBody(nsresult *aResult);
+  nsIContent *GetBody();
+  Element *GetHead() { return GetHeadElement(); }
   already_AddRefed<nsContentList> GetElementsByName(const nsAString & aName)
   {
-    return NS_GetFuncStringContentList(this, MatchNameAttribute, nsnull,
+    return NS_GetFuncStringContentList(this, MatchNameAttribute, nullptr,
                                        UseExistingNameString, aName);
   }
-
 
   virtual nsresult ResolveName(const nsAString& aName,
                                nsIContent *aForm,
                                nsISupports **aResult,
                                nsWrapperCache **aCache);
 
-  virtual void ScriptLoading(nsIScriptElement *aScript);
-  virtual void ScriptExecuted(nsIScriptElement *aScript);
-
   virtual void AddedForm();
   virtual void RemovedForm();
-  virtual PRInt32 GetNumFormsSynchronous();
+  virtual int32_t GetNumFormsSynchronous();
   virtual void TearingDownEditor(nsIEditor *aEditor);
-  virtual void SetIsXHTML(PRBool aXHTML) { mIsRegularHTML = !aXHTML; }
-  virtual void SetDocWriteDisabled(PRBool aDisabled)
+  virtual void SetIsXHTML(bool aXHTML) { mIsRegularHTML = !aXHTML; }
+  virtual void SetDocWriteDisabled(bool aDisabled)
   {
     mDisableDocWrite = aDisabled;
   }
 
-  nsresult ChangeContentEditableCount(nsIContent *aElement, PRInt32 aChange);
+  nsresult ChangeContentEditableCount(nsIContent *aElement, int32_t aChange);
   void DeferredContentEditableCountChange(nsIContent *aElement);
 
   virtual EditingState GetEditingState()
@@ -171,7 +134,7 @@ public:
 
   virtual void DisableCookieAccess()
   {
-    mDisableCookieAccess = PR_TRUE;
+    mDisableCookieAccess = true;
   }
 
   class nsAutoEditingState {
@@ -206,17 +169,21 @@ public:
   }
 
   virtual nsXPCClassInfo* GetClassInfo();
+
+  virtual void DocSizeOfExcludingThis(nsWindowSizes* aWindowSizes) const;
+  // DocSizeOfIncludingThis is inherited from nsIDocument.
+
 protected:
-  nsresult GetBodySize(PRInt32* aWidth,
-                       PRInt32* aHeight);
+  nsresult GetBodySize(int32_t* aWidth,
+                       int32_t* aHeight);
 
   nsIContent *MatchId(nsIContent *aContent, const nsAString& aId);
 
-  static PRBool MatchLinks(nsIContent *aContent, PRInt32 aNamespaceID,
+  static bool MatchLinks(nsIContent *aContent, int32_t aNamespaceID,
                            nsIAtom* aAtom, void* aData);
-  static PRBool MatchAnchors(nsIContent *aContent, PRInt32 aNamespaceID,
+  static bool MatchAnchors(nsIContent *aContent, int32_t aNamespaceID,
                              nsIAtom* aAtom, void* aData);
-  static PRBool MatchNameAttribute(nsIContent* aContent, PRInt32 aNamespaceID,
+  static bool MatchNameAttribute(nsIContent* aContent, int32_t aNamespaceID,
                                    nsIAtom* aAtom, void* aData);
   static void* UseExistingNameString(nsINode* aRootNode, const nsString* aName);
 
@@ -225,7 +192,7 @@ protected:
   void GetDomainURI(nsIURI **uri);
 
   nsresult WriteCommon(JSContext *cx, const nsAString& aText,
-                       PRBool aNewlineTerminate);
+                       bool aNewlineTerminate);
 
   nsresult CreateAndAddWyciwygChannel(void);
   nsresult RemoveWyciwygChannel(void);
@@ -233,87 +200,61 @@ protected:
   /**
    * Like IsEditingOn(), but will flush as needed first.
    */
-  PRBool IsEditingOnAfterFlush();
+  bool IsEditingOnAfterFlush();
 
   void *GenerateParserKey(void);
-
-  virtual PRInt32 GetDefaultNamespaceID() const
-  {
-    return kNameSpaceID_XHTML;
-  }
 
   nsCOMPtr<nsIDOMHTMLCollection> mImages;
   nsCOMPtr<nsIDOMHTMLCollection> mApplets;
   nsCOMPtr<nsIDOMHTMLCollection> mEmbeds;
   nsCOMPtr<nsIDOMHTMLCollection> mLinks;
   nsCOMPtr<nsIDOMHTMLCollection> mAnchors;
+  nsCOMPtr<nsIDOMHTMLCollection> mScripts;
   nsRefPtr<nsContentList> mForms;
   nsRefPtr<nsContentList> mFormControls;
 
   /** # of forms in the document, synchronously set */
-  PRInt32 mNumForms;
+  int32_t mNumForms;
 
-  static PRUint32 gWyciwygSessionCnt;
+  static uint32_t gWyciwygSessionCnt;
 
-  static PRBool TryHintCharset(nsIMarkupDocumentViewer* aMarkupDV,
-                               PRInt32& aCharsetSource,
+  static bool TryHintCharset(nsIMarkupDocumentViewer* aMarkupDV,
+                               int32_t& aCharsetSource,
                                nsACString& aCharset);
-  static PRBool TryUserForcedCharset(nsIMarkupDocumentViewer* aMarkupDV,
-                                     nsIDocumentCharsetInfo*  aDocInfo,
-                                     PRInt32& aCharsetSource,
+  static bool TryUserForcedCharset(nsIMarkupDocumentViewer* aMarkupDV,
+                                     nsIDocShell*  aDocShell,
+                                     int32_t& aCharsetSource,
                                      nsACString& aCharset);
-  static PRBool TryCacheCharset(nsICachingChannel* aCachingChannel,
-                                PRInt32& aCharsetSource,
+  static bool TryCacheCharset(nsICachingChannel* aCachingChannel,
+                                int32_t& aCharsetSource,
                                 nsACString& aCharset);
   // aParentDocument could be null.
-  PRBool TryParentCharset(nsIDocumentCharsetInfo*  aDocInfo,
+  bool TryParentCharset(nsIDocShell*  aDocShell,
                           nsIDocument* aParentDocument,
-                          PRInt32& charsetSource, nsACString& aCharset);
-  static PRBool UseWeakDocTypeDefault(PRInt32& aCharsetSource,
+                          int32_t& charsetSource, nsACString& aCharset);
+  static bool UseWeakDocTypeDefault(int32_t& aCharsetSource,
                                       nsACString& aCharset);
-  static PRBool TryDefaultCharset(nsIMarkupDocumentViewer* aMarkupDV,
-                                  PRInt32& aCharsetSource,
+  static bool TryDefaultCharset(nsIMarkupDocumentViewer* aMarkupDV,
+                                  int32_t& aCharsetSource,
                                   nsACString& aCharset);
-
-  void StartAutodetection(nsIDocShell *aDocShell, nsACString& aCharset,
-                          const char* aCommand);
 
   // Override so we can munge the charset on our wyciwyg channel as needed.
   virtual void SetDocumentCharacterSet(const nsACString& aCharSetID);
-
-  // mWriteState tracks the status of this document if the document is being
-  // entirely created by script. In the normal load case, mWriteState will be
-  // eNotWriting. Once document.open has been called (either implicitly or
-  // explicitly), mWriteState will be eDocumentOpened. When document.close has
-  // been called, mWriteState will become eDocumentClosed if there have been no
-  // external script loads in the meantime. If there have been, then mWriteState
-  // becomes ePendingClose, indicating that we might still be writing, but that
-  // we shouldn't process any further close() calls.
-  enum {
-    eNotWriting,
-    eDocumentOpened,
-    ePendingClose,
-    eDocumentClosed
-  } mWriteState;
 
   // Tracks if we are currently processing any document.write calls (either
   // implicit or explicit). Note that if a write call writes out something which
   // would block the parser, then mWriteLevel will be incorrect until the parser
   // finishes processing that script.
-  PRUint32 mWriteLevel;
-
-  nsAutoTArray<nsIScriptElement*, 1> mPendingScripts;
+  uint32_t mWriteLevel;
 
   // Load flags of the document's channel
-  PRUint32 mLoadFlags;
+  uint32_t mLoadFlags;
 
-  PRPackedBool mIsFrameset;
+  bool mTooDeepWriteRecursion;
 
-  PRPackedBool mTooDeepWriteRecursion;
+  bool mDisableDocWrite;
 
-  PRPackedBool mDisableDocWrite;
-
-  PRPackedBool mWarnedWidthHeight;
+  bool mWarnedWidthHeight;
 
   nsCOMPtr<nsIWyciwygChannel> mWyciwygChannel;
 
@@ -326,15 +267,15 @@ protected:
   nsresult EditingStateChanged();
   void MaybeEditingStateChanged();
 
-  PRUint32 mContentEditableCount;
+  uint32_t mContentEditableCount;
   EditingState mEditingState;
 
-  nsresult   DoClipboardSecurityCheck(PRBool aPaste);
+  nsresult   DoClipboardSecurityCheck(bool aPaste);
   static jsid        sCutCopyInternal_id;
   static jsid        sPasteInternal_id;
 
   // When false, the .cookies property is completely disabled
-  PRBool mDisableCookieAccess;
+  bool mDisableCookieAccess;
 };
 
 #define NS_HTML_DOCUMENT_INTERFACE_TABLE_BEGIN(_class)                        \

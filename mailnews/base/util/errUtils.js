@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Komodo code.
- *
- * Portions created by the Initial Developer are Copyright (C) 2000-2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Robert Ginda, rginda@ndcico.com
- *  ActiveState Software Inc
- *  David Ascher <dascher@mozillamessaging.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
  * This file contains helper methods for debugging -- things like logging
@@ -120,6 +87,8 @@ Stringifier.prototype = {
   },
 
   dumpException: function(exc, message) {
+    dump(exc + "\n");
+    Components.utils.reportError(exc);
     this._reset();
     if (message)
       this._append("Exception (" + message + ")\n");
@@ -280,26 +249,26 @@ Stringifier.prototype = {
       if ("name" in event)
         this._append("str(charCode):  '" + String.fromCharCode(event.charCode) + "'\n");
     }
-    if ("target" in event) {
+    if (("target" in event) && event.target) {
       this._append("target: " + event.target + "\n");
-      if (event.target && "nodeName" in event.target) {
+      if ("nodeName" in event.target)
         this._append("target.nodeName: " + event.target.nodeName + "\n");
+      if ("getAttribute" in event.target)
         this._append("target.id: " + event.target.getAttribute("id") + "\n");
-      }
     }
-    if ("currentTarget" in event) {
+    if (("currentTarget" in event) && event.currentTarget) {
       this._append("currentTarget: " + event.currentTarget + "\n");
-      if (event.currentTarget && "nodeName" in event.currentTarget) {
+      if ("nodeName" in event.currentTarget)
         this._append("currentTarget.nodeName: "+ event.currentTarget.nodeName + "\n");
+      if ("getAttribute" in event.currentTarget)
         this._append("currentTarget.id: "+ event.currentTarget.getAttribute("id") + "\n");
-      }
     }
-    if ("originalTarget" in event) {
+    if (("originalTarget" in event) && event.originalTarget) {
       this._append("originalTarget: " + event.originalTarget + "\n");
-      if (event.originalTarget && "nodeName" in event.originalTarget) {
+      if ("nodeName" in event.originalTarget)
         this._append("originalTarget.nodeName: "+ event.originalTarget.nodeName + "\n");
+      if ("getAttribute" in event.originalTarget)
         this._append("originalTarget.id: "+ event.originalTarget.getAttribute("id") + "\n");
-      }
     }
     let names = [
         "bubbles",

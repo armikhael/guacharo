@@ -1,40 +1,7 @@
 /* -*- Mode: IDL; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   David Bienvenu <bienvenu@nventure.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsISupports.idl"
 #include "nsIFolderListener.idl"
@@ -55,17 +22,18 @@ interface nsITransport;
 interface nsIFile;
 interface nsIOutputStream;
 interface nsIInputStream;
-interface nsILocalFile;
+interface nsIFile;
 interface nsIMsgIdentity;
 interface nsIArray;
 interface nsIMutableArray;
 interface nsISupportsArray;
+interface nsIMsgPluggableStore;
 
 typedef long nsMsgBiffState;
 
 // enumerated type for determining if a message has been replied to, forwarded, etc.
 typedef long nsMsgDispositionState;
-[scriptable, uuid(953b7bb1-6a3e-4a5b-841f-637ac68dee0e)]
+[scriptable, uuid(8b8c5bf8-82e3-4415-bcf3-6029ab4777c5)]
 interface nsIMsgFolder : nsISupports {
 
   const nsMsgBiffState nsMsgBiffState_NewMail = 0; // User has new mail waiting.
@@ -192,6 +160,16 @@ interface nsIMsgFolder : nsISupports {
                        in nsIMsgWindow msgWindow);
   void recursiveDelete(in boolean deleteStorage, in nsIMsgWindow msgWindow);
 
+  /**
+   * Create a subfolder of the current folder with the passed in name.
+   * For IMAP, this will be an async operation and the folder won't exist
+   * until it is created on the server.
+   *
+   * @param folderName name of the folder to create.
+   * @param msgWindow msgWindow to display status feedback in.
+   *
+   * @exception NS_MSG_FOLDER_EXISTS
+   */
   void createSubfolder(in AString folderName, in nsIMsgWindow msgWindow);
 
   /**
@@ -283,15 +261,14 @@ interface nsIMsgFolder : nsISupports {
 
   /**
    * clear new status flag of all of the new messages
-   *
    */
   void clearNewMessages();
 
   readonly attribute unsigned long expungedBytes;
 
   /**
-   * can this folder be deleted?
-   * for example, special folders cannot be deleted
+   * Can this folder be deleted?
+   * For example, special folders and isServer folders cannot be deleted.
    */
   readonly attribute boolean deletable;
 
@@ -488,7 +465,7 @@ interface nsIMsgFolder : nsISupports {
   /**
    * local path of this folder
    */
-  attribute nsILocalFile filePath;
+  attribute nsIFile filePath;
 
   readonly attribute ACString baseMessageURI;
   ACString generateMessageURI(in nsMsgKey msgKey);
@@ -552,9 +529,28 @@ interface nsIMsgFolder : nsISupports {
    * @returns input stream to read the message from.
    */
   nsIInputStream getOfflineFileStream(in nsMsgKey aMsgKey,
-                                      out unsigned long long aOffset,
+                                      out long long aOffset,
                                       out unsigned long aSize);
-  readonly attribute nsIOutputStream offlineStoreOutputStream;
+
+  /**
+   * Get an offline store output stream for the passed message header.
+   *
+   * @param aHdr hdr of message to get outputstream for
+   * @returns An output stream to write to.
+   */
+  nsIOutputStream getOfflineStoreOutputStream(in nsIMsgDBHdr aHdr);
+
+  /**
+   * Get an input stream for the passed message header. The stream will
+   * be positioned at the start of the message.
+   *
+   * @param aHdr hdr of message to get the input stream for.
+   * @param[out] aReusable set to true if the stream can be re-used, in which
+                           case the caller might not want to close it.
+   * @returns an input stream to read the message from
+   */
+  nsIInputStream getMsgInputStream(in nsIMsgDBHdr aHdr, out boolean aReusable);
+
   readonly attribute nsIInputStream offlineStoreInputStream;
   void DownloadMessagesForOffline(in nsIArray messages,
                                   in nsIMsgWindow window);
@@ -816,4 +812,9 @@ interface nsIMsgFolder : nsISupports {
    */
   boolean getForcePropertyEmpty(in string propertyName);
 
+  /**
+   * Pluggable store for this folder. Currently, this will always be the same
+   * as the pluggable store for the server.
+   */
+  readonly attribute nsIMsgPluggableStore msgStore;
 };

@@ -1,38 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Geolocation.
- *
- * The Initial Developer of the Original Code is Mozilla Foundation
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Doug Turner <dougt@meer.net>  (Original Author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsGeoLocation_h
 #define nsGeoLocation_h
@@ -57,15 +25,15 @@
 #include "nsIDOMGeoPositionError.h"
 #include "nsIDOMGeoPositionCallback.h"
 #include "nsIDOMGeoPositionErrorCallback.h"
-#include "nsIDOMGeoPositionOptions.h"
 #include "nsIDOMNavigatorGeolocation.h"
 
 #include "nsPIDOMWindow.h"
 
 #include "nsIGeolocationProvider.h"
 #include "nsIContentPermissionPrompt.h"
-
+#include "DictionaryHelpers.h"
 #include "PCOMContentPermissionRequestChild.h"
+#include "mozilla/Attributes.h"
 
 class nsGeolocationService;
 class nsGeolocation;
@@ -85,18 +53,17 @@ class nsGeolocationRequest
   nsGeolocationRequest(nsGeolocation* locator,
                        nsIDOMGeoPositionCallback* callback,
                        nsIDOMGeoPositionErrorCallback* errorCallback,
-                       nsIDOMGeoPositionOptions* options,
-                       PRBool watchPositionRequest = PR_FALSE);
-  nsresult Init();
+                       bool watchPositionRequest = false);
+  nsresult Init(JSContext* aCx, const jsval& aOptions);
   void Shutdown();
 
   // Called by the geolocation device to notify that a location has changed.
-  void Update(nsIDOMGeoPosition* aPosition);
+  bool Update(nsIDOMGeoPosition* aPosition);
 
   void SendLocation(nsIDOMGeoPosition* location);
   void MarkCleared();
-  PRBool IsActive() {return !mCleared;}
-  PRBool Allowed() {return mAllowed;}
+  bool IsActive() {return !mCleared;}
+  bool Allowed() {return mAllowed;}
   void SetTimeoutTimer();
 
   ~nsGeolocationRequest();
@@ -106,15 +73,15 @@ class nsGeolocationRequest
 
  private:
 
-  void NotifyError(PRInt16 errorCode);
-  PRPackedBool mAllowed;
-  PRPackedBool mCleared;
-  PRPackedBool mIsWatchPositionRequest;
+  void NotifyError(int16_t errorCode);
+  bool mAllowed;
+  bool mCleared;
+  bool mIsWatchPositionRequest;
 
   nsCOMPtr<nsITimer> mTimeoutTimer;
   nsCOMPtr<nsIDOMGeoPositionCallback> mCallback;
   nsCOMPtr<nsIDOMGeoPositionErrorCallback> mErrorCallback;
-  nsCOMPtr<nsIDOMGeoPositionOptions> mOptions;
+  nsAutoPtr<mozilla::dom::GeoPositionOptions> mOptions;
 
   nsRefPtr<nsGeolocation> mLocator;
 };
@@ -122,7 +89,7 @@ class nsGeolocationRequest
 /**
  * Singleton that manages the geolocation provider
  */
-class nsGeolocationService : public nsIGeolocationUpdate, public nsIObserver
+class nsGeolocationService MOZ_FINAL : public nsIGeolocationUpdate, public nsIObserver
 {
 public:
 
@@ -134,9 +101,13 @@ public:
   NS_DECL_NSIGEOLOCATIONUPDATE
   NS_DECL_NSIOBSERVER
 
-  nsGeolocationService() {mTimeout = 6000;};
+  nsGeolocationService() {
+      mHigherAccuracy = false;
+  }
 
   nsresult Init();
+
+  void HandleMozsettingChanged(const PRUnichar* aData);
 
   // Management of the nsGeolocation objects
   void AddLocator(nsGeolocation* locator);
@@ -154,6 +125,9 @@ public:
   // create, or reinitalize the callback timer
   void     SetDisconnectTimer();
 
+  // request higher accuracy, if possible
+  void     SetHigherAccuracy(bool aEnable);
+
 private:
 
   ~nsGeolocationService();
@@ -162,9 +136,6 @@ private:
   // and closes down the provider, unless we are watching a point, and in that
   // case, we disable the disconnect timer.
   nsCOMPtr<nsITimer> mDisconnectTimer;
-
-  // Time, in milliseconds, to wait for the location provider to spin up.
-  PRInt32 mTimeout;
 
   // The object providing geo location information to us.
   nsCOMArray<nsIGeolocationProvider> mProviders;
@@ -176,13 +147,16 @@ private:
 
   // This is the last geo position that we have seen.
   nsCOMPtr<nsIDOMGeoPosition> mLastPosition;
+
+  // Current state of requests for higher accuracy
+  bool mHigherAccuracy;
 };
 
 
 /**
  * Can return a geolocation info
  */ 
-class nsGeolocation : public nsIDOMGeoGeolocation
+class nsGeolocation MOZ_FINAL : public nsIDOMGeoGeolocation
 {
 public:
 
@@ -193,13 +167,13 @@ public:
 
   nsGeolocation();
 
-  nsresult Init(nsIDOMWindow* contentDom=nsnull);
+  nsresult Init(nsIDOMWindow* contentDom=nullptr);
 
   // Called by the geolocation device to notify that a location has changed.
   void Update(nsIDOMGeoPosition* aPosition);
 
   // Returns true if any of the callbacks are repeating
-  PRBool HasActiveCallbacks();
+  bool HasActiveCallbacks();
 
   // Remove request from all callbacks arrays
   void RemoveRequest(nsGeolocationRequest* request);
@@ -207,14 +181,14 @@ public:
   // Shutting down.
   void Shutdown();
 
-  // Getter for the URI that this nsGeolocation was loaded from
-  nsIURI* GetURI() { return mURI; }
+  // Getter for the principal that this nsGeolocation was loaded from
+  nsIPrincipal* GetPrincipal() { return mPrincipal; }
 
   // Getter for the window that this nsGeolocation is owned by
   nsIWeakReference* GetOwner() { return mOwner; }
 
   // Check to see if the widnow still exists
-  PRBool WindowOwnerStillExists();
+  bool WindowOwnerStillExists();
 
 private:
 
@@ -234,7 +208,7 @@ private:
   nsWeakPtr mOwner;
 
   // where the content was loaded from
-  nsCOMPtr<nsIURI> mURI;
+  nsCOMPtr<nsIPrincipal> mPrincipal;
 
   // owning back pointer.
   nsRefPtr<nsGeolocationService> mService;

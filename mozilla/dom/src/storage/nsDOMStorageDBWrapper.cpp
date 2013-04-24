@@ -1,44 +1,10 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Neil Deakin <enndeakin@sympatico.ca>
- *   Honza Bambas <honzab@firemni.cz>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsCOMPtr.h"
-#include "nsDOMError.h"
+#include "nsError.h"
 #include "nsDOMStorage.h"
 #include "nsDOMStorageDBWrapper.h"
 #include "nsIFile.h"
@@ -78,6 +44,13 @@ nsDOMStorageDBWrapper::~nsDOMStorageDBWrapper()
 {
 }
 
+void
+nsDOMStorageDBWrapper::Close()
+{
+  mPersistentDB.Close();
+  mChromePersistentDB.Close();
+}
+
 nsresult
 nsDOMStorageDBWrapper::Init()
 {
@@ -113,107 +86,91 @@ nsDOMStorageDBWrapper::FlushAndDeleteTemporaryTables(bool force)
   return NS_FAILED(rv1) ? rv1 : rv2;
 }
 
+#define IMPL_FORWARDER_GUTS(_return, _code)                                \
+  PR_BEGIN_MACRO                                                      \
+  if (aStorage->CanUseChromePersist())                                \
+    _return mChromePersistentDB._code;                                \
+  if (aStorage->IsPrivate())                                          \
+    _return mPrivateBrowsingDB._code;                                 \
+  if (aStorage->SessionOnly())                                        \
+    _return mSessionOnlyDB._code;                                     \
+  _return mPersistentDB._code;                                        \
+  PR_END_MACRO
+
+#define IMPL_FORWARDER(_code)                                  \
+  IMPL_FORWARDER_GUTS(return, _code)
+
+#define IMPL_VOID_FORWARDER(_code)                                    \
+  IMPL_FORWARDER_GUTS((void), _code)
+
 nsresult
 nsDOMStorageDBWrapper::GetAllKeys(DOMStorageImpl* aStorage,
                                   nsTHashtable<nsSessionStorageEntry>* aKeys)
 {
-  if (aStorage->CanUseChromePersist())
-    return mChromePersistentDB.GetAllKeys(aStorage, aKeys);
-  if (nsDOMStorageManager::gStorageManager->InPrivateBrowsingMode())
-    return mPrivateBrowsingDB.GetAllKeys(aStorage, aKeys);
-  if (aStorage->SessionOnly())
-    return mSessionOnlyDB.GetAllKeys(aStorage, aKeys);
-
-  return mPersistentDB.GetAllKeys(aStorage, aKeys);
+  IMPL_FORWARDER(GetAllKeys(aStorage, aKeys));
 }
 
 nsresult
 nsDOMStorageDBWrapper::GetKeyValue(DOMStorageImpl* aStorage,
                                    const nsAString& aKey,
                                    nsAString& aValue,
-                                   PRBool* aSecure)
+                                   bool* aSecure)
 {
-  if (aStorage->CanUseChromePersist())
-    return mChromePersistentDB.GetKeyValue(aStorage, aKey, aValue, aSecure);
-  if (nsDOMStorageManager::gStorageManager->InPrivateBrowsingMode())
-    return mPrivateBrowsingDB.GetKeyValue(aStorage, aKey, aValue, aSecure);
-  if (aStorage->SessionOnly())
-    return mSessionOnlyDB.GetKeyValue(aStorage, aKey, aValue, aSecure);
-
-  return mPersistentDB.GetKeyValue(aStorage, aKey, aValue, aSecure);
+  IMPL_FORWARDER(GetKeyValue(aStorage, aKey, aValue, aSecure));
 }
 
 nsresult
 nsDOMStorageDBWrapper::SetKey(DOMStorageImpl* aStorage,
                               const nsAString& aKey,
                               const nsAString& aValue,
-                              PRBool aSecure,
-                              PRInt32 aQuota,
-                              PRBool aExcludeOfflineFromUsage,
-                              PRInt32 *aNewUsage)
+                              bool aSecure,
+                              int32_t aQuota,
+                              bool aExcludeOfflineFromUsage,
+                              int32_t *aNewUsage)
 {
-  if (aStorage->CanUseChromePersist())
-    return mChromePersistentDB.SetKey(aStorage, aKey, aValue, aSecure,
-                                      aQuota, aExcludeOfflineFromUsage, aNewUsage);
-  if (nsDOMStorageManager::gStorageManager->InPrivateBrowsingMode())
-    return mPrivateBrowsingDB.SetKey(aStorage, aKey, aValue, aSecure,
-                                          aQuota, aExcludeOfflineFromUsage, aNewUsage);
-  if (aStorage->SessionOnly())
-    return mSessionOnlyDB.SetKey(aStorage, aKey, aValue, aSecure,
-                                      aQuota, aExcludeOfflineFromUsage, aNewUsage);
-
-  return mPersistentDB.SetKey(aStorage, aKey, aValue, aSecure,
-                                   aQuota, aExcludeOfflineFromUsage, aNewUsage);
+  IMPL_FORWARDER(SetKey(aStorage, aKey, aValue, aSecure,
+                        aQuota, aExcludeOfflineFromUsage, aNewUsage));
 }
 
 nsresult
 nsDOMStorageDBWrapper::SetSecure(DOMStorageImpl* aStorage,
                                  const nsAString& aKey,
-                                 const PRBool aSecure)
+                                 const bool aSecure)
 {
-  if (aStorage->CanUseChromePersist())
-    return mChromePersistentDB.SetSecure(aStorage, aKey, aSecure);
-  if (nsDOMStorageManager::gStorageManager->InPrivateBrowsingMode())
-    return mPrivateBrowsingDB.SetSecure(aStorage, aKey, aSecure);
-  if (aStorage->SessionOnly())
-    return mSessionOnlyDB.SetSecure(aStorage, aKey, aSecure);
-
-  return mPersistentDB.SetSecure(aStorage, aKey, aSecure);
+  IMPL_FORWARDER(SetSecure(aStorage, aKey, aSecure));
 }
 
 nsresult
 nsDOMStorageDBWrapper::RemoveKey(DOMStorageImpl* aStorage,
                                  const nsAString& aKey,
-                                 PRBool aExcludeOfflineFromUsage,
-                                 PRInt32 aKeyUsage)
+                                 bool aExcludeOfflineFromUsage,
+                                 int32_t aKeyUsage)
 {
-  if (aStorage->CanUseChromePersist())
-    return mChromePersistentDB.RemoveKey(aStorage, aKey, aExcludeOfflineFromUsage, aKeyUsage);
-  if (nsDOMStorageManager::gStorageManager->InPrivateBrowsingMode())
-    return mPrivateBrowsingDB.RemoveKey(aStorage, aKey, aExcludeOfflineFromUsage, aKeyUsage);
-  if (aStorage->SessionOnly())
-    return mSessionOnlyDB.RemoveKey(aStorage, aKey, aExcludeOfflineFromUsage, aKeyUsage);
-
-  return mPersistentDB.RemoveKey(aStorage, aKey, aExcludeOfflineFromUsage, aKeyUsage);
+  IMPL_FORWARDER(RemoveKey(aStorage, aKey, aExcludeOfflineFromUsage, aKeyUsage));
 }
 
 nsresult
 nsDOMStorageDBWrapper::ClearStorage(DOMStorageImpl* aStorage)
 {
-  if (aStorage->CanUseChromePersist())
-    return mChromePersistentDB.ClearStorage(aStorage);
-  if (nsDOMStorageManager::gStorageManager->InPrivateBrowsingMode())
-    return mPrivateBrowsingDB.ClearStorage(aStorage);
-  if (aStorage->SessionOnly())
-    return mSessionOnlyDB.ClearStorage(aStorage);
+  IMPL_FORWARDER(ClearStorage(aStorage));
+}
 
-  return mPersistentDB.ClearStorage(aStorage);
+void
+nsDOMStorageDBWrapper::MarkScopeCached(DOMStorageImpl* aStorage)
+{
+  IMPL_VOID_FORWARDER(MarkScopeCached(aStorage));
+}
+
+bool
+nsDOMStorageDBWrapper::IsScopeDirty(DOMStorageImpl* aStorage)
+{
+  IMPL_FORWARDER(IsScopeDirty(aStorage));
 }
 
 nsresult
 nsDOMStorageDBWrapper::DropSessionOnlyStoragesForHost(const nsACString& aHostName)
 {
-  return mSessionOnlyDB.RemoveOwner(aHostName, PR_TRUE);
+  return mSessionOnlyDB.RemoveOwner(aHostName, true);
 }
 
 nsresult
@@ -224,15 +181,12 @@ nsDOMStorageDBWrapper::DropPrivateBrowsingStorages()
 
 nsresult
 nsDOMStorageDBWrapper::RemoveOwner(const nsACString& aOwner,
-                                   PRBool aIncludeSubDomains)
+                                   bool aIncludeSubDomains)
 {
   nsresult rv;
 
   rv = mPrivateBrowsingDB.RemoveOwner(aOwner, aIncludeSubDomains);
   NS_ENSURE_SUCCESS(rv, rv);
-
-  if (nsDOMStorageManager::gStorageManager->InPrivateBrowsingMode())
-    return NS_OK;
 
   rv = mSessionOnlyDB.RemoveOwner(aOwner, aIncludeSubDomains);
   NS_ENSURE_SUCCESS(rv, rv);
@@ -246,15 +200,12 @@ nsDOMStorageDBWrapper::RemoveOwner(const nsACString& aOwner,
 
 nsresult
 nsDOMStorageDBWrapper::RemoveOwners(const nsTArray<nsString> &aOwners,
-                                    PRBool aIncludeSubDomains, PRBool aMatch)
+                                    bool aIncludeSubDomains, bool aMatch)
 {
   nsresult rv;
 
   rv = mPrivateBrowsingDB.RemoveOwners(aOwners, aIncludeSubDomains, aMatch);
   NS_ENSURE_SUCCESS(rv, rv);
-
-  if (nsDOMStorageManager::gStorageManager->InPrivateBrowsingMode())
-    return NS_OK;
 
   rv = mSessionOnlyDB.RemoveOwners(aOwners, aIncludeSubDomains, aMatch);
   NS_ENSURE_SUCCESS(rv, rv);
@@ -266,44 +217,17 @@ nsDOMStorageDBWrapper::RemoveOwners(const nsTArray<nsString> &aOwners,
 }
 
 nsresult
-nsDOMStorageDBWrapper::RemoveAll()
-{
-  nsresult rv;
-
-  rv = mPrivateBrowsingDB.RemoveAll();
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  if (nsDOMStorageManager::gStorageManager->InPrivateBrowsingMode())
-    return NS_OK;
-
-  rv = mSessionOnlyDB.RemoveAll();
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  rv = mPersistentDB.RemoveAll();
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  return rv;
-}
-
-nsresult
 nsDOMStorageDBWrapper::GetUsage(DOMStorageImpl* aStorage,
-                                PRBool aExcludeOfflineFromUsage, PRInt32 *aUsage)
+                                bool aExcludeOfflineFromUsage, int32_t *aUsage)
 {
-  if (aStorage->CanUseChromePersist())
-    return mChromePersistentDB.GetUsage(aStorage, aExcludeOfflineFromUsage, aUsage);    
-  if (nsDOMStorageManager::gStorageManager->InPrivateBrowsingMode())
-    return mPrivateBrowsingDB.GetUsage(aStorage, aExcludeOfflineFromUsage, aUsage);
-  if (aStorage->SessionOnly())
-    return mSessionOnlyDB.GetUsage(aStorage, aExcludeOfflineFromUsage, aUsage);
-
-  return mPersistentDB.GetUsage(aStorage, aExcludeOfflineFromUsage, aUsage);
+  IMPL_FORWARDER(GetUsage(aStorage, aExcludeOfflineFromUsage, aUsage));
 }
 
 nsresult
 nsDOMStorageDBWrapper::GetUsage(const nsACString& aDomain,
-                                PRBool aIncludeSubDomains, PRInt32 *aUsage)
+                                bool aIncludeSubDomains, int32_t *aUsage, bool aPrivate)
 {
-  if (nsDOMStorageManager::gStorageManager->InPrivateBrowsingMode())
+  if (aPrivate)
     return mPrivateBrowsingDB.GetUsage(aDomain, aIncludeSubDomains, aUsage);
 
 #if 0
@@ -334,10 +258,10 @@ nsDOMStorageDBWrapper::CreateOriginScopeDBKey(nsIURI* aUri, nsACString& aKey)
   aKey.AppendLiteral(":");
   aKey.Append(scheme);
 
-  PRInt32 port = NS_GetRealPort(aUri);
+  int32_t port = NS_GetRealPort(aUri);
   if (port != -1) {
     aKey.AppendLiteral(":");
-    aKey.Append(nsPrintfCString(32, "%d", port));
+    aKey.Append(nsPrintfCString("%d", port));
   }
 
   return NS_OK;
@@ -356,7 +280,7 @@ nsDOMStorageDBWrapper::CreateDomainScopeDBKey(nsIURI* aUri, nsACString& aKey)
     // About pages have an empty host but a valid path.  Since they are handled
     // internally by our own redirector, we can trust them and use path as key.
     // if file:/// protocol, let's make the exact directory the domain
-    PRBool isScheme = PR_FALSE;
+    bool isScheme = false;
     if ((NS_SUCCEEDED(aUri->SchemeIs("about", &isScheme)) && isScheme) ||
         (NS_SUCCEEDED(aUri->SchemeIs("moz-safe-about", &isScheme)) && isScheme)) {
       rv = aUri->GetPath(domainScope);
@@ -394,8 +318,8 @@ nsDOMStorageDBWrapper::CreateDomainScopeDBKey(const nsACString& aAsciiDomain,
 
 nsresult
 nsDOMStorageDBWrapper::CreateQuotaDomainDBKey(const nsACString& aAsciiDomain,
-                                              PRBool aIncludeSubDomains,
-                                              PRBool aEffectiveTLDplus1Only,
+                                              bool aIncludeSubDomains,
+                                              bool aEffectiveTLDplus1Only,
                                               nsACString& aKey)
 {
   nsresult rv;
@@ -451,7 +375,7 @@ nsDOMStorageDBWrapper::EnsureTempTableFlushTimer()
     mTempTableFlushTimer = do_CreateInstance(NS_TIMER_CONTRACTID, &rv);
 
     if (!NS_SUCCEEDED(rv)) {
-      mTempTableFlushTimer = nsnull;
+      mTempTableFlushTimer = nullptr;
       return;
     }
 
@@ -465,7 +389,7 @@ nsDOMStorageDBWrapper::StopTempTableFlushTimer()
 {
   if (mTempTableFlushTimer) {
     mTempTableFlushTimer->Cancel();
-    mTempTableFlushTimer = nsnull;
+    mTempTableFlushTimer = nullptr;
   }
 }
 

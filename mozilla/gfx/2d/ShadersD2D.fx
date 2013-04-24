@@ -14,6 +14,7 @@ cbuffer cb0
     float4 QuadDesc;
     float4 TexCoords;
     float4 MaskTexCoords;
+    float4 TextColor;
 }
 
 cbuffer cb1
@@ -50,6 +51,12 @@ struct VS_RADIAL_OUTPUT
     float2 PixelCoord : TEXCOORD1;
 };
 
+struct PS_TEXT_OUTPUT
+{
+    float4 color;
+    float4 alpha;
+};
+
 Texture2D tex;
 Texture2D mask;
 
@@ -58,6 +65,20 @@ sampler sSampler = sampler_state {
     Texture = tex;
     AddressU = Clamp;
     AddressV = Clamp;
+};
+
+sampler sWrapSampler = sampler_state {
+    Filter = MIN_MAG_MIP_LINEAR;
+    Texture = tex;
+    AddressU = Wrap;
+    AddressV = Wrap;
+};
+
+sampler sMirrorSampler = sampler_state {
+    Filter = MIN_MAG_MIP_LINEAR;
+    Texture = tex;
+    AddressU = Mirror;
+    AddressV = Mirror;
 };
 
 sampler sMaskSampler = sampler_state {
@@ -97,6 +118,19 @@ BlendState ShadowBlendV
   DestBlendAlpha = Inv_Src_Alpha;
   BlendOpAlpha = Add;
   RenderTargetWriteMask[0] = 0xF;
+};
+
+BlendState bTextBlend
+{
+  AlphaToCoverageEnable = FALSE;
+  BlendEnable[0] = TRUE;
+  SrcBlend = Src1_Color;
+  DestBlend = Inv_Src1_Color;
+  BlendOp = Add;
+  SrcBlendAlpha = Src1_Alpha;
+  DestBlendAlpha = Inv_Src1_Alpha;
+  BlendOpAlpha = Add;
+  RenderTargetWriteMask[0] = 0x0F; // All
 };
 
 VS_OUTPUT SampleTextureVS(float3 pos : POSITION)
@@ -142,7 +176,7 @@ float4 SampleMaskTexturePS( VS_OUTPUT In) : SV_Target
     return tex.Sample(sSampler, In.TexCoord) * mask.Sample(sMaskSampler, In.MaskTexCoord).a;
 };
 
-float4 SampleRadialGradientPS( VS_RADIAL_OUTPUT In) : SV_Target
+float4 SampleRadialGradientPS(VS_RADIAL_OUTPUT In, uniform sampler aSampler) : SV_Target
 {
     // Radial gradient painting is defined as the set of circles whose centers
     // are described by C(t) = (C2 - C1) * t + C1; with radii
@@ -178,7 +212,7 @@ float4 SampleRadialGradientPS( VS_RADIAL_OUTPUT In) : SV_Target
 
     float upper_t = lerp(t.y, t.x, isValid.x);
 
-    float4 output = tex.Sample(sSampler, float2(upper_t, 0.5));
+    float4 output = tex.Sample(aSampler, float2(upper_t, 0.5));
     // Premultiply
     output.rgb *= output.a;
     // Multiply the output color by the input mask for the operation.
@@ -186,7 +220,7 @@ float4 SampleRadialGradientPS( VS_RADIAL_OUTPUT In) : SV_Target
     return output;
 };
 
-float4 SampleRadialGradientA0PS( VS_RADIAL_OUTPUT In) : SV_Target
+float4 SampleRadialGradientA0PS( VS_RADIAL_OUTPUT In, uniform sampler aSampler ) : SV_Target
 {
     // This simpler shader is used for the degenerate case where A is 0,
     // i.e. we're actually solving a linear equation.
@@ -205,7 +239,7 @@ float4 SampleRadialGradientA0PS( VS_RADIAL_OUTPUT In) : SV_Target
       return float4(0, 0, 0, 0);
     }
 
-    float4 output = tex.Sample(sSampler, float2(t, 0.5));
+    float4 output = tex.Sample(aSampler, float2(t, 0.5));
     // Premultiply
     output.rgb *= output.a;
     // Multiply the output color by the input mask for the operation.
@@ -264,6 +298,26 @@ float4 SampleMaskShadowVPS( VS_OUTPUT In) : SV_Target
     return outputColor * mask.Sample(sMaskSampler, In.MaskTexCoord).a;
 };
 
+PS_TEXT_OUTPUT SampleTextTexturePS( VS_OUTPUT In) : SV_Target
+{
+    PS_TEXT_OUTPUT output;
+    output.color = float4(TextColor.r, TextColor.g, TextColor.b, 1.0);
+    output.alpha.rgba = tex.Sample(sSampler, In.TexCoord).bgrg * TextColor.a;
+    return output;
+};
+
+PS_TEXT_OUTPUT SampleTextTexturePSMasked( VS_OUTPUT In) : SV_Target
+{
+    PS_TEXT_OUTPUT output;
+    
+    float maskValue = mask.Sample(sMaskSampler, In.MaskTexCoord).a;
+
+    output.color = float4(TextColor.r, TextColor.g, TextColor.b, 1.0);
+    output.alpha.rgba = tex.Sample(sSampler, In.TexCoord).bgrg * TextColor.a * maskValue;
+    
+    return output;
+};
+
 technique10 SampleTexture
 {
     pass P0
@@ -277,19 +331,47 @@ technique10 SampleTexture
 
 technique10 SampleRadialGradient
 {
-    pass P0
+    pass APos
     {
         SetRasterizerState(TextureRast);
         SetVertexShader(CompileShader(vs_4_0_level_9_3, SampleRadialVS()));
         SetGeometryShader(NULL);
-        SetPixelShader(CompileShader(ps_4_0_level_9_3, SampleRadialGradientPS()));
+        SetPixelShader(CompileShader(ps_4_0_level_9_3, SampleRadialGradientPS( sSampler )));
     }
-    pass P1
+    pass A0
     {
         SetRasterizerState(TextureRast);
         SetVertexShader(CompileShader(vs_4_0_level_9_3, SampleRadialVS()));
         SetGeometryShader(NULL);
-        SetPixelShader(CompileShader(ps_4_0_level_9_3, SampleRadialGradientA0PS()));
+        SetPixelShader(CompileShader(ps_4_0_level_9_3, SampleRadialGradientA0PS( sSampler )));
+    }
+    pass APosWrap
+    {
+        SetRasterizerState(TextureRast);
+        SetVertexShader(CompileShader(vs_4_0_level_9_3, SampleRadialVS()));
+        SetGeometryShader(NULL);
+        SetPixelShader(CompileShader(ps_4_0_level_9_3, SampleRadialGradientPS( sWrapSampler )));
+    }
+    pass A0Wrap
+    {
+        SetRasterizerState(TextureRast);
+        SetVertexShader(CompileShader(vs_4_0_level_9_3, SampleRadialVS()));
+        SetGeometryShader(NULL);
+        SetPixelShader(CompileShader(ps_4_0_level_9_3, SampleRadialGradientA0PS( sWrapSampler )));
+    }
+    pass APosMirror
+    {
+        SetRasterizerState(TextureRast);
+        SetVertexShader(CompileShader(vs_4_0_level_9_3, SampleRadialVS()));
+        SetGeometryShader(NULL);
+        SetPixelShader(CompileShader(ps_4_0_level_9_3, SampleRadialGradientPS( sMirrorSampler )));
+    }
+    pass A0Mirror
+    {
+        SetRasterizerState(TextureRast);
+        SetVertexShader(CompileShader(vs_4_0_level_9_3, SampleRadialVS()));
+        SetGeometryShader(NULL);
+        SetPixelShader(CompileShader(ps_4_0_level_9_3, SampleRadialGradientA0PS( sMirrorSampler )));
     }
 }
 
@@ -333,4 +415,25 @@ technique10 SampleTextureWithShadow
         SetGeometryShader(NULL);
         SetPixelShader(CompileShader(ps_4_0_level_9_3, SampleMaskShadowVPS()));
     }
- }
+}
+
+technique10 SampleTextTexture
+{
+    pass Unmasked
+    {
+        SetRasterizerState(TextureRast);
+        SetBlendState(bTextBlend, float4( 0.0f, 0.0f, 0.0f, 0.0f ), 0xFFFFFFFF );
+        SetVertexShader(CompileShader(vs_4_0_level_9_3, SampleTextureVS()));
+        SetGeometryShader(NULL);
+        SetPixelShader(CompileShader(ps_4_0_level_9_3, SampleTextTexturePS()));
+    }
+    pass Masked
+    {
+        SetRasterizerState(TextureRast);
+        SetBlendState(bTextBlend, float4( 0.0f, 0.0f, 0.0f, 0.0f ), 0xFFFFFFFF );
+        SetVertexShader(CompileShader(vs_4_0_level_9_3, SampleTextureVS()));
+        SetGeometryShader(NULL);
+        SetPixelShader(CompileShader(ps_4_0_level_9_3, SampleTextTexturePSMasked()));
+    }
+}
+

@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 wizard {
   -moz-appearance: none;
   width: 55em;
@@ -88,6 +92,10 @@ description > .text-link:focus {
 .pin {
   font-size: 18pt;
   text-align: center;
+}
+
+#passphraseHelpSpacer {
+  width: 0.5em;
 }
 
 #add-device-throbber,

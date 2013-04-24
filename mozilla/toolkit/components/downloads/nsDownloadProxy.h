@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Blake Ross <blaker@netscape.com> (Original Author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
  
 #ifndef downloadproxy___h___
 #define downloadproxy___h___
@@ -63,7 +30,7 @@ public:
                      const nsAString& aDisplayName,
                      nsIMIMEInfo *aMIMEInfo,
                      PRTime aStartTime,
-                     nsILocalFile* aTempFile,
+                     nsIFile* aTempFile,
                      nsICancelable* aCancelable) {
     nsresult rv;
     nsCOMPtr<nsIDownloadManager> dm = do_GetService("@mozilla.org/download-manager;1", &rv);
@@ -78,37 +45,37 @@ public:
     NS_ENSURE_SUCCESS(rv, rv);
     nsCOMPtr<nsIPrefBranch> branch = do_QueryInterface(prefs);
 
-    PRBool showDM = PR_TRUE;
+    bool showDM = true;
     if (branch)
       branch->GetBoolPref(PREF_BDM_SHOWWHENSTARTING, &showDM);
 
     if (showDM) {
-      PRUint32 id;
+      uint32_t id;
       mInner->GetId(&id);
 
       nsCOMPtr<nsIDownloadManagerUI> dmui =
         do_GetService("@mozilla.org/download-manager-ui;1", &rv);
       NS_ENSURE_SUCCESS(rv, rv);
 
-      PRBool visible;
+      bool visible;
       rv = dmui->GetVisible(&visible);
       NS_ENSURE_SUCCESS(rv, rv);
 
-      PRBool focusWhenStarting = PR_TRUE;
+      bool focusWhenStarting = true;
       if (branch)
         (void)branch->GetBoolPref(PREF_BDM_FOCUSWHENSTARTING, &focusWhenStarting);
 
       if (visible && !focusWhenStarting)
         return NS_OK;
 
-      return dmui->Show(nsnull, id, nsIDownloadManagerUI::REASON_NEW_DOWNLOAD);
+      return dmui->Show(nullptr, id, nsIDownloadManagerUI::REASON_NEW_DOWNLOAD);
     }
     return rv;
   }
 
   NS_IMETHODIMP OnStateChange(nsIWebProgress* aWebProgress,
-                              nsIRequest* aRequest, PRUint32 aStateFlags,
-                              PRUint32 aStatus)
+                              nsIRequest* aRequest, uint32_t aStateFlags,
+                              nsresult aStatus)
   {
     NS_ENSURE_TRUE(mInner, NS_ERROR_NOT_INITIALIZED);
     return mInner->OnStateChange(aWebProgress, aRequest, aStateFlags, aStatus);
@@ -123,18 +90,19 @@ public:
   }
 
   NS_IMETHODIMP OnLocationChange(nsIWebProgress *aWebProgress,
-                                 nsIRequest *aRequest, nsIURI *aLocation)
+                                 nsIRequest *aRequest, nsIURI *aLocation,
+                                 uint32_t aFlags)
   {
     NS_ENSURE_TRUE(mInner, NS_ERROR_NOT_INITIALIZED);
-    return mInner->OnLocationChange(aWebProgress, aRequest, aLocation);
+    return mInner->OnLocationChange(aWebProgress, aRequest, aLocation, aFlags);
   }
   
   NS_IMETHODIMP OnProgressChange(nsIWebProgress *aWebProgress,
                                  nsIRequest *aRequest,
-                                 PRInt32 aCurSelfProgress,
-                                 PRInt32 aMaxSelfProgress,
-                                 PRInt32 aCurTotalProgress,
-                                 PRInt32 aMaxTotalProgress)
+                                 int32_t aCurSelfProgress,
+                                 int32_t aMaxSelfProgress,
+                                 int32_t aCurTotalProgress,
+                                 int32_t aMaxTotalProgress)
   {
     NS_ENSURE_TRUE(mInner, NS_ERROR_NOT_INITIALIZED);
     return mInner->OnProgressChange(aWebProgress, aRequest,
@@ -146,10 +114,10 @@ public:
 
   NS_IMETHODIMP OnProgressChange64(nsIWebProgress *aWebProgress,
                                    nsIRequest *aRequest,
-                                   PRInt64 aCurSelfProgress,
-                                   PRInt64 aMaxSelfProgress,
-                                   PRInt64 aCurTotalProgress,
-                                   PRInt64 aMaxTotalProgress)
+                                   int64_t aCurSelfProgress,
+                                   int64_t aMaxSelfProgress,
+                                   int64_t aCurTotalProgress,
+                                   int64_t aMaxTotalProgress)
   {
     NS_ENSURE_TRUE(mInner, NS_ERROR_NOT_INITIALIZED);
     return mInner->OnProgressChange64(aWebProgress, aRequest,
@@ -161,16 +129,16 @@ public:
 
   NS_IMETHODIMP OnRefreshAttempted(nsIWebProgress *aWebProgress,
                                    nsIURI *aUri,
-                                   PRInt32 aDelay,
-                                   PRBool aSameUri,
-                                   PRBool *allowRefresh)
+                                   int32_t aDelay,
+                                   bool aSameUri,
+                                   bool *allowRefresh)
   {
-    *allowRefresh = PR_TRUE;
+    *allowRefresh = true;
     return NS_OK;
   }
 
   NS_IMETHODIMP OnSecurityChange(nsIWebProgress *aWebProgress,
-                                 nsIRequest *aRequest, PRUint32 aState)
+                                 nsIRequest *aRequest, uint32_t aState)
   {
     NS_ENSURE_TRUE(mInner, NS_ERROR_NOT_INITIALIZED);
     return mInner->OnSecurityChange(aWebProgress, aRequest, aState);

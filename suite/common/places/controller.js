@@ -1,48 +1,12 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Places Command Controller.
- *
- * The Initial Developer of the Original Code is Google Inc.
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Ben Goodger <beng@google.com>
- *   Myk Melez <myk@mozilla.org>
- *   Asaf Romano <mano@mozilla.com>
- *   Marco Bonardo <mak77@bonardo.net>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://gre/modules/XPCOMUtils.jsm");
 
 // XXXmano: we should move most/all of these constants to PlacesUtils
 const ORGANIZER_ROOT_BOOKMARKS = "place:folder=BOOKMARKS_MENU&excludeItems=1&queryType=1";
-const ORGANIZER_SUBSCRIPTIONS_QUERY = "place:annotation=livemark%2FfeedURI";
 
 // No change to the view, preserve current selection
 const RELOAD_ACTION_NOTHING = 0;
@@ -67,6 +31,19 @@ const REMOVE_PAGES_MAX_SINGLEREMOVES = 10;
 
 // XXX: should pull in from global definition, see bug 585500
 var TAB_DROP_TYPE = "application/x-moz-tabbrowser-tab";
+
+/**
+ * A completion callback for reloading a live bookmark.
+ * @param   aStatus
+ *          The status code for the async livemark operation
+ * @param   aLivemark
+ *          The live bookmark
+ */
+function onReload(aStatus, aLivemark)
+{
+  if (Components.isSuccessCode(aStatus))
+    aLivemark.reload(true);
+}
 
 /**
  * Represents an insertion point within a container where we can insert
@@ -120,6 +97,7 @@ function PlacesController(aView) {
   XPCOMUtils.defineLazyServiceGetter(this, "clipboard",
                                      "@mozilla.org/widget/clipboard;1",
                                      "nsIClipboard");
+  this._cachedLivemarkInfoObjects = new Map();
 }
 
 PlacesController.prototype = {
@@ -151,9 +129,9 @@ PlacesController.prototype = {
   isCommandEnabled: function PC_isCommandEnabled(aCommand) {
     switch (aCommand) {
     case "cmd_undo":
-      return PlacesUIUtils.ptm.numberOfUndoItems > 0;
+      return PlacesUtils.transactionManager.numberOfUndoItems > 0;
     case "cmd_redo":
-      return PlacesUIUtils.ptm.numberOfRedoItems > 0;
+      return PlacesUtils.transactionManager.numberOfRedoItems > 0;
     case "cmd_cut":
     case "placesCmd_cut":
       var nodes = this._view.selectedNodes;
@@ -200,15 +178,11 @@ PlacesController.prototype = {
                  Components.interfaces.nsINavHistoryQueryOptions.SORT_BY_NONE;
     case "placesCmd_show:info":
       var selectedNode = this._view.selectedNode;
-      if (selectedNode &&
-          PlacesUtils.getConcreteItemId(selectedNode) != -1  &&
-          !PlacesUtils.nodeIsLivemarkItem(selectedNode))
-        return true;
-      return false;
+      return selectedNode && PlacesUtils.getConcreteItemId(selectedNode) != -1;
     case "placesCmd_reload":
       // Livemark containers
       var selectedNode = this._view.selectedNode;
-      return selectedNode && PlacesUtils.nodeIsLivemarkContainer(selectedNode);
+      return selectedNode && this.hasCachedLivemarkInfo(selectedNode);
     case "placesCmd_sortBy:name":
       var selectedNode = this._view.selectedNode;
       return selectedNode &&
@@ -227,10 +201,10 @@ PlacesController.prototype = {
   doCommand: function PC_doCommand(aCommand) {
     switch (aCommand) {
     case "cmd_undo":
-      PlacesUIUtils.ptm.undoTransaction();
+      PlacesUtils.transactionManager.undoTransaction(); 
       break;
     case "cmd_redo":
-      PlacesUIUtils.ptm.redoTransaction();
+      PlacesUtils.transactionManager.redoTransaction(); 
       break;
     case "cmd_cut":
     case "placesCmd_cut":
@@ -282,11 +256,13 @@ PlacesController.prototype = {
       this.newSeparator();
       break;
     case "placesCmd_show:info":
-      var dd = document.getElementById("detailsDeck");
-      if (dd)
-        dd.collapsed = false;
-      else
+      var dds = document.getElementById("detailsDeck-splitter");
+      if (dds) {
+        dds.removeAttribute("state");
+        document.getElementById("editBMPanel_namePicker").focus();
+      } else {
         this.showBookmarkPropertiesForSelection();
+      }
       break;
     case "placesCmd_moveBookmarks":
       this.moveSelectedBookmarks();
@@ -401,6 +377,7 @@ PlacesController.prototype = {
     var xferable = Components.classes["@mozilla.org/widget/transferable;1"]
                              .createInstance(Components.interfaces.nsITransferable);
 
+    xferable.init(null);
     xferable.addDataFlavor(PlacesUtils.TYPE_X_MOZ_URL);
     xferable.addDataFlavor(PlacesUtils.TYPE_UNICODE);
     clipboard.getData(xferable, Components.interfaces.nsIClipboard.kGlobalClipboard);
@@ -499,7 +476,7 @@ PlacesController.prototype = {
             if (parentNode) {
               if (PlacesUtils.nodeIsTagQuery(parentNode))
                 nodeData["tagChild"] = true;
-              else if (PlacesUtils.nodeIsLivemarkContainer(parentNode))
+              else if (this.hasCachedLivemarkInfo(parentNode))
                 nodeData["livemarkChild"] = true;
             }
           }
@@ -716,8 +693,8 @@ PlacesController.prototype = {
    */
   reloadSelectedLivemark: function PC_reloadSelectedLivemark() {
     var selectedNode = this._view.selectedNode;
-    if (selectedNode && PlacesUtils.nodeIsLivemarkContainer(selectedNode))
-      PlacesUtils.livemarks.reloadLivemarkFolder(selectedNode.itemId);
+    if (selectedNode)
+      PlacesUtils.livemarks.getLivemark({ id: selectedNode.itemId }, onReload);
   },
 
   /**
@@ -831,8 +808,8 @@ PlacesController.prototype = {
     var ip = this._view.insertionPoint;
     if (!ip)
       throw Components.results.NS_ERROR_NOT_AVAILABLE;
-    var txn = PlacesUIUtils.ptm.createSeparator(ip.itemId, ip.index);
-    PlacesUIUtils.ptm.doTransaction(txn);
+    var txn = new PlacesCreateSeparatorTransaction(ip.itemId, ip.index);
+    PlacesUtils.transactionManager.doTransaction(txn);
     // select the new item
     var insertedNodeId = PlacesUtils.bookmarks
                                     .getIdForItemAt(ip.itemId, ip.index);
@@ -844,7 +821,7 @@ PlacesController.prototype = {
    */
   moveSelectedBookmarks: function PC_moveBookmarks() {
     window.openDialog("chrome://communicator/content/bookmarks/moveBookmarks.xul",
-                      "", "chrome, modal",
+                      "", "chrome,modal,resizable=yes",
                       this._view.selectedNodes);
   },
 
@@ -853,8 +830,8 @@ PlacesController.prototype = {
    */
   sortFolderByName: function PC_sortFolderByName() {
     var itemId = PlacesUtils.getConcreteItemId(this._view.selectedNode);
-    var txn = PlacesUIUtils.ptm.sortFolderByName(itemId);
-    PlacesUIUtils.ptm.doTransaction(txn);
+    var txn = new PlacesSortFolderByNameTransaction(itemId);
+    PlacesUtils.transactionManager.doTransaction(txn);
   },
 
   /**
@@ -918,7 +895,8 @@ PlacesController.prototype = {
         // untag transaction.
         var tagItemId = PlacesUtils.getConcreteItemId(node.parent);
         var uri = PlacesUtils._uri(node.uri);
-        transactions.push(PlacesUIUtils.ptm.untagURI(uri, [tagItemId]));
+        let txn = new PlacesUntagURITransaction(uri, [tagItemId]);
+        transactions.push(txn);
       }
       else if (PlacesUtils.nodeIsTagQuery(node) && node.parent &&
                PlacesUtils.nodeIsQuery(node.parent) &&
@@ -930,8 +908,10 @@ PlacesController.prototype = {
         // must only remove the query node.
         var tag = node.title;
         var URIs = PlacesUtils.tagging.getURIsForTag(tag);
-        for (var j = 0; j < URIs.length; j++)
-          transactions.push(PlacesUIUtils.ptm.untagURI(URIs[j], [tag]));
+        for (var j = 0; j < URIs.length; j++) {
+          let txn = new PlacesUntagURITransaction(URIs[j], [tag]);
+          transactions.push(txn);
+        }
       }
       else if (PlacesUtils.nodeIsURI(node) &&
                PlacesUtils.nodeIsQuery(node.parent) &&
@@ -959,7 +939,8 @@ PlacesController.prototype = {
           // to skip nodes that are children of an already removed folder.
           removedFolders.push(node);
         }
-        transactions.push(PlacesUIUtils.ptm.removeItem(node.itemId));
+        let txn = new PlacesRemoveItemTransaction(node.itemId);
+        transactions.push(txn);
       }
     }
   },
@@ -978,8 +959,8 @@ PlacesController.prototype = {
       this._removeRange(ranges[i], transactions, removedFolders);
 
     if (transactions.length > 0) {
-      var txn = PlacesUIUtils.ptm.aggregateTransactions(txnName, transactions);
-      PlacesUIUtils.ptm.doTransaction(txn);
+      var txn = new PlacesAggregatedTransaction(txnName, transactions);
+      PlacesUtils.transactionManager.doTransaction(txn);
     }
   },
 
@@ -1120,8 +1101,9 @@ PlacesController.prototype = {
         addData(PlacesUtils.TYPE_X_MOZ_PLACE, i);
 
         // Drop the feed uri for livemark containers
-        if (PlacesUtils.nodeIsLivemarkContainer(node))
-          addURIData(i, PlacesUtils.livemarks.getFeedURI(node.itemId).spec);
+        let livemarkInfo = this.getCachedLivemarkInfo(node);
+        if (livemarkInfo)
+          addURIData(i, livemarkInfo.feedURI.spec);
         else if (node.uri)
           addURIData(i);
       }
@@ -1147,6 +1129,7 @@ PlacesController.prototype = {
 
       let xferable = Components.classes["@mozilla.org/widget/transferable;1"]
                                .createInstance(Components.interfaces.nsITransferable);
+      xferable.init(null);
       let foundFolder = false, foundLink = false;
       let copiedFolders = [];
       let placeString, mozURLString, htmlString, unicodeString;
@@ -1159,12 +1142,14 @@ PlacesController.prototype = {
         if (PlacesUtils.nodeIsFolder(node))
           copiedFolders.push(node);
 
+        let self = this;
         function generateChunk(type, overrideURI) {
           let suffix = i < (nodes.length - 1) ? PlacesUtils.endl : "";
           let uri = overrideURI;
 
-          if (PlacesUtils.nodeIsLivemarkContainer(node))
-            uri = PlacesUtils.livemarks.getFeedURI(node.itemId).spec
+          let livemarkInfo = self.getCachedLivemarkInfo(node);
+          if (livemarkInfo)
+            uri = livemarkInfo.feedURI.spec;
 
           mozURLString += (PlacesUtils.wrapNode(node, PlacesUtils.TYPE_X_MOZ_URL,
                                                  uri) + suffix);
@@ -1238,6 +1223,8 @@ PlacesController.prototype = {
       var xferable =
           Components.classes["@mozilla.org/widget/transferable;1"]
                     .createInstance(Components.interfaces.nsITransferable);
+
+      xferable.init(null);
       for (var i = 0; i < types.length; ++i)
         xferable.addDataFlavor(types[i]);
       return xferable;
@@ -1270,7 +1257,7 @@ PlacesController.prototype = {
           var txn;
           if (ip.isTag) {
             var uri = PlacesUtils._uri(items[i].uri);
-            txn = PlacesUIUtils.ptm.tagURI(uri, [ip.itemId]);
+            txn = new PlacesTagURITransaction(uri, [ip.itemId]);
           }
           else {
             // adjusted to make sure that items are given the correct index
@@ -1300,8 +1287,8 @@ PlacesController.prototype = {
     var transactions = getTransactions([PlacesUtils.TYPE_X_MOZ_PLACE,
                                         PlacesUtils.TYPE_X_MOZ_URL,
                                         PlacesUtils.TYPE_UNICODE]);
-    var txn = PlacesUIUtils.ptm.aggregateTransactions("Paste", transactions);
-    PlacesUIUtils.ptm.doTransaction(txn);
+    let aggregatedTxn = new PlacesAggregatedTransaction("Paste", transactions);
+    PlacesUtils.transactionManager.doTransaction(aggregatedTxn);
 
     // select the pasted items, they should be consecutive
     var insertedNodeIds = [];
@@ -1310,7 +1297,40 @@ PlacesController.prototype = {
                                       .getIdForItemAt(ip.itemId, ip.index + i));
     if (insertedNodeIds.length > 0)
       this._view.selectItems(insertedNodeIds, false);
-  }
+  },
+
+
+  /**
+   * Cache the livemark info for a node.  This allows the controller and the
+   * views to treat the given node as a livemark.
+   * @param aNode
+   *        a places result node.
+   * @param aLivemarkInfo
+   *        a mozILivemarkInfo object.
+   */
+  cacheLivemarkInfo: function PC_cacheLivemarkInfo(aNode, aLivemarkInfo) {
+    this._cachedLivemarkInfoObjects.set(aNode, aLivemarkInfo);
+  },
+
+  /**
+   * Returns whether or not there's cached mozILivemarkInfo object for a node.
+   * @param aNode
+   *        a places result node.
+   * @return true if there's a cached mozILivemarkInfo object for
+   * aNode, false otherwise.
+   */
+  hasCachedLivemarkInfo: function PC_hasCachedLivemarkInfo(aNode)
+    this._cachedLivemarkInfoObjects.has(aNode),
+
+  /**
+   * Returns the cached livemark info for a node, if set by cacheLivemarkInfo,
+   * null otherwise.
+   * @param aNode
+   *        a places result node.
+   * @return the mozILivemarkInfo object for aNode, if set, null otherwise.
+   */
+  getCachedLivemarkInfo: function PC_getCachedLivemarkInfo(aNode)
+    this._cachedLivemarkInfoObjects.get(aNode, null)
 };
 
 /**
@@ -1501,7 +1521,7 @@ let PlacesControllerDragHelper = {
     for (let i = 0; i < dropCount; ++i) {
       let flavor = this.getFirstValidFlavor(dt.mozTypesAt(i));
       if (!flavor)
-        return false;
+        return;
 
       let data = dt.mozGetDataAt(flavor, i);
       let unwrapped;
@@ -1536,7 +1556,8 @@ let PlacesControllerDragHelper = {
           insertionPoint.orientation == Components.interfaces.nsITreeView.DROP_ON) {
         let uri = PlacesUtils._uri(unwrapped.uri);
         let tagItemId = insertionPoint.itemId;
-        transactions.push(PlacesUIUtils.ptm.tagURI(uri,[tagItemId]));
+        let tagTxn = new PlacesTagURITransaction(uri, [tagItemId]);
+        transactions.push(tagTxn);
       }
       else {
         transactions.push(PlacesUIUtils.makeTransaction(unwrapped,
@@ -1545,8 +1566,8 @@ let PlacesControllerDragHelper = {
       }
     }
 
-    let txn = PlacesUIUtils.ptm.aggregateTransactions("DropItems", transactions);
-    PlacesUIUtils.ptm.doTransaction(txn);
+    let txn = new PlacesAggregatedTransaction("DropItems", transactions);
+    PlacesUtils.transactionManager.doTransaction(txn);
   },
 
   /**

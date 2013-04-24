@@ -1,53 +1,17 @@
 <?xml version="1.0"?> <!-- -*- Mode: HTML; indent-tabs-mode: nil -*- --> 
 
-<!-- ***** BEGIN LICENSE BLOCK *****
- Version: MPL 1.1/GPL 2.0/LGPL 2.1
-
- The contents of this file are subject to the Mozilla Public License Version
- 1.1 (the "License"); you may not use this file except in compliance with
- the License. You may obtain a copy of the License at
- http://www.mozilla.org/MPL/
-
- Software distributed under the License is distributed on an "AS IS" basis,
- WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- for the specific language governing rights and limitations under the
- License.
-
- The Original Code is Mozilla Communicator client code, released
- March 31, 1998.
-
- The Initial Developer of the Original Code is
- Netscape Communications Corporation.
- Portions created by the Initial Developer are Copyright (C) 1998-2000
- the Initial Developer. All Rights Reserved.
-
- Contributor(s):
-   Dean Tessman <dean_tessman@hotmail.com>
-
- Alternatively, the contents of this file may be used under the terms of
- either of the GNU General Public License Version 2 or later (the "GPL"),
- or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- in which case the provisions of the GPL or the LGPL are applicable instead
- of those above. If you wish to allow use of your version of this file only
- under the terms of either the GPL or the LGPL, and not to allow others to
- use your version of this file under the terms of the MPL, indicate your
- decision by deleting the provisions above and replace them with the notice
- and other provisions required by the GPL or the LGPL. If you do not delete
- the provisions above, a recipient may use your version of this file under
- the terms of any one of the MPL, the GPL or the LGPL.
-
- ***** END LICENSE BLOCK ***** -->
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
 
 
 <?xml-stylesheet href="chrome://navigator/skin/" type="text/css"?>
 <?xml-stylesheet href="chrome://communicator/content/places/places.css" type="text/css"?>
 
 <?xul-overlay href="chrome://navigator/content/navigatorOverlay.xul"?>
-<?xul-overlay href="chrome://navigator/content/mailNavigatorOverlay.xul"?>
 <?xul-overlay href="chrome://navigator/content/linkToolbarOverlay.xul"?>
 <?xul-overlay href="chrome://communicator/content/contentAreaContextOverlay.xul"?>
 <?xul-overlay href="chrome://communicator/content/sidebar/sidebarOverlay.xul"?>
-<?xul-overlay href="chrome://communicator/content/bookmarks/placesOverlay.xul"?>
 
 
 <!DOCTYPE window [
@@ -70,6 +34,7 @@
         lightweightthemes="true"
         lightweightthemesfooter="status-bar"
         windowtype="navigator:browser"
+        macanimationtype="document"
         persist="screenX screenY width height sizemode"> 
 
   <!-- Generic Utility -->
@@ -87,37 +52,23 @@
 
   <!-- Navigator -->
   <script type="application/javascript" src="chrome://navigator/content/fullScreen.js"/>
-  <script type="application/javascript" src="chrome://navigator/content/browser.js"/>
-  <script type="application/javascript" src="chrome://navigator/content/navigator.js"/>
   <script type="application/javascript" src="chrome://navigator/content/navigatorDD.js"/>
   <script type="application/javascript" src="chrome://navigator/content/sessionHistoryUI.js"/>
 
   <!-- Places Bookmarks Utilities -->
-  <script type="application/javascript" src="chrome://communicator/content/places/browserPlacesViews.js"/>
-  <script type="application/javascript" src="chrome://communicator/content/bookmarks/browser-places.js"/>
   <script type="application/javascript" src="chrome://communicator/content/bookmarks/editBookmarkOverlay.js"/>
 
   <!-- hook for stringbundle overlays -->
   <stringbundleset id="stringbundleset">
-    <stringbundle id="bundle_navigator" src="chrome://navigator/locale/navigator.properties"/>
-    <stringbundle id="bundle_brand" src="chrome://branding/locale/brand.properties"/>
-    <stringbundle id="bundle_navigator_region" src="chrome://navigator-region/locale/region.properties"/>
     <stringbundle id="findBundle" src="chrome://global/locale/finddialog.properties"/>
   </stringbundleset>
 
   <commandset id="commands">
     <commandset id="findTypeMenuItems"/>
-    <commandset id="globalEditMenuItems"/>
-    <commandset id="selectEditMenuItems"/>
-    <commandset id="undoEditMenuItems"/>
-    <commandset id="clipboardEditMenuItems"/>
-    <!-- <command id="cmd_pageSetup"/> -->
     <command id="toggleSidebar"/>
   </commandset>
 
   <commandset id="mainCommandSet"/> <!-- Firefox extension compatibility -->
-
-  <commandset id="placesCommands"/>
 
   <!-- broadcasters are appended from the overlay -->
   <broadcasterset id="navBroadcasters"/>
@@ -178,7 +129,8 @@
 
     <menupopup id="popupBlockerMenu"
                oncommand="popupBlockerMenuCommand(event.target);"
-               onpopupshowing="return popupBlockerMenuShowing(event)"/>
+               onpopupshowing="return popupBlockerMenuShowing(event);"
+               onpopuphiding="RemovePopupsItems(this);"/>
     <!-- Items are generated, see popupBlockerMenuShowing() -->
     <menupopup id="popupNotificationMenu"/>
     <menupopup id="networkProperties"/>
@@ -226,11 +178,11 @@
     <toolbarset id="customToolbars" context="toolbar-context-menu"/>
 
     <toolbar id="PersonalToolbar"
-             accesskey="&personalbarCmd.accesskey;"
+             accesskey="&bookmarksToolbarCmd.accesskey;"
              class="chromeclass-directories"
              persist="collapsed"
-             grippytooltiptext="&personalToolbar.tooltip;"
-             toolbarname="&personalbarCmd.label;"
+             grippytooltiptext="&bookmarksToolbar.tooltip;"
+             toolbarname="&bookmarksToolbarCmd.label;"
              nowindowdrag="true"
              customizable="true"
              defaultset="home-button,separator,bookmarks-button,personal-bookmarks"
@@ -290,11 +242,11 @@
                      oncommand="BrowserHome(event);"
                      onclick="if (event.button == 1) BrowserHome(event);"
                      tooltip="home-button-tooltip"
-                     ondraggesture="nsDragAndDrop.startDrag(event, homeButtonObserver)"
-                     ondragdrop="nsDragAndDrop.drop(event, homeButtonObserver); event.stopPropagation()"
-                     ondragenter="event.stopPropagation()"
-                     ondragexit="nsDragAndDrop.dragExit(event, homeButtonObserver); event.stopPropagation()"
-                     ondragover="nsDragAndDrop.dragOver(event, homeButtonObserver); event.stopPropagation()"/>
+                     ondragstart="homeButtonObserver.onDragStart(event);"
+                     ondragdrop="homeButtonObserver.onDrop(event);"
+                     ondragenter="event.stopPropagation();"
+                     ondragexit="homeButtonObserver.onDragExit(event);"
+                     ondragover="homeButtonObserver.onDragOver(event);"/>
 
       <toolbaritem id="nav-bar-inner"
                    flex="4"
@@ -324,15 +276,15 @@
             <image id="addons-notification-icon" class="notification-anchor-icon" role="button"/>
             <image id="indexedDB-notification-icon" class="notification-anchor-icon" role="button"/>
             <image id="password-notification-icon" class="notification-anchor-icon" role="button"/>
+            <image id="plugins-notification-icon" class="notification-anchor-icon" role="button"/>
           </box>
           <deck id="page-proxy-deck"
                 class="urlbar-icons"
+                ondragstart="proxyIconDNDObserver.onDragStart(event);"
                 onclick="handlePageProxyClick(event);">
             <image id="page-proxy-button"
-                   ondraggesture="PageProxyDragGesture(event);"
                    tooltiptext="&proxyIcon.tooltip;"/>
             <image id="page-proxy-favicon" validate="never"
-                   ondraggesture="PageProxyDragGesture(event);"
                    onload="this.parentNode.selectedIndex = 1;
                            event.stopPropagation();"
                    onerror="gBrowser.addToMissedIconCache(this.src);"
@@ -363,9 +315,9 @@
                 tooltiptext="&goButton.tooltip;"
                 default="true"
                 oncommand="handleURLBarCommand('none', event);"
-                ondragover="nsDragAndDrop.dragOver(event, goButtonObserver);"
-                ondragdrop="nsDragAndDrop.drop(event, goButtonObserver);"
-                ondragexit="nsDragAndDrop.dragExit(event, goButtonObserver);"/>
+                onclick="checkForMiddleClick(this, event);"
+                ondragover="goButtonObserver.onDragOver(event);"
+                ondragdrop="goButtonObserver.onDrop(event);"/>
       </toolbaritem>
 
       <toolbaritem id="search-button-container"
@@ -376,9 +328,8 @@
                 label="&searchButton.label;"
                 tooltiptext="&searchButton.tooltip;"
                 oncommand="BrowserSearch.loadSearch(QualifySearchTerm());"
-                ondragover="nsDragAndDrop.dragOver(event, searchButtonObserver);"
-                ondragdrop="nsDragAndDrop.drop(event, searchButtonObserver);"
-                ondragexit="nsDragAndDrop.dragExit(event, searchButtonObserver);"/>
+                ondragover="searchButtonObserver.onDragOver(event);"
+                ondragdrop="searchButtonObserver.onDrop(event);"/>
       </toolbaritem>
 
       <toolbaritem id="search-container" title="&searchItem.title;"
@@ -387,18 +338,9 @@
         <searchbar id="searchbar" flex="1"/>
       </toolbaritem>
 
-      <toolbarbutton id="print-button" type="menu-button"
-                     class="toolbarbutton-1 chromeclass-toolbar-additional"
+      <toolbarbutton id="print-button"
                      label="&printButton.label;"
-                     oncommand="if (event.target==this) PrintUtils.print();"
-                     tooltiptext="&printButton.tooltip;">
-        <menupopup id="printMenu">
-          <menuitem id="printMenuItemToolbar" label="&printCmd.label;" accesskey="&printCmd.accesskey;"
-                    default="true" oncommand="PrintUtils.print()"/>
-          <menuitem id="printPreviewMenuItemToolbar" label="&printPreviewCmd.label;" accesskey="&printPreviewCmd.accesskey;"
-                    oncommand="setTimeout(BrowserPrintPreview, 0);"/>
-        </menupopup>
-      </toolbarbutton>
+                     tooltiptext="&printButton.tooltip;"/>
 
       <toolbaritem id="throbber-box" align="center">
         <button id="navigator-throbber"
@@ -407,7 +349,7 @@
                 tooltiptext="&throbber.tooltip;"/>
       </toolbaritem>
 
-      <!-- "Bookmarks" button on personal toolbar -->
+      <!-- "Bookmarks" button on Bookmarks Toolbar -->
       <toolbarbutton type="menu" id="bookmarks-button"
                      class="bookmark-item" container="true"
                      label="&bookmarksButton.label;"
@@ -421,7 +363,7 @@
                    openInTabs="children"
                    oncommand="BookmarksEventHandler.onCommand(event);"
                    onclick="BookmarksEventHandler.onClick(event);"
-                   onpopupshowing="BookmarksMenuButton.onPopupShowing(event);
+                   onpopupshowing="BookmarksMenu.onPopupShowing(event, 'BMB_');
                                    BookmarksEventHandler.onPopupShowing(event);"
                    tooltip="bhTooltip" popupsinherittooltip="true">
           <menuitem command="Browser:AddBookmark"/>
@@ -438,7 +380,7 @@
           <menuseparator/>
           <menu id="BMB_bookmarksToolbarFolderMenu"
                 class="menu-iconic bookmark-item"
-                label="&personalbarCmd.label;"
+                label="&bookmarksToolbarCmd.label;"
                 container="true">
             <menupopup id="BMB_bookmarksToolbarFolderPopup"
                        placespopup="true"

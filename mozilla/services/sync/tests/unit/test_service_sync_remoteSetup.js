@@ -1,9 +1,12 @@
+/* Any copyright is dedicated to the Public Domain.
+ * http://creativecommons.org/publicdomain/zero/1.0/ */
+
 Cu.import("resource://services-sync/main.js");
 Cu.import("resource://services-sync/util.js");
 Cu.import("resource://services-sync/status.js");
 Cu.import("resource://services-sync/constants.js");
-Cu.import("resource://services-sync/record.js");
-Cu.import("resource://services-sync/log4moz.js");
+Cu.import("resource://services-sync/keys.js");
+Cu.import("resource://services-common/log4moz.js");
 
 function run_test() {
   let logger = Log4Moz.repository.rootLogger;
@@ -16,7 +19,7 @@ function run_test() {
   let collectionsHelper = track_collections_helper();
   let upd = collectionsHelper.with_updated_collection;
   let collections = collectionsHelper.collections;
-  
+
   function wasCalledHandler(wbo) {
     let handler = wbo.handler();
     return function() {
@@ -29,7 +32,28 @@ function run_test() {
   let cryptoColl = new ServerCollection({keys: keysWBO});
   let metaColl = new ServerCollection({global: meta_global});
   do_test_pending();
+
+  /**
+   * Handle the bulk DELETE request sent by wipeServer.
+   */
+  function storageHandler(request, response) {
+    do_check_eq("DELETE", request.method);
+    do_check_true(request.hasHeader("X-Confirm-Delete"));
+
+    _("Wiping out all collections.");
+    cryptoColl.delete({});
+    clients.delete({});
+    metaColl.delete({});
+
+    let ts = new_timestamp();
+    collectionsHelper.update_collection("crypto", ts);
+    collectionsHelper.update_collection("clients", ts);
+    collectionsHelper.update_collection("meta", ts);
+    return_timestamp(request, response, ts);
+  }
+
   let server = httpd_setup({
+    "/1.1/johndoe/storage": storageHandler,
     "/1.1/johndoe/storage/crypto/keys": upd("crypto", keysWBO.handler()),
     "/1.1/johndoe/storage/crypto": upd("crypto", cryptoColl.handler()),
     "/1.1/johndoe/storage/clients": upd("clients", clients.handler()),
@@ -40,31 +64,31 @@ function run_test() {
 
   try {
     _("Log in.");
-    Weave.Service.serverURL = "http://localhost:8080/";
-    Weave.Service.clusterURL = "http://localhost:8080/";
-    
+    Weave.Service.serverURL = TEST_SERVER_URL;
+    Weave.Service.clusterURL = TEST_CLUSTER_URL;
+
     _("Checking Status.sync with no credentials.");
     Weave.Service.verifyAndFetchSymmetricKeys();
     do_check_eq(Status.sync, CREDENTIALS_CHANGED);
-    do_check_eq(Status.login, LOGIN_FAILED_INVALID_PASSPHRASE);
+    do_check_eq(Status.login, LOGIN_FAILED_NO_PASSPHRASE);
 
     _("Log in with an old secret phrase, is upgraded to Sync Key.");
     Weave.Service.login("johndoe", "ilovejane", "my old secret phrase!!1!");
+    _("End of login");
     do_check_true(Weave.Service.isLoggedIn);
-    do_check_true(Utils.isPassphrase(Weave.Service.passphrase));
-    do_check_true(Utils.isPassphrase(Weave.Service.syncKeyBundle.keyStr));
-    let syncKey = Weave.Service.passphrase;
+    do_check_true(Utils.isPassphrase(Identity.syncKey));
+    let syncKey = Identity.syncKey;
     Weave.Service.startOver();
 
-    Weave.Service.serverURL = "http://localhost:8080/";
-    Weave.Service.clusterURL = "http://localhost:8080/";
+    Weave.Service.serverURL = TEST_SERVER_URL;
+    Weave.Service.clusterURL = TEST_CLUSTER_URL;
     Weave.Service.login("johndoe", "ilovejane", syncKey);
     do_check_true(Weave.Service.isLoggedIn);
 
     _("Checking that remoteSetup returns true when credentials have changed.");
     Records.get(Weave.Service.metaURL).payload.syncID = "foobar";
     do_check_true(Weave.Service._remoteSetup());
-    
+
     _("Do an initial sync.");
     let beforeSync = Date.now()/1000;
     Weave.Service.sync();
@@ -99,25 +123,25 @@ function run_test() {
     do_check_eq(metaModified, meta_global.modified);
 
     _("Checking bad passphrases.");
-    let pp = Weave.Service.passphrase;
-    Weave.Service.passphrase = "notvalid";
+    let pp = Identity.syncKey;
+    Identity.syncKey = "notvalid";
     do_check_false(Weave.Service.verifyAndFetchSymmetricKeys());
     do_check_eq(Status.sync, CREDENTIALS_CHANGED);
     do_check_eq(Status.login, LOGIN_FAILED_INVALID_PASSPHRASE);
-    Weave.Service.passphrase = pp;
+    Identity.syncKey = pp;
     do_check_true(Weave.Service.verifyAndFetchSymmetricKeys());
-    
+
     // changePassphrase wipes our keys, and they're regenerated on next sync.
     _("Checking changed passphrase.");
     let existingDefault = CollectionKeys.keyForCollection();
     let existingKeysPayload = keysWBO.payload;
     let newPassphrase = "bbbbbabcdeabcdeabcdeabcdea";
     Weave.Service.changePassphrase(newPassphrase);
-    
+
     _("Local key cache is full, but different.");
     do_check_true(!!CollectionKeys._default);
     do_check_false(CollectionKeys._default.equals(existingDefault));
-    
+
     _("Server has new keys.");
     do_check_true(!!keysWBO.payload);
     do_check_true(!!keysWBO.modified);
@@ -128,12 +152,12 @@ function run_test() {
     // server, just as might happen with a second client.
     _("Attempting to screw up HMAC by re-encrypting keys.");
     let keys = CollectionKeys.asWBO();
-    let b = new BulkKeyBundle("hmacerror", "hmacerror");
+    let b = new BulkKeyBundle("hmacerror");
     b.generateRandom();
     collections.crypto = keys.modified = 100 + (Date.now()/1000);  // Future modification time.
     keys.encrypt(b);
     keys.upload(Weave.Service.cryptoKeysURL);
-    
+
     do_check_false(Weave.Service.verifyAndFetchSymmetricKeys());
     do_check_eq(Status.login, LOGIN_FAILED_INVALID_PASSPHRASE);
 

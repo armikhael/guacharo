@@ -34,17 +34,13 @@
 #include "nsString.h"
 #include "nsINameSpaceManager.h"
 #include "nsIContent.h"
-#include "nsIDocument.h"
 #include "nsTraceRefcnt.h"
 #include "jArray.h"
-#include "nsHtml5DocumentMode.h"
 #include "nsHtml5ArrayCopy.h"
-#include "nsHtml5NamedCharacters.h"
-#include "nsHtml5NamedCharactersAccel.h"
+#include "nsAHtml5TreeBuilderState.h"
 #include "nsHtml5Atoms.h"
 #include "nsHtml5ByteReadable.h"
 #include "nsIUnicodeDecoder.h"
-#include "nsAHtml5TreeBuilderState.h"
 #include "nsHtml5Macros.h"
 
 class nsHtml5StreamParser;
@@ -65,22 +61,22 @@ class nsHtml5ElementName
     static nsHtml5ElementName* ELT_NULL_ELEMENT_NAME;
     nsIAtom* name;
     nsIAtom* camelCaseName;
-    PRInt32 flags;
-    inline PRInt32 getFlags()
+    int32_t flags;
+    inline int32_t getFlags()
     {
       return flags;
     }
 
-    PRInt32 getGroup();
-    static nsHtml5ElementName* elementNameByBuffer(PRUnichar* buf, PRInt32 offset, PRInt32 length, nsHtml5AtomTable* interner);
+    int32_t getGroup();
+    static nsHtml5ElementName* elementNameByBuffer(PRUnichar* buf, int32_t offset, int32_t length, nsHtml5AtomTable* interner);
   private:
-    static PRInt32 bufToHash(PRUnichar* buf, PRInt32 len);
-    nsHtml5ElementName(nsIAtom* name, nsIAtom* camelCaseName, PRInt32 flags);
+    static int32_t bufToHash(PRUnichar* buf, int32_t len);
+    nsHtml5ElementName(nsIAtom* name, nsIAtom* camelCaseName, int32_t flags);
   protected:
     nsHtml5ElementName(nsIAtom* name);
   public:
     virtual void release();
-    ~nsHtml5ElementName();
+    virtual ~nsHtml5ElementName();
     virtual nsHtml5ElementName* cloneElementName(nsHtml5AtomTable* interner);
     static nsHtml5ElementName* ELT_A;
     static nsHtml5ElementName* ELT_B;
@@ -476,7 +472,7 @@ class nsHtml5ElementName
     static nsHtml5ElementName* ELT_FECOMPONENTTRANSFER;
   private:
     static nsHtml5ElementName** ELEMENT_NAMES;
-    static staticJArray<PRInt32,PRInt32> ELEMENT_HASHES;
+    static staticJArray<int32_t,int32_t> ELEMENT_HASHES;
   public:
     static void initializeStatics();
     static void releaseStatics();

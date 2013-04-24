@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Mozilla browser.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications, Inc.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Travis Bogard <travis@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsDocShell.h"
 #include "nsDSURIContentListener.h"
@@ -47,7 +14,11 @@
 #include "nsAutoPtr.h"
 #include "nsIHttpChannel.h"
 #include "nsIScriptSecurityManager.h"
-#include "nsNetError.h"
+#include "nsError.h"
+#include "nsCharSeparatedTokenizer.h"
+#include "mozilla/Preferences.h"
+
+using namespace mozilla;
 
 //*****************************************************************************
 //***    nsDSURIContentListener: Object Management
@@ -55,7 +26,7 @@
 
 nsDSURIContentListener::nsDSURIContentListener(nsDocShell* aDocShell)
     : mDocShell(aDocShell), 
-      mParentContentListener(nsnull)
+      mParentContentListener(nullptr)
 {
 }
 
@@ -91,13 +62,13 @@ NS_INTERFACE_MAP_END
 //*****************************************************************************   
 
 NS_IMETHODIMP
-nsDSURIContentListener::OnStartURIOpen(nsIURI* aURI, PRBool* aAbortOpen)
+nsDSURIContentListener::OnStartURIOpen(nsIURI* aURI, bool* aAbortOpen)
 {
     // If mDocShell is null here, that means someone's starting a load
     // in our docshell after it's already been destroyed.  Don't let
     // that happen.
     if (!mDocShell) {
-        *aAbortOpen = PR_TRUE;
+        *aAbortOpen = true;
         return NS_OK;
     }
     
@@ -111,23 +82,24 @@ nsDSURIContentListener::OnStartURIOpen(nsIURI* aURI, PRBool* aAbortOpen)
 
 NS_IMETHODIMP 
 nsDSURIContentListener::DoContent(const char* aContentType, 
-                                  PRBool aIsContentPreferred,
+                                  bool aIsContentPreferred,
                                   nsIRequest* request,
                                   nsIStreamListener** aContentHandler,
-                                  PRBool* aAbortProcess)
+                                  bool* aAbortProcess)
 {
     nsresult rv;
     NS_ENSURE_ARG_POINTER(aContentHandler);
     NS_ENSURE_TRUE(mDocShell, NS_ERROR_FAILURE);
 
     // Check whether X-Frame-Options permits us to load this content in an
-    // iframe
+    // iframe and abort the load (unless we've disabled x-frame-options
+    // checking).
     if (!CheckFrameOptions(request)) {
-        *aAbortProcess = PR_TRUE;
+        *aAbortProcess = true;
         return NS_OK;
     }
 
-    *aAbortProcess = PR_FALSE;
+    *aAbortProcess = false;
 
     // determine if the channel has just been retargeted to us...
     nsLoadFlags loadFlags = 0;
@@ -168,7 +140,7 @@ nsDSURIContentListener::DoContent(const char* aContentType,
 NS_IMETHODIMP
 nsDSURIContentListener::IsPreferred(const char* aContentType,
                                     char ** aDesiredContentType,
-                                    PRBool* aCanHandle)
+                                    bool* aCanHandle)
 {
     NS_ENSURE_ARG_POINTER(aCanHandle);
     NS_ENSURE_ARG_POINTER(aDesiredContentType);
@@ -195,26 +167,26 @@ nsDSURIContentListener::IsPreferred(const char* aContentType,
     // of our docshell chain, then we'll now always attempt to process the
     // content ourselves...
     return CanHandleContent(aContentType,
-                            PR_TRUE,
+                            true,
                             aDesiredContentType,
                             aCanHandle);
 }
 
 NS_IMETHODIMP
 nsDSURIContentListener::CanHandleContent(const char* aContentType,
-                                         PRBool aIsContentPreferred,
+                                         bool aIsContentPreferred,
                                          char ** aDesiredContentType,
-                                         PRBool* aCanHandleContent)
+                                         bool* aCanHandleContent)
 {
     NS_PRECONDITION(aCanHandleContent, "Null out param?");
     NS_ENSURE_ARG_POINTER(aDesiredContentType);
 
-    *aCanHandleContent = PR_FALSE;
-    *aDesiredContentType = nsnull;
+    *aCanHandleContent = false;
+    *aDesiredContentType = nullptr;
 
     nsresult rv = NS_OK;
     if (aContentType) {
-        PRUint32 canHandle = nsIWebNavigationInfo::UNSUPPORTED;
+        uint32_t canHandle = nsIWebNavigationInfo::UNSUPPORTED;
         rv = mNavInfo->IsTypeSupported(nsDependentCString(aContentType),
                                        mDocShell,
                                        &canHandle);
@@ -269,7 +241,7 @@ nsDSURIContentListener::SetParentContentListener(nsIURIContentListener*
     {
         // Store the parent listener as a weak ref. Parents not supporting
         // nsISupportsWeakReference assert but may still be used.
-        mParentContentListener = nsnull;
+        mParentContentListener = nullptr;
         mWeakParentContentListener = do_GetWeakReference(aParentListener);
         if (!mWeakParentContentListener)
         {
@@ -278,29 +250,23 @@ nsDSURIContentListener::SetParentContentListener(nsIURIContentListener*
     }
     else
     {
-        mWeakParentContentListener = nsnull;
-        mParentContentListener = nsnull;
+        mWeakParentContentListener = nullptr;
+        mParentContentListener = nullptr;
     }
     return NS_OK;
 }
 
-// Check if X-Frame-Options permits this document to be loaded as a subdocument.
-bool nsDSURIContentListener::CheckFrameOptions(nsIRequest* request)
-{
-    nsCAutoString xfoHeaderValue;
+bool nsDSURIContentListener::CheckOneFrameOptionsPolicy(nsIRequest *request,
+                                                        const nsAString& policy) {
+    // return early if header does not have one of the two values with meaning
+    if (!policy.LowerCaseEqualsLiteral("deny") &&
+        !policy.LowerCaseEqualsLiteral("sameorigin"))
+        return true;
 
     nsCOMPtr<nsIHttpChannel> httpChannel = do_QueryInterface(request);
     if (!httpChannel) {
         return true;
     }
-
-    httpChannel->GetResponseHeader(NS_LITERAL_CSTRING("X-Frame-Options"),
-                                   xfoHeaderValue);
-
-    // return early if header does not have one of the two values with meaning
-    if (!xfoHeaderValue.LowerCaseEqualsLiteral("deny") &&
-        !xfoHeaderValue.LowerCaseEqualsLiteral("sameorigin"))
-        return true;
 
     if (mDocShell) {
         // We need to check the location of this window and the location of the top
@@ -312,8 +278,10 @@ bool nsDSURIContentListener::CheckFrameOptions(nsIRequest* request)
         if (!thisWindow)
             return true;
 
+        // GetScriptableTop, not GetTop, because we want this to respect
+        // <iframe mozbrowser> boundaries.
         nsCOMPtr<nsIDOMWindow> topWindow;
-        thisWindow->GetTop(getter_AddRefs(topWindow));
+        thisWindow->GetScriptableTop(getter_AddRefs(topWindow));
 
         // if the document is in the top window, it's not in a frame.
         if (thisWindow == topWindow)
@@ -331,18 +299,28 @@ bool nsDSURIContentListener::CheckFrameOptions(nsIRequest* request)
         nsresult rv;
         nsCOMPtr<nsIScriptSecurityManager> ssm =
             do_GetService(NS_SCRIPTSECURITYMANAGER_CONTRACTID, &rv);
-        if (!ssm)
+        if (!ssm) {
+            NS_ASSERTION(ssm, "Failed to get the ScriptSecurityManager.");
             return false;
+        }
 
-        // Traverse up the parent chain to the top docshell that doesn't have
-        // a system principal
+        // Traverse up the parent chain and stop when we see a docshell whose
+        // parent has a system principal, or a docshell corresponding to
+        // <iframe mozbrowser>.
         while (NS_SUCCEEDED(curDocShellItem->GetParent(getter_AddRefs(parentDocShellItem))) &&
                parentDocShellItem) {
-            PRBool system = PR_FALSE;
+
+            nsCOMPtr<nsIDocShell> curDocShell = do_QueryInterface(curDocShellItem);
+            if (curDocShell && curDocShell->GetIsContentBoundary()) {
+              break;
+            }
+
+            bool system = false;
             topDoc = do_GetInterface(parentDocShellItem);
             if (topDoc) {
                 if (NS_SUCCEEDED(ssm->IsSystemPrincipal(topDoc->NodePrincipal(),
                                                         &system)) && system) {
+                    // Found a system-principled doc: last docshell was top.
                     break;
                 }
             }
@@ -357,34 +335,66 @@ bool nsDSURIContentListener::CheckFrameOptions(nsIRequest* request)
         if (curDocShellItem == thisDocShellItem)
             return true;
 
+        // If the value of the header is DENY, and the previous condition is
+        // not met (current docshell is not the top docshell), prohibit the
+        // load.
+        if (policy.LowerCaseEqualsLiteral("deny")) {
+            return false;
+        }
+
         // If the X-Frame-Options value is SAMEORIGIN, then the top frame in the
         // parent chain must be from the same origin as this document.
-        if (xfoHeaderValue.LowerCaseEqualsLiteral("sameorigin")) {
+        if (policy.LowerCaseEqualsLiteral("sameorigin")) {
             nsCOMPtr<nsIURI> uri;
             httpChannel->GetURI(getter_AddRefs(uri));
             topDoc = do_GetInterface(curDocShellItem);
             nsCOMPtr<nsIURI> topUri;
             topDoc->NodePrincipal()->GetURI(getter_AddRefs(topUri));
-            rv = ssm->CheckSameOriginURI(uri, topUri, PR_TRUE);
-            if (NS_SUCCEEDED(rv))
-                return true;
+            rv = ssm->CheckSameOriginURI(uri, topUri, true);
+            if (NS_FAILED(rv))
+                return false; /* wasn't same-origin */
         }
+    }
 
-        else {
-            // If the value of the header is DENY, then the document
-            // should never be permitted to load as a subdocument.
-            NS_ASSERTION(xfoHeaderValue.LowerCaseEqualsLiteral("deny"),
-                         "How did we get here with some random header value?");
-        }
+    return true;
+}
 
-        // cancel the load and display about:blank
-        httpChannel->Cancel(NS_BINDING_ABORTED);
-        nsCOMPtr<nsIWebNavigation> webNav(do_QueryInterface(static_cast<nsIDocShell*>(mDocShell)));
-        if (webNav) {
-            webNav->LoadURI(NS_LITERAL_STRING("about:blank").get(),
-                            0, nsnull, nsnull, nsnull);
+// Check if X-Frame-Options permits this document to be loaded as a subdocument.
+// This will iterate through and check any number of X-Frame-Options policies
+// in the request (comma-separated in a header, multiple headers, etc).
+bool nsDSURIContentListener::CheckFrameOptions(nsIRequest *request)
+{
+    nsCOMPtr<nsIHttpChannel> httpChannel = do_QueryInterface(request);
+    if (!httpChannel) {
+        return true;
+    }
+
+    nsCAutoString xfoHeaderCValue;
+    httpChannel->GetResponseHeader(NS_LITERAL_CSTRING("X-Frame-Options"),
+                                   xfoHeaderCValue);
+    NS_ConvertUTF8toUTF16 xfoHeaderValue(xfoHeaderCValue);
+
+    // if no header value, there's nothing to do.
+    if (xfoHeaderValue.IsEmpty())
+        return true;
+
+    // iterate through all the header values (usually there's only one, but can
+    // be many.  If any want to deny the load, deny the load.
+    nsCharSeparatedTokenizer tokenizer(xfoHeaderValue, ',');
+    while (tokenizer.hasMoreTokens()) {
+        const nsSubstring& tok = tokenizer.nextToken();
+        if (!CheckOneFrameOptionsPolicy(request, tok)) {
+            // cancel the load and display about:blank
+            httpChannel->Cancel(NS_BINDING_ABORTED);
+            if (mDocShell) {
+                nsCOMPtr<nsIWebNavigation> webNav(do_QueryObject(mDocShell));
+                if (webNav) {
+                    webNav->LoadURI(NS_LITERAL_STRING("about:blank").get(),
+                                    0, nullptr, nullptr, nullptr);
+                }
+            }
+            return false;
         }
-        return false;
     }
 
     return true;

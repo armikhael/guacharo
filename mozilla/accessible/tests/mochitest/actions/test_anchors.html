@@ -35,11 +35,21 @@
     // Test
 
     // gA11yEventDumpID = "debug"; // debug stuff
+    //gA11yEventDumpToConsole = true; // debug stuff
 
     function doTest()
     {
       var actionsArray = [
         {
+          ID: "anchor1",
+          actionName: "jump",
+          actionIndex: 0,
+          events: CLICK_EVENTS,
+          eventSeq: [
+            new scrollingChecker(getAccessible("bottom1"))
+          ]
+        },
+        { // jump again (test for bug 437607)
           ID: "anchor1",
           actionName: "jump",
           actionIndex: 0,

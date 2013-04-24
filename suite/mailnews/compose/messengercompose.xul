@@ -1,44 +1,7 @@
 <?xml version="1.0"?>
-<!-- ***** BEGIN LICENSE BLOCK *****
-   - Version: MPL 1.1/GPL 2.0/LGPL 2.1
-   -
-   - The contents of this file are subject to the Mozilla Public License Version
-   - 1.1 (the "License"); you may not use this file except in compliance with
-   - the License. You may obtain a copy of the License at
-   - http://www.mozilla.org/MPL/
-   -
-   - Software distributed under the License is distributed on an "AS IS" basis,
-   - WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-   - for the specific language governing rights and limitations under the
-   - License.
-   -
-   - The Original Code is Mozilla Communicator client code, released
-   - March 31, 1998.
-   -
-   - The Initial Developer of the Original Code is
-   - Netscape Communications Corporation.
-   - Portions created by the Initial Developer are Copyright (C) 1999
-   - the Initial Developer. All Rights Reserved.
-   -
-   - Contributor(s):
-   -   Ben Goodger <ben@netscape.com> (ass'td polish fixes)
-   -   Håkan Waara <hwaara@chello.se>
-   -   Neil Rashbrook <neil@parkwaycc.co.uk> (ass'td polish fix)
-   -   Ian Neal <iann_bugzilla@blueyonder.co.uk>
-   -
-   - Alternatively, the contents of this file may be used under the terms of
-   - either of the GNU General Public License Version 2 or later (the "GPL"),
-   - or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-   - in which case the provisions of the GPL or the LGPL are applicable instead
-   - of those above. If you wish to allow use of your version of this file only
-   - under the terms of either the GPL or the LGPL, and not to allow others to
-   - use your version of this file under the terms of the MPL, indicate your
-   - decision by deleting the provisions above and replace them with the notice
-   - and other provisions required by the GPL or the LGPL. If you do not delete
-   - the provisions above, a recipient may use your version of this file under
-   - the terms of any one of the MPL, the GPL or the LGPL.
-   -
-   - ***** END LICENSE BLOCK ***** -->
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
 
 <?xml-stylesheet href="chrome://messenger/skin/messengercompose/messengercompose.css" type="text/css"?>
 <?xml-stylesheet href="chrome://messenger/skin/folderMenus.css" type="text/css"?>
@@ -55,7 +18,10 @@
 <?xul-overlay href="chrome://communicator/content/utilityOverlay.xul"?>
 <?xul-overlay href="chrome://editor/content/editorOverlay.xul"?>
 <?xul-overlay href="chrome://editor/content/editorSmileyOverlay.xul"?>
+<?xul-overlay href="chrome://messenger/content/messengercompose/mailComposeOverlay.xul"?>
 <?xul-overlay href="chrome://messenger/content/messengercompose/mailComposeExtrasOverlay.xul"?>
+<?xul-overlay href="chrome://messenger/content/mailOverlay.xul"?>
+<?xul-overlay href="chrome://messenger/content/platformMailnewsOverlay.xul"?>
 
 <!DOCTYPE window [
 <!ENTITY % messengercomposeDTD SYSTEM "chrome://messenger/locale/messengercompose/messengercompose.dtd" >
@@ -81,6 +47,7 @@
         lightweightthemes="true"
         lightweightthemesfooter="status-bar"
         windowtype="msgcompose"
+        macanimationtype="document"
         width="640" height="480"
         persist="screenX screenY width height sizemode">
 
@@ -118,11 +85,10 @@
   <commandset id="composerListMenuItems"/>
   <commandset id="tasksCommands"/>
   <!-- File Menu -->
-  <command id="cmd_new" oncommand="goDoCommand('cmd_newMessage')"/>
   <command id="cmd_attachFile" oncommand="goDoCommand('cmd_attachFile')"/>
   <command id="cmd_attachPage" oncommand="goDoCommand('cmd_attachPage')"/>
   <command id="cmd_attachVCard" checked="false" oncommand="ToggleAttachVCard(event.target)"/>
-  <command id="cmd_saveDefault" oncommand="goDoCommand('cmd_saveDefault')"/>
+  <command id="cmd_save" oncommand="goDoCommand('cmd_save')"/>
   <command id="cmd_saveAsFile" oncommand="goDoCommand('cmd_saveAsFile')"/>
   <command id="cmd_saveAsDraft" oncommand="goDoCommand('cmd_saveAsDraft')"/>
   <command id="cmd_saveAsTemplate" oncommand="goDoCommand('cmd_saveAsTemplate')"/>
@@ -130,22 +96,27 @@
   <command id="cmd_sendNow" oncommand="goDoCommand('cmd_sendNow')"/>
   <command id="cmd_sendWithCheck" oncommand="goDoCommand('cmd_sendWithCheck')"/>
   <command id="cmd_sendLater" oncommand="goDoCommand('cmd_sendLater')"/>
+  <command id="cmd_printpreview" disabled="true"/>
 
   <!-- Edit Menu -->
   <!--command id="cmd_pasteQuote"/  DO NOT INCLUDE THOSE COMMANDS ELSE THE EDIT MENU WILL BE BROKEN! -->
   <!--command id="cmd_find"/-->
   <!--command id="cmd_findNext"/-->
-  <command id="cmd_rewrap"  oncommand="goDoCommand('cmd_rewrap')"/>
+  <command id="cmd_rewrap"
+           label="&editRewrapCmd.label;"
+           accesskey="&editRewrapCmd.accesskey;"
+           oncommand="goDoCommand('cmd_rewrap');"/>
   <command id="cmd_renameAttachment" oncommand="goDoCommand('cmd_renameAttachment')" disabled="true"/>
   <command id="cmd_openAttachment" oncommand="goDoCommand('cmd_openAttachment')"/>
-  <command id="cmd_account" oncommand="goDoCommand('cmd_account')"/>
+  <command id="cmd_account"
+           label="&accountManagerCmd.label;"
+           accesskey="&accountManagerCmd.accesskey;"
+           oncommand="goDoCommand('cmd_account');"/>
 
   <!-- Options Menu -->
   <command id="cmd_selectAddress" oncommand="goDoCommand('cmd_selectAddress')"/>
   <command id="cmd_outputFormat" oncommand="OutputFormatMenuSelect(event.target)"/>
   <command id="cmd_quoteMessage" oncommand="goDoCommand('cmd_quoteMessage')"/>
-
-  <command id="cmd_CustomizeToolbars" oncommand="goCustomizeToolbar(getMailToolbox());"/>
 </commandset>
 
 <broadcasterset id="composeBroadcasters">
@@ -157,24 +128,14 @@
 
 <keyset id="tasksKeys">
   <!-- File Menu -->
-  <key id="key_close"/>
-  <key id="key_save"  key="&saveCmd.key;" command="cmd_saveDefault" modifiers="accel"/>
   <key id="key_send" keycode="&sendCmd.keycode;" observes="cmd_sendWithCheck" modifiers="accel"/>
   <key id="key_sendLater" keycode="&sendLaterCmd.keycode;" observes="cmd_sendLater" modifiers="accel, shift"/>
-  <key id="key_print"  key="&printCmd.key;" command="cmd_print" modifiers="accel"/>
 
   <!-- Edit Menu -->
   <key id="key_rewrap" key="&editRewrapCmd.key;" command="cmd_rewrap" modifiers="accel"/>
-  <key id="key_delete2"/>
-  <keyset id="findKeys"/>
 
   <!-- Options Menu -->
   <!-- key id="key_selectAddresses" key="&selectAddressCmd.key;" command="cmd_selectAddress"/ -->
-  <key id="key_checkspelling"
-       key="&checkSpellingCmd2.key;"
-       command="cmd_spelling"
-       modifiers="accel,shift"
-  />
 
   <key id="showHideSidebar"/>
   <!-- Tab/F6 Keys -->
@@ -186,6 +147,9 @@
   <key keycode="VK_F6" oncommand="SwitchElementFocus(event);"/>
 </keyset>
 <keyset id="editorKeys"/>
+<keyset id="composeKeys">
+  <key id="key_renameAttachment"/>
+</keyset>
 
   <popupset id="contentAreaContextSet">
     <menupopup id="contentAreaContextMenu"/>
@@ -243,12 +207,9 @@
             <menupopup id="menu_FilePopup">
               <menu id="menu_New">
                 <menupopup id="menu_NewPopup">
-                  <menuitem id="menu_NewMessage"
-                            label="&newMessage.label;"
-                            accesskey="&newMessage.accesskey;"
-                            key="key_newMessage"
-                            oncommand="goOpenNewMessage();"/>
+                  <menuitem id="menu_newMessage"/>
                   <menuseparator id="menuNewPopupSeparator"/>
+                  <menuitem id="menu_newCard"/>
                   <menuitem id="menu_newNavigator"/>
                   <menuitem id="menu_newEditor"/>
                 </menupopup>
@@ -279,7 +240,7 @@
                         label="&saveCmd.label;"
                         accesskey="&saveCmd.accesskey;"
                         key="key_save"
-                        command="cmd_saveDefault"/>
+                        command="cmd_save"/>
               <menu id="menu_SaveAsCmd"
                     label="&saveAsCmd.label;"
                     accesskey="&saveAsCmd.accesskey;">
@@ -310,49 +271,11 @@
                         key="key_sendLater"
                         command="cmd_sendLater"/>
               <menuseparator id="menuFileAfterSendLaterSeparator"/>
-              <menuitem id="printSetupMenuItem"
-                        label="&printSetupCmd.label;"
-                        accesskey="&printSetupCmd.accesskey;"
-                        command="cmd_printSetup"/>
-              <menuitem id="printMenuItem"
-                        label="&printCmd.label;"
-                        accesskey="&printCmd.accesskey;"
-                        key="key_print" command="cmd_print"/>
+              <menuitem id="menu_printSetup"/>
+              <menuitem id="menu_print"/>
             </menupopup>
           </menu>
-          <menu id="menu_Edit">
-            <menupopup id="menu_EditPopup" onpopupshowing="updateEditItems();">
-              <menuitem id="menu_undo"/>
-              <menuitem id="menu_redo"/>
-              <menuseparator id="menuEditAfterRedoSeparator"/>
-              <menuitem id="menu_cut"/>
-              <menuitem id="menu_copy"/>
-              <menuitem id="menu_paste"/>
-              <menuitem id="menu_pasteNoFormatting"
-                        command="cmd_pasteNoFormatting"
-                        key="pastenoformattingkb"/>
-              <menuitem id="menu_pasteQuote"/>
-              <menuitem id="menu_rewrap"
-                        label="&editRewrapCmd.label;"
-                        accesskey="&editRewrapCmd.accesskey;"
-                        key="key_rewrap"
-                        command="cmd_rewrap"/>
-              <menuitem id="menu_delete"/>
-              <menuseparator id="menuEditAfterDeleteSeparator"/>
-              <menuitem id="menu_selectAll"/>
-              <menuseparator id="menuEditAfterSelectAllSeparator"/>
-              <menuitem id="menu_find" label="&findCmd.label;"/>
-              <menuitem id="menu_findNext"/>
-              <menuitem id="menu_findPrev"/>
-              <menuseparator id="prefSep"/>
-              <menuitem id="menu_accountmgr"
-                        label="&accountManagerCmd.label;"
-                        accesskey="&accountManagerCmd.accesskey;"
-                        command="cmd_account"/>
-              <menuitem id="menu_preferences"
-                        oncommand="goDoCommand('cmd_preferences')"/>
-            </menupopup>
-          </menu>
+          <menu id="menu_Edit"/>
           <menu id="menu_View">
             <menupopup id="menu_View_Popup">
               <menu id="menu_Toolbars">
@@ -393,16 +316,6 @@
                         label="&selectAddressCmd.label;"
                         accesskey="&selectAddressCmd.accesskey;"
                         command="cmd_selectAddress"/>
-              <menuitem id="menu_checkspelling"
-                        label="&checkSpellingCmd2.label;"
-                        accesskey="&checkSpellingCmd2.accesskey;"
-                        key="key_checkspelling"
-                        command="cmd_spelling"/>
-              <menuitem id="menu_inlineSpellCheck"
-                        type="checkbox"
-                        label="&enableInlineSpellChecker.label;"
-                        accesskey="&enableInlineSpellChecker.accesskey;"
-                        oncommand="EnableInlineSpellCheck(!InlineSpellCheckerUI.enabled);"/>
               <menuitem id="menu_quoteMessage"
                         label="&quoteCmd.label;"
                         accesskey="&quoteCmd.accesskey;"
@@ -414,6 +327,12 @@
                         accesskey="&returnReceiptMenu.accesskey;"
                         checked="false"
                         oncommand="ToggleReturnReceipt(event.target)"/>
+              <menuitem id="dsnMenu"
+                        type="checkbox"
+                        label="&dsnMenu.label;"
+                        accesskey="&dsnMenu.accesskey;"
+                        checked="false"
+                        oncommand="ToggleDSN(event.target);"/>
               <menu id="outputFormatMenu"
                     label="&outputFormatMenu.label;"
                     accesskey="&outputFormatMenu.accesskey;"
@@ -518,6 +437,96 @@
              customizable="true"
              defaultset="button-send,separator,button-address,button-attach,spellingButton,button-security,separator,button-save,spring,throbber-box"
              context="toolbar-context-menu">
+      <toolbarbutton id="button-send"
+                     class="toolbarbutton-1"
+                     label="&sendButton.label;"
+                     tooltiptext="&sendButton.tooltip;"
+                     now_label="&sendButton.label;"
+                     now_tooltiptext="&sendButton.tooltip;"
+                     later_label="&sendLaterCmd.label;"
+                     later_tooltiptext="&sendlaterButton.tooltip;"
+                     removable="true"
+                     command="cmd_sendButton">
+       <observes element="Communicator:WorkMode"
+                 attribute="offline"/>
+      </toolbarbutton>
+
+      <toolbarbutton id="button-address"
+                     class="toolbarbutton-1"
+                     label="&addressButton.label;"
+                     tooltiptext="&addressButton.tooltip;"
+                     removable="true"
+                     command="cmd_selectAddress"/>
+
+      <toolbarbutton id="button-attach"
+                     type="menu-button"
+                     class="toolbarbutton-1"
+                     label="&attachButton.label;"
+                     tooltiptext="&attachButton.tooltip;"
+                     removable="true"
+                     command="cmd_attachFile">
+        <menupopup id="button-attachPopup">
+          <menuitem id="button-attachFile"
+                    label="&attachFileCmd.label;"
+                    accesskey="&attachFileCmd.accesskey;"
+                    command="cmd_attachFile"/>
+          <menuitem id="button-attachPage"
+                    label="&attachPageCmd.label;"
+                    accesskey="&attachPageCmd.accesskey;"
+                    command="cmd_attachPage"/>
+          <menuseparator id="buttonAttachAfterPageSeparator"/>
+          <menuitem id="button-attachVCard"
+                    type="checkbox"
+                    label="&attachVCardCmd.label;"
+                    accesskey="&attachVCardCmd.accesskey;"
+                    command="cmd_attachVCard"/>
+        </menupopup>
+      </toolbarbutton>
+
+      <toolbarbutton id="spellingButton"
+                     type="menu-button"
+                     class="toolbarbutton-1"
+                     label="&spellingButton.label;"
+                     removable="true"
+                     command="cmd_spelling">
+        <!-- this popup gets dynamically generated -->
+        <menupopup id="languageMenuList"
+                   oncommand="ChangeLanguage(event);"
+                   onpopupshowing="OnShowDictionaryMenu(event.target);"/>
+      </toolbarbutton>
+
+      <toolbarbutton id="button-save"
+                     type="menu-button"
+                     class="toolbarbutton-1"
+                     label="&saveButton.label;"
+                     tooltiptext="&saveButton.tooltip;"
+                     removable="true"
+                     command="cmd_save">
+        <menupopup id="button-savePopup">
+          <menuitem id="button-saveAsFile"
+                    label="&saveAsFileCmd.label;"
+                    accesskey="&saveAsFileCmd.accesskey;"
+                    command="cmd_saveAsFile"/>
+          <menuseparator id="buttonSaveAfterFileSeparator"/>
+          <menuitem id="button-saveAsDraft"
+                    label="&saveAsDraftCmd.label;"
+                    accesskey="&saveAsDraftCmd.accesskey;"
+                    command="cmd_saveAsDraft"/>
+          <menuitem id="button-saveAsTemplate"
+                    label="&saveAsTemplateCmd.label;"
+                    accesskey="&saveAsTemplateCmd.accesskey;"
+                    command="cmd_saveAsTemplate"/>
+        </menupopup>
+      </toolbarbutton>
+
+      <toolbaritem id="throbber-box"
+                   removable="true"
+                   align="center">
+          <button id="navigator-throbber"
+                  oncommand="goClickThrobber('compose.throbber.url', event)"
+                  onclick="checkForMiddleClick(this, event);"
+                  tooltiptext="&throbber.tooltip;"/>
+      </toolbaritem>
     </toolbar>
 
     <toolbarset id="customToolbars" context="toolbar-context-menu"/>
@@ -595,90 +604,7 @@
     </toolbar>
 
     <toolbarpalette id="MsgComposeToolbarPalette">
-      <toolbarbutton id="button-send"
-                     class="toolbarbutton-1"
-                     label="&sendButton.label;"
-                     tooltiptext="&sendButton.tooltip;"
-                     now_label="&sendButton.label;"
-                     now_tooltiptext="&sendButton.tooltip;"
-                     later_label="&sendLaterCmd.label;"
-                     later_tooltiptext="&sendlaterButton.tooltip;"
-                     command="cmd_sendButton">
-       <observes element="Communicator:WorkMode"
-                 attribute="offline"/>
-      </toolbarbutton>
-
-      <toolbarbutton id="button-address"
-                     class="toolbarbutton-1"
-                     label="&addressButton.label;"
-                     tooltiptext="&addressButton.tooltip;"
-                     command="cmd_selectAddress"/>
-
-      <toolbarbutton id="button-attach"
-                     type="menu-button"
-                     class="toolbarbutton-1"
-                     label="&attachButton.label;"
-                     tooltiptext="&attachButton.tooltip;"
-                     command="cmd_attachFile">
-        <menupopup id="button-attachPopup">
-          <menuitem id="button-attachFile"
-                    label="&attachFileCmd.label;"
-                    accesskey="&attachFileCmd.accesskey;"
-                    command="cmd_attachFile"/>
-          <menuitem id="button-attachPage"
-                    label="&attachPageCmd.label;"
-                    accesskey="&attachPageCmd.accesskey;"
-                    command="cmd_attachPage"/>
-          <menuseparator id="buttonAttachAfterPageSeparator"/>
-          <menuitem id="button-attachVCard"
-                    type="checkbox"
-                    label="&attachVCardCmd.label;"
-                    accesskey="&attachVCardCmd.accesskey;"
-                    command="cmd_attachVCard"/>
-        </menupopup>
-      </toolbarbutton>
-
-      <toolbarbutton id="spellingButton"
-                     type="menu-button"
-                     class="toolbarbutton-1"
-                     label="&spellingButton.label;"
-                     command="cmd_spelling">
-        <!-- this popup gets dynamically generated -->
-        <menupopup id="languageMenuList"
-                   oncommand="ChangeLanguage(event);"
-                   onpopupshowing="OnShowDictionaryMenu(event.target);"/>
-      </toolbarbutton>
-
-      <toolbarbutton id="button-save"
-                     type="menu-button"
-                     class="toolbarbutton-1"
-                     label="&saveButton.label;"
-                     tooltiptext="&saveButton.tooltip;"
-                     command="cmd_saveDefault">
-        <menupopup id="button-savePopup">
-          <menuitem id="button-saveAsFile"
-                    label="&saveAsFileCmd.label;"
-                    accesskey="&saveAsFileCmd.accesskey;"
-                    command="cmd_saveAsFile"/>
-          <menuseparator id="buttonSaveAfterFileSeparator"/>
-          <menuitem id="button-saveAsDraft"
-                    label="&saveAsDraftCmd.label;"
-                    accesskey="&saveAsDraftCmd.accesskey;"
-                    command="cmd_saveAsDraft"/>
-          <menuitem id="button-saveAsTemplate"
-                    label="&saveAsTemplateCmd.label;"
-                    accesskey="&saveAsTemplateCmd.accesskey;"
-                    command="cmd_saveAsTemplate"/>
-        </menupopup>
-      </toolbarbutton>
-
-      <toolbaritem id="throbber-box"
-                   align="center">
-          <button id="navigator-throbber"
-                  oncommand="goClickThrobber('compose.throbber.url', event)"
-                  onclick="checkForMiddleClick(this, event);"
-                  tooltiptext="&throbber.tooltip;"/>
-      </toolbaritem>
+      <toolbarbutton id="print-button"/>
     </toolbarpalette>
 
   </toolbox>

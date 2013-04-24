@@ -1,7 +1,14 @@
+/* Any copyright is dedicated to the Public Domain.
+   http://creativecommons.org/publicdomain/zero/1.0/ */
+
+Cu.import("resource://services-common/utils.js");
+Cu.import("resource://services-common/async.js");
+Cu.import("resource://services-sync/identity.js");
 Cu.import("resource://services-sync/util.js");
 Cu.import("resource://services-sync/record.js");
 Cu.import("resource://services-sync/engines.js");
-var btoa;
+let btoa;
+let atob;
 
 let provider = {
   getFile: function(prop, persistent) {
@@ -17,40 +24,125 @@ let provider = {
 };
 Services.dirsvc.QueryInterface(Ci.nsIDirectoryService).registerProvider(provider);
 
-btoa = Cu.import("resource://services-sync/log4moz.js").btoa;
-function getTestLogger(component) {
-  return Log4Moz.repository.getLogger("Testing");
+let timer;
+function waitForZeroTimer(callback) {
+  // First wait >100ms (nsITimers can take up to that much time to fire, so
+  // we can account for the timer in delayedAutoconnect) and then two event
+  // loop ticks (to account for the Utils.nextTick() in autoConnect).
+  let ticks = 2;
+  function wait() {
+    if (ticks) {
+      ticks -= 1;
+      Utils.nextTick(wait);
+      return;
+    }
+    callback();
+  }
+  timer = Utils.namedTimer(wait, 150, {}, "timer");
 }
 
-function initTestLogging(level) {
-  function LogStats() {
-    this.errorsLogged = 0;
+btoa = Cu.import("resource://services-common/log4moz.js").btoa;
+atob = Cu.import("resource://services-common/log4moz.js").atob;
+
+// This is needed for loadAddonTestFunctions().
+let gGlobalScope = this;
+
+function ExtensionsTestPath(path) {
+  if (path[0] != "/") {
+    throw Error("Path must begin with '/': " + path);
   }
-  LogStats.prototype = {
-    format: function BF_format(message) {
-      if (message.level == Log4Moz.Level.Error)
-        this.errorsLogged += 1;
-      return message.loggerName + "\t" + message.levelDesc + "\t" +
-        message.message + "\n";
+
+  return "../../../../toolkit/mozapps/extensions/test/xpcshell" + path;
+}
+
+/**
+ * Loads the AddonManager test functions by importing its test file.
+ *
+ * This should be called in the global scope of any test file needing to
+ * interface with the AddonManager. It should only be called once, or the
+ * universe will end.
+ */
+function loadAddonTestFunctions() {
+  const path = ExtensionsTestPath("/head_addons.js");
+  let file = do_get_file(path);
+  let uri = Services.io.newFileURI(file);
+  Services.scriptloader.loadSubScript(uri.spec, gGlobalScope);
+  createAppInfo("xpcshell@tests.mozilla.org", "XPCShell", "1", "1.9.2");
+}
+
+function getAddonInstall(name) {
+  let f = do_get_file(ExtensionsTestPath("/addons/" + name + ".xpi"));
+  let cb = Async.makeSyncCallback();
+  AddonManager.getInstallForFile(f, cb);
+
+  return Async.waitForSyncCallback(cb);
+}
+
+/**
+ * Obtains an addon from the add-on manager by id.
+ *
+ * This is merely a synchronous wrapper.
+ *
+ * @param  id
+ *         ID of add-on to fetch
+ * @return addon object on success or undefined or null on failure
+ */
+function getAddonFromAddonManagerByID(id) {
+   let cb = Async.makeSyncCallback();
+   AddonManager.getAddonByID(id, cb);
+   return Async.waitForSyncCallback(cb);
+}
+
+/**
+ * Installs an add-on synchronously from an addonInstall
+ *
+ * @param  install addonInstall instance to install
+ */
+function installAddonFromInstall(install) {
+  let cb = Async.makeSyncCallback();
+  let listener = {onInstallEnded: cb};
+  AddonManager.addInstallListener(listener);
+  install.install();
+  Async.waitForSyncCallback(cb);
+  AddonManager.removeAddonListener(listener);
+
+  do_check_neq(null, install.addon);
+  do_check_neq(null, install.addon.syncGUID);
+
+  return install.addon;
+}
+
+/**
+ * Convenience function to install an add-on from the extensions unit tests.
+ *
+ * @param  name
+ *         String name of add-on to install. e.g. test_install1
+ * @return addon object that was installed
+ */
+function installAddon(name) {
+  let install = getAddonInstall(name);
+  do_check_neq(null, install);
+  return installAddonFromInstall(install);
+}
+
+/**
+ * Convenience function to uninstall an add-on synchronously.
+ *
+ * @param addon
+ *        Addon instance to uninstall
+ */
+function uninstallAddon(addon) {
+  let cb = Async.makeSyncCallback();
+  let listener = {onUninstalled: function(uninstalled) {
+    if (uninstalled.id == addon.id) {
+      AddonManager.removeAddonListener(listener);
+      cb(uninstalled);
     }
-  };
-  LogStats.prototype.__proto__ = new Log4Moz.Formatter();
+  }};
 
-  var log = Log4Moz.repository.rootLogger;
-  var logStats = new LogStats();
-  var appender = new Log4Moz.DumpAppender(logStats);
-
-  if (typeof(level) == "undefined")
-    level = "Debug";
-  getTestLogger().level = Log4Moz.Level[level];
-
-  log.level = Log4Moz.Level.Trace;
-  appender.level = Log4Moz.Level.Trace;
-  // Overwrite any other appenders (e.g. from previous incarnations)
-  log.ownAppenders = [appender];
-  log.updateAppenders();
-
-  return logStats;
+  AddonManager.addAddonListener(listener);
+  addon.uninstall();
+  Async.waitForSyncCallback(cb);
 }
 
 function FakeFilesystemService(contents) {
@@ -82,6 +174,14 @@ function FakeGUIDService() {
 }
 
 
+function fakeSHA256HMAC(message) {
+   message = message.substr(0, 64);
+   while (message.length < 64) {
+     message += " ";
+   }
+   return message;
+}
+
 /*
  * Mock implementation of WeaveCrypto. It does not encrypt or
  * decrypt, merely returning the input verbatim.
@@ -91,23 +191,12 @@ function FakeCryptoService() {
 
   delete Svc.Crypto;  // get rid of the getter first
   Svc.Crypto = this;
-  Utils.sha256HMAC = this.sha256HMAC;
 
-  CryptoWrapper.prototype.ciphertextHMAC = this.ciphertextHMAC;
+  CryptoWrapper.prototype.ciphertextHMAC = function ciphertextHMAC(keyBundle) {
+    return fakeSHA256HMAC(this.ciphertext);
+  };
 }
 FakeCryptoService.prototype = {
-
-  sha256HMAC: function Utils_sha256HMAC(message, hasher) {
-     message = message.substr(0, 64);
-     while (message.length < 64) {
-       message += " ";
-     }
-     return message;
-  },
-
-  ciphertextHMAC: function CryptoWrapper_ciphertextHMAC(keyBundle) {
-    return Utils.sha256HMAC(this.ciphertext);
-  },
 
   encrypt: function(aClearText, aSymmetricKey, aIV) {
     return aClearText;
@@ -139,14 +228,22 @@ FakeCryptoService.prototype = {
   }
 };
 
+function setBasicCredentials(username, password, syncKey) {
+  let auth = Identity;
+  auth.username = username;
+  auth.basicPassword = password;
+  auth.syncKey = syncKey;
+}
 
-function SyncTestingInfrastructure() {
-  Cu.import("resource://services-sync/identity.js");
+function SyncTestingInfrastructure(username, password, syncKey) {
+  Cu.import("resource://services-sync/service.js");
 
-  ID.set('WeaveID',
-         new Identity('Mozilla Services Encryption Passphrase', 'foo'));
-  ID.set('WeaveCryptoID',
-         new Identity('Mozilla Services Encryption Passphrase', 'foo'));
+  Identity.account = username || "foo";
+  Identity.basicPassword = password || "password";
+  Identity.syncKey = syncKey || "foo";
+
+  Service.serverURL = TEST_SERVER_URL;
+  Service.clusterURL = TEST_CLUSTER_URL;
 
   this.logStats = initTestLogging();
   this.fakeFilesystem = new FakeFilesystemService({});
@@ -154,40 +251,14 @@ function SyncTestingInfrastructure() {
   this.fakeCryptoService = new FakeCryptoService();
 }
 
-/*
- * Ensure exceptions from inside callbacks leads to test failures.
- */
-function ensureThrows(func) {
-  return function() {
-    try {
-      func.apply(this, arguments);
-    } catch (ex) {
-      do_throw(ex);
-    }
-  };
-}
-
-
-/**
- * Print some debug message to the console. All arguments will be printed,
- * separated by spaces.
- *
- * @param [arg0, arg1, arg2, ...]
- *        Any number of arguments to print out
- * @usage _("Hello World") -> prints "Hello World"
- * @usage _(1, 2, 3) -> prints "1 2 3"
- */
-let _ = function(some, debug, text, to) print(Array.slice(arguments).join(" "));
-
 _("Setting the identity for passphrase");
 Cu.import("resource://services-sync/identity.js");
-
 
 /*
  * Test setup helpers.
  */
 
-// Turn WBO cleartext into "encrypted" payload as it goes over the wire
+// Turn WBO cleartext into fake "encrypted" payload as it goes over the wire.
 function encryptPayload(cleartext) {
   if (typeof cleartext == "object") {
     cleartext = JSON.stringify(cleartext);
@@ -195,7 +266,7 @@ function encryptPayload(cleartext) {
 
   return {ciphertext: cleartext, // ciphertext == cleartext with fake crypto
           IV: "irrelevant",
-          hmac: Utils.sha256HMAC(cleartext, Utils.makeHMACKey(""))};
+          hmac: fakeSHA256HMAC(cleartext, Utils.makeHMACKey(""))};
 }
 
 function generateNewKeys(collections) {
@@ -204,28 +275,10 @@ function generateNewKeys(collections) {
   CollectionKeys.setContents(wbo.cleartext, modified);
 }
 
-function do_check_throws(aFunc, aResult, aStack)
-{
-  if (!aStack) {
-    try {
-      // We might not have a 'Components' object.
-      aStack = Components.stack.caller;
-    } catch (e) {}
-  }
-
-  try {
-    aFunc();
-  } catch (e) {
-    do_check_eq(e.result, aResult, aStack);
-    return;
-  }
-  do_throw("Expected result " + aResult + ", none thrown.", aStack);
-}
-
 /*
  * A fake engine implementation.
  * This is used all over the place.
- * 
+ *
  * Complete with record, store, and tracker implementations.
  */
 
@@ -262,12 +315,21 @@ RotaryStore.prototype = {
 
   createRecord: function(id, collection) {
     let record = new RotaryRecord(collection, id);
+
+    if (!(id in this.items)) {
+      record.deleted = true;
+      return record;
+    }
+
     record.denomination = this.items[id] || "Data for new record: " + id;
     return record;
   },
 
   changeItemID: function(oldID, newID) {
-    this.items[newID] = this.items[oldID];
+    if (oldID in this.items) {
+      this.items[newID] = this.items[oldID];
+    }
+
     delete this.items[oldID];
   },
 
@@ -305,6 +367,12 @@ RotaryEngine.prototype = {
   _recordObj: RotaryRecord,
 
   _findDupe: function(item) {
+    // This is a semaphore used for testing proper reconciling on dupe
+    // detection.
+    if (item.id == "DUPE_INCOMING") {
+      return "DUPE_LOCAL";
+    }
+
     for (let [id, value] in Iterator(this._store.items)) {
       if (item.denomination == value) {
         return id;

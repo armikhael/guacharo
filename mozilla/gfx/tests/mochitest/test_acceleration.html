@@ -20,16 +20,14 @@ https://bugzilla.mozilla.org/show_bug.cgi?id=627498
 // Make sure that acceleration is enabled/disabled the way we expect it to be
 // based on platform.
 
-netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
+var importObj = {};
 
-Components.utils.import("resource://gre/modules/Services.jsm");
-
-var Cc = Components.classes;
+var Cc = SpecialPowers.wrap(Components).classes;
 var Ci = Components.interfaces;
 
 var sysInfo = Cc["@mozilla.org/system-info;1"].getService(Ci.nsIPropertyBag2);
 
-var windows = Services.ww.getWindowEnumerator();
+var windows = SpecialPowers.Services.ww.getWindowEnumerator();
 var windowutils;
 var acceleratedWindows = 0;
 while (windows.hasMoreElements()) {
@@ -43,21 +41,39 @@ while (windows.hasMoreElements()) {
 var osName = sysInfo.getProperty("name");
 switch(osName)
 {
-  case "Darwin":
+  case "Darwin": // Mac OS X.
     // We only enable OpenGL layers on machines that don't support QuickDraw
     // plugins. x86-64 architecture is a good proxy for this plugin support.
     if (sysInfo.getProperty("arch") != "x86-64") {
       is(acceleratedWindows, 0, "Acceleration not supported on x86 OS X");
     } else {
+      // Workaround for SeaMonkey tinderboxes which don't support acceleration.
+      if (navigator.userAgent.match(/ SeaMonkey\//)) {
+        if (acceleratedWindows == 0) {
+          todo(false, "Acceleration not supported on x86-64 OS X" +
+                      " (This is expected on SeaMonkey (tinderboxes).)");
+          break;
+        }
+      }
+
       isnot(acceleratedWindows, 0, "Acceleration enabled on x86-64 OS X");
     }
     break;
 
-  case "Windows_NT":
+  case "Windows_NT": // Windows.
     var version = parseFloat(sysInfo.getProperty("version"));
     if (version == 5.0) {
       is(acceleratedWindows, 0, "Acceleration not supported on Windows 2000");
     } else {
+      // Workaround for SeaMonkey tinderboxes which don't support acceleration.
+      if (navigator.userAgent.match(/ SeaMonkey\//)) {
+        if (acceleratedWindows == 0) {
+          todo(false, "Acceleration not supported on Windows XP or newer" +
+                      " (This is expected on SeaMonkey (tinderboxes).)");
+          break;
+        }
+      }
+
       isnot(acceleratedWindows, 0, "Acceleration enabled on Windows XP or newer");
     }
 
@@ -71,7 +87,7 @@ switch(osName)
     }
     break;
 
-  default:
+  default: // Linux and others.
     is(acceleratedWindows, 0, "Acceleration not supported on '" + osName + "'");
 }
 

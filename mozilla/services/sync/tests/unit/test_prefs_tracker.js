@@ -1,7 +1,8 @@
 Cu.import("resource://services-sync/engines/prefs.js");
 Cu.import("resource://services-sync/util.js");
 Cu.import("resource://services-sync/constants.js");
-Cu.import("resource://services-sync/ext/Preferences.js");
+Cu.import("resource://services-common/utils.js");
+Cu.import("resource://services-common/preferences.js");
 
 function run_test() {
   let engine = new PrefsEngine();
@@ -20,15 +21,15 @@ function run_test() {
 
     _("Engine's getChangedID() just returns the one GUID we have.");
     let changedIDs = engine.getChangedIDs();
-    let ids = [id for (id in changedIDs)];
+    let ids = Object.keys(changedIDs);
     do_check_eq(ids.length, 1);
-    do_check_eq(ids[0], Utils.encodeBase64url(Services.appinfo.ID));
+    do_check_eq(ids[0], CommonUtils.encodeBase64URL(Services.appinfo.ID));
 
     Svc.Prefs.set("engine.prefs.modified", false);
     do_check_false(tracker.modified);
 
     _("No modified state, so no changed IDs.");
-    do_check_eq([id for (id in engine.getChangedIDs())].length, 0);
+    do_check_empty(engine.getChangedIDs());
 
     _("Initial score is 0");
     do_check_eq(tracker.score, 0);
@@ -75,5 +76,8 @@ function run_test() {
   } finally {
     Svc.Obs.notify("weave:engine:stop-tracking");
     prefs.resetBranch("");
+    if (tracker._lazySave) {
+      tracker._lazySave.clear();
+    }
   }
 }

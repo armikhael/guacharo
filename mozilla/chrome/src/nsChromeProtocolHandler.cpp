@@ -1,40 +1,8 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* vim:set ts=4 sw=4 sts=4 et cin: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
 
@@ -69,14 +37,6 @@
 #include "nsString.h"
 #include "prlog.h"
 
-#ifdef MOZ_XUL
-#include "nsIXULPrototypeCache.h"
-#endif
-
-//----------------------------------------------------------------------
-
-static NS_DEFINE_CID(kXULPrototypeCacheCID,      NS_XULPROTOTYPECACHE_CID);
-
 ////////////////////////////////////////////////////////////////////////////////
 
 NS_IMPL_THREADSAFE_ISUPPORTS2(nsChromeProtocolHandler,
@@ -94,22 +54,22 @@ nsChromeProtocolHandler::GetScheme(nsACString &result)
 }
 
 NS_IMETHODIMP
-nsChromeProtocolHandler::GetDefaultPort(PRInt32 *result)
+nsChromeProtocolHandler::GetDefaultPort(int32_t *result)
 {
     *result = -1;        // no port for chrome: URLs
     return NS_OK;
 }
 
 NS_IMETHODIMP
-nsChromeProtocolHandler::AllowPort(PRInt32 port, const char *scheme, PRBool *_retval)
+nsChromeProtocolHandler::AllowPort(int32_t port, const char *scheme, bool *_retval)
 {
     // don't override anything.
-    *_retval = PR_FALSE;
+    *_retval = false;
     return NS_OK;
 }
 
 NS_IMETHODIMP
-nsChromeProtocolHandler::GetProtocolFlags(PRUint32 *result)
+nsChromeProtocolHandler::GetProtocolFlags(uint32_t *result)
 {
     *result = URI_STD | URI_IS_UI_RESOURCE | URI_IS_LOCAL_RESOURCE;
     return NS_OK;
@@ -144,7 +104,7 @@ nsChromeProtocolHandler::NewURI(const nsACString &aSpec,
     if (NS_FAILED(rv))
         return rv;
 
-    surl->SetMutable(PR_FALSE);
+    surl->SetMutable(false);
 
     NS_ADDREF(*result = url);
     return NS_OK;
@@ -168,7 +128,7 @@ nsChromeProtocolHandler::NewChannel(nsIURI* aURI,
         nsCOMPtr<nsIURL> debugURL (do_QueryInterface(debugClone));
         debug_rv = nsChromeRegistry::Canonify(debugURL);
         if (NS_SUCCEEDED(debug_rv)) {
-            PRBool same;
+            bool same;
             debug_rv = aURI->Equals(debugURL, &same);
             if (NS_SUCCEEDED(debug_rv)) {
                 NS_ASSERTION(same, "Non-canonified chrome uri passed to nsChromeProtocolHandler::NewChannel!");
@@ -210,7 +170,7 @@ nsChromeProtocolHandler::NewChannel(nsIURI* aURI,
         nsCOMPtr<nsIFile> file;
         fileChan->GetFile(getter_AddRefs(file));
 
-        PRBool exists = PR_FALSE;
+        bool exists = false;
         file->Exists(&exists);
         if (!exists) {
             nsCAutoString path;
@@ -222,6 +182,9 @@ nsChromeProtocolHandler::NewChannel(nsIURI* aURI,
 
     // Make sure that the channel remembers where it was
     // originally loaded from.
+    nsLoadFlags loadFlags = 0;
+    result->GetLoadFlags(&loadFlags);
+    result->SetLoadFlags(loadFlags & ~nsIChannel::LOAD_REPLACE);
     rv = result->SetOriginalURI(aURI);
     if (NS_FAILED(rv)) return rv;
 
@@ -249,6 +212,7 @@ nsChromeProtocolHandler::NewChannel(nsIURI* aURI,
     // and with startupcache not at all), but this is where we would start
     // if we need to re-add.
     // See bug 531886, bug 533038.
+    result->SetContentCharset(NS_LITERAL_CSTRING("UTF-8"));
 
     *aResult = result;
     NS_ADDREF(*aResult);

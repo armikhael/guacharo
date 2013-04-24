@@ -1,38 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- *   Kent James <kent@caspia.com>
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * This file tests that a message saved as draft in an IMAP folder is correctly
@@ -43,6 +11,8 @@
 load("../../../resources/logHelper.js");
 load("../../../resources/mailTestUtils.js");
 load("../../../resources/asyncTestUtils.js");
+
+Components.utils.import("resource://gre/modules/Services.jsm");
 
 // IMAP pump
 load("../../../resources/IMAPpump.js");
@@ -67,7 +37,7 @@ function createDraftsFolder()
   yield false;
   gDraftsFolder = gIMAPIncomingServer.rootFolder.getChildNamed("Drafts");
   do_check_true(gDraftsFolder instanceof Ci.nsIMsgImapMailFolder);
-  gDraftsFolder.updateFolderWithListener(null, urlListener);
+  gDraftsFolder.updateFolderWithListener(null, asyncUrlListener);
   dl('wait for OnStopRunningURL');
   yield false;
 }
@@ -100,12 +70,14 @@ function saveDraft()
 
 function updateDrafts()
 {
-  gDraftsFolder.updateFolderWithListener(null, urlListener);
+  dump("updating drafts\n");
+  gDraftsFolder.updateFolderWithListener(null, asyncUrlListener);
   yield false;
 }
 
 function checkResult()
 {
+  dump("checking result\n");
   do_check_eq(gDraftsFolder.getTotalMessages(false), 1);
   do_check_eq(gDraftsFolder.getNumUnread(false), 1);
   yield true;
@@ -119,6 +91,7 @@ function endTest()
 
 function run_test()
 {
+  Services.prefs.setBoolPref("mail.server.default.autosync_offline_stores", false);
   let server = gIMAPIncomingServer;
 
   // Add folder listeners that will capture async events
@@ -135,17 +108,6 @@ function run_test()
   //start first test
   async_run_tests(tests);
 }
-
-var urlListener = {
-  OnStartRunningUrl: function _OnStartRunningUrl(aUrl) {
-    // funny but this never seems to get called.
-    dl('OnStartRunningUrl');
-  },
-  OnStopRunningUrl: function _OnStopRunningUrl(aUrl, aExitCode) {
-    dl('OnStopRunningUrl');
-    async_driver();
-  }
-};
 
 var mfnListener =
 {
@@ -177,7 +139,7 @@ var progressListener = {
   },
 
   onProgressChange: function(aWebProgress, aRequest, aCurSelfProgress, aMaxSelfProgress, aCurTotalProgress, aMaxTotalProgress) {},
-  onLocationChange: function(aWebProgress, aRequest, aLocation) {},
+  onLocationChange: function(aWebProgress, aRequest, aLocation, aFlags) {},
   onStatusChange: function(aWebProgress, aRequest, aStatus, aMessage) {},
   onSecurityChange: function(aWebProgress, aRequest, state) {},
 

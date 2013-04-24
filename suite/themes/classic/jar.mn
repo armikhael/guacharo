@@ -1,3 +1,7 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 classic.jar:
 % skin communicator classic/1.0 %skin/classic/communicator/
 % skin editor classic/1.0 %skin/classic/editor/
@@ -27,7 +31,6 @@ classic.jar:
   skin/classic/communicator/bookmarks/expander-open.png                 (mac/communicator/bookmarks/expander-open.png)
   skin/classic/communicator/bookmarks/expander-open-active.png          (mac/communicator/bookmarks/expander-open-active.png)
   skin/classic/communicator/bookmarks/livemark-folder.png               (mac/communicator/bookmarks/livemark-folder.png)
-  skin/classic/communicator/bookmarks/livemark-item.png                 (mac/communicator/bookmarks/livemark-item.png)
   skin/classic/communicator/bookmarks/query.png                         (mac/communicator/bookmarks/query.png)
   skin/classic/communicator/bookmarks/toolbarDropMarker.png             (mac/communicator/bookmarks/toolbarDropMarker.png)
   skin/classic/communicator/directory/directory.css                     (mac/communicator/directory/directory.css)
@@ -43,6 +46,7 @@ classic.jar:
   skin/classic/communicator/icons/feedIcon16-disabled.png               (mac/communicator/icons/feedIcon16-disabled.png)
   skin/classic/communicator/icons/geolocation-16.png                    (mac/communicator/icons/geolocation-16.png)
   skin/classic/communicator/icons/geolocation-64.png                    (mac/communicator/icons/geolocation-64.png)
+  skin/classic/communicator/icons/item.png                              (mac/communicator/icons/item.png)
   skin/classic/communicator/toolbar/toolbar-gradient22.png              (mac/communicator/toolbar/toolbar-gradient22.png)
   skin/classic/communicator/toolbar/toolbar-gradient34.png              (mac/communicator/toolbar/toolbar-gradient34.png)
 #else
@@ -66,7 +70,6 @@ classic.jar:
   skin/classic/communicator/bookmarks/bookmarksToolbar.png              (communicator/bookmarks/bookmarksToolbar.png)
   skin/classic/communicator/bookmarks/editBookmarkOverlay.css           (communicator/bookmarks/editBookmarkOverlay.css)
   skin/classic/communicator/bookmarks/livemark-folder.png               (communicator/bookmarks/livemark-folder.png)
-  skin/classic/communicator/bookmarks/livemark-item.png                 (communicator/bookmarks/livemark-item.png)
   skin/classic/communicator/bookmarks/query.png                         (communicator/bookmarks/query.png)
   skin/classic/communicator/bookmarks/toolbarDropMarker.png             (communicator/bookmarks/toolbarDropMarker.png)
   skin/classic/communicator/directory/directory.css                     (communicator/directory/directory.css)
@@ -95,6 +98,7 @@ classic.jar:
   skin/classic/communicator/bookmarks/allBookmarks.png                  (communicator/bookmarks/allBookmarks.png)
   skin/classic/communicator/bookmarks/bookmark.png                      (communicator/bookmarks/bookmark.png)
   skin/classic/communicator/bookmarks/bookmark-item-dis.png             (communicator/bookmarks/bookmark-item-dis.png)
+  skin/classic/communicator/bookmarks/bookmark-item-updated.png         (communicator/bookmarks/bookmark-item-updated.png)
   skin/classic/communicator/bookmarks/bookmark-item.png                 (communicator/bookmarks/bookmark-item.png)
   skin/classic/communicator/bookmarks/unsortedBookmarks.png             (communicator/bookmarks/unsortedBookmarks.png)
   skin/classic/communicator/brand/throbber-anim.png                     (communicator/brand/throbber-anim.png)
@@ -189,9 +193,7 @@ classic.jar:
   skin/classic/editor/icons/editoricons.png                             (editor/icons/editoricons.png)
   skin/classic/editor/icons/editoricons-small.png                       (editor/icons/editoricons-small.png)
 #endif
-  skin/classic/editor/EdImageMapPage.css                                (editor/EdImageMapPage.css)
   skin/classic/editor/EditorDialog.css                                  (editor/EditorDialog.css)
-  skin/classic/editor/EdImageMap.css                                    (editor/EdImageMap.css)
   skin/classic/editor/icons/editmode-html.gif                           (editor/icons/editmode-html.gif)
   skin/classic/editor/icons/editmode-normal.gif                         (editor/icons/editmode-normal.gif)
   skin/classic/editor/icons/editmode-preview.gif                        (editor/icons/editmode-preview.gif)
@@ -222,6 +224,7 @@ classic.jar:
   skin/classic/messenger/icons/twisty-open.png                          (mac/messenger/icons/twisty-open.png)
   skin/classic/messenger/addressbook/addressbook.css                    (mac/messenger/addressbook/addressbook.css)
   skin/classic/messenger/addressbook/icons/addressbookicons.png         (mac/messenger/addressbook/icons/addressbookicons.png)
+  skin/classic/messenger/addressbook/icons/addressbookicons-small.png   (mac/messenger/addressbook/icons/addressbookicons-small.png)
   skin/classic/messenger/messengercompose/messengercompose.css          (mac/messenger/messengercompose/messengercompose.css)
   skin/classic/messenger/smime/msgCompSMIMEOverlay.css                  (mac/messenger/smime/msgCompSMIMEOverlay.css)
   skin/classic/messenger/smime/icons/smimeicons.png                     (mac/messenger/smime/icons/smimeicons.png)
@@ -239,6 +242,7 @@ classic.jar:
   skin/classic/messenger/icons/twisty-open.png                          (messenger/icons/twisty-open.png)
   skin/classic/messenger/addressbook/addressbook.css                    (messenger/addressbook/addressbook.css)
   skin/classic/messenger/addressbook/icons/addressbookicons.png         (messenger/addressbook/icons/addressbookicons.png)
+  skin/classic/messenger/addressbook/icons/addressbookicons-small.png   (messenger/addressbook/icons/addressbookicons-small.png)
   skin/classic/messenger/messengercompose/messengercompose.css          (messenger/messengercompose/messengercompose.css)
   skin/classic/messenger/smime/msgCompSMIMEOverlay.css                  (messenger/smime/msgCompSMIMEOverlay.css)
   skin/classic/messenger/smime/icons/smimeicons.png                     (messenger/smime/icons/smimeicons.png)
@@ -404,16 +408,12 @@ classic.jar:
   skin/classic/navigator/linkToolbar.css                                (mac/navigator/linkToolbar.css)
   skin/classic/navigator/pageInfo.css                                   (mac/navigator/pageInfo.css)
   skin/classic/navigator/tabbrowser.css                                 (mac/navigator/tabbrowser.css)
-  skin/classic/navigator/icons/hud-style-check-box-checked.png          (mac/navigator/icons/hud-style-check-box-checked.png)
-  skin/classic/navigator/icons/hud-style-check-box-empty.png            (mac/navigator/icons/hud-style-check-box-empty.png)
-  skin/classic/navigator/icons/hud-style-dropmarker-double-arrows.png   (mac/navigator/icons/hud-style-dropmarker-double-arrows.png)
-  skin/classic/navigator/icons/hud-style-expander-closed.png            (mac/navigator/icons/hud-style-expander-closed.png)
-  skin/classic/navigator/icons/hud-style-expander-open.png              (mac/navigator/icons/hud-style-expander-open.png)
-  skin/classic/navigator/icons/hud-style-new-folder-plus-sign.png       (mac/navigator/icons/hud-style-new-folder-plus-sign.png)
-  skin/classic/navigator/icons/hud-style-twisties.png                   (mac/navigator/icons/hud-style-twisties.png)
   skin/classic/navigator/icons/identity.png                             (mac/navigator/icons/identity.png)
   skin/classic/navigator/icons/navigatoricons.png                       (mac/navigator/icons/navigatoricons.png)
   skin/classic/navigator/icons/navigatoricons-small.png                 (mac/navigator/icons/navigatoricons-small.png)
+  skin/classic/navigator/icons/panel-expander-closed.png                (mac/navigator/icons/panel-expander-closed.png)
+  skin/classic/navigator/icons/panel-expander-open.png                  (mac/navigator/icons/panel-expander-open.png)
+  skin/classic/navigator/icons/panel-plus-sign.png                      (mac/navigator/icons/panel-plus-sign.png)
   skin/classic/navigator/icons/restore.png                              (mac/navigator/icons/restore.png)
 #else
   skin/classic/navigator/navigator.css                                  (navigator/navigator.css)

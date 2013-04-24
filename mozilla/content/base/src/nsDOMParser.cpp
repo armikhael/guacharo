@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "jsapi.h"
 #include "nsDOMParser.h"
@@ -43,11 +11,10 @@
 #include "nsIInputStream.h"
 #include "nsNetUtil.h"
 #include "nsStringStream.h"
-#include "nsIDocument.h"
 #include "nsIDOMDocument.h"
 #include "nsIScriptSecurityManager.h"
 #include "nsIPrincipal.h"
-#include "nsIDOMClassInfo.h"
+#include "nsDOMClassInfoID.h"
 #include "nsReadableUtils.h"
 #include "nsCRT.h"
 #include "nsStreamUtils.h"
@@ -55,7 +22,7 @@
 #include "nsNetCID.h"
 #include "nsContentUtils.h"
 #include "nsDOMJSUtils.h"
-#include "nsDOMError.h"
+#include "nsError.h"
 #include "nsIDOMWindow.h"
 #include "nsPIDOMWindow.h"
 #include "mozilla/AutoRestore.h"
@@ -63,7 +30,7 @@
 using namespace mozilla;
 
 nsDOMParser::nsDOMParser()
-  : mAttemptedInit(PR_FALSE)
+  : mAttemptedInit(false)
 {
 }
 
@@ -95,13 +62,41 @@ nsDOMParser::ParseFromString(const PRUnichar *str,
   NS_ENSURE_ARG(str);
   NS_ENSURE_ARG_POINTER(aResult);
 
+  nsresult rv;
+
+  if (!nsCRT::strcmp(contentType, "text/html")) {
+    nsCOMPtr<nsIDOMDocument> domDocument;
+    rv = SetUpDocument(DocumentFlavorHTML, getter_AddRefs(domDocument));
+    NS_ENSURE_SUCCESS(rv, rv);
+    nsCOMPtr<nsIDocument> document = do_QueryInterface(domDocument);
+
+    // Keep the XULXBL state, base URL and principal setting in sync with the
+    // XML case
+
+    if (nsContentUtils::IsSystemPrincipal(mOriginalPrincipal)) {
+      document->ForceEnableXULXBL();
+    }
+
+    // Make sure to give this document the right base URI
+    document->SetBaseURI(mBaseURI);
+    // And the right principal
+    document->SetPrincipal(mPrincipal);
+
+    nsDependentString sourceBuffer(str);
+    rv = nsContentUtils::ParseDocumentHTML(sourceBuffer, document, false);
+    NS_ENSURE_SUCCESS(rv, rv);
+
+    domDocument.forget(aResult);
+    return rv;
+  }
+
   NS_ConvertUTF16toUTF8 data(str);
 
   // The new stream holds a reference to the buffer
   nsCOMPtr<nsIInputStream> stream;
-  nsresult rv = NS_NewByteInputStream(getter_AddRefs(stream),
-                                      data.get(), data.Length(),
-                                      NS_ASSIGNMENT_DEPEND);
+  rv = NS_NewByteInputStream(getter_AddRefs(stream),
+                             data.get(), data.Length(),
+                             NS_ASSIGNMENT_DEPEND);
   if (NS_FAILED(rv))
     return rv;
 
@@ -109,8 +104,8 @@ nsDOMParser::ParseFromString(const PRUnichar *str,
 }
 
 NS_IMETHODIMP 
-nsDOMParser::ParseFromBuffer(const PRUint8 *buf,
-                             PRUint32 bufLen,
+nsDOMParser::ParseFromBuffer(const uint8_t *buf,
+                             uint32_t bufLen,
                              const char *contentType,
                              nsIDOMDocument **aResult)
 {
@@ -125,46 +120,35 @@ nsDOMParser::ParseFromBuffer(const PRUint8 *buf,
   if (NS_FAILED(rv))
     return rv;
 
-  return ParseFromStream(stream, nsnull, bufLen, contentType, aResult);
+  return ParseFromStream(stream, nullptr, bufLen, contentType, aResult);
 }
 
 
 NS_IMETHODIMP 
 nsDOMParser::ParseFromStream(nsIInputStream *stream, 
                              const char *charset, 
-                             PRInt32 contentLength,
+                             int32_t contentLength,
                              const char *contentType,
                              nsIDOMDocument **aResult)
 {
   NS_ENSURE_ARG(stream);
   NS_ENSURE_ARG(contentType);
   NS_ENSURE_ARG_POINTER(aResult);
-  *aResult = nsnull;
+  *aResult = nullptr;
+
+  bool svg = nsCRT::strcmp(contentType, "image/svg+xml") == 0;
 
   // For now, we can only create XML documents.
+  //XXXsmaug Should we create an HTMLDocument (in XHTML mode)
+  //         for "application/xhtml+xml"?
   if ((nsCRT::strcmp(contentType, "text/xml") != 0) &&
       (nsCRT::strcmp(contentType, "application/xml") != 0) &&
-      (nsCRT::strcmp(contentType, "application/xhtml+xml") != 0))
+      (nsCRT::strcmp(contentType, "application/xhtml+xml") != 0) &&
+      !svg)
     return NS_ERROR_NOT_IMPLEMENTED;
 
-  nsCOMPtr<nsIScriptGlobalObject> scriptHandlingObject =
-    do_QueryReferent(mScriptHandlingObject);
   nsresult rv;
-  if (!mPrincipal) {
-    NS_ENSURE_TRUE(!mAttemptedInit, NS_ERROR_NOT_INITIALIZED);
-    AttemptedInitMarker marker(&mAttemptedInit);
-    
-    nsCOMPtr<nsIPrincipal> prin =
-      do_CreateInstance("@mozilla.org/nullprincipal;1", &rv);
-    NS_ENSURE_SUCCESS(rv, rv);
-    
-    rv = Init(prin, nsnull, nsnull, scriptHandlingObject);
-    NS_ENSURE_SUCCESS(rv, rv);
-  }
 
-  NS_ASSERTION(mPrincipal, "Must have principal by now");
-  NS_ASSERTION(mDocumentURI, "Must have document URI by now");
-  
   // Put the nsCOMPtr out here so we hold a ref to the stream as needed
   nsCOMPtr<nsIInputStream> bufferedStream;
   if (!NS_InputStreamIsBuffered(stream)) {
@@ -175,22 +159,15 @@ nsDOMParser::ParseFromStream(nsIInputStream *stream,
     stream = bufferedStream;
   }
 
-  // Here we have to cheat a little bit...  Setting the base URI won't
-  // work if the document has a null principal, so use
-  // mOriginalPrincipal when creating the document, then reset the
-  // principal.
   nsCOMPtr<nsIDOMDocument> domDocument;
-  rv = nsContentUtils::CreateDocument(EmptyString(), EmptyString(), nsnull,
-                                      mDocumentURI, mBaseURI,
-                                      mOriginalPrincipal,
-                                      scriptHandlingObject,
-                                      getter_AddRefs(domDocument));
+  rv = SetUpDocument(svg ? DocumentFlavorSVG : DocumentFlavorLegacyGuess,
+                     getter_AddRefs(domDocument));
   NS_ENSURE_SUCCESS(rv, rv);
 
   // Create a fake channel 
   nsCOMPtr<nsIChannel> parserChannel;
-  NS_NewInputStreamChannel(getter_AddRefs(parserChannel), mDocumentURI, nsnull,
-                           nsDependentCString(contentType), nsnull);
+  NS_NewInputStreamChannel(getter_AddRefs(parserChannel), mDocumentURI, nullptr,
+                           nsDependentCString(contentType), nullptr);
   NS_ENSURE_STATE(parserChannel);
 
   // More principal-faking here 
@@ -203,21 +180,24 @@ nsDOMParser::ParseFromStream(nsIInputStream *stream,
   // Tell the document to start loading
   nsCOMPtr<nsIStreamListener> listener;
 
-  // Have to pass PR_FALSE for reset here, else the reset will remove
+  // Have to pass false for reset here, else the reset will remove
   // our event listener.  Should that listener addition move to later
   // than this call?  Then we wouldn't need to mess around with
   // SetPrincipal, etc, probably!
   nsCOMPtr<nsIDocument> document(do_QueryInterface(domDocument));
   if (!document) return NS_ERROR_FAILURE;
 
+  // Keep the XULXBL state, base URL and principal setting in sync with the
+  // HTML case
+
   if (nsContentUtils::IsSystemPrincipal(mOriginalPrincipal)) {
     document->ForceEnableXULXBL();
   }
 
   rv = document->StartDocumentLoad(kLoadAsData, parserChannel, 
-                                   nsnull, nsnull, 
+                                   nullptr, nullptr, 
                                    getter_AddRefs(listener),
-                                   PR_FALSE);
+                                   false);
 
   // Make sure to give this document the right base URI
   document->SetBaseURI(mBaseURI);
@@ -232,20 +212,20 @@ nsDOMParser::ParseFromStream(nsIInputStream *stream,
   // Now start pumping data to the listener
   nsresult status;
 
-  rv = listener->OnStartRequest(parserChannel, nsnull);
+  rv = listener->OnStartRequest(parserChannel, nullptr);
   if (NS_FAILED(rv))
     parserChannel->Cancel(rv);
   parserChannel->GetStatus(&status);
 
   if (NS_SUCCEEDED(rv) && NS_SUCCEEDED(status)) {
-    rv = listener->OnDataAvailable(parserChannel, nsnull, stream, 0,
+    rv = listener->OnDataAvailable(parserChannel, nullptr, stream, 0,
                                    contentLength);
     if (NS_FAILED(rv))
       parserChannel->Cancel(rv);
     parserChannel->GetStatus(&status);
   }
 
-  rv = listener->OnStopRequest(parserChannel, nsnull, status);
+  rv = listener->OnStopRequest(parserChannel, nullptr, status);
   // Failure returned from OnStopRequest does not affect the final status of
   // the channel, so we do not need to call Cancel(rv) as we do above.
 
@@ -263,7 +243,7 @@ nsDOMParser::Init(nsIPrincipal* principal, nsIURI* documentURI,
                   nsIURI* baseURI, nsIScriptGlobalObject* aScriptObject)
 {
   NS_ENSURE_STATE(!mAttemptedInit);
-  mAttemptedInit = PR_TRUE;
+  mAttemptedInit = true;
   
   NS_ENSURE_ARG(principal || documentURI);
 
@@ -285,7 +265,8 @@ nsDOMParser::Init(nsIPrincipal* principal, nsIURI* documentURI,
     nsIScriptSecurityManager* secMan = nsContentUtils::GetSecurityManager();
     NS_ENSURE_TRUE(secMan, NS_ERROR_NOT_AVAILABLE);
     rv =
-      secMan->GetCodebasePrincipal(mDocumentURI, getter_AddRefs(mPrincipal));
+      secMan->GetSimpleCodebasePrincipal(mDocumentURI,
+                                         getter_AddRefs(mPrincipal));
     NS_ENSURE_SUCCESS(rv, rv);
     mOriginalPrincipal = mPrincipal;
   } else {
@@ -315,16 +296,16 @@ nsDOMParser::Init(nsIPrincipal* principal, nsIURI* documentURI,
 }
   
 static nsQueryInterface
-JSvalToInterface(JSContext* cx, jsval val, nsIXPConnect* xpc, PRBool* wasNull)
+JSvalToInterface(JSContext* cx, JS::Value val, nsIXPConnect* xpc, bool* wasNull)
 {
-  if (val == JSVAL_NULL) {
-    *wasNull = PR_TRUE;
-    return nsQueryInterface(nsnull);
+  if (val.isNull()) {
+    *wasNull = true;
+    return nsQueryInterface(nullptr);
   }
   
-  *wasNull = PR_FALSE;
-  if (JSVAL_IS_OBJECT(val)) {
-    JSObject* arg = JSVAL_TO_OBJECT(val);
+  *wasNull = false;
+  if (val.isObject()) {
+    JSObject* arg = &val.toObject();
 
     nsCOMPtr<nsIXPConnectWrappedNative> native;
     xpc->GetWrappedNativeOfJSObject(cx, arg, getter_AddRefs(native));
@@ -335,16 +316,16 @@ JSvalToInterface(JSContext* cx, jsval val, nsIXPConnect* xpc, PRBool* wasNull)
     }
   }
   
-  return nsQueryInterface(nsnull);
+  return nsQueryInterface(nullptr);
 }
 
 static nsresult
-GetInitArgs(JSContext *cx, PRUint32 argc, jsval *argv,
+GetInitArgs(JSContext *cx, uint32_t argc, jsval *argv,
             nsIPrincipal** aPrincipal, nsIURI** aDocumentURI,
             nsIURI** aBaseURI)
 {
   // Only proceed if the caller has UniversalXPConnect.
-  PRBool haveUniversalXPConnect;
+  bool haveUniversalXPConnect;
   nsresult rv = nsContentUtils::GetSecurityManager()->
     IsCapabilityEnabled("UniversalXPConnect", &haveUniversalXPConnect);
   NS_ENSURE_SUCCESS(rv, rv);
@@ -357,7 +338,7 @@ GetInitArgs(JSContext *cx, PRUint32 argc, jsval *argv,
   
   // First arg is our principal.  If someone passes something that's
   // not a principal and not null, die to prevent privilege escalation.
-  PRBool wasNull;
+  bool wasNull;
   nsCOMPtr<nsIPrincipal> prin = JSvalToInterface(cx, argv[0], xpc, &wasNull);
   if (!prin && !wasNull) {
     return NS_ERROR_INVALID_ARG;
@@ -390,7 +371,7 @@ GetInitArgs(JSContext *cx, PRUint32 argc, jsval *argv,
 
 NS_IMETHODIMP
 nsDOMParser::Initialize(nsISupports* aOwner, JSContext* cx, JSObject* obj,
-                        PRUint32 argc, jsval *argv)
+                        uint32_t argc, jsval *argv)
 {
   AttemptedInitMarker marker(&mAttemptedInit);
   nsCOMPtr<nsIPrincipal> prin;
@@ -472,5 +453,38 @@ nsDOMParser::Init(nsIPrincipal *aPrincipal, nsIURI *aDocumentURI,
   }
 
   return Init(principal, aDocumentURI, aBaseURI,
-              scriptContext ? scriptContext->GetGlobalObject() : nsnull);
+              scriptContext ? scriptContext->GetGlobalObject() : nullptr);
+}
+
+nsresult
+nsDOMParser::SetUpDocument(DocumentFlavor aFlavor, nsIDOMDocument** aResult)
+{
+  nsCOMPtr<nsIScriptGlobalObject> scriptHandlingObject =
+    do_QueryReferent(mScriptHandlingObject);
+  nsresult rv;
+  if (!mPrincipal) {
+    NS_ENSURE_TRUE(!mAttemptedInit, NS_ERROR_NOT_INITIALIZED);
+    AttemptedInitMarker marker(&mAttemptedInit);
+
+    nsCOMPtr<nsIPrincipal> prin =
+      do_CreateInstance("@mozilla.org/nullprincipal;1", &rv);
+    NS_ENSURE_SUCCESS(rv, rv);
+
+    rv = Init(prin, nullptr, nullptr, scriptHandlingObject);
+    NS_ENSURE_SUCCESS(rv, rv);
+  }
+
+  NS_ASSERTION(mPrincipal, "Must have principal by now");
+  NS_ASSERTION(mDocumentURI, "Must have document URI by now");
+
+  // Here we have to cheat a little bit...  Setting the base URI won't
+  // work if the document has a null principal, so use
+  // mOriginalPrincipal when creating the document, then reset the
+  // principal.
+  return nsContentUtils::CreateDocument(EmptyString(), EmptyString(), nullptr,
+                                        mDocumentURI, mBaseURI,
+                                        mOriginalPrincipal,
+                                        scriptHandlingObject,
+                                        aFlavor,
+                                        aResult);
 }

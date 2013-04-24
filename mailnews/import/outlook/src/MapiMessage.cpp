@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef INITGUID
 #define INITGUID
@@ -45,11 +13,13 @@
 
 #include "nscore.h"
 #include <time.h>
-#include "nsString.h"
+#include "nsStringGlue.h"
 #include "nsDirectoryServiceDefs.h"
 #include "nsMsgUtils.h"
 #include "nsMimeTypes.h"
 
+#include "nsMsgCompCID.h"
+#include "nsIMutableArray.h"
 #include "MapiDbgLog.h"
 #include "MapiApi.h"
 
@@ -58,7 +28,7 @@
 #include <algorithm>
 #include "nsMsgI18N.h"
 #include "nsICharsetConverterManager.h"
-
+#include "nsCRT.h"
 #include "nsNetUtil.h"
 #include "MapiMessage.h"
 
@@ -73,25 +43,23 @@ extern LPMAPIFREEBUFFER gpMapiFreeBuffer;
 typedef const char * PC_S8;
 
 static const char * kWhitespace = "\b\t\r\n ";
-static const wchar_t * sFromLine = L"From - ";
-static const wchar_t * sFromDate = L"Mon Jan 1 00:00:00 1965";
-static const wchar_t * sDaysOfWeek[7] = {
-  L"Sun", L"Mon", L"Tue", L"Wed", L"Thu", L"Fri", L"Sat"
+static const char * sFromLine = "From - ";
+static const char * sFromDate = "Mon Jan 1 00:00:00 1965";
+static const char * sDaysOfWeek[7] = {
+  "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
 };
 
-static const wchar_t *sMonths[12] = {
-  L"Jan", L"Feb", L"Mar", L"Apr", L"May", L"Jun", L"Jul", L"Aug", L"Sep", L"Oct", L"Nov", L"Dec"
+static const char *sMonths[12] = {
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
 
-CMapiMessage::CMapiMessage( LPMESSAGE lpMsg)
-  : m_lpMsg(lpMsg), m_pIOService(0), m_dldStateHeadersOnly(false), m_msgFlags(0)
+CMapiMessage::CMapiMessage(LPMESSAGE lpMsg)
+  : m_lpMsg(lpMsg), m_dldStateHeadersOnly(false), m_msgFlags(0)
 {
   nsresult rv;
-  NS_WITH_PROXIED_SERVICE(nsIIOService, service, NS_IOSERVICE_CONTRACTID,
-                          NS_PROXY_TO_MAIN_THREAD, &rv);
+  m_pIOService = do_GetService(NS_IOSERVICE_CONTRACTID, &rv);
   if (NS_FAILED(rv))
     return;
-  NS_IF_ADDREF(m_pIOService = service);
 
   FetchHeaders();
   if (ValidState()) {
@@ -110,52 +78,50 @@ CMapiMessage::~CMapiMessage()
   ClearAttachments();
   if (m_lpMsg)
     m_lpMsg->Release();
-  NS_IF_RELEASE(m_pIOService);
 }
 
-
-void CMapiMessage::FormatDateTime( SYSTEMTIME & tm, nsString& s, bool includeTZ)
+void CMapiMessage::FormatDateTime(SYSTEMTIME& tm, nsCString& s, bool includeTZ)
 {
   long offset = _timezone;
   s += sDaysOfWeek[tm.wDayOfWeek];
-  s += L", ";
-  s.AppendInt((PRInt32) tm.wDay);
-  s += L" ";
+  s += ", ";
+  s.AppendInt((int32_t) tm.wDay);
+  s += " ";
   s += sMonths[tm.wMonth - 1];
-  s += L" ";
-  s.AppendInt((PRInt32) tm.wYear);
-  s += L" ";
+  s += " ";
+  s.AppendInt((int32_t) tm.wYear);
+  s += " ";
   int val = tm.wHour;
   if (val < 10)
-    s += L"0";
-  s.AppendInt((PRInt32) val);
-  s += L":";
+    s += "0";
+  s.AppendInt((int32_t) val);
+  s += ":";
   val = tm.wMinute;
   if (val < 10)
-    s += L"0";
-  s.AppendInt((PRInt32) val);
-  s += L":";
+    s += "0";
+  s.AppendInt((int32_t) val);
+  s += ":";
   val = tm.wSecond;
   if (val < 10)
-    s += L"0";
-  s.AppendInt((PRInt32) val);
+    s += "0";
+  s.AppendInt((int32_t) val);
   if (includeTZ) {
-    s += L" ";
+    s += " ";
     if (offset < 0) {
       offset *= -1;
-      s += L"+";
+      s += "+";
     }
     else
-      s += L"-";
+      s += "-";
     offset /= 60;
     val = (int) (offset / 60);
     if (val < 10)
-      s += L"0";
-    s.AppendInt((PRInt32) val);
+      s += "0";
+    s.AppendInt((int32_t) val);
     val = (int) (offset % 60);
     if (val < 10)
-      s += L"0";
-    s.AppendInt((PRInt32) val);
+      s += "0";
+    s.AppendInt((int32_t) val);
   }
 }
 
@@ -165,14 +131,25 @@ bool CMapiMessage::EnsureHeader(CMapiMessageHeaders::SpecialHeader special,
   if (m_headers.Value(special))
     return true;
 
-  nsString value;
   LPSPropValue pVal = CMapiApi::GetMapiProperty(m_lpMsg, mapiTag);
-  if (CMapiApi::GetStringFromProp(pVal, value) && !value.IsEmpty()) {
-    m_headers.SetValue(special, value.get());
-    return true;
+  bool success = false;
+  if (pVal) {
+    if (PROP_TYPE(pVal->ulPropTag) == PT_STRING8) {
+      if (pVal->Value.lpszA && strlen(pVal->Value.lpszA)) {
+        m_headers.SetValue(special, pVal->Value.lpszA);
+        success = true;
+      }
+    }
+    else if (PROP_TYPE(pVal->ulPropTag) == PT_UNICODE) {
+      if (pVal->Value.lpszW && wcslen(pVal->Value.lpszW)) {
+        m_headers.SetValue(special, NS_ConvertUTF16toUTF8(pVal->Value.lpszW).get());
+        success = true;
+      }
+    }
+    CMapiApi::MAPIFreeBuffer(pVal);
   }
 
-  return false;
+  return success;
 }
 
 bool CMapiMessage::EnsureDate()
@@ -190,9 +167,9 @@ bool CMapiMessage::EnsureDate()
     CMapiApi::MAPIFreeBuffer(pVal);
     // FormatDateTime would append the local time zone, so don't use it.
     // Instead, we just append +0000 for GMT/UTC here.
-    nsString str;
-    FormatDateTime( st, str, false);
-    str += L" +0000";
+    nsCString str;
+    FormatDateTime(st, str, false);
+    str += " +0000";
     m_headers.SetValue(CMapiMessageHeaders::hdrDate, str.get());
     return true;
   }
@@ -200,21 +177,20 @@ bool CMapiMessage::EnsureDate()
   return false;
 }
 
-void CMapiMessage::BuildFromLine( void)
+void CMapiMessage::BuildFromLine(void)
 {
-  nsString fromLine(sFromLine);
-  LPSPropValue pVal = CMapiApi::GetMapiProperty( m_lpMsg, PR_CREATION_TIME);
+  m_fromLine = sFromLine;
+  LPSPropValue pVal = CMapiApi::GetMapiProperty(m_lpMsg, PR_CREATION_TIME);
   if (pVal) {
     SYSTEMTIME st;
-    ::FileTimeToSystemTime( &(pVal->Value.ft), &st);
-    CMapiApi::MAPIFreeBuffer( pVal);
-    FormatDateTime( st, fromLine, FALSE);
+    ::FileTimeToSystemTime(&(pVal->Value.ft), &st);
+    CMapiApi::MAPIFreeBuffer(pVal);
+    FormatDateTime(st, m_fromLine, FALSE);
   }
   else
-    fromLine += sFromDate;
+    m_fromLine += sFromDate;
 
-  fromLine += L"\x0D\x0A";
-  CopyUTF16toUTF8(fromLine, m_fromLine);
+  m_fromLine += "\x0D\x0A";
 }
 
 #ifndef dispidHeaderItem
@@ -260,26 +236,27 @@ void CMapiMessage::GetDownloadState()
 //  PR_SUBJECT
 //  PR_MESSAGE_RECIPIENTS
 // and PR_CREATION_TIME if needed?
-bool CMapiMessage::FetchHeaders( void)
+bool CMapiMessage::FetchHeaders(void)
 {
-  // Get the Unicode string right away -> no need to double-convert,
-  // no possible conversion problems.
-  ULONG tag = PR_TRANSPORT_MESSAGE_HEADERS_W;
+  ULONG tag = PR_TRANSPORT_MESSAGE_HEADERS_A;
   LPSPropValue pVal = CMapiApi::GetMapiProperty(m_lpMsg, tag);
   if (!pVal)
-    pVal = CMapiApi::GetMapiProperty(m_lpMsg, tag = PR_TRANSPORT_MESSAGE_HEADERS_A);
+    pVal = CMapiApi::GetMapiProperty(m_lpMsg, tag = PR_TRANSPORT_MESSAGE_HEADERS_W);
   if (pVal) {
     if (CMapiApi::IsLargeProperty(pVal)) {
-      nsString headers;
+      nsCString headers;
       CMapiApi::GetLargeStringProperty(m_lpMsg, tag, headers);
       m_headers.Assign(headers.get());
     }
-    else if ((PROP_TYPE(pVal->ulPropTag) == PT_UNICODE) &&
-             (pVal->Value.lpszW) && (*(pVal->Value.lpszW)))
-      m_headers.Assign(pVal->Value.lpszW);
     else if ((PROP_TYPE(pVal->ulPropTag) == PT_STRING8) &&
              (pVal->Value.lpszA) && (*(pVal->Value.lpszA)))
-      m_headers.Assign(NS_ConvertASCIItoUTF16(pVal->Value.lpszA).get());
+      m_headers.Assign(pVal->Value.lpszA);
+    else if ((PROP_TYPE(pVal->ulPropTag) == PT_UNICODE) &&
+             (pVal->Value.lpszW) && (*(pVal->Value.lpszW))) {
+      nsCString headers;
+      LossyCopyUTF16toASCII(nsDependentString(pVal->Value.lpszW), headers);
+      m_headers.Assign(headers.get());
+    }
 
     CMapiApi::MAPIFreeBuffer(pVal);
   }
@@ -294,16 +271,7 @@ bool CMapiMessage::FetchHeaders( void)
 
   ProcessContentType();
 
-  return( !m_headers.IsEmpty());
-}
-
-bool CMapiMessage::IsMultipart( void) const
-{
-  nsCString left;
-  m_mimeContentType.Left( left, 10);
-  if (left.Equals(NS_LITERAL_CSTRING("multipart/"), nsCaseInsensitiveCStringComparator()))
-    return true;
-  return false;
+  return !m_headers.IsEmpty();
 }
 
 // Mime-Version: 1.0
@@ -316,12 +284,12 @@ void CMapiMessage::ProcessContentType()
   m_mimeBoundary.Truncate();
   m_mimeCharset.Truncate();
 
-  const wchar_t* contentType = m_headers.Value(CMapiMessageHeaders::hdrContentType);
+  const char* contentType = m_headers.Value(CMapiMessageHeaders::hdrContentType);
   if (!contentType)
     return;
 
-  const wchar_t *begin = contentType, *end;
-  nsString tStr;
+  const char *begin = contentType, *end;
+  nsCString tStr;
 
   // Note: this isn't a complete parser, the content type
   // we extract could have rfc822 comments in it
@@ -330,10 +298,9 @@ void CMapiMessage::ProcessContentType()
   if (!(*begin))
     return;
   end = begin;
-  while (*end && (*end != L';'))
+  while (*end && (*end != ';'))
     end++;
-  tStr.Assign(begin, end-begin);
-  CopyUTF16toUTF8(tStr, m_mimeContentType);
+  m_mimeContentType.Assign(begin, end-begin);
   if (!(*end))
     return;
   // look for "boundary="
@@ -348,15 +315,13 @@ void CMapiMessage::ProcessContentType()
     if (!(*begin))
       return;
     end = begin;
-    while (*end && (*end != L'='))
+    while (*end && (*end != '='))
       end++;
     if (end - begin) {
       tStr.Assign(begin, end-begin);
-      if (tStr.Equals(NS_LITERAL_STRING("boundary"),
-                      nsCaseInsensitiveStringComparator()))
+      if (tStr.LowerCaseEqualsLiteral("boundary"))
         haveB = true;
-      else if (tStr.Equals(NS_LITERAL_STRING("charset"),
-                           nsCaseInsensitiveStringComparator()))
+      else if (tStr.LowerCaseEqualsLiteral("charset"))
         haveC = true;
     }
     if (!(*end))
@@ -364,7 +329,7 @@ void CMapiMessage::ProcessContentType()
     begin = end+1;
     while (*begin && IsSpace(*begin))
       begin++;
-    if (*begin == L'"') {
+    if (*begin == '"') {
       begin++;
       bool slash = false;
       tStr.Truncate();
@@ -373,20 +338,20 @@ void CMapiMessage::ProcessContentType()
           slash = false;
           tStr.Append(*begin);
         }
-        else if (*begin == L'"')
+        else if (*begin == '"')
           break;
-        else if (*begin != L'\\')
+        else if (*begin != '\\')
           tStr.Append(*begin);
         else
           slash = true;
         begin++;
       }
       if (haveB) {
-        CopyUTF16toUTF8(tStr, m_mimeBoundary);
+        m_mimeBoundary = tStr;
         haveB = false;
       }
       if (haveC) {
-        CopyUTF16toUTF8(tStr, m_mimeCharset);
+        m_mimeCharset = tStr;
         haveC = false;
       }
       if (!(*begin))
@@ -394,16 +359,16 @@ void CMapiMessage::ProcessContentType()
       begin++;
     }
     tStr.Truncate();
-    while (*begin && (*begin != L';')) {
+    while (*begin && (*begin != ';')) {
       tStr.Append(*(begin++));
     }
     if (haveB) {
       tStr.Trim(kWhitespace);
-      CopyUTF16toUTF8(tStr, m_mimeBoundary);
+      m_mimeBoundary = tStr;
     }
     if (haveC) {
       tStr.Trim(kWhitespace);
-      CopyUTF16toUTF8(tStr, m_mimeCharset);
+      m_mimeCharset = tStr;
     }
     if (*begin)
       begin++;
@@ -490,7 +455,7 @@ const char* CpToCharset(unsigned int cp)
       {10079, "x-mac-icelandic"}, // Icelandic (Mac)
       {10081, "x-mac-turkish"}, // Turkish (Mac)
       {10082, "x-mac-croatian"}, // Croatian (Mac)
-      // Unicode UTF-32, little endian byte order; available only to managed applications 
+      // Unicode UTF-32, little endian byte order; available only to managed applications
       // impossible in 8-bit mail
       {12000, "utf-32"},
        // Unicode UTF-32, big endian byte order; available only to managed applications
@@ -596,7 +561,7 @@ const char* CpToCharset(unsigned int cp)
 
 // We don't use nsMsgI18Ncheck_data_in_charset_range because it returns true
 // even if there's no such charset:
-// 1. result initialized by PR_TRUE and returned if, eg, GetUnicodeEncoderRaw fail
+// 1. result initialized by true and returned if, eg, GetUnicodeEncoderRaw fail
 // 2. it uses GetUnicodeEncoderRaw(), not GetUnicodeEncoder() (to normalize the
 //    charset string) (see nsMsgI18N.cpp)
 // This function returns true only if the unicode (utf-16) text can be
@@ -619,11 +584,11 @@ bool CMapiMessage::CheckBodyInCharsetRange(const char* charset)
   // get an unicode converter
   rv = ccm->GetUnicodeEncoder(charset, getter_AddRefs(encoder));
   NS_ENSURE_SUCCESS(rv, false);
-  rv = encoder->SetOutputErrorBehavior(nsIUnicodeEncoder::kOnError_Signal, nsnull, 0);
+  rv = encoder->SetOutputErrorBehavior(nsIUnicodeEncoder::kOnError_Signal, nullptr, 0);
   NS_ENSURE_SUCCESS(rv, false);
 
   const wchar_t *txt = m_body.get();
-  PRInt32 txtLen = m_body.Length();
+  int32_t txtLen = m_body.Length();
   const wchar_t *currentSrcPtr = txt;
   int srcLength;
   int dstLength;
@@ -632,7 +597,7 @@ bool CMapiMessage::CheckBodyInCharsetRange(const char* charset)
 
   // convert
   while (consumedLen < txtLen) {
-    srcLength = txtLen - consumedLen;  
+    srcLength = txtLen - consumedLen;
     dstLength = sizeof(localbuf)/sizeof(localbuf[0]);
     rv = encoder->Convert(currentSrcPtr, &srcLength, localbuf, &dstLength);
     if (rv == NS_ERROR_UENC_NOMAPPING)
@@ -646,12 +611,12 @@ bool CMapiMessage::CheckBodyInCharsetRange(const char* charset)
   return true;
 }
 
-bool CaseInsensitiveComp (wchar_t elem1, wchar_t elem2 )
+bool CaseInsensitiveComp (wchar_t elem1, wchar_t elem2)
 {
   return _wcsnicmp(&elem1, &elem2, 1) == 0;
 }
 
-void ExtractMetaCharset( const wchar_t* body, int bodySz, /*out*/nsCString& charset)
+void ExtractMetaCharset(const wchar_t* body, int bodySz, /*out*/nsCString& charset)
 {
   charset.Truncate();
   const wchar_t* body_end = body+bodySz;
@@ -684,7 +649,7 @@ void ExtractMetaCharset( const wchar_t* body, int bodySz, /*out*/nsCString& char
     LossyCopyUTF16toASCII(Substring(chset_pos, chset_end), charset);
 }
 
-bool CMapiMessage::FetchBody( void)
+bool CMapiMessage::FetchBody(void)
 {
   m_bodyIsHtml = false;
   m_body.Truncate();
@@ -692,11 +657,11 @@ bool CMapiMessage::FetchBody( void)
   // Get the Outlook codepage info; if unsuccessful then it defaults to 0 (CP_ACP) -> system default
   // Maybe we can use this info later?
   unsigned int codepage=0;
-  LPSPropValue pVal = CMapiApi::GetMapiProperty( m_lpMsg, PR_INTERNET_CPID);
+  LPSPropValue pVal = CMapiApi::GetMapiProperty(m_lpMsg, PR_INTERNET_CPID);
   if (pVal) {
-    if (PROP_TYPE( pVal->ulPropTag) == PT_LONG)
+    if (PROP_TYPE(pVal->ulPropTag) == PT_LONG)
       codepage = pVal->Value.l;
-    CMapiApi::MAPIFreeBuffer( pVal);
+    CMapiApi::MAPIFreeBuffer(pVal);
   }
 
   unsigned long nativeBodyType = 0;
@@ -713,7 +678,7 @@ bool CMapiMessage::FetchBody( void)
       else if ((PROP_TYPE(pVal->ulPropTag) == PT_UNICODE) &&
                (pVal->Value.lpszW) && (*(pVal->Value.lpszW)))
         m_body.Assign(pVal->Value.lpszW);
-      CMapiApi::MAPIFreeBuffer( pVal);
+      CMapiApi::MAPIFreeBuffer(pVal);
     }
 
     // Kind-hearted Outlook will give us html even for a plain text message.
@@ -726,7 +691,7 @@ bool CMapiMessage::FetchBody( void)
     // To detect the "true" plain text messages, we look for our string
     // immediately following the <BODY> tag.
     if (!m_body.IsEmpty() &&
-        m_body.Find(L"<BODY>\r\n<!-- Converted from text/plain format -->") ==
+        m_body.Find("<BODY>\r\n<!-- Converted from text/plain format -->") ==
         kNotFound) {
       m_bodyIsHtml = true;
     }
@@ -817,20 +782,20 @@ static const SizedSPropTagArray(ieidAttachMax, ptaEid)=
 bool CMapiMessage::IterateAttachTable(LPMAPITABLE lpTable)
 {
   ULONG rowCount;
-  HRESULT hr = lpTable->GetRowCount( 0, &rowCount);
+  HRESULT hr = lpTable->GetRowCount(0, &rowCount);
   if (!rowCount) {
     return true;
   }
 
-  hr = lpTable->SetColumns( (LPSPropTagArray)&ptaEid, 0);
+  hr = lpTable->SetColumns((LPSPropTagArray)&ptaEid, 0);
   if (FAILED(hr)) {
-    MAPI_TRACE2( "SetColumns for attachment table failed: 0x%lx, %d\r\n", (long)hr, (int)hr);
+    MAPI_TRACE2("SetColumns for attachment table failed: 0x%lx, %d\r\n", (long)hr, (int)hr);
     return false;
   }
 
-  hr = lpTable->SeekRow( BOOKMARK_BEGINNING, 0, NULL);
+  hr = lpTable->SeekRow(BOOKMARK_BEGINNING, 0, NULL);
   if (FAILED(hr)) {
-    MAPI_TRACE2( "SeekRow for attachment table failed: 0x%lx, %d\r\n", (long)hr, (int)hr);
+    MAPI_TRACE2("SeekRow for attachment table failed: 0x%lx, %d\r\n", (long)hr, (int)hr);
     return false;
   }
 
@@ -840,10 +805,10 @@ bool CMapiMessage::IterateAttachTable(LPMAPITABLE lpTable)
   do {
 
     lpRow = NULL;
-    hr = lpTable->QueryRows( 1, 0, &lpRow);
+    hr = lpTable->QueryRows(1, 0, &lpRow);
 
     if(HR_FAILED(hr)) {
-      MAPI_TRACE2( "QueryRows for attachment table failed: 0x%lx, %d\n", (long)hr, (int)hr);
+      MAPI_TRACE2("QueryRows for attachment table failed: 0x%lx, %d\n", (long)hr, (int)hr);
       bResult = false;
       break;
     }
@@ -854,17 +819,17 @@ bool CMapiMessage::IterateAttachTable(LPMAPITABLE lpTable)
       if (cNumRows) {
         DWORD aNum = lpRow->aRow[0].lpProps[ieidPR_ATTACH_NUM].Value.ul;
         AddAttachment(aNum);
-        MAPI_TRACE1( "\t\t****Attachment found - #%d\r\n", (int)aNum);
+        MAPI_TRACE1("\t\t****Attachment found - #%d\r\n", (int)aNum);
       }
-      CMapiApi::FreeProws( lpRow);
+      CMapiApi::FreeProws(lpRow);
     }
 
-  } while ( SUCCEEDED(hr) && cNumRows && lpRow);
+  } while (SUCCEEDED(hr) && cNumRows && lpRow);
 
-  return( bResult);
+  return bResult;
 }
 
-bool CMapiMessage::GetTmpFile(/*out*/ nsILocalFile **aResult)
+bool CMapiMessage::GetTmpFile(/*out*/ nsIFile **aResult)
 {
   nsCOMPtr<nsIFile> tmpFile;
   nsresult rv = GetSpecialDirectoryWithFileName(NS_OS_TEMP_DIR,
@@ -880,7 +845,7 @@ bool CMapiMessage::GetTmpFile(/*out*/ nsILocalFile **aResult)
   return NS_SUCCEEDED(CallQueryInterface(tmpFile, aResult));
 }
 
-bool CMapiMessage::CopyMsgAttachToFile(LPATTACH lpAttach, /*out*/ nsILocalFile **tmp_file)
+bool CMapiMessage::CopyMsgAttachToFile(LPATTACH lpAttach, /*out*/ nsIFile **tmp_file)
 {
   bool bResult = true;
   LPMESSAGE  lpMsg;
@@ -897,16 +862,16 @@ bool CMapiMessage::CopyMsgAttachToFile(LPATTACH lpAttach, /*out*/ nsILocalFile *
     rv = nsOutlookMail::ImportMessage(lpMsg, destOutputStream, nsIMsgSend::nsMsgSaveAsDraft);
 
   if (NS_FAILED(rv)) {
-    (*tmp_file)->Remove(PR_FALSE);
+    (*tmp_file)->Remove(false);
     (*tmp_file)->Release();
-    tmp_file = 0;
+    *tmp_file = 0;
   }
 
   return NS_SUCCEEDED(rv);
 }
 
 bool CMapiMessage::CopyBinAttachToFile(LPATTACH lpAttach,
-                                       nsILocalFile **tmp_file)
+                                       nsIFile **tmp_file)
 {
   nsCOMPtr<nsIFile> _tmp_file;
   nsresult rv = GetSpecialDirectoryWithFileName(NS_OS_TEMP_DIR,
@@ -920,7 +885,7 @@ bool CMapiMessage::CopyBinAttachToFile(LPATTACH lpAttach,
   nsCString tmpPath;
   _tmp_file->GetNativePath(tmpPath);
   LPSTREAM lpStreamFile;
-  HRESULT hr = CMapiApi::OpenStreamOnFile( gpMapiAllocateBuffer, gpMapiFreeBuffer, STGM_READWRITE | STGM_CREATE,
+  HRESULT hr = CMapiApi::OpenStreamOnFile(gpMapiAllocateBuffer, gpMapiFreeBuffer, STGM_READWRITE | STGM_CREATE,
     const_cast<char*>(tmpPath.get()), NULL, &lpStreamFile);
   if (HR_FAILED(hr)) {
     MAPI_TRACE1("~~ERROR~~ OpenStreamOnFile failed - temp path: %s\r\n",
@@ -930,24 +895,24 @@ bool CMapiMessage::CopyBinAttachToFile(LPATTACH lpAttach,
 
   bool bResult = true;
   LPSTREAM lpAttachStream;
-  hr = lpAttach->OpenProperty( PR_ATTACH_DATA_BIN, &IID_IStream, 0, 0, (LPUNKNOWN *)&lpAttachStream);
+  hr = lpAttach->OpenProperty(PR_ATTACH_DATA_BIN, &IID_IStream, 0, 0, (LPUNKNOWN *)&lpAttachStream);
 
-  if (HR_FAILED( hr)) {
-    MAPI_TRACE0( "~~ERROR~~ OpenProperty failed for PR_ATTACH_DATA_BIN.\r\n");
+  if (HR_FAILED(hr)) {
+    MAPI_TRACE0("~~ERROR~~ OpenProperty failed for PR_ATTACH_DATA_BIN.\r\n");
     lpAttachStream = NULL;
     bResult = false;
   }
   else {
     STATSTG st;
-    hr = lpAttachStream->Stat( &st, STATFLAG_NONAME);
-    if (HR_FAILED( hr)) {
-      MAPI_TRACE0( "~~ERROR~~ Stat failed for attachment stream\r\n");
+    hr = lpAttachStream->Stat(&st, STATFLAG_NONAME);
+    if (HR_FAILED(hr)) {
+      MAPI_TRACE0("~~ERROR~~ Stat failed for attachment stream\r\n");
       bResult = false;
     }
     else {
-      hr = lpAttachStream->CopyTo( lpStreamFile, st.cbSize, NULL, NULL);
-      if (HR_FAILED( hr)) {
-        MAPI_TRACE0( "~~ERROR~~ Attach Stream CopyTo temp file failed.\r\n");
+      hr = lpAttachStream->CopyTo(lpStreamFile, st.cbSize, NULL, NULL);
+      if (HR_FAILED(hr)) {
+        MAPI_TRACE0("~~ERROR~~ Attach Stream CopyTo temp file failed.\r\n");
         bResult = false;
       }
     }
@@ -957,7 +922,7 @@ bool CMapiMessage::CopyBinAttachToFile(LPATTACH lpAttach,
     lpAttachStream->Release();
   lpStreamFile->Release();
   if (!bResult)
-    _tmp_file->Remove(PR_FALSE);
+    _tmp_file->Remove(false);
   else
     CallQueryInterface(_tmp_file, tmp_file);
 
@@ -991,10 +956,10 @@ bool CMapiMessage::AddAttachment(DWORD aNum)
     // 1. Get the file that contains the attachment data
     LPSPropValue pVal = CMapiApi::GetMapiProperty(lpAttach, PR_ATTACH_METHOD);
     if (pVal) {
-      aMethod = CMapiApi::GetLongFromProp( pVal);
+      aMethod = CMapiApi::GetLongFromProp(pVal);
       switch (aMethod) {
       case ATTACH_BY_VALUE:
-        MAPI_TRACE1( "\t\t** Attachment #%d by value.\r\n", aNum);
+        MAPI_TRACE1("\t\t** Attachment #%d by value.\r\n", aNum);
         bResult = CopyBinAttachToFile(lpAttach, getter_AddRefs(data->tmp_file));
         data->delete_file = true;
         break;
@@ -1039,8 +1004,8 @@ bool CMapiMessage::AddAttachment(DWORD aNum)
       bResult = data->tmp_file;
 
     if (bResult) {
-      PRBool isFile = PR_FALSE;
-      PRBool exists = PR_FALSE;
+      bool isFile = false;
+      bool exists = false;
       data->tmp_file->Exists(&exists);
       data->tmp_file->IsFile(&isFile);
 
@@ -1071,7 +1036,7 @@ bool CMapiMessage::AddAttachment(DWORD aNum)
       if (fext.IsEmpty()) {
         int idx = fname.RFindChar(L'.');
         if (idx != -1)
-          fname.Right(fext, fname.Length() - idx);
+          fext = Substring(fname, idx);
       }
       else if (fname.RFindChar(L'.') == -1) {
         fname += L".";
@@ -1080,7 +1045,7 @@ bool CMapiMessage::AddAttachment(DWORD aNum)
       if (fname.IsEmpty()) {
         // If no description use "Attachment i" format.
         fname = L"Attachment ";
-        fname.AppendInt(static_cast<PRUint32>(aNum));
+        fname.AppendInt(static_cast<uint32_t>(aNum));
       }
       data->real_name = ToNewUTF8String(fname);
 
@@ -1093,7 +1058,7 @@ bool CMapiMessage::AddAttachment(DWORD aNum)
         CMapiApi::GetStringFromProp(pVal, tmp);
         MAPI_TRACE1("\t\t\t--- Mime type: %s\r\n", tmp.get());
         if (tmp.IsEmpty()) {
-          PRUint8 *pType = NULL;
+          uint8_t *pType = NULL;
           if (!fext.IsEmpty()) {
             pType = CMimeTypes::GetMimeType(fext);
           }
@@ -1155,13 +1120,13 @@ bool CMapiMessage::AddAttachment(DWORD aNum)
   }
 
   lpAttach->Release();
-  return( bResult);
+  return bResult;
 }
 
 void CMapiMessage::ClearAttachment(attach_data* data)
 {
   if (data->delete_file && data->tmp_file)
-    data->tmp_file->Remove(PR_FALSE);
+    data->tmp_file->Remove(false);
 
   if (data->type)
     NS_Free(data->type);
@@ -1192,9 +1157,9 @@ void CMapiMessage::ProcessAttachments()
   bool hasAttach = true;
 
   if (pVal) {
-    if (PROP_TYPE( pVal->ulPropTag) == PT_BOOLEAN)
+    if (PROP_TYPE(pVal->ulPropTag) == PT_BOOLEAN)
       hasAttach = (pVal->Value.b != 0);
-    CMapiApi::MAPIFreeBuffer( pVal);
+    CMapiApi::MAPIFreeBuffer(pVal);
   }
 
   if (!hasAttach)
@@ -1202,38 +1167,39 @@ void CMapiMessage::ProcessAttachments()
 
   // Get the attachment table?
   LPMAPITABLE pTable = NULL;
-  HRESULT hr = m_lpMsg->GetAttachmentTable( 0, &pTable);
-  if (FAILED( hr) || !pTable)
+  HRESULT hr = m_lpMsg->GetAttachmentTable(0, &pTable);
+  if (FAILED(hr) || !pTable)
     return;
   IterateAttachTable(pTable);
   pTable->Release();
 }
 
-nsMsgAttachedFile* CMapiMessage::GetAttachments()
+nsresult CMapiMessage::GetAttachments(nsIArray **aArray)
 {
-  nsMsgAttachedFile* result = new nsMsgAttachedFile[m_stdattachments.size()+1];
-  if (!result)
-    return 0;
-  memset(result, 0, sizeof(nsMsgAttachedFile)*m_stdattachments.size()+1);
+  nsresult rv;
+  nsCOMPtr<nsIMutableArray> attachments (do_CreateInstance(NS_ARRAY_CONTRACTID, &rv));
+  NS_ENSURE_SUCCESS(rv, rv);
+  NS_IF_ADDREF(*aArray = attachments);
 
-  nsMsgAttachedFile* pos=result;
   for (std::vector<attach_data*>::const_iterator it = m_stdattachments.begin();
-       it != m_stdattachments.end(); pos++, it++) {
-    pos->orig_url = (*it)->orig_url;
-    pos->tmp_file = (*it)->tmp_file;
-    pos->encoding = (*it)->encoding;
-    pos->real_name = (*it)->real_name;
-    pos->type = (*it)->type;
+       it != m_stdattachments.end(); it++) {
+    nsCOMPtr<nsIMsgAttachedFile> a(do_CreateInstance(NS_MSGATTACHEDFILE_CONTRACTID, &rv));
+    NS_ENSURE_SUCCESS(rv, rv);
+    a->SetOrigUrl((*it)->orig_url);
+    a->SetTmpFile((*it)->tmp_file);
+    a->SetEncoding(nsDependentCString((*it)->encoding));
+    a->SetRealName(nsDependentCString((*it)->real_name));
+    a->SetType(nsDependentCString((*it)->type));
+    attachments->AppendElement(a, false);
   }
-
-  return result;
+  return rv;
 }
 
 bool CMapiMessage::GetEmbeddedAttachmentInfo(unsigned int i, nsIURI **uri,
                                              const char **cid,
                                              const char **name) const
 {
-  if ((i < 0) || ( i >= m_embattachments.size()))
+  if ((i < 0) || (i >= m_embattachments.size()))
     return false;
   attach_data* data = m_embattachments[i];
   if (!data)
@@ -1247,34 +1213,35 @@ bool CMapiMessage::GetEmbeddedAttachmentInfo(unsigned int i, nsIURI **uri,
 //////////////////////////////////////////////////////
 
 // begin and end MUST point to the same string
-wchar_t* dup(const wchar_t* begin, const wchar_t* end)
+char* dup(const char* begin, const char* end)
 {
   if (begin >= end)
     return 0;
-  wchar_t* str = new wchar_t[end-begin+1];
+  char* str = new char[end-begin+1];
   memcpy(str, begin, (end-begin)*sizeof(begin[0]));
   str[end - begin] = 0;
   return str;
 }
 
 // See RFC822
-inline bool IsPrintableASCII(wchar_t c) { return (c > 32) && (c < 127); }
-inline bool IsWSP(wchar_t c) { return (c == 32) || (c == 9); }
+// 9 = '\t', 32 = ' '.
+inline bool IsPrintableASCII(char c) { return (c > ' ') && (c < 127); }
+inline bool IsWSP(char c) { return (c == ' ') || (c == '\t'); }
 
-CMapiMessageHeaders::CHeaderField::CHeaderField(const wchar_t* begin, int len)
-  : m_fname(0), m_fbody(0)
+CMapiMessageHeaders::CHeaderField::CHeaderField(const char* begin, int len)
+  : m_fname(0), m_fbody(0), m_fbody_utf8(false)
 {
-  const wchar_t *end = begin+len, *fname_end = begin;
-  while ((fname_end < end) && IsPrintableASCII(*fname_end) && (*fname_end != L':'))
+  const char *end = begin+len, *fname_end = begin;
+  while ((fname_end < end) && IsPrintableASCII(*fname_end) && (*fname_end != ':'))
     ++fname_end;
-  if ((fname_end == end) || (*fname_end != L':'))
+  if ((fname_end == end) || (*fname_end != ':'))
     return; // Not a valid header!
   m_fname = dup(begin, fname_end+1); // including colon
   m_fbody = dup(fname_end+1, end);
 }
 
-CMapiMessageHeaders::CHeaderField::CHeaderField(const wchar_t* name, const wchar_t* body)
-  : m_fname(dup(name, name+wcslen(name))), m_fbody(dup(body, body+wcslen(body)))
+CMapiMessageHeaders::CHeaderField::CHeaderField(const char* name, const char* body, bool utf8)
+  : m_fname(dup(name, name+strlen(name))), m_fbody(dup(body, body+strlen(body))), m_fbody_utf8(utf8)
 {
 }
 
@@ -1284,45 +1251,52 @@ CMapiMessageHeaders::CHeaderField::~CHeaderField()
   delete[] m_fbody;
 }
 
-void CMapiMessageHeaders::CHeaderField::set_fbody(const wchar_t* txt)
+void CMapiMessageHeaders::CHeaderField::set_fbody(const char* txt)
 {
   if (m_fbody == txt)
     return; // to avoid assigning to self
-  wchar_t* oldbody = m_fbody;
-  m_fbody = dup(txt, txt+wcslen(txt));
+  char* oldbody = m_fbody;
+  m_fbody = dup(txt, txt+strlen(txt));
   delete[] oldbody;
+  m_fbody_utf8 = true;
 }
 
-void CMapiMessageHeaders::CHeaderField::UnfoldFoldedSpaces(const wchar_t* body,
-                                                           nsString& dest)
+void CMapiMessageHeaders::CHeaderField::GetUnfoldedString(nsString& dest,
+                                          const char* fallbackCharset) const
 {
   dest.Truncate();
-  if (!body)
+  if (!m_fbody)
     return;
-  const wchar_t* pos = body;
+
+  nsCString unfolded;
+  const char* pos = m_fbody;
   while (*pos) {
-    if ((*pos == '\x0D') && (*(pos+1) == '\x0A') && *(pos+2) && IsWSP(*(pos+2)))
+    if ((*pos == nsCRT::CR) && (*(pos+1) == nsCRT::LF) && IsWSP(*(pos+2)))
       pos += 2; // Skip CRLF if it is followed by SPACE or TAB
     else
-      dest.Append(*(pos++));
+      unfolded.Append(*(pos++));
   }
+  if (m_fbody_utf8)
+    CopyUTF8toUTF16(unfolded, dest);
+  else
+    nsMsgI18NConvertToUnicode(fallbackCharset, unfolded, dest);
 }
 
 ////////////////////////////////////////
 
-const wchar_t* CMapiMessageHeaders::Specials[hdrMax] = {
-  L"Date:",
-  L"From:",
-  L"Sender:",
-  L"Reply-To:",
-  L"To:",
-  L"Cc:",
-  L"Bcc:",
-  L"Message-ID:",
-  L"Subject:",
-  L"Mime-Version:",
-  L"Content-Type:",
-  L"Content-Transfer-Encoding:"
+const char* CMapiMessageHeaders::Specials[hdrMax] = {
+  "Date:",
+  "From:",
+  "Sender:",
+  "Reply-To:",
+  "To:",
+  "Cc:",
+  "Bcc:",
+  "Message-ID:",
+  "Subject:",
+  "Mime-Version:",
+  "Content-Type:",
+  "Content-Transfer-Encoding:"
 };
 
 CMapiMessageHeaders::~CMapiMessageHeaders()
@@ -1338,16 +1312,17 @@ void CMapiMessageHeaders::ClearHeaderFields()
   m_headerFields.clear();
 }
 
-void CMapiMessageHeaders::Assign(const wchar_t* headers)
+void CMapiMessageHeaders::Assign(const char* headers)
 {
   for (int i=0; i<hdrMax; i++)
     m_SpecialHeaders[i] = 0;
   ClearHeaderFields();
   if (!headers)
     return;
-  const wchar_t *start=headers, *end=headers;
+
+  const char *start=headers, *end=headers;
   while (*end) {
-    if ((*end == L'\x0D') && (*(end+1) == L'\x0A')) { // CRLF
+    if ((*end == nsCRT::CR) && (*(end+1) == nsCRT::LF)) {
       if (!IsWSP(*(end+2))) { // Not SPACE nor TAB (avoid FSP) -> next header or EOF
         Add(new CHeaderField(start, end-start));
         start = ++end + 1;
@@ -1386,16 +1361,16 @@ void CMapiMessageHeaders::Add(CHeaderField* f)
   m_headerFields.push_back(f);
 }
 
-CMapiMessageHeaders::SpecialHeader CMapiMessageHeaders::CheckSpecialHeader(const wchar_t* fname) const
+CMapiMessageHeaders::SpecialHeader CMapiMessageHeaders::CheckSpecialHeader(const char* fname)
 {
   for (int i = hdrFirst; i < hdrMax; i++)
-    if (!wcsicmp(fname, Specials[i]))
+    if (stricmp(fname, Specials[i]) == 0)
       return static_cast<SpecialHeader>(i);
 
   return hdrNone;
 }
 
-const CMapiMessageHeaders::CHeaderField* CMapiMessageHeaders::CFind(const wchar_t* name) const
+const CMapiMessageHeaders::CHeaderField* CMapiMessageHeaders::CFind(const char* name) const
 {
   SpecialHeader special = CheckSpecialHeader(name);
   if ((special > hdrNone) && (special < hdrMax))
@@ -1407,47 +1382,63 @@ const CMapiMessageHeaders::CHeaderField* CMapiMessageHeaders::CFind(const wchar_
   return *iter;
 }
 
-const wchar_t* CMapiMessageHeaders::Value(SpecialHeader special) const
+const char* CMapiMessageHeaders::SpecialName(SpecialHeader special)
+{
+  if ((special <= hdrNone) || (special >= hdrMax))
+    return 0;
+  return Specials[special];
+}
+
+const char* CMapiMessageHeaders::Value(SpecialHeader special) const
 {
   if ((special <= hdrNone) || (special >= hdrMax))
     return 0;
   return (m_SpecialHeaders[special]) ? m_SpecialHeaders[special]->fbody() : 0;
 }
 
-const wchar_t* CMapiMessageHeaders::Value(const wchar_t* name) const
+const char* CMapiMessageHeaders::Value(const char* name) const
 {
   const CHeaderField* result = CFind(name);
   return result ? result->fbody() : 0;
 }
 
-void CMapiMessageHeaders::UnfoldValue(const wchar_t* name, nsString& dest) const
+void CMapiMessageHeaders::UnfoldValue(const char* name, nsString& dest, const char* fallbackCharset) const
 {
-  CHeaderField::UnfoldFoldedSpaces(Value(name), dest);
-}
-
-void CMapiMessageHeaders::UnfoldValue(SpecialHeader special, nsString& dest) const
-{
-  CHeaderField::UnfoldFoldedSpaces(Value(special), dest);
-}
-
-int CMapiMessageHeaders::SetValue(const wchar_t* name, const wchar_t* value, bool replace)
-{
-  CHeaderField* result = Find(name);
-  if (result) {
-    result->set_fbody(value);
-  }
+  const CHeaderField* result = CFind(name);
+  if (result)
+    result->GetUnfoldedString(dest, fallbackCharset);
   else
-    Add(new CHeaderField(name, value));
+    dest.Truncate();
+}
+
+void CMapiMessageHeaders::UnfoldValue(SpecialHeader special, nsString& dest, const char* fallbackCharset) const
+{
+  if ((special <= hdrNone) || (special >= hdrMax) || (!m_SpecialHeaders[special]))
+    dest.Truncate();
+  else
+    m_SpecialHeaders[special]->GetUnfoldedString(dest, fallbackCharset);
+}
+
+int CMapiMessageHeaders::SetValue(const char* name, const char* value, bool replace)
+{
+  if (!replace) {
+    CHeaderField* result = Find(name);
+    if (result) {
+      result->set_fbody(value);
+      return 0;
+    }
+  }
+  Add(new CHeaderField(name, value, true));
   return 0; // No sensible result is returned; maybe do something senseful later
 }
 
-int CMapiMessageHeaders::SetValue(SpecialHeader special, const wchar_t* value)
+int CMapiMessageHeaders::SetValue(SpecialHeader special, const char* value)
 {
   CHeaderField* result = m_SpecialHeaders[special];
   if (result)
     result->set_fbody(value);
   else
-    Add(new CHeaderField(Specials[special], value));
+    Add(new CHeaderField(Specials[special], value, true));
   return 0;
 }
 
@@ -1456,15 +1447,14 @@ void CMapiMessageHeaders::write_to_stream::operator () (const CHeaderField* f)
   if (!f || NS_FAILED(m_rv))
     return;
 
-  nsCString str;
-  PRUint32 written;
-  LossyCopyUTF16toASCII(f->fname(), str);
-  m_rv = m_pDst->Write( str.get(), str.Length(), &written);
+  uint32_t written;
+  m_rv = m_pDst->Write(f->fname(), strlen(f->fname()), &written);
   NS_ENSURE_SUCCESS(m_rv,);
-  LossyCopyUTF16toASCII(f->fbody(), str);
-  m_rv = m_pDst->Write(str.get(), str.Length(), &written);
-  NS_ENSURE_SUCCESS(m_rv,);
-  m_rv = m_pDst->Write( "\x0D\x0A", 2, &written);
+  if (f->fbody()) {
+    m_rv = m_pDst->Write(f->fbody(), strlen(f->fbody()), &written);
+    NS_ENSURE_SUCCESS(m_rv,);
+  }
+  m_rv = m_pDst->Write("\x0D\x0A", 2, &written);
 }
 
 nsresult CMapiMessageHeaders::ToStream(nsIOutputStream *pDst) const
@@ -1472,8 +1462,8 @@ nsresult CMapiMessageHeaders::ToStream(nsIOutputStream *pDst) const
   nsresult rv = std::for_each(m_headerFields.begin(), m_headerFields.end(),
                               write_to_stream(pDst));
   if (NS_SUCCEEDED(rv)) {
-    PRUint32 written;
-    rv = pDst->Write( "\x0D\x0A", 2, &written); // Separator line
+    uint32_t written;
+    rv = pDst->Write("\x0D\x0A", 2, &written); // Separator line
   }
   return rv;
 }

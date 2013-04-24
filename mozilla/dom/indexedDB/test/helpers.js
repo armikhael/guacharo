@@ -4,21 +4,77 @@
  */
 
 var testGenerator = testSteps();
+var archiveReaderEnabled = false;
 
-function runTest()
+function executeSoon(aFun)
 {
-  allowIndexedDB();
+  let comp = SpecialPowers.wrap(Components);
 
-  SimpleTest.waitForExplicitFinish();
-  testGenerator.next();
+  let thread = comp.classes["@mozilla.org/thread-manager;1"]
+                   .getService(comp.interfaces.nsIThreadManager)
+                   .mainThread;
+
+  thread.dispatch({
+    run: function() {
+      aFun();
+    }
+  }, Components.interfaces.nsIThread.DISPATCH_NORMAL);
+}
+
+function clearAllDatabases(callback) {
+  function runCallback() {
+    SimpleTest.executeSoon(function () { callback(); });
+  }
+
+  if (!SpecialPowers.isMainProcess()) {
+    runCallback();
+    return;
+  }
+
+  let comp = SpecialPowers.wrap(Components);
+
+  let idbManager =
+    comp.classes["@mozilla.org/dom/indexeddb/manager;1"]
+        .getService(comp.interfaces.nsIIndexedDatabaseManager);
+
+  let uri = SpecialPowers.getDocumentURIObject(document);
+
+  idbManager.clearDatabasesForURI(uri);
+  idbManager.getUsageForURI(uri, function(uri, usage, fileUsage) {
+    if (usage) {
+      throw new Error("getUsageForURI returned non-zero usage after " +
+                      "clearing all databases!");
+    }
+    runCallback();
+  });
+}
+
+if (!window.runTest) {
+  window.runTest = function(limitedQuota)
+  {
+    SimpleTest.waitForExplicitFinish();
+
+    if (limitedQuota) {
+      denyUnlimitedQuota();
+    }
+    else {
+      allowUnlimitedQuota();
+    }
+
+    enableArchiveReader();
+
+    clearAllDatabases(function () { testGenerator.next(); });
+  }
 }
 
 function finishTest()
 {
-  disallowIndexedDB();
+  resetUnlimitedQuota();
+  resetArchiveReader();
 
   SimpleTest.executeSoon(function() {
     testGenerator.close();
+    //clearAllDatabases(function() { SimpleTest.finish(); });
     SimpleTest.finish();
   });
 }
@@ -45,9 +101,14 @@ function continueToNextStep()
   });
 }
 
+function continueToNextStepSync()
+{
+  testGenerator.next();
+}
+
 function errorHandler(event)
 {
-  ok(false, "indexedDB error, code " + event.target.errorCode);
+  ok(false, "indexedDB error, '" + event.target.error.name + "'");
   finishTest();
 }
 
@@ -63,85 +124,102 @@ function unexpectedSuccessHandler()
   finishTest();
 }
 
-function ExpectError(code)
+function ExpectError(name, preventDefault)
 {
-  this._code = code;
+  this._name = name;
+  this._preventDefault = preventDefault;
 }
 ExpectError.prototype = {
   handleEvent: function(event)
   {
     is(event.type, "error", "Got an error event");
-    is(this._code, event.target.errorCode, "Expected error was thrown.");
-    event.preventDefault();
+    is(event.target.error.name, this._name, "Expected error was thrown.");
+    if (this._preventDefault) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
     grabEventAndContinueHandler(event);
   }
 };
 
-function addPermission(permission, url)
-{
-  netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
+function compareKeys(k1, k2) {
+  let t = typeof k1;
+  if (t != typeof k2)
+    return false;
 
-  let uri;
-  if (url) {
-    uri = Components.classes["@mozilla.org/network/io-service;1"]
-                    .getService(Components.interfaces.nsIIOService)
-                    .newURI(url, null, null);
-  }
-  else {
-    uri = window.document.documentURIObject;
+  if (t !== "object")
+    return k1 === k2;
+
+  if (k1 instanceof Date) {
+    return (k2 instanceof Date) &&
+      k1.getTime() === k2.getTime();
   }
 
-  Components.classes["@mozilla.org/permissionmanager;1"]
-            .getService(Components.interfaces.nsIPermissionManager)
-            .add(uri, permission,
-                 Components.interfaces.nsIPermissionManager.ALLOW_ACTION);
+  if (k1 instanceof Array) {
+    if (!(k2 instanceof Array) ||
+        k1.length != k2.length)
+      return false;
+
+    for (let i = 0; i < k1.length; ++i) {
+      if (!compareKeys(k1[i], k2[i]))
+        return false;
+    }
+
+    return true;
+  }
+
+  return false;
 }
 
-function removePermission(permission, url)
+function addPermission(type, allow, url)
 {
-  netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
-
-  let uri;
-  if (url) {
-    uri = Components.classes["@mozilla.org/network/io-service;1"]
-                    .getService(Components.interfaces.nsIIOService)
-                    .newURI(url, null, null);
+  if (!url) {
+    url = window.document;
   }
-  else {
-    uri = window.document.documentURIObject;
-  }
+  SpecialPowers.addPermission(type, allow, url);
+}
 
-  Components.classes["@mozilla.org/permissionmanager;1"]
-            .getService(Components.interfaces.nsIPermissionManager)
-            .remove(uri.host, permission);
+function removePermission(type, url)
+{
+  if (!url) {
+    url = window.document;
+  }
+  SpecialPowers.removePermission(type, url);
 }
 
 function setQuota(quota)
 {
-  netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
-
-  let prefs = Components.classes["@mozilla.org/preferences-service;1"]
-                        .getService(Components.interfaces.nsIPrefBranch);
-
-  prefs.setIntPref("dom.indexedDB.warningQuota", quota);
-}
-
-function allowIndexedDB(url)
-{
-  addPermission("indexedDB", url);
-}
-
-function disallowIndexedDB(url)
-{
-  removePermission("indexedDB", url);
+  SpecialPowers.setIntPref("dom.indexedDB.warningQuota", quota);
 }
 
 function allowUnlimitedQuota(url)
 {
-  addPermission("indexedDB-unlimited", url);
+  addPermission("indexedDB-unlimited", true, url);
 }
 
-function disallowUnlimitedQuota(url)
+function denyUnlimitedQuota(url)
+{
+  addPermission("indexedDB-unlimited", false, url);
+}
+
+function resetUnlimitedQuota(url)
 {
   removePermission("indexedDB-unlimited", url);
+}
+
+function enableArchiveReader()
+{
+  archiveReaderEnabled = SpecialPowers.getBoolPref("dom.archivereader.enabled");
+  SpecialPowers.setBoolPref("dom.archivereader.enabled", true);
+}
+
+function resetArchiveReader()
+{
+  SpecialPowers.setBoolPref("dom.archivereader.enabled", archiveReaderEnabled);
+}
+
+function gc()
+{
+  SpecialPowers.forceGC();
+  SpecialPowers.forceCC();
 }

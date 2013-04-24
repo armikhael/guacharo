@@ -1,48 +1,19 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Kent James <kent@caspia.com>.
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
- * tests message moves with filter and quarantine enabled per bug 582918
+ * tests message moves with filter and quarantine enabled per bug 582918.
+ * It then tests that subsequent moves of the filtered messages work.
  *
  * adapted from test_copyThenMoveManual.js
  */
 
+Components.utils.import("resource:///modules/mailServices.js");
+
 load("../../../resources/POP3pump.js");
-const gFiles = ["../../../data/bugmail1", "../../../data/bugmail2"];
-var gMoveFolder;
+const gFiles = ["../../../data/bugmail1", "../../../data/bugmail10"];
+var gMoveFolder, gMoveFolder2;
 var gFilter; // the test filter
 var gFilterList;
 var gCurTestNum = 1;
@@ -71,21 +42,53 @@ const gTestArray =
     ++gCurTestNum;
     gPOP3Pump.run();
   },
-  function verifyFolders2() {
+  function waitForCopyToFinish() {
+    do_timeout(1000, function() {++gCurTestNum; doTest();});
+  },
+  function verifyFolders1() {
     do_check_eq(folderCount(gMoveFolder), 2);
     // the local inbox folder should now be empty, since the second
     // operation was a move
     do_check_eq(folderCount(gLocalInboxFolder), 0);
 
+    let enumerator = gMoveFolder.msgDatabase.EnumerateMessages();
+    let firstMsgHdr = enumerator.getNext().QueryInterface(Ci.nsIMsgDBHdr);
+    let secondMsgHdr = enumerator.getNext().QueryInterface(Ci.nsIMsgDBHdr);
     // Check that the messages have content
-    msgHdr = firstMsgHdr(gMoveFolder);
-
-    messageContent = getContentFromMessage(msgHdr);
+    messageContent = getContentFromMessage(firstMsgHdr);
     do_check_true(messageContent.indexOf("Some User <bugmail@example.org> changed") != -1);
+    messageContent = getContentFromMessage(secondMsgHdr);
+    do_check_true(messageContent.indexOf("https://bugzilla.mozilla.org/show_bug.cgi?id=436880") != -1);
 
     ++gCurTestNum;
     doTest();
-  }
+  },
+  function copyMovedMessages() {
+    let messages = Cc["@mozilla.org/array;1"].createInstance(Ci.nsIMutableArray);
+    let enumerator = gMoveFolder.msgDatabase.EnumerateMessages();
+    let firstMsgHdr = enumerator.getNext().QueryInterface(Ci.nsIMsgDBHdr);
+    let secondMsgHdr = enumerator.getNext().QueryInterface(Ci.nsIMsgDBHdr);
+    messages.appendElement(firstMsgHdr, false);
+    messages.appendElement(secondMsgHdr, false);
+    MailServices.copy.CopyMessages(gMoveFolder, messages, gMoveFolder2, false,
+                             copyListener, null, false);
+
+  },
+  function verifyFolders2() {
+    do_check_eq(folderCount(gMoveFolder2), 2);
+
+    let enumerator = gMoveFolder2.msgDatabase.EnumerateMessages();
+    let firstMsgHdr = enumerator.getNext().QueryInterface(Ci.nsIMsgDBHdr);
+    let secondMsgHdr = enumerator.getNext().QueryInterface(Ci.nsIMsgDBHdr);
+    // Check that the messages have content
+    messageContent = getContentFromMessage(firstMsgHdr);
+    do_check_true(messageContent.indexOf("Some User <bugmail@example.org> changed") != -1);
+    messageContent = getContentFromMessage(secondMsgHdr);
+    do_check_true(messageContent.indexOf("https://bugzilla.mozilla.org/show_bug.cgi?id=436880") != -1);
+
+    ++gCurTestNum;
+    doTest();
+  },
 ];
 
 function folderCount(folder)
@@ -108,13 +111,14 @@ function run_test()
   /**/
 
   // quarantine messages
-  let prefs = Cc["@mozilla.org/preferences-service;1"]
-                .getService(Ci.nsIPrefBranch);
-  prefs.setBoolPref("mailnews.downloadToTempFile", true);
+  Services.prefs.setBoolPref("mailnews.downloadToTempFile", true);
   if (!gLocalInboxFolder)
     loadLocalMailAccount();
 
-  gMoveFolder = gLocalIncomingServer.rootFolder.createLocalSubfolder("MoveFolder");
+  gMoveFolder = gLocalIncomingServer.rootMsgFolder
+                  .createLocalSubfolder("MoveFolder");
+  gMoveFolder2 = gLocalIncomingServer.rootMsgFolder
+                  .createLocalSubfolder("MoveFolder2");
   const mailSession = Cc["@mozilla.org/messenger/services/session;1"]
                         .getService(Ci.nsIMsgMailSession);
 
@@ -147,6 +151,17 @@ function doTest()
   else
     do_timeout(1000, endTest);
 }
+
+var copyListener = {
+  OnStartCopy: function() {},
+  OnProgress: function(aProgress, aProgressMax) {},
+  SetMessageKey: function(aKey) {},
+  SetMessageId: function(aMessageId) {},
+  OnStopCopy: function(aStatus)
+  {
+    do_timeout(0, function(){doTest(++gCurTestNum);});
+  }
+};
 
 // nsIFolderListener implementation
 var FolderListener = {
@@ -207,12 +222,4 @@ function getContentFromMessage(aMsgHdr) {
               .createInstance(Ci.nsIScriptableInputStream);
   sis.init(streamListener.inputStream);
   return sis.read(MAX_MESSAGE_LENGTH);
-}
-
-// get the first message header found in a folder
-function firstMsgHdr(folder) {
-  let enumerator = folder.msgDatabase.EnumerateMessages();
-  if (enumerator.hasMoreElements())
-    return enumerator.getNext().QueryInterface(Ci.nsIMsgDBHdr);
-  return null;
 }

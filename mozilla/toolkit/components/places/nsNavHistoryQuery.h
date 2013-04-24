@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Places code.
- *
- * The Initial Developer of the Original Code is
- * Google Inc.
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Brett Wilson <brettw@gmail.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
  * The definitions of nsNavHistoryQuery and nsNavHistoryQueryOptions. This
@@ -50,10 +17,12 @@
 //    This class encapsulates the parameters for basic history queries for
 //    building UI, trees, lists, etc.
 
+#include "mozilla/Attributes.h"
+
 #define NS_NAVHISTORYQUERY_IID \
 { 0xb10185e0, 0x86eb, 0x4612, { 0x95, 0x7c, 0x09, 0x34, 0xf2, 0xb1, 0xce, 0xd7 } }
 
-class nsNavHistoryQuery : public nsINavHistoryQuery
+class nsNavHistoryQuery MOZ_FINAL : public nsINavHistoryQuery
 {
 public:
   nsNavHistoryQuery();
@@ -63,21 +32,21 @@ public:
   NS_DECL_ISUPPORTS
   NS_DECL_NSINAVHISTORYQUERY
 
-  PRInt32 MinVisits() { return mMinVisits; }
-  PRInt32 MaxVisits() { return mMaxVisits; }
+  int32_t MinVisits() { return mMinVisits; }
+  int32_t MaxVisits() { return mMaxVisits; }
   PRTime BeginTime() { return mBeginTime; }
-  PRUint32 BeginTimeReference() { return mBeginTimeReference; }
+  uint32_t BeginTimeReference() { return mBeginTimeReference; }
   PRTime EndTime() { return mEndTime; }
-  PRUint32 EndTimeReference() { return mEndTimeReference; }
+  uint32_t EndTimeReference() { return mEndTimeReference; }
   const nsString& SearchTerms() { return mSearchTerms; }
-  PRBool OnlyBookmarked() { return mOnlyBookmarked; }
-  PRBool DomainIsHost() { return mDomainIsHost; }
+  bool OnlyBookmarked() { return mOnlyBookmarked; }
+  bool DomainIsHost() { return mDomainIsHost; }
   const nsCString& Domain() { return mDomain; }
-  PRBool UriIsPrefix() { return mUriIsPrefix; }
+  bool UriIsPrefix() { return mUriIsPrefix; }
   nsIURI* Uri() { return mUri; } // NOT AddRef-ed!
-  PRBool AnnotationIsNot() { return mAnnotationIsNot; }
+  bool AnnotationIsNot() { return mAnnotationIsNot; }
   const nsCString& Annotation() { return mAnnotation; }
-  const nsTArray<PRInt64>& Folders() const { return mFolders; }
+  const nsTArray<int64_t>& Folders() const { return mFolders; }
   const nsTArray<nsString>& Tags() const { return mTags; }
   nsresult SetTags(const nsTArray<nsString>& aTags)
   {
@@ -86,10 +55,10 @@ public:
 
     return NS_OK;
   }
-  PRBool TagsAreNot() { return mTagsAreNot; }
+  bool TagsAreNot() { return mTagsAreNot; }
 
-  const nsTArray<PRUint32>& Transitions() const { return mTransitions; }
-  nsresult SetTransitions(const nsTArray<PRUint32>& aTransitions)
+  const nsTArray<uint32_t>& Transitions() const { return mTransitions; }
+  nsresult SetTransitions(const nsTArray<uint32_t>& aTransitions)
   {
     if (!mTransitions.ReplaceElementsAt(0, mTransitions.Length(),
                                         aTransitions))
@@ -103,24 +72,24 @@ private:
 
 protected:
 
-  PRInt32 mMinVisits;
-  PRInt32 mMaxVisits;
+  int32_t mMinVisits;
+  int32_t mMaxVisits;
   PRTime mBeginTime;
-  PRUint32 mBeginTimeReference;
+  uint32_t mBeginTimeReference;
   PRTime mEndTime;
-  PRUint32 mEndTimeReference;
+  uint32_t mEndTimeReference;
   nsString mSearchTerms;
-  PRBool mOnlyBookmarked;
-  PRBool mDomainIsHost;
+  bool mOnlyBookmarked;
+  bool mDomainIsHost;
   nsCString mDomain; // Default is IsVoid, empty string is valid query
-  PRBool mUriIsPrefix;
+  bool mUriIsPrefix;
   nsCOMPtr<nsIURI> mUri;
-  PRBool mAnnotationIsNot;
+  bool mAnnotationIsNot;
   nsCString mAnnotation;
-  nsTArray<PRInt64> mFolders;
+  nsTArray<int64_t> mFolders;
   nsTArray<nsString> mTags;
-  PRBool mTagsAreNot;
-  nsTArray<PRUint32> mTransitions;
+  bool mTagsAreNot;
+  nsTArray<uint32_t> mTransitions;
 };
 
 NS_DEFINE_STATIC_IID_ACCESSOR(nsNavHistoryQuery, NS_NAVHISTORYQUERY_IID)
@@ -130,21 +99,20 @@ NS_DEFINE_STATIC_IID_ACCESSOR(nsNavHistoryQuery, NS_NAVHISTORYQUERY_IID)
 #define NS_NAVHISTORYQUERYOPTIONS_IID \
 {0x95f8ba3b, 0xd681, 0x4d89, {0xab, 0xd1, 0xfd, 0xae, 0xf2, 0xa3, 0xde, 0x18}}
 
-class nsNavHistoryQueryOptions : public nsINavHistoryQueryOptions
+class nsNavHistoryQueryOptions MOZ_FINAL : public nsINavHistoryQueryOptions
 {
 public:
   nsNavHistoryQueryOptions()
   : mSort(0)
   , mResultType(0)
-  , mExcludeItems(PR_FALSE)
-  , mExcludeQueries(PR_FALSE)
-  , mExcludeReadOnlyFolders(PR_FALSE)
-  , mExpandQueries(PR_TRUE)
-  , mIncludeHidden(PR_FALSE)
-  , mRedirectsMode(nsINavHistoryQueryOptions::REDIRECTS_MODE_ALL)
+  , mExcludeItems(false)
+  , mExcludeQueries(false)
+  , mExcludeReadOnlyFolders(false)
+  , mExpandQueries(true)
+  , mIncludeHidden(false)
   , mMaxResults(0)
   , mQueryType(nsINavHistoryQueryOptions::QUERY_TYPE_HISTORY)
-  , mAsyncEnabled(PR_FALSE)
+  , mAsyncEnabled(false)
   { }
 
   NS_DECLARE_STATIC_IID_ACCESSOR(NS_NAVHISTORYQUERYOPTIONS_IID)
@@ -152,17 +120,16 @@ public:
   NS_DECL_ISUPPORTS
   NS_DECL_NSINAVHISTORYQUERYOPTIONS
 
-  PRUint16 SortingMode() const { return mSort; }
-  PRUint16 ResultType() const { return mResultType; }
-  PRBool ExcludeItems() const { return mExcludeItems; }
-  PRBool ExcludeQueries() const { return mExcludeQueries; }
-  PRBool ExcludeReadOnlyFolders() const { return mExcludeReadOnlyFolders; }
-  PRBool ExpandQueries() const { return mExpandQueries; }
-  PRBool IncludeHidden() const { return mIncludeHidden; }
-  PRUint16 RedirectsMode() const { return mRedirectsMode; }
-  PRUint32 MaxResults() const { return mMaxResults; }
-  PRUint16 QueryType() const { return mQueryType; }
-  PRBool AsyncEnabled() const { return mAsyncEnabled; }
+  uint16_t SortingMode() const { return mSort; }
+  uint16_t ResultType() const { return mResultType; }
+  bool ExcludeItems() const { return mExcludeItems; }
+  bool ExcludeQueries() const { return mExcludeQueries; }
+  bool ExcludeReadOnlyFolders() const { return mExcludeReadOnlyFolders; }
+  bool ExpandQueries() const { return mExpandQueries; }
+  bool IncludeHidden() const { return mIncludeHidden; }
+  uint32_t MaxResults() const { return mMaxResults; }
+  uint16_t QueryType() const { return mQueryType; }
+  bool AsyncEnabled() const { return mAsyncEnabled; }
 
   nsresult Clone(nsNavHistoryQueryOptions **aResult);
 
@@ -175,19 +142,18 @@ private:
   //  * Add to the deserialization code (see nsNavHistory::QueryStringToQueries)
   //  * Add to the nsNavHistoryQueryOptions::Clone() function
   //  * Add to the nsNavHistory.cpp::GetSimpleBookmarksQueryFolder function if applicable
-  PRUint16 mSort;
+  uint16_t mSort;
   nsCString mSortingAnnotation;
   nsCString mParentAnnotationToExclude;
-  PRUint16 mResultType;
-  PRPackedBool mExcludeItems;
-  PRPackedBool mExcludeQueries;
-  PRPackedBool mExcludeReadOnlyFolders;
-  PRPackedBool mExpandQueries;
-  PRPackedBool mIncludeHidden;
-  PRUint16 mRedirectsMode;
-  PRUint32 mMaxResults;
-  PRUint16 mQueryType;
-  PRBool mAsyncEnabled;
+  uint16_t mResultType;
+  bool mExcludeItems;
+  bool mExcludeQueries;
+  bool mExcludeReadOnlyFolders;
+  bool mExpandQueries;
+  bool mIncludeHidden;
+  uint32_t mMaxResults;
+  uint16_t mQueryType;
+  bool mAsyncEnabled;
 };
 
 NS_DEFINE_STATIC_IID_ACCESSOR(nsNavHistoryQueryOptions, NS_NAVHISTORYQUERYOPTIONS_IID)

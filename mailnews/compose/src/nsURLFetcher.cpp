@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsURLFetcher.h"
 
@@ -79,19 +46,19 @@ nsURLFetcher::nsURLFetcher()
 {
   // Init member variables...
   mTotalWritten = 0;
-  mBuffer = nsnull;
+  mBuffer = nullptr;
   mBufferSize = 0;
-  mStillRunning = PR_TRUE;
-  mCallback = nsnull;
-  mOnStopRequestProcessed = PR_FALSE;
-  mIsFile=PR_FALSE;
+  mStillRunning = true;
+  mCallback = nullptr;
+  mOnStopRequestProcessed = false;
+  mIsFile=false;
   nsURLFetcherStreamConsumer *consumer = new nsURLFetcherStreamConsumer(this);
   mConverter = do_QueryInterface(consumer);
 }
 
 nsURLFetcher::~nsURLFetcher()
 {
-  mStillRunning = PR_FALSE;
+  mStillRunning = false;
   
   PR_FREEIF(mBuffer);
   // Remove the DocShell as a listener of the old WebProgress...
@@ -112,7 +79,7 @@ NS_IMETHODIMP nsURLFetcher::GetInterface(const nsIID & aIID, void * *aInstancePt
 
 // nsIURIContentListener support
 NS_IMETHODIMP 
-nsURLFetcher::OnStartURIOpen(nsIURI* aURI, PRBool* aAbortOpen)
+nsURLFetcher::OnStartURIOpen(nsIURI* aURI, bool* aAbortOpen)
 {
    return NS_OK;
 }
@@ -120,39 +87,39 @@ nsURLFetcher::OnStartURIOpen(nsIURI* aURI, PRBool* aAbortOpen)
 NS_IMETHODIMP 
 nsURLFetcher::IsPreferred(const char * aContentType,
                                 char ** aDesiredContentType,
-                                PRBool * aCanHandleContent)
+                                bool * aCanHandleContent)
 
 {
-  return CanHandleContent(aContentType, PR_TRUE, aDesiredContentType,
+  return CanHandleContent(aContentType, true, aDesiredContentType,
                           aCanHandleContent);
 }
 
 NS_IMETHODIMP 
 nsURLFetcher::CanHandleContent(const char * aContentType,
-                                PRBool aIsContentPreferred,
+                                bool aIsContentPreferred,
                                 char ** aDesiredContentType,
-                                PRBool * aCanHandleContent)
+                                bool * aCanHandleContent)
 
 {
     if (!mIsFile && PL_strcasecmp(aContentType, MESSAGE_RFC822) == 0)
       *aDesiredContentType = strdup("text/html");
 
     // since we explicilty loaded the url, we always want to handle it!
-    *aCanHandleContent = PR_TRUE;
+    *aCanHandleContent = true;
   return NS_OK;
 } 
 
 NS_IMETHODIMP 
 nsURLFetcher::DoContent(const char * aContentType,
-                      PRBool aIsContentPreferred,
+                      bool aIsContentPreferred,
                       nsIRequest *request,
                       nsIStreamListener ** aContentHandler,
-                      PRBool * aAbortProcess)
+                      bool * aAbortProcess)
 {
   nsresult rv = NS_OK;
 
   if (aAbortProcess)
-    *aAbortProcess = PR_FALSE;
+    *aAbortProcess = false;
   QueryInterface(NS_GET_IID(nsIStreamListener), (void **) aContentHandler);
 
   /*
@@ -174,7 +141,7 @@ nsURLFetcher::DoContent(const char * aContentType,
 NS_IMETHODIMP 
 nsURLFetcher::GetParentContentListener(nsIURIContentListener** aParent)
 {
-  *aParent = nsnull;
+  *aParent = nullptr;
   return NS_OK;
 }
 
@@ -219,7 +186,7 @@ nsURLFetcher::SetLoadCookie(nsISupports * aLoadCookie)
 }
 
 nsresult
-nsURLFetcher::StillRunning(PRBool *running)
+nsURLFetcher::StillRunning(bool *running)
 {
   *running = mStillRunning;
   return NS_OK;
@@ -229,7 +196,7 @@ nsURLFetcher::StillRunning(PRBool *running)
 // Methods for nsIStreamListener...
 nsresult
 nsURLFetcher::OnDataAvailable(nsIRequest *request, nsISupports * ctxt, nsIInputStream *aIStream, 
-                              PRUint32 sourceOffset, PRUint32 aLength)
+                              uint32_t sourceOffset, uint32_t aLength)
 {
   /* let our converter or consumer process the data */
   if (!mConverter)
@@ -255,7 +222,7 @@ nsURLFetcher::OnStartRequest(nsIRequest *request, nsISupports *ctxt)
       sendPtr->GetProgress(getter_AddRefs(progress));
       if (progress)
       {
-        PRBool cancel = PR_FALSE;
+        bool cancel = false;
         progress->GetProcessCanceledByUser(&cancel);
         if (cancel)
           return request->Cancel(NS_ERROR_ABORT);
@@ -283,7 +250,7 @@ nsURLFetcher::OnStopRequest(nsIRequest *request, nsISupports * ctxt, nsresult aS
 
   if (mOnStopRequestProcessed)
     return NS_OK;
-  mOnStopRequestProcessed = PR_TRUE;
+  mOnStopRequestProcessed = true;
   
   /* first, call our converter or consumer */
   if (mConverter)
@@ -291,38 +258,36 @@ nsURLFetcher::OnStopRequest(nsIRequest *request, nsISupports * ctxt, nsresult aS
 
   nsMsgAttachmentHandler *attachmentHdl = (nsMsgAttachmentHandler *)mTagData;
   if (attachmentHdl)
-    attachmentHdl->mRequest = nsnull;
+    attachmentHdl->mRequest = nullptr;
 
   //
   // Now complete the stream!
   //
-  mStillRunning = PR_FALSE;
+  mStillRunning = false;
 
   // time to close the output stream...
   if (mOutStream)
   {
     mOutStream->Close();
-    mOutStream = nsnull;
+    mOutStream = nullptr;
   
     /* In case of multipart/x-mixed-replace, we need to truncate the file to the current part size */
     if (MsgLowerCaseEqualsLiteral(mConverterContentType, MULTIPART_MIXED_REPLACE))
     {
-      PRInt64 fileSize;
-      LL_I2L(fileSize, mTotalWritten);
-      mLocalFile->SetFileSize(fileSize);
+      mLocalFile->SetFileSize(mTotalWritten);
     }
   }
 
   // Now if there is a callback, we need to call it...
   if (mCallback)
-    mCallback (aStatus, mContentType, mCharset, mTotalWritten, nsnull, mTagData);
+    mCallback (aStatus, mContentType, mCharset, mTotalWritten, nullptr, mTagData);
 
   // Time to return...
   return NS_OK;
 }
 
 nsresult 
-nsURLFetcher::Initialize(nsILocalFile *localFile, 
+nsURLFetcher::Initialize(nsIFile *localFile, 
                          nsIOutputStream *outputStream,
                          nsAttachSaveCompletionCallback cb, 
                          void *tagData)
@@ -338,7 +303,7 @@ nsURLFetcher::Initialize(nsILocalFile *localFile,
 }
 
 nsresult
-nsURLFetcher::FireURLRequest(nsIURI *aURL, nsILocalFile *localFile, nsIOutputStream *outputStream, 
+nsURLFetcher::FireURLRequest(nsIURI *aURL, nsIFile *localFile, nsIOutputStream *outputStream, 
                              nsAttachSaveCompletionCallback cb, void *tagData)
 {
   nsresult rv;
@@ -350,16 +315,16 @@ nsURLFetcher::FireURLRequest(nsIURI *aURL, nsILocalFile *localFile, nsIOutputStr
   aURL->SchemeIs("file", &mIsFile);
   
   // we're about to fire a new url request so make sure the on stop request flag is cleared...
-  mOnStopRequestProcessed = PR_FALSE;
+  mOnStopRequestProcessed = false;
 
   // let's try uri dispatching...
   nsCOMPtr<nsIURILoader> pURILoader (do_GetService(NS_URI_LOADER_CONTRACTID));
   NS_ENSURE_TRUE(pURILoader, NS_ERROR_FAILURE);
 
   nsCOMPtr<nsIChannel> channel;
-  NS_ENSURE_SUCCESS(NS_NewChannel(getter_AddRefs(channel), aURL, nsnull, nsnull, this), NS_ERROR_FAILURE);
+  NS_ENSURE_SUCCESS(NS_NewChannel(getter_AddRefs(channel), aURL, nullptr, nullptr, this), NS_ERROR_FAILURE);
  
-  return pURILoader->OpenURI(channel, PR_FALSE, this);
+  return pURILoader->OpenURI(channel, false, this);
 }
 
 nsresult
@@ -376,7 +341,7 @@ nsURLFetcher::InsertConverter(const char * aContentType)
     rv = convServ->AsyncConvertData(aContentType,
                                     "*/*",
                                     toListener,
-                                    nsnull,
+                                    nullptr,
                                     getter_AddRefs(fromListener));
     if (NS_SUCCEEDED(rv))
       mConverter = fromListener;
@@ -389,21 +354,21 @@ nsURLFetcher::InsertConverter(const char * aContentType)
 
 NS_IMETHODIMP
 nsURLFetcher::OnProgressChange(nsIWebProgress *aProgress, nsIRequest *aRequest,
-                             PRInt32 aCurSelfProgress, PRInt32 aMaxSelfProgress,
-                             PRInt32 aCurTotalProgress, PRInt32 aMaxTotalProgress)
+                             int32_t aCurSelfProgress, int32_t aMaxSelfProgress,
+                             int32_t aCurTotalProgress, int32_t aMaxTotalProgress)
 {
   return NS_OK;
 }
 
 NS_IMETHODIMP
 nsURLFetcher::OnStateChange(nsIWebProgress *aProgress, nsIRequest *aRequest,
-                          PRUint32 aStateFlags, nsresult aStatus)
+                          uint32_t aStateFlags, nsresult aStatus)
 {
   // all we care about is the case where an error occurred (as in we were unable to locate the
   // the url....
 
   if (NS_FAILED(aStatus))
-    OnStopRequest(aRequest, nsnull, aStatus);
+    OnStopRequest(aRequest, nullptr, aStatus);
 
   return NS_OK;
 }
@@ -411,7 +376,8 @@ nsURLFetcher::OnStateChange(nsIWebProgress *aProgress, nsIRequest *aRequest,
 NS_IMETHODIMP
 nsURLFetcher::OnLocationChange(nsIWebProgress* aWebProgress,
                                nsIRequest* aRequest,
-                               nsIURI *aURI)
+                               nsIURI *aURI,
+                               uint32_t aFlags)
 {
   NS_NOTREACHED("notification excluded in AddProgressListener(...)");
   return NS_OK;
@@ -430,7 +396,7 @@ nsURLFetcher::OnStatusChange(nsIWebProgress* aWebProgress,
 NS_IMETHODIMP 
 nsURLFetcher::OnSecurityChange(nsIWebProgress *aWebProgress, 
                                nsIRequest *aRequest, 
-                               PRUint32 state)
+                               uint32_t state)
 {
   NS_NOTREACHED("notification excluded in AddProgressListener(...)");
   return NS_OK;
@@ -509,10 +475,10 @@ NS_IMETHODIMP nsURLFetcherStreamConsumer::OnStopRequest(nsIRequest *aRequest, ns
 /** nsIStreamListener methods **/
 
 /* void onDataAvailable (in nsIRequest request, in nsISupports ctxt, in nsIInputStream inStr, in unsigned long sourceOffset, in unsigned long count); */
-NS_IMETHODIMP nsURLFetcherStreamConsumer::OnDataAvailable(nsIRequest *aRequest, nsISupports *ctxt, nsIInputStream *inStr, PRUint32 sourceOffset, PRUint32 count)
+NS_IMETHODIMP nsURLFetcherStreamConsumer::OnDataAvailable(nsIRequest *aRequest, nsISupports *ctxt, nsIInputStream *inStr, uint32_t sourceOffset, uint32_t count)
 {
-  PRUint32        readLen = count;
-  PRUint32        wroteIt;
+  uint32_t        readLen = count;
+  uint32_t        wroteIt;
 
   if (!mURLFetcher)
     return NS_ERROR_FAILURE;

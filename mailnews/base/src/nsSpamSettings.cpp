@@ -1,46 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001-2002
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Seth Spitzer <sspitzer@netscape.com>
- *   Dan Mosedale <dmose@netscape.com>
- *   David Bienvenu <bienvenu@mozilla.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsSpamSettings.h"
 #include "nsISupportsObsolete.h"
-#include "nsILocalFile.h"
+#include "nsIFile.h"
 #include "plstr.h"
 #include "prmem.h"
 #include "nsIMsgHdr.h"
@@ -57,6 +22,7 @@
 #include "nsIPrefBranch.h"
 #include "nsIStringBundle.h"
 #include "nsDateTimeFormatCID.h"
+#include "mozilla/Services.h"
 
 #include "nsMailDirServiceDefs.h"
 #include "nsDirectoryServiceUtils.h"
@@ -72,15 +38,15 @@
 nsSpamSettings::nsSpamSettings()
 {
   mLevel = 0;
-  mMoveOnSpam = PR_FALSE;
+  mMoveOnSpam = false;
   mMoveTargetMode = nsISpamSettings::MOVE_TARGET_MODE_ACCOUNT;
-  mPurge = PR_FALSE;
+  mPurge = false;
   mPurgeInterval = 14; // 14 days
 
   mServerFilterTrustFlags = 0;
 
-  mUseWhiteList = PR_FALSE;
-  mUseServerFilter = PR_FALSE;
+  mUseWhiteList = false;
+  mUseServerFilter = false;
 
   nsresult rv = NS_GetSpecialDirectory(NS_APP_USER_PROFILE_50_DIR, getter_AddRefs(mLogFile));
   if (NS_SUCCEEDED(rv))
@@ -94,14 +60,14 @@ nsSpamSettings::~nsSpamSettings()
 NS_IMPL_ISUPPORTS2(nsSpamSettings, nsISpamSettings, nsIUrlListener)
 
 NS_IMETHODIMP
-nsSpamSettings::GetLevel(PRInt32 *aLevel)
+nsSpamSettings::GetLevel(int32_t *aLevel)
 {
   NS_ENSURE_ARG_POINTER(aLevel);
   *aLevel = mLevel;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsSpamSettings::SetLevel(PRInt32 aLevel)
+NS_IMETHODIMP nsSpamSettings::SetLevel(int32_t aLevel)
 {
   NS_ASSERTION((aLevel >= 0 && aLevel <= 100), "bad level");
   mLevel = aLevel;
@@ -109,21 +75,21 @@ NS_IMETHODIMP nsSpamSettings::SetLevel(PRInt32 aLevel)
 }
 
 NS_IMETHODIMP
-nsSpamSettings::GetMoveTargetMode(PRInt32 *aMoveTargetMode)
+nsSpamSettings::GetMoveTargetMode(int32_t *aMoveTargetMode)
 {
   NS_ENSURE_ARG_POINTER(aMoveTargetMode);
   *aMoveTargetMode = mMoveTargetMode;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsSpamSettings::SetMoveTargetMode(PRInt32 aMoveTargetMode)
+NS_IMETHODIMP nsSpamSettings::SetMoveTargetMode(int32_t aMoveTargetMode)
 {
   NS_ASSERTION((aMoveTargetMode == nsISpamSettings::MOVE_TARGET_MODE_FOLDER || aMoveTargetMode == nsISpamSettings::MOVE_TARGET_MODE_ACCOUNT), "bad move target mode");
   mMoveTargetMode = aMoveTargetMode;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsSpamSettings::GetManualMark(PRBool *aManualMark)
+NS_IMETHODIMP nsSpamSettings::GetManualMark(bool *aManualMark)
 {
   NS_ENSURE_ARG_POINTER(aManualMark);
   nsresult rv;
@@ -132,7 +98,7 @@ NS_IMETHODIMP nsSpamSettings::GetManualMark(PRBool *aManualMark)
   return prefBranch->GetBoolPref("mail.spam.manualMark", aManualMark);
 }
 
-NS_IMETHODIMP nsSpamSettings::GetManualMarkMode(PRInt32 *aManualMarkMode)
+NS_IMETHODIMP nsSpamSettings::GetManualMarkMode(int32_t *aManualMarkMode)
 {
   NS_ENSURE_ARG_POINTER(aManualMarkMode);
   nsresult rv;
@@ -141,7 +107,7 @@ NS_IMETHODIMP nsSpamSettings::GetManualMarkMode(PRInt32 *aManualMarkMode)
   return prefBranch->GetIntPref("mail.spam.manualMarkMode", aManualMarkMode);
 }
 
-NS_IMETHODIMP nsSpamSettings::GetLoggingEnabled(PRBool *aLoggingEnabled)
+NS_IMETHODIMP nsSpamSettings::GetLoggingEnabled(bool *aLoggingEnabled)
 {
   NS_ENSURE_ARG_POINTER(aLoggingEnabled);
   nsresult rv;
@@ -150,7 +116,7 @@ NS_IMETHODIMP nsSpamSettings::GetLoggingEnabled(PRBool *aLoggingEnabled)
   return prefBranch->GetBoolPref("mail.spam.logging.enabled", aLoggingEnabled);
 }
 
-NS_IMETHODIMP nsSpamSettings::GetMarkAsReadOnSpam(PRBool *aMarkAsReadOnSpam)
+NS_IMETHODIMP nsSpamSettings::GetMarkAsReadOnSpam(bool *aMarkAsReadOnSpam)
 {
   NS_ENSURE_ARG_POINTER(aMarkAsReadOnSpam);
   nsresult rv;
@@ -159,10 +125,10 @@ NS_IMETHODIMP nsSpamSettings::GetMarkAsReadOnSpam(PRBool *aMarkAsReadOnSpam)
   return prefBranch->GetBoolPref("mail.spam.markAsReadOnSpam", aMarkAsReadOnSpam);
 }
 
-NS_IMPL_GETSET(nsSpamSettings, MoveOnSpam, PRBool, mMoveOnSpam)
-NS_IMPL_GETSET(nsSpamSettings, Purge, PRBool, mPurge)
-NS_IMPL_GETSET(nsSpamSettings, UseWhiteList, PRBool, mUseWhiteList)
-NS_IMPL_GETSET(nsSpamSettings, UseServerFilter, PRBool, mUseServerFilter)
+NS_IMPL_GETSET(nsSpamSettings, MoveOnSpam, bool, mMoveOnSpam)
+NS_IMPL_GETSET(nsSpamSettings, Purge, bool, mPurge)
+NS_IMPL_GETSET(nsSpamSettings, UseWhiteList, bool, mUseWhiteList)
+NS_IMPL_GETSET(nsSpamSettings, UseServerFilter, bool, mUseServerFilter)
 
 NS_IMETHODIMP nsSpamSettings::GetWhiteListAbURI(char * *aWhiteListAbURI)
 {
@@ -202,14 +168,14 @@ NS_IMETHODIMP nsSpamSettings::SetActionTargetFolder(const char * aActionTargetFo
   return NS_OK;
 }
 
-NS_IMETHODIMP nsSpamSettings::GetPurgeInterval(PRInt32 *aPurgeInterval)
+NS_IMETHODIMP nsSpamSettings::GetPurgeInterval(int32_t *aPurgeInterval)
 {
   NS_ENSURE_ARG_POINTER(aPurgeInterval);
   *aPurgeInterval = mPurgeInterval;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsSpamSettings::SetPurgeInterval(PRInt32 aPurgeInterval)
+NS_IMETHODIMP nsSpamSettings::SetPurgeInterval(int32_t aPurgeInterval)
 {
   NS_ASSERTION(aPurgeInterval >= 0, "bad purge interval");
   mPurgeInterval = aPurgeInterval;
@@ -241,26 +207,21 @@ nsSpamSettings::GetLogStream(nsIOutputStream **aLogStream)
   nsresult rv;
 
   if (!mLogStream) {
-    nsCOMPtr <nsILocalFile> logFile = do_QueryInterface(mLogFile, &rv);
-    NS_ENSURE_SUCCESS(rv,rv);
-
     // append to the end of the log file
     rv = MsgNewBufferedFileOutputStream(getter_AddRefs(mLogStream),
-                                        logFile,
+                                        mLogFile,
                                         PR_CREATE_FILE | PR_WRONLY | PR_APPEND,
                                         0600);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    PRInt64 fileSize;
-    rv = logFile->GetFileSize(&fileSize);
+    int64_t fileSize;
+    rv = mLogFile->GetFileSize(&fileSize);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    PRUint32 fileLen;
-    LL_L2UI(fileLen, fileSize);
     // write the header at the start
-    if (fileLen == 0)
+    if (fileSize == 0)
     {
-      PRUint32 writeCount;
+      uint32_t writeCount;
 
       rv = mLogStream->Write(LOG_HEADER, LOG_HEADER_LEN, &writeCount);
       NS_ENSURE_SUCCESS(rv, rv);
@@ -276,19 +237,19 @@ NS_IMETHODIMP nsSpamSettings::Initialize(nsIMsgIncomingServer *aServer)
 {
   NS_ENSURE_ARG_POINTER(aServer);
   nsresult rv;
-  PRInt32 spamLevel;
+  int32_t spamLevel;
   rv = aServer->GetIntValue("spamLevel", &spamLevel);
   NS_ENSURE_SUCCESS(rv, rv);
   rv = SetLevel(spamLevel);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool moveOnSpam;
+  bool moveOnSpam;
   rv = aServer->GetBoolValue("moveOnSpam", &moveOnSpam);
   NS_ENSURE_SUCCESS(rv, rv);
   rv = SetMoveOnSpam(moveOnSpam);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRInt32 moveTargetMode;
+  int32_t moveTargetMode;
   rv = aServer->GetIntValue("moveTargetMode", &moveTargetMode);
   NS_ENSURE_SUCCESS(rv, rv);
   rv = SetMoveTargetMode(moveTargetMode);
@@ -306,7 +267,7 @@ NS_IMETHODIMP nsSpamSettings::Initialize(nsIMsgIncomingServer *aServer)
   rv = SetActionTargetFolder(spamActionTargetFolder.get());
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool useWhiteList;
+  bool useWhiteList;
   rv = aServer->GetBoolValue("useWhiteList", &useWhiteList);
   NS_ENSURE_SUCCESS(rv, rv);
   rv = SetUseWhiteList(useWhiteList);
@@ -318,19 +279,19 @@ NS_IMETHODIMP nsSpamSettings::Initialize(nsIMsgIncomingServer *aServer)
   rv = SetWhiteListAbURI(whiteListAbURI.get());
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool purgeSpam;
+  bool purgeSpam;
   rv = aServer->GetBoolValue("purgeSpam", &purgeSpam);
   NS_ENSURE_SUCCESS(rv, rv);
   rv = SetPurge(purgeSpam);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRInt32 purgeSpamInterval;
+  int32_t purgeSpamInterval;
   rv = aServer->GetIntValue("purgeSpamInterval", &purgeSpamInterval);
   NS_ENSURE_SUCCESS(rv, rv);
   rv = SetPurgeInterval(purgeSpamInterval);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool useServerFilter;
+  bool useServerFilter;
   rv = aServer->GetBoolValue("useServerFilter", &useServerFilter);
   NS_ENSURE_SUCCESS(rv, rv);
   rv = SetUseServerFilter(useServerFilter);
@@ -340,7 +301,7 @@ NS_IMETHODIMP nsSpamSettings::Initialize(nsIMsgIncomingServer *aServer)
   rv = aServer->GetCharValue("serverFilterName", serverFilterName);
   if (NS_SUCCEEDED(rv))
     SetServerFilterName(serverFilterName);
-  PRInt32 serverFilterTrustFlags = 0;
+  int32_t serverFilterTrustFlags = 0;
   rv = aServer->GetIntValue("serverFilterTrustFlags", &serverFilterTrustFlags);
   NS_ENSURE_SUCCESS(rv, rv);
   rv = SetServerFilterTrustFlags(serverFilterTrustFlags);
@@ -360,7 +321,7 @@ NS_IMETHODIMP nsSpamSettings::Initialize(nsIMsgIncomingServer *aServer)
     nsTArray<nsCString> whiteListArray;
     ParseString(mWhiteListAbURI, ' ', whiteListArray);
 
-    for (PRUint32 index = 0; index < whiteListArray.Length(); index++)
+    for (uint32_t index = 0; index < whiteListArray.Length(); index++)
     {
       nsCOMPtr<nsIAbDirectory> directory;
       rv = abManager->GetDirectory(whiteListArray[index],
@@ -409,11 +370,11 @@ NS_IMETHODIMP nsSpamSettings::Initialize(nsIMsgIncomingServer *aServer)
     nsCOMPtr<nsISupportsArray> accounts;
     rv = accountManager->GetAccounts(getter_AddRefs(accounts));
     NS_ENSURE_SUCCESS(rv, rv);
-    PRUint32 accountCount = 0;
+    uint32_t accountCount = 0;
     if (account && accounts) // no sense scanning accounts if we've nothing to match
       accounts->Count(&accountCount);
 
-    for (PRUint32 i = 0; i < accountCount; i++)
+    for (uint32_t i = 0; i < accountCount; i++)
     {
       nsCOMPtr<nsIMsgAccount> loopAccount(do_QueryElementAt(accounts, i));
       if (!loopAccount)
@@ -434,9 +395,9 @@ NS_IMETHODIMP nsSpamSettings::Initialize(nsIMsgIncomingServer *aServer)
         loopAccount->GetIdentities(getter_AddRefs(identities));
         if (!identities)
           continue;
-        PRUint32 identityCount = 0;
+        uint32_t identityCount = 0;
         identities->Count(&identityCount);
-        for (PRUint32 j = 0; j < identityCount; ++j)
+        for (uint32_t j = 0; j < identityCount; ++j)
         {
           nsCOMPtr<nsIMsgIdentity> identity(do_QueryElementAt(identities, j));
           if (!identity)
@@ -573,7 +534,7 @@ NS_IMETHODIMP nsSpamSettings::GetSpamFolderURI(char **aSpamFolderURI)
   // search by URI - if we find a junk folder, use its URI.
   nsCOMPtr<nsIMsgFolder> junkFolder;
   folderURI.Append("/Junk");
-  if (NS_SUCCEEDED(server->GetMsgFolderFromURI(nsnull, folderURI,
+  if (NS_SUCCEEDED(server->GetMsgFolderFromURI(nullptr, folderURI,
                                                getter_AddRefs(junkFolder))) &&
       junkFolder)
     junkFolder->GetURI(folderURI);
@@ -609,7 +570,7 @@ NS_IMETHODIMP nsSpamSettings::GetServerFilterName(nsACString &aFilterName)
 NS_IMETHODIMP nsSpamSettings::SetServerFilterName(const nsACString &aFilterName)
 {
   mServerFilterName = aFilterName;
-  mServerFilterFile = nsnull; // clear out our stored location value
+  mServerFilterFile = nullptr; // clear out our stored location value
   return NS_OK;
 }
 
@@ -631,7 +592,7 @@ NS_IMETHODIMP nsSpamSettings::GetServerFilterFile(nsIFile ** aFile)
     rv = dirSvc->Get(ISP_DIRECTORY_LIST, NS_GET_IID(nsISimpleEnumerator), getter_AddRefs(ispDirectories));
     NS_ENSURE_SUCCESS(rv, rv);
 
-    PRBool hasMore;
+    bool hasMore;
     nsCOMPtr<nsIFile> file;
     while (NS_SUCCEEDED(ispDirectories->HasMoreElements(&hasMore)) && hasMore)
     {
@@ -644,7 +605,7 @@ NS_IMETHODIMP nsSpamSettings::GetServerFilterFile(nsIFile ** aFile)
         // append our desired leaf name then test to see if the file exists. If it does, we've found
         // mServerFilterFile.
         file->AppendNative(serverFilterFileName);
-        PRBool exists;
+        bool exists;
         if (NS_SUCCEEDED(file->Exists(&exists)) && exists)
         {
           file.swap(mServerFilterFile);
@@ -659,16 +620,16 @@ NS_IMETHODIMP nsSpamSettings::GetServerFilterFile(nsIFile ** aFile)
 }
 
 
-NS_IMPL_GETSET(nsSpamSettings, ServerFilterTrustFlags, PRInt32, mServerFilterTrustFlags)
+NS_IMPL_GETSET(nsSpamSettings, ServerFilterTrustFlags, int32_t, mServerFilterTrustFlags)
 
 #define LOG_ENTRY_START_TAG "<p>\n"
 #define LOG_ENTRY_START_TAG_LEN (strlen(LOG_ENTRY_START_TAG))
 #define LOG_ENTRY_END_TAG "</p>\n"
 #define LOG_ENTRY_END_TAG_LEN (strlen(LOG_ENTRY_END_TAG))
 
-NS_IMETHODIMP nsSpamSettings::LogJunkHit(nsIMsgDBHdr *aMsgHdr, PRBool aMoveMessage)
+NS_IMETHODIMP nsSpamSettings::LogJunkHit(nsIMsgDBHdr *aMsgHdr, bool aMoveMessage)
 {
-  PRBool loggingEnabled;
+  bool loggingEnabled;
   nsresult rv = GetLoggingEnabled(&loggingEnabled);
   NS_ENSURE_SUCCESS(rv,rv);
 
@@ -694,7 +655,7 @@ NS_IMETHODIMP nsSpamSettings::LogJunkHit(nsIMsgDBHdr *aMsgHdr, PRBool aMoveMessa
       return NS_ERROR_FAILURE;
     }
   }
-  mDateFormatter->FormatPRExplodedTime(nsnull, kDateFormatShort,
+  mDateFormatter->FormatPRExplodedTime(nullptr, kDateFormatShort,
                                       kTimeFormatSeconds, &exploded,
                                       dateValue);
 
@@ -709,8 +670,8 @@ NS_IMETHODIMP nsSpamSettings::LogJunkHit(nsIMsgDBHdr *aMsgHdr, PRBool aMoveMessa
 #endif
 
   nsCOMPtr<nsIStringBundleService> bundleService =
-    do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
+    mozilla::services::GetStringBundleService();
+  NS_ENSURE_TRUE(bundleService, NS_ERROR_UNEXPECTED);
 
   nsCOMPtr<nsIStringBundle> bundle;
   rv = bundleService->CreateBundle("chrome://messenger/locale/filter.properties",
@@ -756,7 +717,7 @@ NS_IMETHODIMP nsSpamSettings::LogJunkHit(nsIMsgDBHdr *aMsgHdr, PRBool aMoveMessa
 
 NS_IMETHODIMP nsSpamSettings::LogJunkString(const char *string)
 {
-  PRBool loggingEnabled;
+  bool loggingEnabled;
   nsresult rv = GetLoggingEnabled(&loggingEnabled);
   NS_ENSURE_SUCCESS(rv,rv);
 
@@ -767,7 +728,7 @@ NS_IMETHODIMP nsSpamSettings::LogJunkString(const char *string)
   rv = GetLogStream(getter_AddRefs(logStream));
   NS_ENSURE_SUCCESS(rv,rv);
 
-  PRUint32 writeCount;
+  uint32_t writeCount;
 
   rv = logStream->Write(LOG_ENTRY_START_TAG, LOG_ENTRY_START_TAG_LEN, &writeCount);
   NS_ENSURE_SUCCESS(rv,rv);
@@ -780,7 +741,7 @@ NS_IMETHODIMP nsSpamSettings::LogJunkString(const char *string)
   if (!escapedBuffer)
     return NS_ERROR_OUT_OF_MEMORY;
 
-  PRUint32 escapedBufferLen = strlen(escapedBuffer);
+  uint32_t escapedBufferLen = strlen(escapedBuffer);
   rv = logStream->Write(escapedBuffer, escapedBufferLen, &writeCount);
   PR_Free(escapedBuffer);
   NS_ENSURE_SUCCESS(rv,rv);
@@ -820,11 +781,11 @@ NS_IMETHODIMP nsSpamSettings::OnStopRunningUrl(nsIURI* aURL, nsresult exitCode)
   return rv;
 }
 
-NS_IMETHODIMP nsSpamSettings::CheckWhiteList(nsIMsgDBHdr *aMsgHdr, PRBool *aResult)
+NS_IMETHODIMP nsSpamSettings::CheckWhiteList(nsIMsgDBHdr *aMsgHdr, bool *aResult)
 {
   NS_ENSURE_ARG_POINTER(aMsgHdr);
   NS_ENSURE_ARG_POINTER(aResult);
-  *aResult = PR_FALSE;  // default in case of error or no whitelisting
+  *aResult = false;  // default in case of error or no whitelisting
 
   if (!mUseWhiteList || (!mWhiteListDirArray.Count() &&
                           mTrustedMailDomains.IsEmpty()))
@@ -849,7 +810,7 @@ NS_IMETHODIMP nsSpamSettings::CheckWhiteList(nsIMsgDBHdr *aMsgHdr, PRBool *aResu
   // should we skip whitelisting for the identity email?
   if (mInhibitWhiteListingIdentityUser)
   {
-    for (PRUint32 i = 0; i < mEmails.Length(); ++i)
+    for (uint32_t i = 0; i < mEmails.Length(); ++i)
     {
       if (mEmails[i].Equals(authorEmailAddress, nsCaseInsensitiveCStringComparator()))
         return NS_OK;
@@ -859,7 +820,7 @@ NS_IMETHODIMP nsSpamSettings::CheckWhiteList(nsIMsgDBHdr *aMsgHdr, PRBool *aResu
   if (!mTrustedMailDomains.IsEmpty() || mInhibitWhiteListingIdentityDomain)
   {
     nsCAutoString domain;
-    PRInt32 atPos = authorEmailAddress.FindChar('@');
+    int32_t atPos = authorEmailAddress.FindChar('@');
     if (atPos >= 0)
       domain = Substring(authorEmailAddress, atPos + 1);
     if (!domain.IsEmpty())
@@ -867,16 +828,16 @@ NS_IMETHODIMP nsSpamSettings::CheckWhiteList(nsIMsgDBHdr *aMsgHdr, PRBool *aResu
       if (!mTrustedMailDomains.IsEmpty() &&
           MsgHostDomainIsTrusted(domain, mTrustedMailDomains))
       {
-        *aResult = PR_TRUE;
+        *aResult = true;
         return NS_OK;
       }
 
       if (mInhibitWhiteListingIdentityDomain)
       {
-        for (PRUint32 i = 0; i < mEmails.Length(); ++i)
+        for (uint32_t i = 0; i < mEmails.Length(); ++i)
         {
           nsCAutoString identityDomain;
-          PRInt32 atPos = mEmails[i].FindChar('@');
+          int32_t atPos = mEmails[i].FindChar('@');
           if (atPos >= 0)
           {
             identityDomain = Substring(mEmails[i], atPos + 1);
@@ -891,7 +852,7 @@ NS_IMETHODIMP nsSpamSettings::CheckWhiteList(nsIMsgDBHdr *aMsgHdr, PRBool *aResu
   if (mWhiteListDirArray.Count())
   {
     nsCOMPtr<nsIAbCard> cardForAddress;
-    for (PRInt32 index = 0;
+    for (int32_t index = 0;
          index < mWhiteListDirArray.Count() && !cardForAddress;
          index++)
     {
@@ -900,7 +861,7 @@ NS_IMETHODIMP nsSpamSettings::CheckWhiteList(nsIMsgDBHdr *aMsgHdr, PRBool *aResu
     }
     if (cardForAddress)
     {
-      *aResult = PR_TRUE;
+      *aResult = true;
       return NS_OK;
     }
   }

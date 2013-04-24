@@ -1,41 +1,10 @@
 /* -*- Mode: javascript; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Dan Mosedale <dan.mosedale@oracle.com>
- *   Olivier Parniere BT Global Services / Etat francais Ministere de la Defense
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+// SpaceHit() function: whether spacebar advances to next unread message.
+pref("mail.advance_on_spacebar", true);
 
 //mailnews.timeline_is_enabled should be set to true ONLY for perf measurement-timeline builds.
 pref("mailnews.timeline_is_enabled", false);
@@ -108,6 +77,10 @@ pref("mailnews.headers.showSender", false);
 // be greater than one hour so daylight savings time changes don't affect us.
 // We will still always regenerate .msf files if the file size changes.
 pref("mail.db_timestamp_leeway", 4000);
+// How long should we leave idle db's open, in milliseconds.
+pref("mail.db.idle_limit", 300000);
+// How many db's should we leave open? LRU db's will be closed first
+pref("mail.db.max_open", 30);
 
 pref("mail.imap.chunk_size",                65536);
 pref("mail.imap.min_chunk_size_threshold",  98304);
@@ -400,6 +373,9 @@ pref("mail.default_sendlater_uri", "mailbox://nobody@Local%20Folders/Unsent%20Me
 pref("mail.smtpservers", "");
 pref("mail.accountmanager.accounts", "");
 
+// Last used account key value
+pref("mail.account.lastKey", 0);
+
 pref("mail.server.default.port", -1);
 pref("mail.server.default.offline_support_level", -1);
 pref("mail.server.default.leave_on_server", false);
@@ -478,6 +454,10 @@ pref("mail.server.default.offline_download",true);
 // -1 means no limit, no purging of offline stores.
 pref("mail.server.default.autosync_max_age_days", -1);
 
+// This is the default store contractID for newly created servers.
+// We don't use mail.server.default because we want to ensure that the
+// store contract id is always written out to prefs.js
+pref("mail.serverDefaultStoreContractID", "@mozilla.org/msgstore/berkeleystore;1");
 // the probablilty threshold over which messages are classified as junk
 // this number is divided by 100 before it is used. The classifier can be fine tuned
 // by changing this pref. Typical values are .99, .95, .90, .5, etc.
@@ -527,7 +507,9 @@ pref("mailnews.display.date_senders_timezone", false);
 pref("mailnews.display.prefer_plaintext", false);  // Ignore HTML parts in multipart/alternative
 pref("mailnews.display.html_as", 0);  // How to display HTML/MIME parts. 0 = Render the sender's HTML; 1 = HTML->TXT->HTML; 2 = Show HTML source; 3 = Sanitize HTML; 4 = Show all body parts
 pref("mailnews.display.show_all_body_parts_menu", false); // Whether the View > Message body as > All body parts menu item is available
-pref("mailnews.display.html_sanitizer.allowed_tags", "html head title body p br div(lang,title) h1 h2 h3 h4 h5 h6 ul(type,compact) ol(type,compact,start) li(type,value) dl dt dd blockquote(type,cite) pre noscript noframes strong em sub sup span(lang,title) acronym(title) abbr(title) del(title,cite,datetime) ins(title,cite,datetime) q(cite) a(href,name,title) img(alt,title,longdesc,src) base(href) area(alt) applet(alt) object(alt) var samp dfn address kbd code cite s strike tt b i table(align) caption tr(align,valign) td(rowspan,colspan,align,valign) th(rowspan,colspan,align,valign) wbr");
+pref("mailnews.display.html_sanitizer.allowed_tags.migrated", false); // whether legacy mailnews.display.html_sanitizer.allowed_tags pref has been migrated to values of the two prefs below
+pref("mailnews.display.html_sanitizer.drop_non_css_presentation", true); // whether to drop <font>, <center>, align='...', etc.
+pref("mailnews.display.html_sanitizer.drop_media", false); // whether to drop <img>, <video> and <audio>
 pref("mailnews.display.disallow_mime_handlers", 0);  /* Let only a few classes process incoming data. This protects from bugs (e.g. buffer overflows) and from security loopholes (e.g. allowing unchecked HTML in some obscure classes, although the user has html_as > 0).
 This option is mainly for the UI of html_as.
 0 = allow all available classes
@@ -541,21 +523,29 @@ This option is mainly for the UI of html_as.
 // RSS rendering options, see prior 4 prefs above.
 pref("rss.display.prefer_plaintext", false);
 pref("rss.display.html_as", 0);
-pref("rss.display.html_sanitizer.allowed_tags", "html head title body p br div(lang,title) h1 h2 h3 h4 h5 h6 ul(type,compact) ol(type,compact,start) li(type,value) dl dt dd blockquote(type,cite) pre noscript noframes strong em sub sup span(lang,title) acronym(title) abbr(title) del(title,cite,datetime) ins(title,cite,datetime) q(cite) a(href,name,title) img(alt,title,longdesc,src) base(href) area(alt) applet(alt) object(alt) var samp dfn address kbd code cite s strike tt b i table(align) caption tr(align,valign) td(rowspan,colspan,align,valign) th(rowspan,colspan,align,valign) wbr");
 pref("rss.display.disallow_mime_handlers", 0);
 
-// RSS message body preferences
-//0 - global no, load web page
-//1 - global yes, load summary
-//2 - use individual folder setting; if no setting default to 1
+// Feed message display (summary or web page), on select.
+// 0 - global override, load web page
+// 1 - global override, load summary
+// 2 - use default feed folder setting from Subscribe dialog; if no setting default to 1
 pref("rss.show.summary", 1);
 
-// Action on double click or enter in threadpane for message with 
-// header 'content-base' url (rss)
+// Feed message display (summary or web page), on open.
+// Action on double click or enter in threadpane for a feed message.
 // 0 - open content-base url in new window
 // 1 - open summary in new window
 // 2 - toggle load summary and content-base url in message pane
+// 3 - load content-base url in browser
 pref("rss.show.content-base", 0);
+
+// Feed message additional web page display.
+// 0 - no action
+// 1 - load web page in default browser, on select
+pref("rss.message.loadWebPageOnSelect", 0);
+
+// Feeds system logging, uses log4moz conventions.
+pref("Feeds.logging.console", "Info");
 
 pref("mail.forward_message_mode", 0); // 0=default as attachment 2=forward as inline with attachments, (obsolete 4.x value)1=forward as quoted (mapped to 2 in mozilla)
 pref("mail.forward_add_extension", true); // add .eml extension when forwarding as attachment
@@ -765,6 +755,8 @@ pref("ldap_2.servers.osx.description", "chrome://messenger/locale/addressbook/ad
 pref("ldap_2.servers.osx.dirType", 3);
 pref("mail.notification.sound",             "");
 pref("mail.notification.count.inbox_only", true);
+// Work around bug 482811 by disabling slow script warning for chrome scripts on Mac
+pref("dom.max_chrome_script_run_time", 0);
 #endif
 
 // gtk2 (*nix) lacks transparent/translucent drag support (bug 376238), so we
@@ -792,13 +784,13 @@ pref("mailnews.mx_service_url", "https://live.mozillamessaging.com/dns/mx/");
 //                     copied to the new nsIMsgHdr when a message is copied.
 //                     Allows extensions to control preservation of properties.
 pref("mailnews.database.summary.dontPreserveOnCopy",
-  "account msgOffset threadParent msgThreadId statusOfset flags size numLines ProtoThreadFlags label gloda-id gloda-dirty");
+  "account msgOffset threadParent msgThreadId statusOfset flags size numLines ProtoThreadFlags label gloda-id gloda-dirty storeToken");
 
 // dontPreserveOnMove: a space separated list of properties that are not
 //                     copied to the new nsIMsgHdr when a message is moved.
 //                     Allows extensions to control preservation of properties.
 pref("mailnews.database.summary.dontPreserveOnMove",
-  "account msgOffset threadParent msgThreadId statusOfset flags size numLines ProtoThreadFlags label");
+  "account msgOffset threadParent msgThreadId statusOfset flags size numLines ProtoThreadFlags label storeToken");
 
 // -- Global Database (gloda) options
 // Should the indexer be enabled?
@@ -809,6 +801,9 @@ pref("mailnews.database.global.logging.console", false);
 pref("mailnews.database.global.logging.dump", false);
 // Should we consider outputting all levels via the network?
 pref("mailnews.database.global.logging.net", false);
+// Rate of growth of the gloda cache, whose maximum value is 8 MiB and max is 64 MiB.
+// See more: https://developer.mozilla.org/en/Thunderbird/gloda#Cache_Size"
+pref("mailnews.database.global.datastore.cache_to_memory_permillage", 10);
 
 // default field order in the fieldmap
 pref("mailnews.import.text.fieldmap", "+0,+1,+2,+3,+4,+5,+36,+6,+7,+8,+9,+10,+11,+12,+13,+14,+15,+16,+17,+18,+19,+20,+21,+22,+23,+24,+25,+26,+27,+28,+29,+30,+31,+32,+33,+34,+35");
@@ -828,3 +823,6 @@ pref("mail.nntp.qos", 0);
 // default value for IMAP4
 // in a DSCP environment this should be 56 (0x38, or AF13), ibid.
 pref("mail.imap.qos", 0);
+
+// PgpMime Addon
+pref("mail.pgpmime.addon_url", "https://addons.mozilla.org/addon/enigmail/");

@@ -1,6 +1,10 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * vim: set ts=8 sw=4 et tw=99:
  */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 
 #include "tests.h"
 
@@ -11,6 +15,8 @@
 
 #include "vm/String-inl.h"
 
+using namespace mozilla;
+
 template<size_t N> JSFlatString *
 NewString(JSContext *cx, const jschar (&chars)[N])
 {
@@ -18,7 +24,7 @@ NewString(JSContext *cx, const jschar (&chars)[N])
 }
 
 static const struct TestPair {
-    uint32 num;
+    uint32_t num;
     const char *expected;
 } tests[] = {
     { 0, "0" },
@@ -51,12 +57,12 @@ static const struct TestPair {
 
 BEGIN_TEST(testIndexToString)
 {
-    for (size_t i = 0, sz = JS_ARRAY_LENGTH(tests); i < sz; i++) {
-        uint32 u = tests[i].num;
+    for (size_t i = 0, sz = ArrayLength(tests); i < sz; i++) {
+        uint32_t u = tests[i].num;
         JSString *str = js::IndexToString(cx, u);
         CHECK(str);
 
-        if (!JSAtom::hasUintStatic(u))
+        if (!js::StaticStrings::hasUint(u))
             CHECK(cx->compartment->dtoaCache.lookup(10, u) == str);
 
         JSBool match = JS_FALSE;
@@ -68,42 +74,42 @@ BEGIN_TEST(testIndexToString)
 }
 END_TEST(testIndexToString)
 
-BEGIN_TEST(testStringIsElement)
+BEGIN_TEST(testStringIsIndex)
 {
-    for (size_t i = 0, sz = JS_ARRAY_LENGTH(tests); i < sz; i++) {
-        uint32 u = tests[i].num;
+    for (size_t i = 0, sz = ArrayLength(tests); i < sz; i++) {
+        uint32_t u = tests[i].num;
         JSFlatString *str = js::IndexToString(cx, u);
         CHECK(str);
 
-        uint32 n;
-        CHECK(str->isElement(&n));
+        uint32_t n;
+        CHECK(str->isIndex(&n));
         CHECK(u == n);
     }
 
     return true;
 }
-END_TEST(testStringIsElement)
+END_TEST(testStringIsIndex)
 
 BEGIN_TEST(testStringToPropertyName)
 {
-    uint32 index;
+    uint32_t index;
 
     static const jschar hiChars[] = { 'h', 'i' };
     JSFlatString *hiStr = NewString(cx, hiChars);
     CHECK(hiStr);
-    CHECK(!hiStr->isElement(&index));
+    CHECK(!hiStr->isIndex(&index));
     CHECK(hiStr->toPropertyName(cx) != NULL);
 
     static const jschar maxChars[] = { '4', '2', '9', '4', '9', '6', '7', '2', '9', '5' };
     JSFlatString *maxStr = NewString(cx, maxChars);
     CHECK(maxStr);
-    CHECK(maxStr->isElement(&index));
+    CHECK(maxStr->isIndex(&index));
     CHECK(index == UINT32_MAX);
 
     static const jschar maxPlusOneChars[] = { '4', '2', '9', '4', '9', '6', '7', '2', '9', '6' };
     JSFlatString *maxPlusOneStr = NewString(cx, maxPlusOneChars);
     CHECK(maxPlusOneStr);
-    CHECK(!maxPlusOneStr->isElement(&index));
+    CHECK(!maxPlusOneStr->isIndex(&index));
     CHECK(maxPlusOneStr->toPropertyName(cx) != NULL);
 
     return true;

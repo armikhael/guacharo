@@ -1,47 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim:set ts=2 sw=2 sts=2 et: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Diane Trout.
- *
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *    James Bunton <jamesbunton@fastmail.fm>
- *    Diane Trout <diane@ghic.org>
- *    Robert O'Callahan <rocallahan@novell.com>
- *    Håkan Waara <hwaara@gmail.com>
- *    Josh Aas <josh@mozilla.com>
- *    Andrew Shilliday <andrewshilliday@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #import <Cocoa/Cocoa.h>
 #import <SystemConfiguration/SystemConfiguration.h>
@@ -54,8 +15,9 @@
 #include "nsISupportsPrimitives.h"
 #include "nsIURI.h"
 #include "nsObjCExceptions.h"
+#include "mozilla/Attributes.h"
 
-class nsOSXSystemProxySettings : public nsISystemProxySettings {
+class nsOSXSystemProxySettings MOZ_FINAL : public nsISystemProxySettings {
 public:
   NS_DECL_ISUPPORTS
   NS_DECL_NSISYSTEMPROXYSETTINGS
@@ -67,15 +29,15 @@ public:
   void ProxyHasChanged();
 
   // is there a PAC url specified in the system configuration
-  PRBool IsAutoconfigEnabled() const;
+  bool IsAutoconfigEnabled() const;
   // retrieve the pac url
   nsresult GetAutoconfigURL(nsCAutoString& aResult) const;
 
   // Find the SystemConfiguration proxy & port for a given URI
-  nsresult FindSCProxyPort(nsIURI* aURI, nsACString& aResultHost, PRInt32& aResultPort, PRBool& aResultSocksProxy);
+  nsresult FindSCProxyPort(nsIURI* aURI, nsACString& aResultHost, int32_t& aResultPort, bool& aResultSocksProxy);
 
   // is host:port on the proxy exception list?
-  PRBool IsInExceptionList(const nsACString& aHost) const;
+  bool IsInExceptionList(const nsACString& aHost) const;
 
 private:
   ~nsOSXSystemProxySettings();
@@ -91,7 +53,7 @@ private:
     CFStringRef mEnabled;
     CFStringRef mHost;
     CFStringRef mPort;
-    PRPackedBool mIsSocksProxy;
+    bool mIsSocksProxy;
   };
   static const SchemeMapping gSchemeMappingList[];
 };
@@ -100,11 +62,11 @@ NS_IMPL_ISUPPORTS1(nsOSXSystemProxySettings, nsISystemProxySettings)
 
 // Mapping of URI schemes to SystemConfiguration keys
 const nsOSXSystemProxySettings::SchemeMapping nsOSXSystemProxySettings::gSchemeMappingList[] = {
-  {"http", kSCPropNetProxiesHTTPEnable, kSCPropNetProxiesHTTPProxy, kSCPropNetProxiesHTTPPort, PR_FALSE},
-  {"https", kSCPropNetProxiesHTTPSEnable, kSCPropNetProxiesHTTPSProxy, kSCPropNetProxiesHTTPSPort, PR_FALSE},
-  {"ftp", kSCPropNetProxiesFTPEnable, kSCPropNetProxiesFTPProxy, kSCPropNetProxiesFTPPort, PR_FALSE},
-  {"socks", kSCPropNetProxiesSOCKSEnable, kSCPropNetProxiesSOCKSProxy, kSCPropNetProxiesSOCKSPort, PR_TRUE},
-  {NULL, NULL, NULL, NULL, PR_FALSE},
+  {"http", kSCPropNetProxiesHTTPEnable, kSCPropNetProxiesHTTPProxy, kSCPropNetProxiesHTTPPort, false},
+  {"https", kSCPropNetProxiesHTTPSEnable, kSCPropNetProxiesHTTPSProxy, kSCPropNetProxiesHTTPSPort, false},
+  {"ftp", kSCPropNetProxiesFTPEnable, kSCPropNetProxiesFTPProxy, kSCPropNetProxiesFTPPort, false},
+  {"socks", kSCPropNetProxiesSOCKSEnable, kSCPropNetProxiesSOCKSProxy, kSCPropNetProxiesSOCKSPort, true},
+  {NULL, NULL, NULL, NULL, false},
 };
 
 static void
@@ -194,7 +156,7 @@ nsOSXSystemProxySettings::ProxyHasChanged()
 }
 
 nsresult
-nsOSXSystemProxySettings::FindSCProxyPort(nsIURI* aURI, nsACString& aResultHost, PRInt32& aResultPort, PRBool& aResultSocksProxy)
+nsOSXSystemProxySettings::FindSCProxyPort(nsIURI* aURI, nsACString& aResultHost, int32_t& aResultPort, bool& aResultSocksProxy)
 {
   NS_OBJC_BEGIN_TRY_ABORT_BLOCK_NSRESULT;
 
@@ -202,7 +164,7 @@ nsOSXSystemProxySettings::FindSCProxyPort(nsIURI* aURI, nsACString& aResultHost,
 
   for (const SchemeMapping* keys = gSchemeMappingList; keys->mScheme != NULL; ++keys) {
     // Check for matching scheme (when appropriate)
-    PRBool res;
+    bool res;
     if ((NS_FAILED(aURI->SchemeIs(keys->mScheme, &res)) || !res) && !keys->mIsSocksProxy)
       continue;
 
@@ -234,16 +196,16 @@ nsOSXSystemProxySettings::FindSCProxyPort(nsIURI* aURI, nsACString& aResultHost,
   NS_OBJC_END_TRY_ABORT_BLOCK_NSRESULT;
 }
 
-PRBool
+bool
 nsOSXSystemProxySettings::IsAutoconfigEnabled() const
 {
   NS_OBJC_BEGIN_TRY_ABORT_BLOCK_RETURN;
 
   NSNumber* value = [mProxyDict objectForKey:(NSString*)kSCPropNetProxiesProxyAutoConfigEnable];
-  NS_ENSURE_TRUE(value == NULL || [value isKindOfClass:[NSNumber class]], PR_FALSE);
+  NS_ENSURE_TRUE(value == NULL || [value isKindOfClass:[NSNumber class]], false);
   return ([value intValue] != 0);
 
-  NS_OBJC_END_TRY_ABORT_BLOCK_RETURN(PR_FALSE);
+  NS_OBJC_END_TRY_ABORT_BLOCK_RETURN(false);
 }
 
 nsresult
@@ -263,22 +225,22 @@ nsOSXSystemProxySettings::GetAutoconfigURL(nsCAutoString& aResult) const
   NS_OBJC_END_TRY_ABORT_BLOCK_NSRESULT;
 }
 
-static PRBool
+static bool
 IsHostProxyEntry(const nsACString& aHost, const nsACString& aOverride)
 {
   nsCAutoString host(aHost);
   nsCAutoString override(aOverride);
 
-  PRInt32 overrideLength = override.Length();
-  PRInt32 tokenStart = 0;
-  PRInt32 offset = 0;
-  PRBool star = PR_FALSE;
+  int32_t overrideLength = override.Length();
+  int32_t tokenStart = 0;
+  int32_t offset = 0;
+  bool star = false;
 
   while (tokenStart < overrideLength) {
-    PRInt32 tokenEnd = override.FindChar('*', tokenStart);
+    int32_t tokenEnd = override.FindChar('*', tokenStart);
     if (tokenEnd == tokenStart) {
       // Star is the first character in the token.
-      star = PR_TRUE;
+      star = true;
       tokenStart++;
       // If the character following the '*' is a '.' character then skip
       // it so that "*.foo.com" allows "foo.com".
@@ -290,36 +252,36 @@ IsHostProxyEntry(const nsACString& aHost, const nsACString& aOverride)
       nsCAutoString token(Substring(override, tokenStart, tokenEnd - tokenStart));
       offset = host.Find(token, offset);
       if (offset == -1 || (!star && offset))
-        return PR_FALSE;
-      star = PR_FALSE;
+        return false;
+      star = false;
       tokenStart = tokenEnd;
       offset += token.Length();
     }
   }
 
-  return (star || (offset == static_cast<PRInt32>(host.Length())));
+  return (star || (offset == static_cast<int32_t>(host.Length())));
 }
 
-PRBool
+bool
 nsOSXSystemProxySettings::IsInExceptionList(const nsACString& aHost) const
 {
   NS_OBJC_BEGIN_TRY_ABORT_BLOCK_RETURN;
 
-  NS_ENSURE_TRUE(mProxyDict != NULL, PR_FALSE);
+  NS_ENSURE_TRUE(mProxyDict != NULL, false);
 
   NSArray* exceptionList = [mProxyDict objectForKey:(NSString*)kSCPropNetProxiesExceptionsList];
-  NS_ENSURE_TRUE(exceptionList == NULL || [exceptionList isKindOfClass:[NSArray class]], PR_FALSE);
+  NS_ENSURE_TRUE(exceptionList == NULL || [exceptionList isKindOfClass:[NSArray class]], false);
 
   NSEnumerator* exceptionEnumerator = [exceptionList objectEnumerator];
   NSString* currentValue = NULL;
   while ((currentValue = [exceptionEnumerator nextObject])) {
-    NS_ENSURE_TRUE([currentValue isKindOfClass:[NSString class]], PR_FALSE);
+    NS_ENSURE_TRUE([currentValue isKindOfClass:[NSString class]], false);
     nsCAutoString overrideStr([currentValue UTF8String]);
     if (IsHostProxyEntry(aHost, overrideStr))
-      return PR_TRUE;
+      return true;
   }
 
-  NS_OBJC_END_TRY_ABORT_BLOCK_RETURN(PR_FALSE);
+  NS_OBJC_END_TRY_ABORT_BLOCK_RETURN(false);
 }
 
 nsresult
@@ -349,9 +311,9 @@ nsOSXSystemProxySettings::GetProxyForURI(nsIURI* aURI, nsACString& aResult)
   nsresult rv = aURI->GetHost(host);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRInt32 proxyPort;
+  int32_t proxyPort;
   nsCAutoString proxyHost;
-  PRBool proxySocks;
+  bool proxySocks;
   rv = FindSCProxyPort(aURI, proxyHost, proxyPort, proxySocks);
 
   if (NS_FAILED(rv) || IsInExceptionList(host)) {

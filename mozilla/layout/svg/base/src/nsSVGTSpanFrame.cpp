@@ -1,47 +1,16 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Mozilla SVG project.
- *
- * The Initial Developer of the Original Code is
- * Crocodile Clips Ltd..
- * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+// Main header first:
+#include "nsSVGTSpanFrame.h"
+
+// Keep others in (case-insensitive) order:
 #include "nsIDOMSVGTSpanElement.h"
 #include "nsIDOMSVGAltGlyphElement.h"
-#include "nsSVGTSpanFrame.h"
+#include "nsSVGIntegrationUtils.h"
 #include "nsSVGUtils.h"
-#include "nsSVGTextFrame.h"
-#include "nsSVGOuterSVGFrame.h"
 
 //----------------------------------------------------------------------
 // Implementation
@@ -101,9 +70,9 @@ nsSVGTSpanFrame::Init(nsIContent* aContent,
 #endif /* DEBUG */
 
 NS_IMETHODIMP
-nsSVGTSpanFrame::AttributeChanged(PRInt32         aNameSpaceID,
+nsSVGTSpanFrame::AttributeChanged(int32_t         aNameSpaceID,
                                   nsIAtom*        aAttribute,
-                                  PRInt32         aModType)
+                                  int32_t         aModType)
 {
   if (aNameSpaceID == kNameSpaceID_None &&
       (aAttribute == nsGkAtoms::x ||
@@ -111,6 +80,7 @@ nsSVGTSpanFrame::AttributeChanged(PRInt32         aNameSpaceID,
        aAttribute == nsGkAtoms::dx ||
        aAttribute == nsGkAtoms::dy ||
        aAttribute == nsGkAtoms::rotate)) {
+    nsSVGUtils::InvalidateAndScheduleReflowSVG(this);
     NotifyGlyphMetricsChange();
   }
 
@@ -121,16 +91,22 @@ nsSVGTSpanFrame::AttributeChanged(PRInt32         aNameSpaceID,
 // nsSVGContainerFrame methods:
 
 gfxMatrix
-nsSVGTSpanFrame::GetCanvasTM()
+nsSVGTSpanFrame::GetCanvasTM(uint32_t aFor)
 {
+  if (!(GetStateBits() & NS_STATE_SVG_NONDISPLAY_CHILD)) {
+    if ((aFor == FOR_PAINTING && NS_SVGDisplayListPaintingEnabled()) ||
+        (aFor == FOR_HIT_TESTING && NS_SVGDisplayListHitTestingEnabled())) {
+      return nsSVGIntegrationUtils::GetCSSPxToDevPxMatrix(this);
+    }
+  }
   NS_ASSERTION(mParent, "null parent");
-  return static_cast<nsSVGContainerFrame*>(mParent)->GetCanvasTM();  
+  return static_cast<nsSVGContainerFrame*>(mParent)->GetCanvasTM(aFor);
 }
 
 //----------------------------------------------------------------------
 // nsISVGGlyphFragmentNode methods:
 
-PRUint32
+uint32_t
 nsSVGTSpanFrame::GetNumberOfChars()
 {
   return nsSVGTSpanFrameBase::GetNumberOfChars();
@@ -143,12 +119,12 @@ nsSVGTSpanFrame::GetComputedTextLength()
 }
 
 float
-nsSVGTSpanFrame::GetSubStringLength(PRUint32 charnum, PRUint32 nchars)
+nsSVGTSpanFrame::GetSubStringLength(uint32_t charnum, uint32_t nchars)
 {
   return nsSVGTSpanFrameBase::GetSubStringLength(charnum, nchars);
 }
 
-PRInt32
+int32_t
 nsSVGTSpanFrame::GetCharNumAtPosition(nsIDOMSVGPoint *point)
 {
   return nsSVGTSpanFrameBase::GetCharNumAtPosition(point);
@@ -186,11 +162,11 @@ nsSVGTSpanFrame::GetNextGlyphFrame()
   
   NS_ASSERTION(GetParent(), "null parent");
   nsISVGGlyphFragmentNode *node = do_QueryFrame(GetParent());
-  return node ? node->GetNextGlyphFrame() : nsnull;
+  return node ? node->GetNextGlyphFrame() : nullptr;
 }
 
 NS_IMETHODIMP_(void)
-nsSVGTSpanFrame::SetWhitespaceCompression(PRBool)
+nsSVGTSpanFrame::SetWhitespaceCompression(bool)
 {
   nsSVGTSpanFrameBase::SetWhitespaceCompression();
 }

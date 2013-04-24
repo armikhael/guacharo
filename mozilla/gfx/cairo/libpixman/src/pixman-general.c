@@ -101,19 +101,9 @@ static const op_info_t op_flags[PIXMAN_N_OPERATORS] =
 
 static void
 general_composite_rect  (pixman_implementation_t *imp,
-                         pixman_op_t              op,
-                         pixman_image_t *         src,
-                         pixman_image_t *         mask,
-                         pixman_image_t *         dest,
-                         int32_t                  src_x,
-                         int32_t                  src_y,
-                         int32_t                  mask_x,
-                         int32_t                  mask_y,
-                         int32_t                  dest_x,
-                         int32_t                  dest_y,
-                         int32_t                  width,
-                         int32_t                  height)
+                         pixman_composite_info_t *info)
 {
+    PIXMAN_COMPOSITE_ARGS (info);
     uint64_t stack_scanline_buffer[(SCANLINE_BUFFER_LENGTH * 3 + 7) / 8];
     uint8_t *scanline_buffer = (uint8_t *) stack_scanline_buffer;
     uint8_t *src_buffer, *mask_buffer, *dest_buffer;
@@ -121,12 +111,13 @@ general_composite_rect  (pixman_implementation_t *imp,
     pixman_combine_32_func_t compose;
     pixman_bool_t component_alpha;
     iter_flags_t narrow, src_flags;
+    iter_flags_t rgb16;
     int Bpp;
     int i;
 
-    if ((src->common.flags & FAST_PATH_NARROW_FORMAT)		&&
-	(!mask || mask->common.flags & FAST_PATH_NARROW_FORMAT)	&&
-	(dest->common.flags & FAST_PATH_NARROW_FORMAT))
+    if ((src_image->common.flags & FAST_PATH_NARROW_FORMAT)		    &&
+	(!mask_image || mask_image->common.flags & FAST_PATH_NARROW_FORMAT) &&
+	(dest_image->common.flags & FAST_PATH_NARROW_FORMAT))
     {
 	narrow = ITER_NARROW;
 	Bpp = 4;
@@ -136,6 +127,20 @@ general_composite_rect  (pixman_implementation_t *imp,
 	narrow = 0;
 	Bpp = 8;
     }
+
+    // XXX: This special casing is bad. Ideally, we'd keep the general code general perhaps
+    // by having it deal more specifically with different intermediate formats
+    if (
+	(dest_image->common.flags & FAST_PATH_16_FORMAT && (src_image->type == LINEAR || src_image->type == RADIAL)) &&
+	( op == PIXMAN_OP_SRC ||
+         (op == PIXMAN_OP_OVER && (src_image->common.flags & FAST_PATH_IS_OPAQUE))
+	)
+	) {
+	rgb16 = ITER_16;
+    } else {
+	rgb16 = 0;
+    }
+
 
     if (width * Bpp > SCANLINE_BUFFER_LENGTH)
     {
@@ -150,9 +155,9 @@ general_composite_rect  (pixman_implementation_t *imp,
     dest_buffer = mask_buffer + width * Bpp;
 
     /* src iter */
-    src_flags = narrow | op_flags[op].src;
+    src_flags = narrow | op_flags[op].src | rgb16;
 
-    _pixman_implementation_src_iter_init (imp->toplevel, &src_iter, src,
+    _pixman_implementation_src_iter_init (imp->toplevel, &src_iter, src_image,
 					  src_x, src_y, width, height,
 					  src_buffer, src_flags);
 
@@ -163,39 +168,26 @@ general_composite_rect  (pixman_implementation_t *imp,
 	/* If it doesn't matter what the source is, then it doesn't matter
 	 * what the mask is
 	 */
-	mask = NULL;
+	mask_image = NULL;
     }
 
     component_alpha =
-        mask                            &&
-        mask->common.type == BITS       &&
-        mask->common.component_alpha    &&
-        PIXMAN_FORMAT_RGB (mask->bits.format);
+        mask_image			      &&
+        mask_image->common.type == BITS       &&
+        mask_image->common.component_alpha    &&
+        PIXMAN_FORMAT_RGB (mask_image->bits.format);
 
     _pixman_implementation_src_iter_init (
-	imp->toplevel, &mask_iter, mask, mask_x, mask_y, width, height,
+	imp->toplevel, &mask_iter, mask_image, mask_x, mask_y, width, height,
 	mask_buffer, narrow | (component_alpha? 0 : ITER_IGNORE_RGB));
 
     /* dest iter */
-    _pixman_implementation_dest_iter_init (imp->toplevel, &dest_iter, dest,
-					   dest_x, dest_y, width, height,
-					   dest_buffer,
-					   narrow | op_flags[op].dst);
+    _pixman_implementation_dest_iter_init (
+	imp->toplevel, &dest_iter, dest_image, dest_x, dest_y, width, height,
+	dest_buffer, narrow | op_flags[op].dst | rgb16);
 
-    if (narrow)
-    {
-	if (component_alpha)
-	    compose = _pixman_implementation_combine_32_ca;
-	else
-	    compose = _pixman_implementation_combine_32;
-    }
-    else
-    {
-	if (component_alpha)
-	    compose = (pixman_combine_32_func_t)_pixman_implementation_combine_64_ca;
-	else
-	    compose = (pixman_combine_32_func_t)_pixman_implementation_combine_64;
-    }
+    compose = _pixman_implementation_lookup_combiner (
+	imp->toplevel, op, component_alpha, narrow, !!rgb16);
 
     if (!compose)
 	return;
@@ -233,8 +225,8 @@ general_blt (pixman_implementation_t *imp,
              int                      dst_bpp,
              int                      src_x,
              int                      src_y,
-             int                      dst_x,
-             int                      dst_y,
+             int                      dest_x,
+             int                      dest_y,
              int                      width,
              int                      height)
 {
@@ -262,6 +254,7 @@ _pixman_implementation_create_general (void)
 {
     pixman_implementation_t *imp = _pixman_implementation_create (NULL, general_fast_path);
 
+    _pixman_setup_combiner_functions_16 (imp);
     _pixman_setup_combiner_functions_32 (imp);
     _pixman_setup_combiner_functions_64 (imp);
 

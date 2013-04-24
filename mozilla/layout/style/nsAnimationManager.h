@@ -1,40 +1,7 @@
 /* vim: set shiftwidth=2 tabstop=8 autoindent cindent expandtab: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is nsAnimationManager, an implementation of part
- * of css3-animations.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   L. David Baron <dbaron@dbaron.org>, Mozilla Corporation (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #ifndef nsAnimationManager_h_
 #define nsAnimationManager_h_
 
@@ -44,12 +11,10 @@
 #include "nsDataHashtable.h"
 #include "nsGUIEvent.h"
 #include "mozilla/TimeStamp.h"
+#include "mozilla/Preferences.h"
 #include "nsThreadUtils.h"
 
 class nsCSSKeyframesRule;
-struct AnimationPropertySegment;
-struct ElementAnimation;
-struct ElementAnimations;
 
 namespace mozilla {
 namespace css {
@@ -57,37 +22,169 @@ class Declaration;
 }
 }
 
+struct AnimationEventInfo {
+  nsRefPtr<mozilla::dom::Element> mElement;
+  nsAnimationEvent mEvent;
+
+  AnimationEventInfo(mozilla::dom::Element *aElement,
+                     const nsString& aAnimationName,
+                     uint32_t aMessage, mozilla::TimeDuration aElapsedTime)
+    : mElement(aElement),
+      mEvent(true, aMessage, aAnimationName, aElapsedTime.ToSeconds())
+  {
+  }
+
+  // nsAnimationEvent doesn't support copy-construction, so we need
+  // to ourselves in order to work with nsTArray
+  AnimationEventInfo(const AnimationEventInfo &aOther)
+    : mElement(aOther.mElement),
+      mEvent(true, aOther.mEvent.message,
+             aOther.mEvent.animationName, aOther.mEvent.elapsedTime)
+  {
+  }
+};
+
+typedef InfallibleTArray<AnimationEventInfo> EventArray;
+
+struct AnimationPropertySegment
+{
+  float mFromKey, mToKey;
+  nsStyleAnimation::Value mFromValue, mToValue;
+  mozilla::css::ComputedTimingFunction mTimingFunction;
+};
+
+struct AnimationProperty
+{
+  nsCSSProperty mProperty;
+  InfallibleTArray<AnimationPropertySegment> mSegments;
+};
+
+/**
+ * Data about one animation (i.e., one of the values of
+ * 'animation-name') running on an element.
+ */
+struct ElementAnimation
+{
+  ElementAnimation()
+    : mLastNotification(LAST_NOTIFICATION_NONE)
+  {
+  }
+
+  nsString mName; // empty string for 'none'
+  float mIterationCount; // NS_IEEEPositiveInfinity() means infinite
+  uint8_t mDirection;
+  uint8_t mFillMode;
+  uint8_t mPlayState;
+
+  bool FillsForwards() const {
+    return mFillMode == NS_STYLE_ANIMATION_FILL_MODE_BOTH ||
+           mFillMode == NS_STYLE_ANIMATION_FILL_MODE_FORWARDS;
+  }
+  bool FillsBackwards() const {
+    return mFillMode == NS_STYLE_ANIMATION_FILL_MODE_BOTH ||
+           mFillMode == NS_STYLE_ANIMATION_FILL_MODE_BACKWARDS;
+  }
+
+  bool IsPaused() const {
+    return mPlayState == NS_STYLE_ANIMATION_PLAY_STATE_PAUSED;
+  }
+
+  bool HasAnimationOfProperty(nsCSSProperty aProperty) const;
+  bool IsRunningAt(mozilla::TimeStamp aTime) const;
+
+  mozilla::TimeStamp mStartTime; // with delay taken into account
+  mozilla::TimeStamp mPauseStart;
+  mozilla::TimeDuration mIterationDuration;
+
+  enum {
+    LAST_NOTIFICATION_NONE = uint32_t(-1),
+    LAST_NOTIFICATION_END = uint32_t(-2)
+  };
+  // One of the above constants, or an integer for the iteration
+  // whose start we last notified on.
+  uint32_t mLastNotification;
+
+  InfallibleTArray<AnimationProperty> mProperties;
+};
+
+/**
+ * Data about all of the animations running on an element.
+ */
+struct ElementAnimations : public mozilla::css::CommonElementAnimationData
+{
+  typedef mozilla::TimeStamp TimeStamp;
+  typedef mozilla::TimeDuration TimeDuration;
+
+  ElementAnimations(mozilla::dom::Element *aElement, nsIAtom *aElementProperty,
+                    nsAnimationManager *aAnimationManager);
+
+  // This function takes as input the start time, duration, and direction of an
+  // animation and returns the position in the current iteration.  Note that
+  // this only works when we know that the animation is currently running.
+  // This way of calling the function can be used from the compositor.  Note
+  // that if the animation has not started yet, has already ended, or is paused,
+  // it should not be run from the compositor.  When this function is called 
+  // from the main thread, we need the actual ElementAnimation* in order to 
+  // get correct animation-fill behavior and to fire animation events.
+  // This function returns -1 for the position if the animation should not be
+  // run (because it is not currently active and has no fill behavior.)
+  static double GetPositionInIteration(TimeStamp aStartTime,
+                                       TimeStamp aCurrentTime,
+                                       TimeDuration aDuration,
+                                       double aIterationCount,
+                                       uint32_t aDirection,
+                                       bool IsForElement = true,
+                                       ElementAnimation* aAnimation = nullptr,
+                                       ElementAnimations* aEa = nullptr,
+                                       EventArray* aEventsToDispatch = nullptr);
+
+  void EnsureStyleRuleFor(TimeStamp aRefreshTime,
+                          EventArray &aEventsToDispatch);
+
+  bool IsForElement() const { // rather than for a pseudo-element
+    return mElementProperty == nsGkAtoms::animationsProperty;
+  }
+
+  void PostRestyleForAnimation(nsPresContext *aPresContext) {
+    nsRestyleHint styleHint = IsForElement() ? eRestyle_Self : eRestyle_Subtree;
+    aPresContext->PresShell()->RestyleForAnimation(mElement, styleHint);
+  }
+
+  // True if this animation can be performed on the compositor thread.
+  bool CanPerformOnCompositorThread() const;
+  bool HasAnimationOfProperty(nsCSSProperty aProperty) const;
+
+  // False when we know that our current style rule is valid
+  // indefinitely into the future (because all of our animations are
+  // either completed or paused).  May be invalidated by a style change.
+  bool mNeedsRefreshes;
+
+  InfallibleTArray<ElementAnimation> mAnimations;
+};
+
 class nsAnimationManager : public mozilla::css::CommonAnimationManager
 {
 public:
   nsAnimationManager(nsPresContext *aPresContext)
-    : mozilla::css::CommonAnimationManager(aPresContext),
-      mKeyframesListIsDirty(true)
+    : mozilla::css::CommonAnimationManager(aPresContext)
+    , mKeyframesListIsDirty(true)
   {
     mKeyframesRules.Init(16); // FIXME: make infallible!
   }
 
-  struct AnimationEventInfo {
-    nsRefPtr<mozilla::dom::Element> mElement;
-    nsAnimationEvent mEvent;
-
-    AnimationEventInfo(mozilla::dom::Element *aElement,
-                       const nsString& aAnimationName,
-                       PRUint32 aMessage, mozilla::TimeDuration aElapsedTime)
-      : mElement(aElement),
-        mEvent(PR_TRUE, aMessage, aAnimationName, aElapsedTime.ToSeconds())
-    {
-    }
-
-    // nsAnimationEvent doesn't support copy-construction, so we need
-    // to ourselves in order to work with nsTArray
-    AnimationEventInfo(const AnimationEventInfo &aOther)
-      : mElement(aOther.mElement),
-        mEvent(PR_TRUE, aOther.mEvent.message,
-               aOther.mEvent.animationName, aOther.mEvent.elapsedTime)
-    {
-    }
-  };
+  static ElementAnimations* GetAnimationsForCompositor(nsIContent* aContent,
+                                                       nsCSSProperty aProperty)
+  {
+    if (!aContent->MayHaveAnimations())
+      return nullptr;
+    ElementAnimations* animations = static_cast<ElementAnimations*>(
+      aContent->GetProperty(nsGkAtoms::animationsProperty));
+    if (!animations)
+      return nullptr;
+    bool propertyMatches = animations->HasAnimationOfProperty(aProperty);
+    return (propertyMatches && animations->CanPerformOnCompositorThread()) ?
+      animations : nullptr;
+  }
 
   // nsIStyleRuleProcessor (parts)
   virtual void RulesMatching(ElementRuleProcessorData* aData);
@@ -96,6 +193,10 @@ public:
 #ifdef MOZ_XUL
   virtual void RulesMatching(XULTreeRuleProcessorData* aData);
 #endif
+  virtual NS_MUST_OVERRIDE size_t
+    SizeOfExcludingThis(nsMallocSizeOfFun aMallocSizeOf) const MOZ_OVERRIDE;
+  virtual NS_MUST_OVERRIDE size_t
+    SizeOfIncludingThis(nsMallocSizeOfFun aMallocSizeOf) const MOZ_OVERRIDE;
 
   // nsARefreshObserver
   virtual void WillRefresh(mozilla::TimeStamp aTime);
@@ -115,10 +216,8 @@ public:
                                    mozilla::dom::Element* aElement);
 
   void KeyframesListIsDirty() {
-    mKeyframesListIsDirty = PR_TRUE;
+    mKeyframesListIsDirty = true;
   }
-
-  typedef InfallibleTArray<AnimationEventInfo> EventArray;
 
   /**
    * Dispatch any pending events.  We accumulate animationend and
@@ -127,12 +226,17 @@ public:
    * accumulate animationstart events at other points when style
    * contexts are created.
    */
-  void DispatchEvents();
+  void DispatchEvents() {
+    // Fast-path the common case: no events
+    if (!mPendingEvents.IsEmpty()) {
+      DoDispatchEvents();
+    }
+  }
 
 private:
   ElementAnimations* GetElementAnimations(mozilla::dom::Element *aElement,
                                           nsCSSPseudoElements::Type aPseudoType,
-                                          PRBool aCreateIfNeeded);
+                                          bool aCreateIfNeeded);
   void BuildAnimations(nsStyleContext* aStyleContext,
                        InfallibleTArray<ElementAnimation>& aAnimations);
   bool BuildSegment(InfallibleTArray<AnimationPropertySegment>& aSegments,
@@ -144,6 +248,9 @@ private:
                                  nsCSSPseudoElements::Type aPseudoType);
 
   nsCSSKeyframesRule* KeyframesRuleFor(const nsSubstring& aName);
+
+  // The guts of DispatchEvents
+  void DoDispatchEvents();
 
   bool mKeyframesListIsDirty;
   nsDataHashtable<nsStringHashKey, nsCSSKeyframesRule*> mKeyframesRules;

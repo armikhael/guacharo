@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Mozilla XUL Toolkit.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Stan Shebs <shebs@mozilla.com>
- *   Thomas K. Dyas <tom.dyas@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // NSApplication delegate for Mac OS X Cocoa API.
 
@@ -86,7 +52,7 @@ private:
 
 @end
 
-static PRBool sProcessedGetURLEvent = PR_FALSE;
+static bool sProcessedGetURLEvent = false;
 
 @class GeckoNSApplication;
 
@@ -140,9 +106,9 @@ void
 ProcessPendingGetURLAppleEvents()
 {
   AutoAutoreleasePool pool;
-  PRBool keepSpinning = PR_TRUE;
+  bool keepSpinning = true;
   while (keepSpinning) {
-    sProcessedGetURLEvent = PR_FALSE;
+    sProcessedGetURLEvent = false;
     NSEvent *event = [NSApp nextEventMatchingMask:NSAnyEventMask
                                         untilDate:nil
                                            inMode:NSDefaultRunLoopMode
@@ -238,7 +204,7 @@ ProcessPendingGetURLAppleEvents()
     return YES;
 
   nsCOMPtr<nsILocalFileMac> inFile;
-  nsresult rv = NS_NewLocalFileWithCFURL((CFURLRef)url, PR_TRUE, getter_AddRefs(inFile));
+  nsresult rv = NS_NewLocalFileWithCFURL((CFURLRef)url, true, getter_AddRefs(inFile));
   if (NS_FAILED(rv))
     return NO;
 
@@ -258,7 +224,7 @@ ProcessPendingGetURLAppleEvents()
   if (NS_FAILED(rv))
     return NO;
 
-  const char *argv[3] = {nsnull, "-file", filePath.get()};
+  const char *argv[3] = {nullptr, "-file", filePath.get()};
   rv = cmdLine->Init(3, const_cast<char**>(argv), workingDir, nsICommandLine::STATE_REMOTE_EXPLICIT);
   if (NS_FAILED(rv))
     return NO;
@@ -302,7 +268,7 @@ ProcessPendingGetURLAppleEvents()
 
   // Determine if the dock menu items should be displayed. This also gives
   // the menu the opportunity to update itself before display.
-  PRBool shouldShowItems;
+  bool shouldShowItems;
   rv = dockMenu->MenuWillOpen(&shouldShowItems);
   if (NS_FAILED(rv) || !shouldShowItems)
     return menu;
@@ -346,10 +312,10 @@ ProcessPendingGetURLAppleEvents()
   if (!cancelQuit)
     return NSTerminateNow;
 
-  cancelQuit->SetData(PR_FALSE);
-  obsServ->NotifyObservers(cancelQuit, "quit-application-requested", nsnull);
+  cancelQuit->SetData(false);
+  obsServ->NotifyObservers(cancelQuit, "quit-application-requested", nullptr);
 
-  PRBool abortQuit;
+  bool abortQuit;
   cancelQuit->GetData(&abortQuit);
   if (abortQuit)
     return NSTerminateCancel;
@@ -369,10 +335,10 @@ ProcessPendingGetURLAppleEvents()
 
   AutoAutoreleasePool pool;
 
-  PRBool isGetURLEvent =
+  bool isGetURLEvent =
     ([event eventClass] == kInternetEventClass && [event eventID] == kAEGetURL);
   if (isGetURLEvent)
-    sProcessedGetURLEvent = PR_TRUE;
+    sProcessedGetURLEvent = true;
 
   if (isGetURLEvent ||
       ([event eventClass] == 'WWW!' && [event eventID] == 'OURL')) {
@@ -400,7 +366,7 @@ ProcessPendingGetURLAppleEvents()
     nsresult rv = NS_GetSpecialDirectory(NS_OS_CURRENT_WORKING_DIR, getter_AddRefs(workingDir));
     if (NS_FAILED(rv))
       return;
-    const char *argv[3] = {nsnull, "-url", [urlString UTF8String]};
+    const char *argv[3] = {nullptr, "-url", [urlString UTF8String]};
     rv = cmdLine->Init(3, const_cast<char**>(argv), workingDir, nsICommandLine::STATE_REMOTE_EXPLICIT);
     if (NS_FAILED(rv))
       return;

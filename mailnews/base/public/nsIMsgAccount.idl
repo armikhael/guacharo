@@ -1,39 +1,7 @@
 /* -*- Mode: IDL; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsISupports.idl"
 #include "nsIMsgIncomingServer.idl"
@@ -47,15 +15,8 @@
  * such as in mail.account.<account>.identities.
  */
 
-[scriptable, uuid(3FE5B45D-ACF8-4348-8951-757D21E983F2)]
+[scriptable, uuid(76048A12-303C-4cf8-B592-1F83BD196B14)]
 interface nsIMsgAccount : nsISupports {
-
-  /**
-   * Initialize an account.
-   *
-   * @throws NS_ERROR_ALREADY_OPENED if it is called more then once.
-   */
-  void init();
 
   /// Internal key identifying itself
   attribute ACString key;
@@ -80,4 +41,47 @@ interface nsIMsgAccount : nsISupports {
 
   /// Name in javascript
   AString toString();
+
+  /**
+   * Create the server, with error returns.
+   *
+   * Normally each valid account also has a valid server.
+   *
+   * If an extension that creates a server type failed to load, then we
+   * may have an existing account without a valid server. We don't want
+   * to simply delete that account, as that would make the user re-enter
+   * all of the account information after what may be a temporary
+   * update glitch. But we also don't want to leave junk lying around
+   * forever. So what we do is note the time when we first noticed
+   * that the server was unavailable. After a period of time set
+   * in a preference, if the server is still unavailable then delete
+   * the associated account.
+   *
+   * Accounts with invalid server are not shown in any way by the account
+   * manager. But if the server becomes available (for example if an extension
+   * is loaded), then the account will reappear when accounts are loaded.
+   *
+   * Preference definitions:
+   *
+   * mail.server.serverN.secondsToLeaveUnavailable
+   * mail.server.serverN.timeFoundUnavailable
+   *
+   * secondsToLeaveUnavailable: is set by the extension to indicate the
+   * delay, in seconds, between first detection that a server is
+   * unavailable, and the time it can be deleted. This should be set
+   * by the extension when the server is created. If missing, treat as 0.
+   * A typical value would be 2592000 (30 days)(24 hr/day)(3600 seconds/hr)
+   *
+   * timeFoundUnavailable: is set by core code the first time that a
+   * server is detected as unavailable, using now() converted to seconds.
+   * If that time + secondsToLeaveUnavailable is exceeded, core code may
+   * delete the server and its associated account (though for now we default
+   * to the previous behavior, which is to just delete the account).
+   *
+   * @throws NS_ERROR_NOT_AVAILABLE if the server component type could not
+   *           be created
+   *         NS_ERROR_ALREADY_INITIALIZED if the server is already created
+   *         (Other errors may also be possible)
+  */
+  void createServer();
 };

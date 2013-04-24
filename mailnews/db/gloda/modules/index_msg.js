@@ -1,42 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Global Database.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Andrew Sutherland <asutherland@asutherland.org>
- *   Kent James <kent@caspia.com>
- *   Siddharth Agarwal <sid.bugzilla@gmail.com>
- *   Dan Mosedale <dmose@mozillamessaging.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 "use strict";
 
@@ -57,6 +21,7 @@ const Cu = Components.utils;
 
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource:///modules/iteratorUtils.jsm");
+Cu.import("resource:///modules/MailUtils.js");
 
 Cu.import("resource:///modules/gloda/log4moz.js");
 
@@ -86,8 +51,23 @@ const GLODA_DIRTY_PROPERTY = "gloda-dirty";
  * The sentinel GLODA_MESSAGE_ID_PROPERTY value indicating that a message fails
  *  to index and we should not bother trying again, at least not until a new
  *  release is made.
+ *
+ * This should ideally just flip between 1 and 2, with GLODA_OLD_BAD_MESSAGE_ID
+ *  flipping in the other direction.  If we start having more trailing badness,
+ *  _indexerGetEnumerator and GLODA_OLD_BAD_MESSAGE_ID will need to be altered.
+ *
+ * When flipping this, be sure to update glodaTestHelper.js's copy.
  */
-const GLODA_BAD_MESSAGE_ID = 1;
+const GLODA_BAD_MESSAGE_ID = 2;
+/**
+ * The gloda id we used to use to mark messages as bad, but now should be
+ *  treated as eligible for indexing.  This is only ever used for consideration
+ *  when creating msg header enumerators with `_indexerGetEnumerator` which
+ *  means we only will re-index such messages in an indexing sweep.  Accordingly
+ *  event-driven indexing will still treat such messages as unindexed (and
+ *  unindexable) until an indexing sweep picks them up.
+ */
+const GLODA_OLD_BAD_MESSAGE_ID = 1;
 const GLODA_FIRST_VALID_MESSAGE_ID = 32;
 
 const JUNK_SCORE_PROPERTY = "junkscore";
@@ -480,6 +460,7 @@ var GlodaMsgIndexer = {
       getService(Ci.nsIMsgMailSession);
     this._folderListener._init(this);
     mailSession.AddFolderListener(this._folderListener,
+                                  Ci.nsIFolderListener.intPropertyChanged |
                                   Ci.nsIFolderListener.propertyFlagChanged |
                                   Ci.nsIFolderListener.event);
 
@@ -492,12 +473,15 @@ var GlodaMsgIndexer = {
         Ci.nsIMsgFolderNotificationService.msgsDeleted |
         Ci.nsIMsgFolderNotificationService.msgsMoveCopyCompleted |
         Ci.nsIMsgFolderNotificationService.msgKeyChanged |
+        Ci.nsIMsgFolderNotificationService.folderAdded |
         Ci.nsIMsgFolderNotificationService.folderDeleted |
         Ci.nsIMsgFolderNotificationService.folderMoveCopyCompleted |
         Ci.nsIMsgFolderNotificationService.folderRenamed |
         Ci.nsIMsgFolderNotificationService.itemEvent);
 
     this._enabled = true;
+
+    this._considerSchemaMigration();
 
     this._log.info("Event-Driven Indexing is now " + this._enabled);
   },
@@ -728,9 +712,15 @@ var GlodaMsgIndexer = {
     if (aEnumKind == this.kEnumMsgsToIndex) {
       // We need to create search terms for messages to index. Messages should
       //  be indexed if they're indexable (local or offline and not expunged)
-      //  and either haven't been indexed or are dirty.
+      //  and either: haven't been indexed, are dirty, or are marked with with
+      //  a former GLODA_BAD_MESSAGE_ID that is no longer our bad marker.  (Our
+      //  bad marker can change on minor schema revs so that we can try and
+      //  reindex those messages exactly once and without needing to go through
+      //  a pass to mark them as needing one more try.)
       // The basic search expression is:
-      //  ((GLODA_MESSAGE_ID_PROPERTY Is 0) || (GLODA_DIRTY_PROPERTY Isnt 0)) &&
+      //  ((GLODA_MESSAGE_ID_PROPERTY Is 0) ||
+      //   (GLODA_MESSAGE_ID_PROPERTY Is GLODA_OLD_BAD_MESSAGE_ID) ||
+      //   (GLODA_DIRTY_PROPERTY Isnt 0)) &&
       //  (JUNK_SCORE_PROPERTY Isnt 100)
       // If the folder !isLocal we add the terms:
       //  - if the folder is offline -- && (Status Is nsMsgMessageFlags.Offline)
@@ -760,7 +750,19 @@ var GlodaMsgIndexer = {
       searchTerm.hdrProperty = GLODA_MESSAGE_ID_PROPERTY;
       searchTerms.appendElement(searchTerm, false);
 
-      //  second term: || GLODA_DIRTY_PROPERTY Isnt 0 )
+      // second term: || GLODA_MESSAGE_ID_PROPERTY Is GLODA_OLD_BAD_MESSAGE_ID
+      searchTerm = searchSession.createTerm();
+      searchTerm.booleanAnd = false; // OR
+      searchTerm.attrib = nsMsgSearchAttrib.Uint32HdrProperty;
+      searchTerm.op = nsMsgSearchOp.Is;
+      value = searchTerm.value;
+      value.attrib = searchTerm.attrib;
+      value.status = GLODA_OLD_BAD_MESSAGE_ID;
+      searchTerm.value = value;
+      searchTerm.hdrProperty = GLODA_MESSAGE_ID_PROPERTY;
+      searchTerms.appendElement(searchTerm, false);
+
+      //  third term: || GLODA_DIRTY_PROPERTY Isnt 0 )
       searchTerm = searchSession.createTerm();
       searchTerm.booleanAnd = false;
       searchTerm.endsGrouping = true;
@@ -939,7 +941,21 @@ var GlodaMsgIndexer = {
       ["delete", {
          worker: this._worker_processDeletes,
        }],
+
+      ["fixMissingContacts", {
+        worker: this._worker_fixMissingContacts,
+       }],
     ];
+  },
+
+  _schemaMigrationInitiated: false,
+  _considerSchemaMigration: function() {
+    if (!this._schemaMigrationInitiated &&
+        GlodaDatastore._actualSchemaVersion === 26) {
+      let job = new IndexingJob("fixMissingContacts", null);
+      GlodaIndexer.indexJob(job);
+      this._schemaMigrationInitiated = true;
+    }
   },
 
   initialSweep: function() {
@@ -1452,12 +1468,13 @@ var GlodaMsgIndexer = {
           continue;
 
         if (logDebug)
-          this._log.debug(">>>  _indexMessage");
+          this._log.debug(">>>  calling _indexMessage");
         yield aCallbackHandle.pushAndGo(
           this._indexMessage(msgHdr, aCallbackHandle),
           {what: "indexMessage", msgHdr: msgHdr});
+        GlodaIndexer._indexedMessageCount++;
         if (logDebug)
-          this._log.debug("<<<  _indexMessage");
+          this._log.debug("<<<  back from _indexMessage");
       }
     }
 
@@ -1579,18 +1596,24 @@ var GlodaMsgIndexer = {
    * @param aContextStack The callbackHandle mechanism's context stack.  When we
    *     invoke pushAndGo for _indexMessage we put something in so we can
    *     detect when it is on the async stack.
+   * @param aException The exception that is necessitating we attempt to
+   *     recover.
    *
    * @return 1 if we were able to recover (because we want the call stack
    *     popped down to our worker), false if we can't.
    */
   _recover_indexMessage:
-      function gloda_index_recover_indexMessage(aJob, aContextStack) {
+      function gloda_index_recover_indexMessage(aJob, aContextStack,
+                                                aException) {
     // See if indexMessage is on the stack...
     if (aContextStack.length >= 2 &&
         aContextStack[1] &&
         ("what" in aContextStack[1]) &&
         aContextStack[1].what == "indexMessage") {
       // it is, so this is probably recoverable.
+
+      this._log.debug(
+        "Exception while indexing message, marking it bad (gloda id of 1).");
 
       // -- Mark the message as bad
       let msgHdr = aContextStack[1].msgHdr;
@@ -1680,6 +1703,98 @@ var GlodaMsgIndexer = {
     yield this.kWorkDone;
   },
 
+  _worker_fixMissingContacts: function(aJob, aCallbackHandle) {
+    let identityContactInfos = [], fixedContacts = {};
+
+    // -- asynchronously get a list of all identities without contacts
+    // The upper bound on the number of messed up contacts is the number of
+    //  contacts in the user's address book.  This should be small enough
+    //  (and the data size small enough) that this won't explode thunderbird.
+    let queryStmt = GlodaDatastore._createAsyncStatement(
+      "SELECT identities.id, identities.contactID, identities.value " +
+        "FROM identities " +
+        "LEFT JOIN contacts ON identities.contactID = contacts.id " +
+        "WHERE identities.kind = 'email' AND contacts.id IS NULL",
+      true);
+    queryStmt.executeAsync({
+      handleResult: function(aResultSet) {
+        let row;
+        while ((row = aResultSet.getNextRow())) {
+          identityContactInfos.push({
+            identityId: row.getInt64(0),
+            contactId: row.getInt64(1),
+            email: row.getString(2)
+          });
+        }
+      },
+      handleError: function(aError) {
+      },
+      handleCompletion: function(aReason) {
+        GlodaDatastore._asyncCompleted();
+        aCallbackHandle.wrappedCallback();
+      },
+    });
+    queryStmt.finalize();
+    GlodaDatastore._pendingAsyncStatements++;
+    yield this.kWorkAsync;
+
+    // -- perform fixes only if there were missing contacts
+    if (identityContactInfos.length) {
+      const yieldEvery = 64;
+      // - create the missing contacts
+      for (let i = 0; i < identityContactInfos.length; i++) {
+        if ((i % yieldEvery) === 0)
+          yield this.kWorkSync;
+
+        let info = identityContactInfos[i],
+            card = GlodaUtils.getCardForEmail(info.email),
+            contact = new GlodaContact(
+              GlodaDatastore, info.contactId,
+              null, null,
+              card ? (card.displayName || info.email) : info.email,
+              0, 0);
+        GlodaDatastore.insertContact(contact);
+
+        // update the in-memory rep of the identity to know about the contact
+        //  if there is one.
+        let identity = GlodaCollectionManager.cacheLookupOne(
+                         Gloda.NOUN_IDENTITY, info.identityId, false);
+        if (identity) {
+          // Unfortunately, although this fixes the (reachable) Identity and
+          //  exposes the Contact, it does not make the Contact reachable from
+          //  the collection manager.  This will make explicit queries that look
+          //  up the contact potentially see the case where
+          //  contact.identities[0].contact !== contact.  Alternately, that
+          //  may not happen and instead the "contact" object we created above
+          //  may become unlinked.  (I'd have to trace some logic I don't feel
+          //  like tracing.)  Either way, The potential fallout is minimal
+          //  since the object identity invariant will just lapse and popularity
+          //  on the contact may become stale, and neither of those meaningfully
+          //  affect the operation of anything in Thunderbird.
+          // If we really cared, we could find all the dominant collections
+          //  that reference the identity and update their corresponding
+          //  contact collection to make it reachable.  That use-case does not
+          //  exist outside of here, which is why we're punting.
+          identity._contact = contact;
+          contact._identities = [identity];
+        }
+
+        // NOTE: If the addressbook indexer did anything useful other than
+        //  adapting to name changes, we could schedule indexing of the cards at
+        //  this time.  However, as of this writing, it doesn't, and this task
+        //  is a one-off relevant only to the time of this writing.
+      }
+
+      // - mark all folders as dirty, initiate indexing sweep
+      this.dirtyAllKnownFolders();
+      this.indexingSweepNeeded = true;
+    }
+
+    // -- mark the schema upgrade, be done
+    GlodaDatastore._updateSchemaVersion(GlodaDatastore._schemaVersion);
+    yield this.kWorkDone;
+  },
+
   /**
    * Determine whether a folder is suitable for indexing.
    *
@@ -1694,11 +1809,6 @@ var GlodaMsgIndexer = {
     //  get to be GlodaFolder instances.
     if (!(folderFlags & Ci.nsMsgFolderFlags.Mail) ||
         (folderFlags & Ci.nsMsgFolderFlags.Virtual))
-      return false;
-
-    // we only index local or IMAP folders
-    if (!(aMsgFolder instanceof nsIMsgLocalMailFolder) &&
-        !(aMsgFolder instanceof nsIMsgImapMailFolder))
       return false;
 
     // Some folders do not really exist; we can detect this by getStringProperty
@@ -1870,6 +1980,26 @@ var GlodaMsgIndexer = {
     job.items = [[GlodaDatastore._mapFolder(fm[0]).id, fm[1]] for each
                  ([i, fm] in Iterator(aFoldersAndMessages))];
     GlodaIndexer.indexJob(job);
+  },
+
+  /**
+   * Mark all known folders as dirty so that the next indexing sweep goes
+   *  into all folders and checks their contents to see if they need to be
+   *  indexed.
+   *
+   * This is being added for the migration case where we want to try and reindex
+   *  all of the messages that had been marked with GLODA_BAD_MESSAGE_ID but
+   *  which is now GLODA_OLD_BAD_MESSAGE_ID and so we should attempt to reindex
+   *  them.
+   */
+  dirtyAllKnownFolders: function gloda_index_msg_dirtyAllKnownFolders() {
+    // Just iterate over the datastore's folder map and tell each folder to
+    //  be dirty if its priority is not disabled.
+    for each (let [folderID, glodaFolder] in
+              Iterator(GlodaDatastore._folderByID)) {
+      if (glodaFolder.indexingPriority !== glodaFolder.kIndexingNeverPriority)
+        glodaFolder._ensureFolderDirty();
+    }
   },
 
   /**
@@ -2113,8 +2243,7 @@ var GlodaMsgIndexer = {
         GlodaMsgIndexer._reindexChangedMessages(aMsgHdrs.enumerate(), false);
       }
       catch (ex) {
-        this.indexer._log.error("Explosion in msgsClassified handling: " +
-                                ex.stack);
+        this.indexer._log.error("Explosion in msgsClassified handling:", ex);
       }
     },
 
@@ -2385,8 +2514,8 @@ var GlodaMsgIndexer = {
           this.indexer.indexingSweepNeeded = true;
         }
       } catch (ex) {
-        this.indexer._log.error("Problem encountered during message move/copy" +
-          ": " + ex + "\n\n" + ex.stack + "\n\n");
+        this.indexer._log.error("Problem encountered during message move/copy:",
+                                ex.stack);
       }
     },
 
@@ -2434,6 +2563,19 @@ var GlodaMsgIndexer = {
                                 ex.stack + " \n\n");
       }
     },
+
+    /**
+     * Detect newly added folders before they get messages so we map them before
+     * they get any messages added to them.  If we only hear about them after
+     * they get their 1st message, then we will mark them filthy, but if we mark
+     * them before that, they get marked clean.
+     */
+    folderAdded: function gloda_indexer_folderAdded(aMsgFolder) {
+      // This is invoked for its side-effect of invoking _mapFolder and doing so
+      // only after filtering out folders we don't care about.
+      GlodaMsgIndexer.shouldIndexFolder(aMsgFolder);
+    },
+
     /**
      * Handles folder no-longer-exists-ence.  We mark all messages as deleted
      *  and remove the folder from our URI table.  Currently, if a folder that
@@ -2516,24 +2658,42 @@ var GlodaMsgIndexer = {
      */
     _folderRenameHelper: function gloda_indexer_folderRenameHelper(aOrigFolder,
                                                                    aNewURI) {
-      let descendentFolders = Cc["@mozilla.org/supports-array;1"].
-                                createInstance(Ci.nsISupportsArray);
-      aOrigFolder.ListDescendents(descendentFolders);
+      let newFolder = MailUtils.getFolderForURI(aNewURI);
+      let specialFolderFlags = Ci.nsMsgFolderFlags.Trash | Ci.nsMsgFolderFlags.Junk;
+      if (newFolder.isSpecialFolder(specialFolderFlags, true)) {
+        let descendentFolders = Cc["@mozilla.org/supports-array;1"].
+                                  createInstance(Ci.nsISupportsArray);
+        newFolder.ListDescendents(descendentFolders);
 
-      let origURI = aOrigFolder.URI;
-      // this rename is straightforward.
-      GlodaDatastore.renameFolder(aOrigFolder, aNewURI);
+        // First thing to do: make sure we don't index the resulting folder and
+        //  its descendents.
+        GlodaMsgIndexer.resetFolderIndexingPriority(newFolder);
+        for (let folder in fixIterator(descendentFolders, Ci.nsIMsgFolder)) {
+          GlodaMsgIndexer.resetFolderIndexingPriority(folder);
+        }
 
-      for (let folder in fixIterator(descendentFolders, Ci.nsIMsgFolder)) {
-        let oldSubURI = folder.URI;
-        // mangle a new URI from the old URI.  we could also try and do a
-        //  parallel traversal of the new folder hierarchy, but that seems like
-        //  more work.
-        let newSubURI = aNewURI + oldSubURI.substring(origURI.length);
-        this.indexer._datastore.renameFolder(oldSubURI, newSubURI);
+        // Remove from the index messages from the original folder
+        this.folderDeleted(aOrigFolder);
+      } else {
+        let descendentFolders = Cc["@mozilla.org/supports-array;1"].
+                                  createInstance(Ci.nsISupportsArray);
+        aOrigFolder.ListDescendents(descendentFolders);
+
+        let origURI = aOrigFolder.URI;
+        // this rename is straightforward.
+        GlodaDatastore.renameFolder(aOrigFolder, aNewURI);
+
+        for (let folder in fixIterator(descendentFolders, Ci.nsIMsgFolder)) {
+          let oldSubURI = folder.URI;
+          // mangle a new URI from the old URI.  we could also try and do a
+          //  parallel traversal of the new folder hierarchy, but that seems like
+          //  more work.
+          let newSubURI = aNewURI + oldSubURI.substring(origURI.length);
+          this.indexer._datastore.renameFolder(oldSubURI, newSubURI);
+        }
+
+        this.indexer._log.debug("folder renamed: " + origURI + " to " + aNewURI);
       }
-
-      this.indexer._log.debug("folder renamed: " + origURI + " to " + aNewURI);
     },
 
     /**
@@ -2649,6 +2809,7 @@ var GlodaMsgIndexer = {
       this._kKeywordsAtom = atomService.getAtom("Keywords");
       this._kStatusAtom = atomService.getAtom("Status");
       this._kFlaggedAtom = atomService.getAtom("Flagged");
+      this._kFolderFlagAtom = atomService.getAtom("FolderFlag");
     },
 
     OnItemAdded: function gloda_indexer_OnItemAdded(aParentItem, aItem) {
@@ -2658,8 +2819,18 @@ var GlodaMsgIndexer = {
     OnItemPropertyChanged: function gloda_indexer_OnItemPropertyChanged(
                              aItem, aProperty, aOldValue, aNewValue) {
     },
+    /**
+     * Detect changes to folder flags and reset our indexing priority.  This
+     * is important because (all?) folders start out without any flags and
+     * then get their flags added to them.
+     */
     OnItemIntPropertyChanged: function gloda_indexer_OnItemIntPropertyChanged(
-                                aItem, aProperty, aOldValue, aNewValue) {
+                                aFolderItem, aProperty, aOldValue, aNewValue) {
+      if (aProperty !== this._kFolderFlagAtom)
+        return;
+      if (!GlodaMsgIndexer.shouldIndexFolder(aFolderItem))
+        return;
+      GlodaMsgIndexer.resetFolderIndexingPriority(aFolderItem);
     },
     OnItemBoolPropertyChanged: function gloda_indexer_OnItemBoolPropertyChanged(
                                 aItem, aProperty, aOldValue, aNewValue) {

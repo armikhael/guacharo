@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Global Database.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jonathan Protzenko <jonathan.protzenko@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * General testing of the byte-counting libmime facility, to make sure that what
@@ -54,6 +21,8 @@ load("../../../../resources/messageGenerator.js");
 load("../../../../resources/messageModifier.js");
 load("../../../../resources/messageInjection.js");
 
+Components.utils.import("resource://gre/modules/NetUtil.jsm");
+
 // Create a message generator
 const msgGen = gMessageGenerator = new MessageGenerator();
 // Create a message scenario generator using that message generator
@@ -70,10 +39,15 @@ var partHtml = new SyntheticPartLeaf(
   }
 );
 
+// This text is 168 characters long, and occupies 173 bytes when encoded in
+// UTF-8. (We make sure it occupies 173 bytes in run_test below). Note that
+// you cannot use this text directly because it isn't pure ASCII. You must use
+// one of the encoded forms below.
 var originalText =
   "Longtemps, je me suis couché de bonne heure. Parfois, à "+
   "peine ma bougie éteinte, mes yeux se fermaient si vite que je n'avais pas le "+
   "temps de me dire : « Je m'endors. »";
+var originalTextByteCount = 173;
 
 var b64Text =
   "TG9uZ3RlbXBzLCBqZSBtZSBzdWlzIGNvdWNow6kgZGUgYm9ubmUgaGV1cmUuIFBhcmZvaXMs\n"+
@@ -116,16 +90,18 @@ var yencText =
 // that completely exotic encoding is only detected if there is no content type
 // on the message, which is usually the case in newsgroups. I hate you yencode!
 var partYencText = new SyntheticPartLeaf("I am text! Woo!\n\n"+yencText,
-  { contentType: '' } );
+  { contentType: '', charset: '', format: '' } );
 
 var partUUText = new SyntheticPartLeaf(
   "I am text! With uuencode... noes...\n\n"+uuText,
-  { contentType: '' });
+  { contentType: '', charset: '', format: '' });
 
-var tachText = {filename: 'bob.txt', body: originalText};
+var tachText = {filename: 'bob.txt', body: qpText,
+                charset: "utf-8", encoding: "quoted-printable"};
 
-var tachInlineText = {filename: 'foo.txt', body: originalText,
-                      format: null, charset: null,
+var tachInlineText = {filename: 'foo.txt', body: qpText,
+                      format: null, charset: "utf-8",
+                      encoding: "quoted-printable",
                       disposition: 'inline'};
 
 // images have a different behavior than other attachments: they are displayed
@@ -145,7 +121,9 @@ var tachUU = {filename: 'john.doe', contentType: 'application/x-uuencode',
                  body: uuText};
 
 var tachApplication = {filename: 'funky.funk',
-                       contentType: 'application/x-funky', body: originalText};
+                       contentType: 'application/x-funky',
+                       encoding: 'base64',
+                       body: b64Text};
 
 var relImage = {contentType: 'image/png',
                 encoding: 'base64', charset: null, format: null,
@@ -163,7 +141,7 @@ var messageInfos = [
     name: 'uuencode inline',
     bodyPart: partUUText,
     subject: "duh",
-    epsilon: 4,
+    epsilon: 1,
     checkTotalSize: false,
   },
   // encoding type specific to newsgroups, not interested, gloda doesn't even
@@ -182,15 +160,19 @@ var messageInfos = [
     name: 'multipart/related',
     bodyPart: new SyntheticPartMultiRelated([partHtml, partRelImage]),
   },*/
-  // all of the other common cases work fine
-  {
+  // This doesn't really make sense because it returns the length of the
+  // encoded blob without the envelope. Disabling as part of bug 711980.
+  /*{
     name: '.eml attachment',
     bodyPart: new SyntheticPartMultiMixed([
       partHtml,
-      msgGen.makeMessage({ body: { body: originalText } }),
+      msgGen.makeMessage({ body: { body: qpText,
+                                   charset: "UTF-8",
+                                   encoding: "quoted-printable" } }),
     ]),
-    epsilon: 4,
-  },
+    epsilon: 1,
+  },*/
+  // all of the other common cases work fine
   {
     name: 'all sorts of "real" attachments',
     bodyPart: partHtml,
@@ -219,22 +201,6 @@ function check_attachments(aMimeMsg, epsilon, checkTotalSize) {
    * the bytes for the extra line. Since newlines in emails are \n, most of the
    * time we get att.size = 174 instead of 173.
    *
-   * Due to mysterious line encoding issues, for attachments that are
-   * text/plain, we get att.size = 175 instead of 174 on Windows.
-   *
-   * Due to the way the fake messages are created, the test message with an .eml
-   * attachment gets an extra new line before the separator.
-   *
-   * de me dire
-   * je m'endor   <-- text/plain attachment
-   * s. >>.
-   *              <-- aaarggh! an extra newline!
-   *
-   * --chopchop
-   *
-   * So that raises the count to 175 on Unix, and 177 on Windows, because of
-   * that weird newline issue.
-   *
    * The good news is, it's just a fixed extra cost. There no issues with the
    * inner contents of the attachment, you can add as many newlines as you want
    * in it, Unix or Windows, the count won't get past the bounds.
@@ -245,14 +211,16 @@ function check_attachments(aMimeMsg, epsilon, checkTotalSize) {
   let totalSize = htmlText.length;
 
   for each (let [i, att] in Iterator(aMimeMsg.allUserAttachments)) {
-    dump("*** Attachment now is "+att.name+" "+att.size+"\n");
-    do_check_true(Math.abs(att.size - originalText.length) <= epsilon);
+    dump("*** Attachment now is " + att.name + " " + att.size + "\n");
+    do_check_true(Math.abs(att.size - originalTextByteCount) <= epsilon);
     totalSize += att.size;
   }
 
   // undefined means true
-  if (checkTotalSize !== false)
+  if (checkTotalSize !== false) {
+    dump("*** Total size comparison: " + totalSize + " vs " + aMimeMsg.size + "\n");
     do_check_true(Math.abs(aMimeMsg.size - totalSize) <= epsilon);
+  }
 
   async_driver();
 }
@@ -330,7 +298,7 @@ function check_bogus_parts(aMimeMsg, { epsilon, checkSize }) {
     // That's the newline between the headers and the message body.
     partSize += sep.length;
     // That's the message body.
-    partSize += originalText.length;
+    partSize += originalTextByteCount;
     // That's the total length that's to be returned by the MimeMessage abstraction.
     let totalSize = htmlText.length + partSize;
     dump(totalSize+" vs "+aMimeMsg.size+"\n");
@@ -399,6 +367,12 @@ var tests = [
 var gInbox;
 
 function run_test() {
+  // Sanity check: figure out how many bytes the original text occupies in UTF-8 encoding
+  let converter = Cc["@mozilla.org/intl/scriptableunicodeconverter"]
+                    .createInstance(Ci.nsIScriptableUnicodeConverter);
+  converter.charset = "UTF-8";
+  do_check_eq(converter.ConvertFromUnicode(originalText).length, originalTextByteCount);
+
   // use mbox injection because the fake server chokes sometimes right now
   gInbox = configure_message_injection({mode: "local"});
   async_run_tests(tests);

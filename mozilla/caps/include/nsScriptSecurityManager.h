@@ -1,43 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Norris Boyd  <nboyd@atg.com>
- *   Mitch Stoltz <mstoltz@netscape.com>
- *   Christopher A. Aillon <christopher@aillon.com>
- *   Giorgio Maone <g.maone@informaction.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsScriptSecurityManager_h__
 #define nsScriptSecurityManager_h__
@@ -56,6 +20,8 @@
 #include "pldhash.h"
 #include "plstr.h"
 #include "nsIScriptExternalNameSet.h"
+
+#include "mozilla/StandardInteger.h"
 
 class nsIDocShell;
 class nsString;
@@ -114,9 +80,9 @@ public:
         return mKey;
     }
 
-    PRBool KeyEquals(KeyTypePointer aKey) const
+    bool KeyEquals(KeyTypePointer aKey) const
     {
-        PRBool eq;
+        bool eq;
         mKey->Equals(const_cast<nsIPrincipal*>(aKey),
                      &eq);
         return eq;
@@ -129,12 +95,12 @@ public:
 
     static PLDHashNumber HashKey(KeyTypePointer aKey)
     {
-        PRUint32 hash;
+        uint32_t hash;
         const_cast<nsIPrincipal*>(aKey)->GetHashValue(&hash);
         return PLDHashNumber(hash);
     }
 
-    enum { ALLOW_MEMMOVE = PR_TRUE };
+    enum { ALLOW_MEMMOVE = true };
 
 private:
     nsCOMPtr<nsIPrincipal> mKey;
@@ -147,8 +113,8 @@ private:
 // Property Policy
 union SecurityLevel
 {
-    PRWord   level;
-    char*    capability;
+    intptr_t   level;
+    char*      capability;
 };
 
 // Security levels
@@ -179,7 +145,7 @@ struct PropertyPolicy : public PLDHashEntryHdr
     SecurityLevel  mSet;
 };
 
-static PRBool
+static bool
 InitPropertyPolicyEntry(PLDHashTable *table,
                      PLDHashEntryHdr *entry,
                      const void *key)
@@ -188,7 +154,7 @@ InitPropertyPolicyEntry(PLDHashTable *table,
     pp->key = (JSString *)key;
     pp->mGet.level = SCRIPT_SECURITY_UNDEFINED_ACCESS;
     pp->mSet.level = SCRIPT_SECURITY_UNDEFINED_ACCESS;
-    return PR_TRUE;
+    return true;
 }
 
 static void
@@ -218,7 +184,7 @@ ClearClassPolicyEntry(PLDHashTable *table, PLDHashEntryHdr *entry)
     if (cp->key)
     {
         PL_strfree(cp->key);
-        cp->key = nsnull;
+        cp->key = nullptr;
     }
     PL_DHashTableDestroy(cp->mPolicy);
 }
@@ -230,7 +196,7 @@ MoveClassPolicyEntry(PLDHashTable *table,
                      const PLDHashEntryHdr *from,
                      PLDHashEntryHdr *to);
 
-static PRBool
+static bool
 InitClassPolicyEntry(PLDHashTable *table,
                      PLDHashEntryHdr *entry,
                      const void *key)
@@ -248,25 +214,25 @@ InitClassPolicyEntry(PLDHashTable *table,
     };
 
     ClassPolicy* cp = (ClassPolicy*)entry;
-    cp->mDomainWeAreWildcardFor = nsnull;
+    cp->mDomainWeAreWildcardFor = nullptr;
     cp->key = PL_strdup((const char*)key);
     if (!cp->key)
-        return PR_FALSE;
-    cp->mPolicy = PL_NewDHashTable(&classPolicyOps, nsnull,
+        return false;
+    cp->mPolicy = PL_NewDHashTable(&classPolicyOps, nullptr,
                                    sizeof(PropertyPolicy), 16);
     if (!cp->mPolicy) {
         PL_strfree(cp->key);
-        cp->key = nsnull;
-        return PR_FALSE;
+        cp->key = nullptr;
+        return false;
     }
-    return PR_TRUE;
+    return true;
 }
 
 // Domain Policy
 class DomainPolicy : public PLDHashTable
 {
 public:
-    DomainPolicy() : mWildcardPolicy(nsnull),
+    DomainPolicy() : mWildcardPolicy(nullptr),
                      mRefCount(0)
     {
         mGeneration = sGeneration;
@@ -278,7 +244,7 @@ public:
 
     }
 
-    PRBool Init()
+    bool Init()
     {
         static const PLDHashTableOps domainPolicyOps =
         {
@@ -292,7 +258,7 @@ public:
             InitClassPolicyEntry
         };
 
-        return PL_DHashTableInit(this, &domainPolicyOps, nsnull,
+        return PL_DHashTableInit(this, &domainPolicyOps, nullptr,
                                  sizeof(ClassPolicy), 16);
     }
 
@@ -324,7 +290,7 @@ public:
         sGeneration++;
     }
     
-    PRBool IsInvalid()
+    bool IsInvalid()
     {
         return mGeneration != sGeneration; 
     }
@@ -332,12 +298,12 @@ public:
     ClassPolicy* mWildcardPolicy;
 
 private:
-    PRUint32 mRefCount;
-    PRUint32 mGeneration;
-    static PRUint32 sGeneration;
+    uint32_t mRefCount;
+    uint32_t mGeneration;
+    static uint32_t sGeneration;
     
 #ifdef DEBUG_CAPS_DomainPolicyLifeCycle
-    static PRUint32 sObjects;
+    static uint32_t sObjects;
     static void _printPopulationInfo();
 #endif
 
@@ -398,8 +364,8 @@ public:
      * method returns true if aSubjectURI and aObjectURI have the same origin,
      * false otherwise.
      */
-    static PRBool SecurityCompareURIs(nsIURI* aSourceURI, nsIURI* aTargetURI);
-    static PRUint32 SecurityHashURI(nsIURI* aURI);
+    static bool SecurityCompareURIs(nsIURI* aSourceURI, nsIURI* aTargetURI);
+    static uint32_t SecurityHashURI(nsIURI* aURI);
 
     static nsresult 
     ReportError(JSContext* cx, const nsAString& messageTag,
@@ -408,10 +374,10 @@ public:
     static nsresult
     CheckSameOriginPrincipal(nsIPrincipal* aSubject,
                              nsIPrincipal* aObject);
-    static PRUint32
+    static uint32_t
     HashPrincipalByOrigin(nsIPrincipal* aPrincipal);
 
-    static PRBool
+    static bool
     GetStrictFileOriginPolicy()
     {
         return sStrictFileOriginPolicy;
@@ -424,22 +390,21 @@ private:
     virtual ~nsScriptSecurityManager();
 
     static JSBool
-    CheckObjectAccess(JSContext *cx, JSObject *obj,
-                      jsid id, JSAccessMode mode,
+    CheckObjectAccess(JSContext *cx, JSHandleObject obj,
+                      JSHandleId id, JSAccessMode mode,
                       jsval *vp);
-
+    
     // Decides, based on CSP, whether or not eval() and stuff can be executed.
     static JSBool
     ContentSecurityPolicyPermitsJSAction(JSContext *cx);
 
     // Returns null if a principal cannot be found; generally callers
     // should error out at that point.
-    static nsIPrincipal*
-    doGetObjectPrincipal(JSObject *obj
+    static nsIPrincipal* doGetObjectPrincipal(JSObject *obj);
 #ifdef DEBUG
-                         , PRBool aAllowShortCircuit = PR_TRUE
+    static nsIPrincipal*
+    old_doGetObjectPrincipal(JSObject *obj, bool aAllowShortCircuit = true);
 #endif
-                         );
 
     // Returns null if a principal cannot be found.  Note that rv can be NS_OK
     // when this happens -- this means that there was no JS running.
@@ -447,10 +412,10 @@ private:
     doGetSubjectPrincipal(nsresult* rv);
     
     nsresult
-    CheckPropertyAccessImpl(PRUint32 aAction,
+    CheckPropertyAccessImpl(uint32_t aAction,
                             nsAXPCNativeCallContext* aCallContext,
                             JSContext* cx, JSObject* aJSObject,
-                            nsISupports* aObj, nsIURI* aTargetURI,
+                            nsISupports* aObj,
                             nsIClassInfo* aClassInfo,
                             const char* aClassName, jsid aProperty,
                             void** aCachedClassPolicy);
@@ -458,17 +423,23 @@ private:
     nsresult
     CheckSameOriginDOMProp(nsIPrincipal* aSubject, 
                            nsIPrincipal* aObject,
-                           PRUint32 aAction);
+                           uint32_t aAction);
 
     nsresult
     LookupPolicy(nsIPrincipal* principal,
                  ClassInfoData& aClassData, jsid aProperty,
-                 PRUint32 aAction,
+                 uint32_t aAction,
                  ClassPolicy** aCachedClassPolicy,
                  SecurityLevel* result);
 
     nsresult
-    CreateCodebasePrincipal(nsIURI* aURI, nsIPrincipal** result);
+    GetCodebasePrincipalInternal(nsIURI* aURI, uint32_t aAppId,
+                                 bool aInMozBrowser,
+                                 nsIPrincipal** result);
+
+    nsresult
+    CreateCodebasePrincipal(nsIURI* aURI, uint32_t aAppId, bool aInMozBrowser,
+                            nsIPrincipal** result);
 
     // This is just like the API method, but it doesn't check that the subject
     // name is non-empty or aCertificate is non-null, and it doesn't change the
@@ -479,7 +450,7 @@ private:
                               const nsACString& aPrettyName,
                               nsISupports* aCertificate,
                               nsIURI* aURI,
-                              PRBool aModifyTable,
+                              bool aModifyTable,
                               nsIPrincipal **result);
 
     // Returns null if a principal cannot be found.  Note that rv can be NS_OK
@@ -498,7 +469,7 @@ private:
     // when this happens -- this means that there was no script.  Callers MUST
     // pass in a non-null rv here.
     static nsIPrincipal*
-    GetScriptPrincipal(JSContext* cx, JSScript* script, nsresult* rv);
+    GetScriptPrincipal(JSScript* script, nsresult* rv);
 
     // Returns null if a principal cannot be found.  Note that rv can be NS_OK
     // when this happens -- this means that there was no script associated
@@ -518,15 +489,8 @@ private:
                          JSStackFrame** frameResult,
                          nsresult* rv);
 
-    static PRBool
-    CheckConfirmDialog(JSContext* cx, nsIPrincipal* aPrincipal,
-                       const char* aCapability, PRBool *checkValue);
-
     static void
     FormatCapabilityString(nsAString& aCapability);
-
-    nsresult
-    SavePrincipal(nsIPrincipal* aToSave);
 
     /**
      * Check capability levels for an |aObj| that implements
@@ -585,23 +549,12 @@ private:
                      DomainPolicy* aDomainPolicy);
 
     nsresult
-    InitPrincipals(PRUint32 prefCount, const char** prefNames);
+    InitPrincipals(uint32_t prefCount, const char** prefNames);
 
 #ifdef DEBUG_CAPS_HACKER
     void
     PrintPolicyDB();
 #endif
-
-    struct ContextPrincipal {
-        ContextPrincipal(ContextPrincipal *next, JSContext *cx,
-                         JSStackFrame *fp, nsIPrincipal *principal)
-            : mNext(next), mCx(cx), mFp(fp), mPrincipal(principal) {}
-
-        ContextPrincipal *mNext;
-        JSContext *mCx;
-        JSStackFrame *mFp;
-        nsCOMPtr<nsIPrincipal> mPrincipal;
-    };
 
     // JS strings we need to clean up on shutdown
     static jsid sEnabledID;
@@ -615,14 +568,13 @@ private:
 
     nsCOMPtr<nsIPrincipal> mSystemPrincipal;
     nsCOMPtr<nsIPrincipal> mSystemCertificate;
-    ContextPrincipal *mContextPrincipals;
     nsInterfaceHashtable<PrincipalKey, nsIPrincipal> mPrincipals;
-    PRPackedBool mPrefInitialized;
-    PRPackedBool mIsJavaScriptEnabled;
-    PRPackedBool mIsWritingPrefs;
-    PRPackedBool mPolicyPrefsChanged;
+    bool mPrefInitialized;
+    bool mIsJavaScriptEnabled;
+    bool mIsWritingPrefs;
+    bool mPolicyPrefsChanged;
 
-    static PRBool sStrictFileOriginPolicy;
+    static bool sStrictFileOriginPolicy;
 
     static nsIIOService    *sIOService;
     static nsIXPConnect    *sXPConnect;
@@ -646,5 +598,14 @@ public:
 
     NS_IMETHOD InitializeNameSet(nsIScriptContext* aScriptContext);
 };
+
+namespace mozilla {
+
+void
+GetExtendedOrigin(nsIURI* aURI, uint32_t aAppid,
+                  bool aInMozBrowser,
+                  nsACString& aExtendedOrigin);
+
+} // namespace mozilla
 
 #endif // nsScriptSecurityManager_h__

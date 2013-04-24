@@ -146,12 +146,13 @@ const ADDON_PREP_DIR = "appupdateprep";
 // Preference for storing add-ons that are disabled by the tests to prevent them
 // from interefering with the tests.
 const PREF_DISABLEDADDONS = "app.update.test.disabledAddons";
+const PREF_EM_HOTFIX_ID = "extensions.hotfix.id";
 const TEST_ADDONS = [ "appdisabled_1", "appdisabled_2",
                       "compatible_1", "compatible_2",
                       "noupdate_1", "noupdate_2",
                       "updatecompatibility_1", "updatecompatibility_2",
                       "updateversion_1", "updateversion_2",
-                      "userdisabled_1", "userdisabled_2" ];
+                      "userdisabled_1", "userdisabled_2", "hotfix" ];
 
 
 const TEST_TIMEOUT = 25000; // 25 seconds
@@ -166,7 +167,6 @@ var gCloseWindowTimeoutCounter = 0;
 
 // The following vars are for restoring previous preference values (if present)
 // when the test finishes.
-var gAppUpdateChannel;    // app.update.channel (default prefbranch)
 var gAppUpdateEnabled;    // app.update.enabled
 var gAppUpdateURLDefault; // app.update.url (default prefbranch)
 var gAppUpdateURL;        // app.update.url.override
@@ -307,6 +307,12 @@ function finishTestDefault() {
   if (gTimeoutTimer) {
     gTimeoutTimer.cancel();
     gTimeoutTimer = null;
+  }
+
+  if (gChannel) {
+    debugDump("channel = " + gChannel);
+    gChannel = null;
+    gPrefRoot.removeObserver(PREF_APP_UPDATE_CHANNEL, observer);
   }
 
   verifyTestsRan();
@@ -589,7 +595,7 @@ function waitForRemoteContentLoaded(aEvent) {
   // Return early until the remotecontent has loaded with the state that is
   // expected or isn't the event's originalTarget.
   if (gRemoteContentState != gTest.expectedRemoteContentState ||
-      !aEvent.originalTarget.isSameNode(gRemoteContent)) {
+      aEvent.originalTarget != gRemoteContent) {
     debugDump("returning early\n" +
               "gRemoteContentState: " + gRemoteContentState + "\n" +
               "expectedRemoteContentState: " +
@@ -790,9 +796,6 @@ function verifyTestsRan() {
  * set back to the original values when each test has finished.
  */
 function setupPrefs() {
-  gAppUpdateChannel = gDefaultPrefBranch.getCharPref(PREF_APP_UPDATE_CHANNEL);
-  setUpdateChannel();
-
   if (DEBUG_AUS_TEST) {
     Services.prefs.setBoolPref(PREF_APP_UPDATE_LOG, true)
   }
@@ -816,6 +819,8 @@ function setupPrefs() {
 
   Services.prefs.setIntPref(PREF_APP_UPDATE_IDLETIME, 0);
   Services.prefs.setIntPref(PREF_APP_UPDATE_PROMPTWAITTIME, 0);
+  Services.prefs.setBoolPref(PREF_EXTENSIONS_STRICT_COMPAT, true);
+  Services.prefs.setCharPref(PREF_EM_HOTFIX_ID, "hotfix" + ADDON_ID_SUFFIX);
 }
 
 /**
@@ -831,10 +836,6 @@ function resetPrefs() {
 
   if (gAppUpdateURLDefault) {
     gDefaultPrefBranch.setCharPref(PREF_APP_UPDATE_URL, gAppUpdateURLDefault);
-  }
-
-  if (gAppUpdateChannel !== undefined) {
-    setUpdateChannel(gAppUpdateChannel);
   }
 
   if (gAppUpdateEnabled !== undefined) {
@@ -912,6 +913,14 @@ function resetPrefs() {
     Services.prefs.deleteBranch(PREF_APP_UPDATE_NEVER_BRANCH);
   }
   catch(e) {
+  }
+
+  if (Services.prefs.prefHasUserValue(PREF_EXTENSIONS_STRICT_COMPAT)) {
+		Services.prefs.clearUserPref(PREF_EXTENSIONS_STRICT_COMPAT);
+  }
+
+  if (Services.prefs.prefHasUserValue(PREF_EM_HOTFIX_ID)) {
+    Services.prefs.clearUserPref(PREF_EM_HOTFIX_ID);
   }
 }
 

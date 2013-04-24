@@ -1,51 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   timeless
- *   slucy@objectivesw.co.uk
- *   Håkan Waara <hwaara@chello.se>
- *   Jan Varga <varga@nixcorp.com>
- *   Seth Spitzer <sspitzer@netscape.com>
- *   David Bienvenu <bienvenu@nventure.com>
- *   Karsten Düsterloh <mnyromyr@tprac.de>
- *   Christopher Thomas <cst@yecc.com>
- *   Jeremy Morton <bugzilla@game-point.net>
- *   Andrew Sutherland <asutherland@asutherland.org>
- *   Dan Mosedale <dmose@mozilla.org>
- *   Siddharth Agarwal <sid.bugzilla@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource:///modules/MsgHdrSyntheticView.js");
 Components.utils.import("resource:///modules/errUtils.js");
@@ -165,7 +120,7 @@ let mailTabType = {
         // inherit from the previous tab (if we've got one)
         else if (modelTab)
           messagePaneShouldBeVisible = modelTab.messageDisplay.visible;
-        // who does't love a message pane?
+        // who doesn't love a message pane?
         else
           messagePaneShouldBeVisible = true;
 
@@ -541,30 +496,7 @@ let mailTabType = {
    *   element.
    */
   saveFocus: function mailTabType_saveFocus(aTab) {
-    let focusedWindow = document.commandDispatcher.focusedWindow.top;
-
-    let messagepane = document.getElementById("messagepane");
-    let multimessage = document.getElementById("multimessage");
-    if (focusedWindow == messagepane.contentWindow) {
-      aTab._focusedElement = messagepane;
-    }
-    else if (focusedWindow == multimessage.contentWindow) {
-      aTab._focusedElement = multimessage;
-    }
-    else {
-      // Look for children as well. This logic is copied from the mail 3pane
-      // version of WhichPaneHasFocus().
-      let focusedElement = document.commandDispatcher.focusedElement;
-      let threadTree = document.getElementById("threadTree");
-      let folderTree = document.getElementById("folderTree");
-      while (focusedElement && focusedElement != threadTree &&
-             focusedElement != folderTree)
-        focusedElement = focusedElement.parentNode;
-
-      // If we still have focusedElement at this point, it's either the thread
-      // tree or the folder tree, so we want to persist it.
-      aTab._focusedElement = focusedElement;
-    }
+    aTab._focusedElement = aTab.folderDisplay.focusedPane;
   },
 
   /**
@@ -574,8 +506,18 @@ let mailTabType = {
     // There seem to be issues with opening multiple messages at once, so allow
     // things to stabilize a bit before proceeding
     let reallyRestoreFocus = function mailTabType_reallyRestoreFocus(aTab) {
-      if ("_focusedElement" in aTab && aTab._focusedElement)
+      if ("_focusedElement" in aTab && aTab._focusedElement) {
         aTab._focusedElement.focus();
+
+        // If we were focused on the message pane, we need to focus on the
+        // appropriate subnode (the single- or multi-message content window).
+        if (aTab._focusedElement == document.getElementById("messagepanebox")) {
+          if (aTab.messageDisplay.singleMessageDisplay)
+            document.getElementById("messagepane").focus();
+          else
+            document.getElementById("multimessage").focus();
+        }
+      }
       aTab._focusedElement = null;
     };
 
@@ -704,7 +646,7 @@ let mailTabType = {
     document.getElementById("totalMessageCount").hidden = !aLegalStates.thread;
 
     // -- message pane
-    document.getElementById("messagepanebox").collapsed =
+    document.getElementById("messagepaneboxwrapper").collapsed =
       !aLegalStates.message || !aVisibleStates.message;
 
     // we are responsible for updating the keybinding; view_init takes care of
@@ -747,6 +689,7 @@ let mailTabType = {
       case "cmd_viewClassicMailLayout":
       case "cmd_viewWideMailLayout":
       case "cmd_viewVerticalMailLayout":
+      case "cmd_toggleFolderPane":
       case "cmd_toggleMessagePane":
         return true;
 
@@ -761,6 +704,7 @@ let mailTabType = {
       case "cmd_viewClassicMailLayout":
       case "cmd_viewWideMailLayout":
       case "cmd_viewVerticalMailLayout":
+      case "cmd_toggleFolderPane":
       case "cmd_toggleMessagePane":
         // If the thread pane is illegal, these are all disabled
         if (!aTab.mode.legalPanes.thread)

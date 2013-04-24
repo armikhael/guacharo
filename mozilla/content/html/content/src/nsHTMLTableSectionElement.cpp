@@ -1,39 +1,10 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "mozilla/Util.h"
+
 #include "nsIDOMHTMLTableSectionElem.h"
 #include "nsIDOMEventTarget.h"
 #include "nsMappedAttributes.h"
@@ -43,9 +14,10 @@
 #include "nsStyleConsts.h"
 #include "nsContentList.h"
 #include "nsRuleData.h"
-#include "nsDOMError.h"
-#include "nsIDocument.h"
+#include "nsError.h"
 #include "nsContentUtils.h"
+
+using namespace mozilla;
 
 // you will see the phrases "rowgroup" and "section" used interchangably
 
@@ -70,12 +42,12 @@ public:
   // nsIDOMHTMLTableSectionElement
   NS_DECL_NSIDOMHTMLTABLESECTIONELEMENT
 
-  virtual PRBool ParseAttribute(PRInt32 aNamespaceID,
-                                nsIAtom* aAttribute,
-                                const nsAString& aValue,
-                                nsAttrValue& aResult);
+  virtual bool ParseAttribute(int32_t aNamespaceID,
+                              nsIAtom* aAttribute,
+                              const nsAString& aValue,
+                              nsAttrValue& aResult);
   virtual nsMapRuleToAttributesFunc GetAttributeMappingFunction() const;
-  NS_IMETHOD_(PRBool) IsAttributeMapped(const nsIAtom* aAttribute) const;
+  NS_IMETHOD_(bool) IsAttributeMapped(const nsIAtom* aAttribute) const;
 
   virtual nsresult Clone(nsINodeInfo *aNodeInfo, nsINode **aResult) const;
 
@@ -83,6 +55,8 @@ public:
                                                      nsGenericHTMLElement)
 
   virtual nsXPCClassInfo* GetClassInfo();
+
+  virtual nsIDOMNode* AsDOMNode() { return this; }
 protected:
   nsRefPtr<nsContentList> mRows;
 };
@@ -130,16 +104,12 @@ NS_IMPL_STRING_ATTR(nsHTMLTableSectionElement, ChOff, charoff)
 NS_IMETHODIMP
 nsHTMLTableSectionElement::GetRows(nsIDOMHTMLCollection** aValue)
 {
-  *aValue = nsnull;
-
   if (!mRows) {
     mRows = new nsContentList(this,
                               mNodeInfo->NamespaceID(),
                               nsGkAtoms::tr,
                               nsGkAtoms::tr,
-                              PR_FALSE);
-
-    NS_ENSURE_TRUE(mRows, NS_ERROR_OUT_OF_MEMORY);
+                              false);
   }
 
   NS_ADDREF(*aValue = mRows);
@@ -148,10 +118,10 @@ nsHTMLTableSectionElement::GetRows(nsIDOMHTMLCollection** aValue)
 
 
 NS_IMETHODIMP
-nsHTMLTableSectionElement::InsertRow(PRInt32 aIndex,
+nsHTMLTableSectionElement::InsertRow(int32_t aIndex,
                                      nsIDOMHTMLElement** aValue)
 {
-  *aValue = nsnull;
+  *aValue = nullptr;
 
   if (aIndex < -1) {
     return NS_ERROR_DOM_INDEX_SIZE_ERR;
@@ -160,14 +130,14 @@ nsHTMLTableSectionElement::InsertRow(PRInt32 aIndex,
   nsCOMPtr<nsIDOMHTMLCollection> rows;
   GetRows(getter_AddRefs(rows));
 
-  PRUint32 rowCount;
+  uint32_t rowCount;
   rows->GetLength(&rowCount);
 
-  if (aIndex > (PRInt32)rowCount) {
+  if (aIndex > (int32_t)rowCount) {
     return NS_ERROR_DOM_INDEX_SIZE_ERR;
   }
 
-  PRBool doInsert = (aIndex < PRInt32(rowCount)) && (aIndex != -1);
+  bool doInsert = (aIndex < int32_t(rowCount)) && (aIndex != -1);
 
   // create the row
   nsCOMPtr<nsINodeInfo> nodeInfo;
@@ -190,8 +160,10 @@ nsHTMLTableSectionElement::InsertRow(PRInt32 aIndex,
     rows->Item(aIndex, getter_AddRefs(refRow));
 
     rv = InsertBefore(rowNode, refRow, getter_AddRefs(retChild));
+    NS_ENSURE_SUCCESS(rv, rv);
   } else {
     rv = AppendChild(rowNode, getter_AddRefs(retChild));
+    NS_ENSURE_SUCCESS(rv, rv);
   }
 
   if (retChild) {
@@ -202,7 +174,7 @@ nsHTMLTableSectionElement::InsertRow(PRInt32 aIndex,
 }
 
 NS_IMETHODIMP
-nsHTMLTableSectionElement::DeleteRow(PRInt32 aValue)
+nsHTMLTableSectionElement::DeleteRow(int32_t aValue)
 {
   if (aValue < -1) {
     return NS_ERROR_DOM_INDEX_SIZE_ERR;
@@ -212,7 +184,7 @@ nsHTMLTableSectionElement::DeleteRow(PRInt32 aValue)
   GetRows(getter_AddRefs(rows));
 
   nsresult rv;
-  PRUint32 refIndex;
+  uint32_t refIndex;
   if (aValue == -1) {
     rv = rows->GetLength(&refIndex);
     NS_ENSURE_SUCCESS(rv, rv);
@@ -224,7 +196,7 @@ nsHTMLTableSectionElement::DeleteRow(PRInt32 aValue)
     --refIndex;
   }
   else {
-    refIndex = (PRUint32)aValue;
+    refIndex = (uint32_t)aValue;
   }
 
   nsCOMPtr<nsIDOMNode> row;
@@ -239,8 +211,8 @@ nsHTMLTableSectionElement::DeleteRow(PRInt32 aValue)
   return RemoveChild(row, getter_AddRefs(retChild));
 }
 
-PRBool
-nsHTMLTableSectionElement::ParseAttribute(PRInt32 aNamespaceID,
+bool
+nsHTMLTableSectionElement::ParseAttribute(int32_t aNamespaceID,
                                           nsIAtom* aAttribute,
                                           const nsAString& aValue,
                                           nsAttrValue& aResult)
@@ -266,7 +238,10 @@ nsHTMLTableSectionElement::ParseAttribute(PRInt32 aNamespaceID,
     }
   }
 
-  return nsGenericHTMLElement::ParseAttribute(aNamespaceID, aAttribute, aValue,
+  return nsGenericHTMLElement::ParseBackgroundAttribute(aNamespaceID,
+                                                        aAttribute, aValue,
+                                                        aResult) ||
+         nsGenericHTMLElement::ParseAttribute(aNamespaceID, aAttribute, aValue,
                                               aResult);
 }
 
@@ -305,14 +280,14 @@ void MapAttributesIntoRule(const nsMappedAttributes* aAttributes, nsRuleData* aD
   nsGenericHTMLElement::MapCommonAttributesInto(aAttributes, aData);
 }
 
-NS_IMETHODIMP_(PRBool)
+NS_IMETHODIMP_(bool)
 nsHTMLTableSectionElement::IsAttributeMapped(const nsIAtom* aAttribute) const
 {
   static const MappedAttributeEntry attributes[] = {
     { &nsGkAtoms::align }, 
     { &nsGkAtoms::valign },
     { &nsGkAtoms::height },
-    { nsnull }
+    { nullptr }
   };
 
   static const MappedAttributeEntry* const map[] = {
@@ -321,7 +296,7 @@ nsHTMLTableSectionElement::IsAttributeMapped(const nsIAtom* aAttribute) const
     sBackgroundAttributeMap,
   };
 
-  return FindAttributeDependence(aAttribute, map, NS_ARRAY_LENGTH(map));
+  return FindAttributeDependence(aAttribute, map);
 }
 
 

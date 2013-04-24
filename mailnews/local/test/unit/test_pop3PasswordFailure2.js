@@ -30,31 +30,6 @@ const kUserName = "testpop3";
 const kInvalidPassword = "pop3test";
 const kValidPassword = "testpop3";
 
-var dummyDocShell =
-{
-  getInterface: function (iid) {
-    if (iid.equals(Ci.nsIAuthPrompt)) {
-      return Cc["@mozilla.org/login-manager/prompter;1"]
-               .getService(Ci.nsIAuthPrompt);
-    }
-
-    throw Components.results.NS_ERROR_FAILURE;
-  },
-
-  QueryInterface: XPCOMUtils.generateQI([Ci.nsIDocShell,
-                                         Ci.nsIInterfaceRequestor])
-}
-
-// Dummy message window that ensures we get prompted for logins.
-var dummyMsgWindow =
-{
-  rootDocShell: dummyDocShell,
-  promptDialog: alertUtilsPrompts,
-
-  QueryInterface: XPCOMUtils.generateQI([Ci.nsIMsgWindow,
-                                         Ci.nsISupportsWeakReference])
-};
-
 function alert(aDialogText, aText)
 {
   // The first few attempts may prompt about the password problem, the last
@@ -101,7 +76,7 @@ function promptPasswordPS(aParent, aDialogTitle, aText, aPassword, aCheckMsg,
 }
 
 function getPopMail() {
-  MailServices.pop3.GetNewMail(dummyMsgWindow, urlListener, gLocalInboxFolder,
+  MailServices.pop3.GetNewMail(gDummyMsgWindow, urlListener, gLocalInboxFolder,
                                incomingServer);
 }
 
@@ -209,13 +184,16 @@ function run_test()
 
   // Set up the Server
   daemon = new pop3Daemon();
-  var handler = new POP3_RFC1939_handler(daemon);
-  server = new nsMailServer(handler);
-  handler.dropOnAuthFailure = true;
+  function createHandler(d) {
+    var handler = new POP3_RFC1939_handler(d);
+    handler.dropOnAuthFailure = true;
 
-  // Set the server expected username & password to what we have in signons.txt
-  handler.kUsername = kUserName;
-  handler.kPassword = kValidPassword;
+    // Set the server expected username & password to what we have in signons.txt
+    handler.kUsername = kUserName;
+    handler.kPassword = kValidPassword;
+    return handler;
+  }
+  server = new nsMailServer(createHandler, daemon);
 
   // Set up the basic accounts and folders.
   // We would use createPop3ServerAndLocalFolders() however we want to have

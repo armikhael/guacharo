@@ -1,59 +1,25 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Mozilla SVG project.
- *
- * The Initial Developer of the Original Code is
- * Crocodile Clips Ltd..
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "mozilla/Util.h"
 
 #include "nsGkAtoms.h"
 #include "nsIDOMSVGPathSeg.h"
 #include "DOMSVGPathSeg.h"
 #include "DOMSVGPathSegList.h"
 #include "nsCOMPtr.h"
-#include "nsIFrame.h"
-#include "nsSVGPathDataParser.h"
+#include "nsContentUtils.h"
 #include "nsSVGPathElement.h"
-#include "nsISVGValueUtils.h"
 #include "nsSVGUtils.h"
 #include "DOMSVGPoint.h"
 #include "gfxContext.h"
-#include "gfxPlatform.h"
 
 using namespace mozilla;
 
 nsSVGElement::NumberInfo nsSVGPathElement::sNumberInfo = 
-{ &nsGkAtoms::pathLength, 0, PR_FALSE };
+{ &nsGkAtoms::pathLength, 0, false };
 
 NS_IMPL_NS_NEW_SVG_ELEMENT(Path)
 
@@ -66,9 +32,9 @@ NS_IMPL_RELEASE_INHERITED(nsSVGPathElement,nsSVGPathElementBase)
 DOMCI_NODE_DATA(SVGPathElement, nsSVGPathElement)
 
 NS_INTERFACE_TABLE_HEAD(nsSVGPathElement)
-  NS_NODE_INTERFACE_TABLE5(nsSVGPathElement, nsIDOMNode, nsIDOMElement,
-                           nsIDOMSVGElement, nsIDOMSVGPathElement,
-                           nsIDOMSVGAnimatedPathData)
+  NS_NODE_INTERFACE_TABLE6(nsSVGPathElement, nsIDOMNode, nsIDOMElement,
+                           nsIDOMSVGElement, nsIDOMSVGTests,
+                           nsIDOMSVGPathElement, nsIDOMSVGAnimatedPathData)
   NS_DOM_INTERFACE_MAP_ENTRY_CLASSINFO(SVGPathElement)
 NS_INTERFACE_MAP_END_INHERITING(nsSVGPathElementBase)
 
@@ -138,7 +104,7 @@ nsSVGPathElement::GetPointAtLength(float distance, nsIDOMSVGPoint **_retval)
 
 /* unsigned long getPathSegAtLength (in float distance); */
 NS_IMETHODIMP
-nsSVGPathElement::GetPathSegAtLength(float distance, PRUint32 *_retval)
+nsSVGPathElement::GetPathSegAtLength(float distance, uint32_t *_retval)
 {
   NS_ENSURE_FINITE(distance, NS_ERROR_ILLEGAL_VALUE);
   *_retval = mD.GetAnimValue().GetPathSegAtLength(distance);
@@ -236,7 +202,7 @@ nsSVGPathElement::CreateSVGPathSegCurvetoQuadraticRel(float x, float y, float x1
 
 /* nsIDOMSVGPathSegArcAbs createSVGPathSegArcAbs (in float x, in float y, in float r1, in float r2, in float angle, in boolean largeArcFlag, in boolean sweepFlag); */
 NS_IMETHODIMP
-nsSVGPathElement::CreateSVGPathSegArcAbs(float x, float y, float r1, float r2, float angle, PRBool largeArcFlag, PRBool sweepFlag, nsIDOMSVGPathSegArcAbs **_retval)
+nsSVGPathElement::CreateSVGPathSegArcAbs(float x, float y, float r1, float r2, float angle, bool largeArcFlag, bool sweepFlag, nsIDOMSVGPathSegArcAbs **_retval)
 {
   NS_ENSURE_FINITE5(x, y, r1, r2, angle, NS_ERROR_ILLEGAL_VALUE);
   nsIDOMSVGPathSeg* seg = NS_NewSVGPathSegArcAbs(x, y, r1, r2, angle,
@@ -247,7 +213,7 @@ nsSVGPathElement::CreateSVGPathSegArcAbs(float x, float y, float r1, float r2, f
 
 /* nsIDOMSVGPathSegArcRel createSVGPathSegArcRel (in float x, in float y, in float r1, in float r2, in float angle, in boolean largeArcFlag, in boolean sweepFlag); */
 NS_IMETHODIMP
-nsSVGPathElement::CreateSVGPathSegArcRel(float x, float y, float r1, float r2, float angle, PRBool largeArcFlag, PRBool sweepFlag, nsIDOMSVGPathSegArcRel **_retval)
+nsSVGPathElement::CreateSVGPathSegArcRel(float x, float y, float r1, float r2, float angle, bool largeArcFlag, bool sweepFlag, nsIDOMSVGPathSegArcRel **_retval)
 {
   NS_ENSURE_FINITE5(x, y, r1, r2, angle, NS_ERROR_ILLEGAL_VALUE);
   nsIDOMSVGPathSeg* seg = NS_NewSVGPathSegArcRel(x, y, r1, r2, angle,
@@ -339,6 +305,12 @@ nsSVGPathElement::CreateSVGPathSegCurvetoQuadraticSmoothRel(float x, float y, ns
 //----------------------------------------------------------------------
 // nsSVGElement methods
 
+/* virtual */ bool
+nsSVGPathElement::HasValidDimensions() const
+{
+  return !mD.GetAnimValue().IsEmpty();
+}
+
 nsSVGElement::NumberAttributesInfo
 nsSVGPathElement::GetNumberInfo()
 {
@@ -352,7 +324,7 @@ nsSVGPathElement::GetNumberInfo()
 NS_IMETHODIMP nsSVGPathElement::GetPathSegList(nsIDOMSVGPathSegList * *aPathSegList)
 {
   void *key = mD.GetBaseValKey();
-  *aPathSegList = DOMSVGPathSegList::GetDOMWrapper(key, this, PR_FALSE).get();
+  *aPathSegList = DOMSVGPathSegList::GetDOMWrapper(key, this, false).get();
   return *aPathSegList ? NS_OK : NS_ERROR_OUT_OF_MEMORY;
 }
 
@@ -367,7 +339,7 @@ NS_IMETHODIMP nsSVGPathElement::GetAnimatedPathSegList(nsIDOMSVGPathSegList * *a
 {
   void *key = mD.GetAnimValKey();
   *aAnimatedPathSegList =
-    DOMSVGPathSegList::GetDOMWrapper(key, this, PR_TRUE).get();
+    DOMSVGPathSegList::GetDOMWrapper(key, this, true).get();
   return *aAnimatedPathSegList ? NS_OK : NS_ERROR_OUT_OF_MEMORY;
 }
 
@@ -380,14 +352,14 @@ NS_IMETHODIMP nsSVGPathElement::GetAnimatedNormalizedPathSegList(nsIDOMSVGPathSe
 //----------------------------------------------------------------------
 // nsIContent methods
 
-NS_IMETHODIMP_(PRBool)
+NS_IMETHODIMP_(bool)
 nsSVGPathElement::IsAttributeMapped(const nsIAtom* name) const
 {
   static const MappedAttributeEntry* const map[] = {
     sMarkersMap
   };
 
-  return FindAttributeDependence(name, map, NS_ARRAY_LENGTH(map)) ||
+  return FindAttributeDependence(name, map) ||
     nsSVGPathElementBase::IsAttributeMapped(name);
 }
 
@@ -400,17 +372,17 @@ nsSVGPathElement::GetFlattenedPath(const gfxMatrix &aMatrix)
 //----------------------------------------------------------------------
 // nsSVGPathGeometryElement methods
 
-PRBool
+bool
 nsSVGPathElement::AttributeDefinesGeometry(const nsIAtom *aName)
 {
   return aName == nsGkAtoms::d ||
          aName == nsGkAtoms::pathLength;
 }
 
-PRBool
+bool
 nsSVGPathElement::IsMarkable()
 {
-  return PR_TRUE;
+  return true;
 }
 
 void
@@ -426,16 +398,24 @@ nsSVGPathElement::ConstructPath(gfxContext *aCtx)
 }
 
 gfxFloat
-nsSVGPathElement::GetScale()
+nsSVGPathElement::GetPathLengthScale(PathLengthScaleForType aFor)
 {
+  NS_ABORT_IF_FALSE(aFor == eForTextPath || aFor == eForStroking,
+                    "Unknown enum");
   if (mPathLength.IsExplicitlySet()) {
-
-    nsRefPtr<gfxFlattenedPath> flat =
-      GetFlattenedPath(PrependLocalTransformTo(gfxMatrix()));
-    float pathLength = mPathLength.GetAnimValue();
-
-    if (flat && pathLength != 0) {
-      return flat->GetLength() / pathLength;
+    float authorsPathLengthEstimate = mPathLength.GetAnimValue();
+    if (authorsPathLengthEstimate > 0) {
+      gfxMatrix matrix;
+      if (aFor == eForTextPath) {
+        // For textPath, a transform on the referenced path affects the
+        // textPath layout, so when calculating the actual path length
+        // we need to take that into account.
+        matrix = PrependLocalTransformsTo(matrix);
+      }
+      nsRefPtr<gfxFlattenedPath> path = GetFlattenedPath(matrix);
+      if (path) {
+        return path->GetLength() / authorsPathLengthEstimate;
+      }
     }
   }
   return 1.0;

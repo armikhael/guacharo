@@ -9,15 +9,15 @@ https://bugzilla.mozilla.org/show_bug.cgi?id=382214
  .../xpcom/reflect/xptcall/src/md/unix/Makefile.in  |   11 +
  .../xptcall/src/md/unix/xptcinvoke_linux_sh.cpp    |  203 +++++++++++++++
  .../xptcall/src/md/unix/xptcstubs_linux_sh.cpp     |  271 ++++++++++++++++++++
- 3 files changed, 485 insertions(+), 0 deletions(-)
+ 3 files changed, 485 insertions(+)
  create mode 100644 mozilla/xpcom/reflect/xptcall/src/md/unix/xptcinvoke_linux_sh.cpp
  create mode 100644 mozilla/xpcom/reflect/xptcall/src/md/unix/xptcstubs_linux_sh.cpp
 
 diff --git a/mozilla/xpcom/reflect/xptcall/src/md/unix/Makefile.in b/mozilla/xpcom/reflect/xptcall/src/md/unix/Makefile.in
-index 5551421..d88aa51 100644
+index 54fdddb..e7bb545 100644
 --- a/mozilla/xpcom/reflect/xptcall/src/md/unix/Makefile.in
 +++ b/mozilla/xpcom/reflect/xptcall/src/md/unix/Makefile.in
-@@ -479,6 +479,17 @@ CPPSRCS		:= xptcinvoke_linux_s390x.cpp xptcstubs_linux_s390x.cpp
+@@ -396,6 +396,17 @@ CPPSRCS		:= xptcinvoke_linux_s390x.cpp xptcstubs_linux_s390x.cpp
  CXXFLAGS	+= -fno-strict-aliasing -fno-inline -fomit-frame-pointer -mbackchain
  endif
  
@@ -521,4 +521,3 @@ index 0000000..cf9fcea
 +}
 +
 +#include "xptcstubsdef.inc"
--- 

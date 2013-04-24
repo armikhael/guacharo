@@ -6,7 +6,7 @@
 
 Components.utils.import("resource://gre/modules/AddonRepository.jsm");
 
-do_load_httpd_js();
+Components.utils.import("resource://testing-common/httpd.js");
 var gServer;
 
 const PREF_GETADDONS_BROWSEADDONS        = "extensions.getAddons.browseAddons";
@@ -31,12 +31,13 @@ const INSTALL_URL3  = "/addons/test_AddonRepository_3.xpi";
 // Note: name is checked separately
 var ADDON_PROPERTIES = ["id", "type", "version", "creator", "developers",
                         "description", "fullDescription", "developerComments",
-                        "eula", "iconURL", "screenshots", "homepageURL",
+                        "eula", "iconURL", "icons", "screenshots", "homepageURL",
                         "supportURL", "contributionURL", "contributionAmount",
                         "averageRating", "reviewCount", "reviewURL",
                         "totalDownloads", "weeklyDownloads", "dailyUsers",
                         "sourceURI", "repositoryStatus", "size", "updateDate",
-                        "purchaseURL", "purchaseAmount", "purchaseDisplayAmount"];
+                        "purchaseURL", "purchaseAmount", "purchaseDisplayAmount",
+                        "compatibilityOverrides"];
 
 // Results of getAddonsByIDs
 var GET_RESULTS = [{
@@ -56,10 +57,15 @@ var GET_RESULTS = [{
   developerComments:      "Test Developer Comments 1",
   eula:                   "Test EULA 1",
   iconURL:                BASE_URL + "/icon1.png",
+  icons:                  { "32": BASE_URL + "/icon1.png" },
   screenshots:            [{
-                            url:          BASE_URL + "/full1-1.png",
-                            thumbnailURL: BASE_URL + "/thumbnail1-1.png",
-                            caption:      "Caption 1 - 1"
+                            url:             BASE_URL + "/full1-1.png",
+                            width:           400,
+                            height:          300,
+                            thumbnailURL:    BASE_URL + "/thumbnail1-1.png",
+                            thumbnailWidth:  200,
+                            thumbnailHeight: 150,
+                            caption:         "Caption 1 - 1"
                           }, {
                             url:          BASE_URL + "/full2-1.png",
                             thumbnailURL: BASE_URL + "/thumbnail2-1.png",
@@ -78,11 +84,27 @@ var GET_RESULTS = [{
   sourceURI:              BASE_URL + INSTALL_URL2,
   repositoryStatus:       8,
   size:                   5555,
-  updateDate:             new Date(1265033045000)
+  updateDate:             new Date(1265033045000),
+  compatibilityOverrides: [{
+                            type: "incompatible",
+                            minVersion: 0.1,
+                            maxVersion: 0.2,
+                            appID: "xpcshell@tests.mozilla.org",
+                            appMinVersion: 3.0,
+                            appMaxVersion: 4.0
+                          }, {
+                            type: "incompatible",
+                            minVersion: 0.2,
+                            maxVersion: 0.3,
+                            appID: "xpcshell@tests.mozilla.org",
+                            appMinVersion: 5.0,
+                            appMaxVersion: 6.0
+                          }]
 }, {
   id:                     "test_AddonRepository_1@tests.mozilla.org",
   version:                "1.4",
-  repositoryStatus:       9999
+  repositoryStatus:       9999,
+  icons:                  {}
 }];
 
 // Results of retrieveRecommendedAddons and searchAddons
@@ -95,7 +117,8 @@ var SEARCH_RESULTS = [{
                             url:  BASE_URL + "/creator1.html"
                           },
   repositoryStatus:       8,
-  sourceURI:              BASE_URL + "/test1.xpi"
+  sourceURI:              BASE_URL + "/test1.xpi",
+  icons:                  {}
 }, {
   id:                     "test2@tests.mozilla.org",
   type:                   "extension",
@@ -112,7 +135,12 @@ var SEARCH_RESULTS = [{
   fullDescription:        "Test Description 2\nnewline",
   developerComments:      "Test Developer\nComments 2",
   eula:                   "Test EULA 2",
-  iconURL:                BASE_URL + "/icon2.png",
+  iconURL:                BASE_URL + "/icon2-32.png",
+  icons:                  {
+                            "32": BASE_URL + "/icon2-32.png",
+                            "48": BASE_URL + "/icon2-48.png",
+                            "64": BASE_URL + "/icon2-64.png"
+                          },
   screenshots:            [{
                             url:          BASE_URL + "/full1-2.png",
                             thumbnailURL: BASE_URL + "/thumbnail1-2.png"
@@ -147,6 +175,7 @@ var SEARCH_RESULTS = [{
   developerComments:      "Test Developer Comments 3",
   eula:                   "Test EULA 3",
   iconURL:                BASE_URL + "/icon3.png",
+  icons:                  { "32": BASE_URL + "/icon3.png" },
   screenshots:            [{
                             url:          BASE_URL + "/full1-3.png",
                             thumbnailURL: BASE_URL + "/thumbnail1-3.png",
@@ -172,7 +201,8 @@ var SEARCH_RESULTS = [{
   sourceURI:              BASE_URL + "/test3.xpi",
   repositoryStatus:       8,
   size:                   5555,
-  updateDate:             new Date(1265033045000)
+  updateDate:             new Date(1265033045000),
+  
 }, {
   id:                     "purchase1@tests.mozilla.org",
   type:                   "extension",
@@ -185,7 +215,8 @@ var SEARCH_RESULTS = [{
   repositoryStatus:       4,
   purchaseURL:            "http://localhost:4444/purchaseURL1",
   purchaseAmount:         5,
-  purchaseDisplayAmount:  "$5"
+  purchaseDisplayAmount:  "$5",
+  icons:                  {}
 }, {
   id:                     "purchase2@tests.mozilla.org",
   type:                   "extension",
@@ -198,7 +229,8 @@ var SEARCH_RESULTS = [{
   repositoryStatus:       4,
   purchaseURL:            "http://localhost:4444/purchaseURL2",
   purchaseAmount:         10,
-  purchaseDisplayAmount:  "$10"
+  purchaseDisplayAmount:  "$10",
+  icons:                  {}
 }, {
   id:                     "test-lastPassing@tests.mozilla.org",
   type:                   "extension",
@@ -209,7 +241,8 @@ var SEARCH_RESULTS = [{
                           },
   averageRating:          5,
   repositoryStatus:       4,
-  sourceURI:              BASE_URL + "/addons/test_AddonRepository_3.xpi"
+  sourceURI:              BASE_URL + "/addons/test_AddonRepository_3.xpi",
+  icons:                  {}
 }];
 
 const TOTAL_RESULTS = 1111;
@@ -331,7 +364,7 @@ function run_test() {
   installAllFiles([do_get_addon("test_AddonRepository_1")], function() {
     restartManager();
 
-    gServer = new nsHttpServer();
+    gServer = new HttpServer();
 
     // Register other add-on XPI files
     gServer.registerFile(INSTALL_URL2,

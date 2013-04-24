@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Global Database.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Andrew Sutherland <asutherland@asutherland.org>
- *   Siddharth Agarwal <sid.bugzilla@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * This file provides gloda testing infrastructure.
@@ -53,9 +20,15 @@
  *  perform a mozmill wait without first telling us to expect the messages.
  */
 
+// Services
+Components.utils.import("resource://gre/modules/Services.jsm");
+// MailServices
+Components.utils.import("resource:///modules/mailServices.js");
+
 // Import the main scripts that mailnews tests need to set up and tear down
 load("../../../../resources/mailDirService.js");
 load("../../../../resources/mailTestUtils.js");
+load("../../../../resources/abSetup.js");
 load("../../../../resources/logHelper.js");
 load("../../../../resources/asyncTestUtils.js");
 
@@ -92,15 +65,14 @@ function createMeIdentity() {
 createMeIdentity();
 
 // -- Set the gloda prefs
-const gPrefs = Cc["@mozilla.org/preferences-service;1"]
-                 .getService(Ci.nsIPrefBranch);
 // yes to indexing
-gPrefs.setBoolPref("mailnews.database.global.indexer.enabled", true);
+Services.prefs.setBoolPref("mailnews.database.global.indexer.enabled",
+                           true);
 // no to a sweep we don't control
-gPrefs.setBoolPref("mailnews.database.global.indexer.perform_initial_sweep",
-    false);
+Services.prefs.setBoolPref("mailnews.database.global.indexer.perform_initial_sweep",
+                           false);
 // yes to debug output
-gPrefs.setBoolPref("mailnews.database.global.logging.dump", true);
+Services.prefs.setBoolPref("mailnews.database.global.logging.dump", true);
 
 const ENVIRON_MAPPINGS = [
   {
@@ -114,7 +86,7 @@ let environ = Cc["@mozilla.org/process/environment;1"]
                 .getService(Ci.nsIEnvironment);
 for each (let [, {envVar, prefName}] in Iterator(ENVIRON_MAPPINGS)) {
  if (environ.exists(envVar)) {
-   gPrefs.setCharPref(prefName, environ.get(envVar));
+   Services.prefs.setCharPref(prefName, environ.get(envVar));
  }
 }
 
@@ -138,7 +110,8 @@ Log4Moz.repository.rootLogger.addAppender(throwingAppender);
 var LOG = Log4Moz.repository.getLogger("gloda.test");
 
 // index_msg does not export this, so we need to provide it.
-const GLODA_BAD_MESSAGE_ID = 1;
+const GLODA_BAD_MESSAGE_ID = 2,
+      GLODA_OLD_BAD_MESSAGE_ID = 1;
 
 // -- Add a hook that makes folders not filthy when we first see them.
 register_message_injection_listener({
@@ -253,6 +226,29 @@ if (logHelperHasInterestedListeners) {
     mark_action("glodaWrapped", "_messageFromRow", [rv]);
     return rv;
   };
+
+  let orig_updateMessageLocations = GlodaDatastore.updateMessageLocations;
+  GlodaDatastore.updateMessageLocations = function() {
+    mark_action("glodaWrapped", "updateMessageLocations",
+                ["ids", arguments[0], "keys", arguments[1], "dest folder",
+                 arguments[2], "do not notify?", arguments[3]]);
+    orig_updateMessageLocations.apply(GlodaDatastore, arguments);
+  };
+  let orig_updateMessageKeys = GlodaDatastore.updateMessageKeys;
+  GlodaDatastore.updateMessageKeys = function() {
+    mark_action("glodaWrapped", "updateMessageKeys"
+                ["ids", arguments[0], "keys", arguments[1]]);
+    orig_updateMessageKeys.apply(GlodaDatastore, arguments);
+  }
+
+  /* also, let us see the results of cache lookups so we can know if we are
+     performing cache unification when a load occurs. */
+  let orig_cacheLookupOne = GlodaCollectionManager.cacheLookupOne;
+  GlodaCollectionManager.cacheLookupOne = function() {
+    let rv = orig_cacheLookupOne.apply(GlodaCollectionManager, arguments);
+    mark_action("glodaWrapped", "cacheLookupOne", ["hit?", rv !== null]);
+    return rv;
+  }
 }
 
 const _wait_for_gloda_indexer_defaults = {
@@ -500,6 +496,7 @@ var _indexMessageState = {
         this._glodaMessagesByMessageId[synMsg.messageId] = null;
         if (verifier) {
           try {
+            mark_action("glodaTestHelper", "verifier", [synMsg, glodaMsg]);
             previousValue = verifier(synMsg, glodaMsg, previousValue);
           }
           catch (ex) {
@@ -606,8 +603,9 @@ var _indexMessageState = {
     for each (let [, item] in Iterator(aItems)) {
       if (item.headerMessageID in this._glodaMessagesByMessageId)
         mark_failure(
-          ["Gloda message", item, "already indexed once since the last" +
-            "wait_for_gloda_indexer call!"]);
+          ["Gloda message", item.folderMessage,
+            "already indexed once since the last" + "wait_for_gloda_indexer call!"
+          ]);
 
       this._glodaMessagesByMessageId[item.headerMessageID] = item;
     }
@@ -1049,6 +1047,37 @@ _SqlExpectationListener.prototype = {
 };
 
 /**
+ * Asynchronously run a SQL statement against the gloda database.  This can grow
+ *  binding logic and data returning as needed.
+ *
+ * We run the statement asynchronously to get a consistent view of the database.
+ */
+function sqlRun(sql) {
+  let conn = GlodaDatastore.asyncConnection;
+  let stmt = conn.createAsyncStatement(sql), rows = null;
+
+  mark_action("glodaTestHelper", "running SQL", [sql]);
+  stmt.executeAsync({
+    handleResult: function(aResultSet) {
+      if (!rows)
+        rows = [];
+      let row;
+      while ((row = aResultSet.getNextRow())) {
+        rows.push(row);
+      }
+    },
+    handleError: function(aError) {
+      mark_failure(["SQL error! result:", aError, "SQL: ", sql]);
+    },
+    handleCompletion: function() {
+      async_driver(rows);
+    }
+  });
+  stmt.finalize();
+  return false;
+}
+
+/**
  * Resume execution when the db has run all the async statements whose execution
  *  was queued prior to this call.  We trigger a commit to accomplish this,
  *  although this could also be accomplished without a commit.  (Though we would
@@ -1265,4 +1294,32 @@ function nukeGlodaCachesAndCollections() {
   for each (let cache in oldCaches) {
     GlodaCollectionManager.defineCache(cache._nounDef, cache._maxCacheSize);
   }
+}
+
+
+/**
+ * Add a name-and-address pair as generated by `makeNameAndAddress` to the
+ *  personal address book.
+ */
+function makeABCardForAddressPair(nameAndAddress) {
+  let abManager = Components.classes["@mozilla.org/abmanager;1"]
+                            .getService(Components.interfaces.nsIAbManager);
+  // XXX bug 314448 demands that we trigger creation of the ABs...  If we don't
+  //  do this, then the call to addCard will fail if someone else hasn't tickled
+  //  this.
+  abManager.directories;
+
+  // kPABData is from abSetup.js
+  let addressBook = abManager.getDirectory(kPABData.URI);
+
+  let card = Components.classes["@mozilla.org/addressbook/cardproperty;1"]
+                       .createInstance(Components.interfaces.nsIAbCard);
+  card.displayName = nameAndAddress[0];
+  card.primaryEmail = nameAndAddress[1];
+
+  // Just save the new node straight away.
+  addressBook.addCard(card);
+
+  mark_action("glodaTestHelper",
+              "adding address book card for:", nameAndAddress);
 }

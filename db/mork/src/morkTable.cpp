@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-  */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef _MDB_
 #include "mdb.h"
@@ -208,7 +176,7 @@ NS_IMETHODIMP
 morkTable::GetSeed(nsIMdbEnv* mev,
   mdb_seed* outSeed)    // member change count
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -264,7 +232,7 @@ NS_IMETHODIMP
 morkTable::BecomeContent(nsIMdbEnv* mev,
   const mdbOid* inOid) // exchange content
 {
-  NS_ASSERTION(PR_FALSE, "not implemented"); 
+  NS_ASSERTION(false, "not implemented"); 
   return NS_ERROR_NOT_IMPLEMENTED;
   // remember table->MaybeDirtySpaceStoreAndTable();
 }
@@ -276,7 +244,7 @@ NS_IMETHODIMP
 morkTable::DropActivity( // tell collection usage no longer expected
   nsIMdbEnv* mev)
 {
-  NS_ASSERTION(PR_FALSE, "not implemented"); 
+  NS_ASSERTION(false, "not implemented"); 
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -291,7 +259,7 @@ morkTable::DropActivity( // tell collection usage no longer expected
 NS_IMETHODIMP
 morkTable::SetTablePriority(nsIMdbEnv* mev, mdb_priority inPrio)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -307,7 +275,7 @@ morkTable::SetTablePriority(nsIMdbEnv* mev, mdb_priority inPrio)
 NS_IMETHODIMP
 morkTable::GetTablePriority(nsIMdbEnv* mev, mdb_priority* outPrio)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mork_priority prio = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -337,7 +305,7 @@ morkTable:: GetTableBeVerbose(nsIMdbEnv* mev, mdb_bool* outBeVerbose)
 NS_IMETHODIMP
 morkTable::SetTableBeVerbose(nsIMdbEnv* mev, mdb_bool inBeVerbose)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -370,7 +338,7 @@ morkTable::GetTableKind(nsIMdbEnv* mev, mdb_kind* outTableKind)
 NS_IMETHODIMP
 morkTable::GetRowScope(nsIMdbEnv* mev, mdb_scope* outRowScope)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mdb_scope rowScope = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -415,7 +383,7 @@ morkTable::GetMetaRow( nsIMdbEnv* mev,
   // it will be different from inOptionalMetaRowOid when the meta row was
   // already given a different oid earlier.
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbRow* outRow = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -450,7 +418,7 @@ morkTable::GetTableRowCursor( // make a cursor, starting iteration at inRowPos
   mdb_pos inRowPos, // zero-based ordinal position of row in table
   nsIMdbTableRowCursor** acqCursor) // acquire new cursor instance
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbTableRowCursor* outCursor = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -481,7 +449,7 @@ morkTable::PosToOid( // get row member for a table position
   mdb_pos inRowPos, // zero-based ordinal position of row in table
   mdbOid* outOid) // row oid at the specified position
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mdbOid roid;
   roid.mOid_Scope = 0;
   roid.mOid_Id = (mork_id) -1;
@@ -506,7 +474,7 @@ morkTable::OidToPos( // test for the table position of a row member
   const mdbOid* inOid, // row to find in table
   mdb_pos* outPos) // zero-based ordinal position of row in table
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -524,7 +492,7 @@ morkTable::PosToRow( // get row member for a table position
   mdb_pos inRowPos, // zero-based ordinal position of row in table
   nsIMdbRow** acqRow) // acquire row at table position inRowPos
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbRow* outRow = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -546,7 +514,7 @@ morkTable::RowToPos( // test for the table position of a row member
   nsIMdbRow* ioRow, // row to find in table
   mdb_pos* outPos) // zero-based ordinal position of row in table
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mork_pos pos = -1;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -569,7 +537,7 @@ morkTable::AddOid( // make sure the row with inOid is a table member
   nsIMdbEnv* mev, // context
   const mdbOid* inOid) // row to ensure membership in table
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -579,7 +547,7 @@ morkTable::HasOid( // test for the table position of a row member
   const mdbOid* inOid, // row to find in table
   mdb_bool* outHasOid) // whether inOid is a member row
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -595,7 +563,7 @@ morkTable::CutOid( // make sure the row with inOid is not a member
   nsIMdbEnv* mev, // context
   const mdbOid* inOid) // row to remove from table
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -621,7 +589,7 @@ morkTable::NewRow( // create a new row instance in table
   mdbOid* ioOid, // please use zero (unbound) rowId for db-assigned IDs
   nsIMdbRow** acqRow) // create new row
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbRow* outRow = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -652,7 +620,7 @@ morkTable::AddRow( // make sure the row with inOid is a table member
   nsIMdbEnv* mev, // context
   nsIMdbRow* ioRow) // row to ensure membership in table
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -670,7 +638,7 @@ morkTable::HasRow( // test for the table position of a row member
   nsIMdbRow* ioRow, // row to find in table
   mdb_bool* outBool) // zero-based ordinal position of row in table
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -689,7 +657,7 @@ morkTable::CutRow( // make sure the row with inOid is not a member
   nsIMdbEnv* mev, // context
   nsIMdbRow* ioRow) // row to remove from table
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -705,7 +673,7 @@ NS_IMETHODIMP
 morkTable::CutAllRows( // remove all rows from the table 
   nsIMdbEnv* mev) // context
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -723,7 +691,7 @@ morkTable::FindRowMatches( // search variable number of sorted cols
   const mdbYarn* inPrefix, // content to find as prefix in row's column cell
   nsIMdbTableRowCursor** acqCursor) // set of matching rows
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
   
@@ -745,7 +713,7 @@ morkTable::GetSearchColumns( // query columns used by FindRowMatches()
   // Callers are expected to change this set of columns by calls to
   // nsIMdbTable::SearchColumnsHint() or SetSearchSorting(), or both.
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 // } ----- end searching methods -----
@@ -756,7 +724,7 @@ morkTable::SearchColumnsHint( // advise re future expected search cols
   nsIMdbEnv* mev, // context
   const mdbColumnSet* inColumnSet) // columns likely to be searched
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
   
@@ -765,7 +733,7 @@ morkTable::SortColumnsHint( // advise re future expected sort columns
   nsIMdbEnv* mev, // context
   const mdbColumnSet* inColumnSet) // columns for likely sort requests
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -810,7 +778,7 @@ morkTable::CanSortColumn( // query which column is currently used for sorting
   mdb_column inColumn, // column to query sorting potential
   mdb_bool* outCanSort) // whether the column can be sorted
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -820,7 +788,7 @@ morkTable::GetSorting( // view same table in particular sorting
   mdb_column inColumn, // requested new column for sorting table
   nsIMdbSorting** acqSorting) // acquire sorting for column
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -852,7 +820,7 @@ morkTable::SetSearchSorting( // use this sorting in FindRowMatches()
   // zero for inColumn when ioSorting is also provided, since then
   // inColumn is both redundant and ignored).
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -869,7 +837,7 @@ morkTable::MoveOid( // change position of row in unsorted table
   mdb_pos inToPos,       // desired new position for row inOid
   mdb_pos* outActualPos) // actual new position of row in table
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mdb_pos actualPos = -1; // meaning it was never found in table
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -899,7 +867,7 @@ morkTable::MoveRow( // change position of row in unsorted table
   mdb_pos* outActualPos) // actual new position of row in table
 {
   mdb_pos actualPos = -1; // meaning it was never found in table
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -923,7 +891,7 @@ morkTable::AddIndex( // create a sorting index for column if possible
 // Call nsIMdbThumb::DoMore() until done, or until the thumb is broken, and
 // then the index addition will be finished.
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -935,7 +903,7 @@ morkTable::CutIndex( // stop supporting a specific column index
 // Call nsIMdbThumb::DoMore() until done, or until the thumb is broken, and
 // then the index removal will be finished.
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -945,7 +913,7 @@ morkTable::HasIndex( // query for current presence of a column index
   mdb_column inColumn, // the column to investigate
   mdb_bool* outHasIndex) // whether column has index for this column
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -954,7 +922,7 @@ morkTable::EnableIndexOnSort( // create an index for col on first sort
   nsIMdbEnv* mev, // context
   mdb_column inColumn) // the column to index if ever sorted
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -964,7 +932,7 @@ morkTable::QueryIndexOnSort( // check whether index on sort is enabled
   mdb_column inColumn, // the column to investigate
   mdb_bool* outIndexOnSort) // whether column has index-on-sort enabled
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -973,7 +941,7 @@ morkTable::DisableIndexOnSort( // prevent future index creation on sort
   nsIMdbEnv* mev, // context
   mdb_column inColumn) // the column to index if ever sorted
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 // } ----- end index methods -----

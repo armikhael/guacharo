@@ -1,40 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Mail Client.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Andrew Sutherland <asutherland@asutherland.org>
- *   Mike Conley <mconley@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var gMessageGenerator, gMessageScenarioFactory;
 
@@ -60,13 +26,10 @@ function configure_message_injection(aInjectionConfig) {
   mis.injectionConfig = aInjectionConfig;
 
   // Disable new mail notifications
-  var prefSvc = Cc["@mozilla.org/preferences-service;1"]
-                  .getService(Ci.nsIPrefBranch);
-
-  prefSvc.setBoolPref("mail.biff.play_sound", false);
-  prefSvc.setBoolPref("mail.biff.show_alert", false);
-  prefSvc.setBoolPref("mail.biff.show_tray_icon", false);
-  prefSvc.setBoolPref("mail.biff.animate_dock_icon", false);
+  Services.prefs.setBoolPref("mail.biff.play_sound", false);
+  Services.prefs.setBoolPref("mail.biff.show_alert", false);
+  Services.prefs.setBoolPref("mail.biff.show_tray_icon", false);
+  Services.prefs.setBoolPref("mail.biff.animate_dock_icon", false);
 
 
   // we need to pull in the notification service so we get events?
@@ -133,18 +96,17 @@ function configure_message_injection(aInjectionConfig) {
     let unused = mis.inboxFolder.prettiestName;
   }
   else if (mis.injectionConfig.mode == "imap") {
-    const gPrefs = Cc["@mozilla.org/preferences-service;1"]
-                     .getService(Ci.nsIPrefBranch);
     // Disable autosync in favor of our explicitly forcing downloads of all
     //  messages in a folder.  This is being done speculatively because when we
     //  didn't do this we got tripped up by the semaphore being in use and
     //  concern over inability to hang a listener off of the completion of the
     //  download.  (Although I'm sure there are various ways we could do it.)
-    gPrefs.setBoolPref("mail.server.default.autosync_offline_stores", false);
+    Services.prefs.setBoolPref("mail.server.default.autosync_offline_stores",
+                               false);
     // Set the offline property based on the configured setting.  This will
     //  affect newly created folders.
-    gPrefs.setBoolPref("mail.server.default.offline_download",
-                       mis.injectionConfig.offline);
+    Services.prefs.setBoolPref("mail.server.default.offline_download",
+                               mis.injectionConfig.offline);
 
     // Pull in the IMAP fake server code
     load(gDEPTH + "mailnews/imap/test/unit/head_server.js");
@@ -179,9 +141,9 @@ function configure_message_injection(aInjectionConfig) {
     imapAccount.incomingServer = mis.incomingServer;
 
     // The server doesn't support more than one connection
-    prefSvc.setIntPref("mail.server.server1.max_cached_connections", 1);
+    Services.prefs.setIntPref("mail.server.server1.max_cached_connections", 1);
     // We aren't interested in downloading messages automatically
-    prefSvc.setBoolPref("mail.server.server1.download_on_biff", false);
+    Services.prefs.setBoolPref("mail.server.server1.download_on_biff", false);
 
     mis.rootFolder = mis.incomingServer.rootMsgFolder;
 
@@ -195,9 +157,6 @@ function configure_message_injection(aInjectionConfig) {
     _messageInjectionSetup.notifyListeners("onRealFolderCreated",
                                            [mis.inboxFolder]);
 
-    mis.mainThread = Cc["@mozilla.org/thread-manager;1"]
-                       .getService()
-                       .mainThread;
     mis.imapService = Cc["@mozilla.org/messenger/imapservice;1"]
                         .getService(Ci.nsIImapService);
 
@@ -360,7 +319,6 @@ function make_empty_folder(aFolderName, aSpecialFlags) {
     // Tell the IMAP service to create the folder, adding a listener that
     //  hooks up the 'handle' URI -> actual folder mapping.
     mis.imapService.createFolder(
-      mis.mainThread,
       mis.rootFolder,
       aFolderName,
       new AsyncUrlListener(mis.rootFolder, function() {
@@ -396,6 +354,27 @@ function make_empty_folder(aFolderName, aSpecialFlags) {
   }
 
   return testFolder;
+}
+
+// Small helper for moving folder. You have to yield move_folder(f1, f2);
+function move_folder(aSource, aTarget) {
+  let cs = Cc["@mozilla.org/messenger/messagecopyservice;1"]
+          .getService(Ci.nsIMsgCopyService);
+  let array = toXPCOMArray([get_nsIMsgFolder(aSource)], Ci.nsIMutableArray);
+  // we're doing a true move
+  cs.CopyFolders(array, get_nsIMsgFolder(aTarget), true, {
+    /* nsIMsgCopyServiceListener implementation */
+    OnStartCopy: function() {},
+    OnProgress: function(aProgress, aProgressMax) {},
+    SetMessageKey: function(aKey) {},
+    SetMessageId: function(aMessageId) {},
+    OnStopCopy: function(aStatus) {
+      async_driver();
+    }
+  }, null);
+
+  // Wait for the call above to async_driver to be issued
+  return false;
 }
 
 /**
@@ -509,9 +488,15 @@ function make_folder_and_contents_offline(aFolderHandle) {
  *
  * @param aSynSetDefs A synthetic set definition, as appropriate to pass to
  *     make_new_sets_in_folder.
- * @return A list whose first element is the nsIMsgLocalMailFolder created and
- *     whose subsequent items are the SyntheticMessageSets used to populate the
- *     folder (as returned by make_new_sets_in_folder).
+ * @return A list whose first element is the folder created and whose subsequent
+ *     items are the SyntheticMessageSets used to populate the folder (as returned
+ *     by make_new_sets_in_folder).
+ *  Please note that the folder is either a nsIMsgLocalMailFolder, or a folder
+ *     URI, depending on whether we're in local injection mode, or on IMAP. This
+ *     should be transparent to you, unless you start trying to inject messages
+ *     into a folder that hasn't been created by make_folder_with_sets. See
+ *     test_folder_deletion_nested in base_index_messages.js for an example of
+ *     such pain.
  */
 function make_folder_with_sets(aSynSetDefs) {
   let msgFolder = make_empty_folder();

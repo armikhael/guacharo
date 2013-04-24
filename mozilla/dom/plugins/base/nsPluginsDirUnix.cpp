@@ -1,45 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Alex Musil
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsNPAPIPlugin.h"
 #include "nsNPAPIPluginInstance.h"
 #include "nsIMemory.h"
-#include "nsIPluginStreamListener.h"
 #include "nsPluginsDir.h"
 #include "nsPluginsDirUtils.h"
 #include "prmem.h"
@@ -47,7 +13,7 @@
 #include "prerror.h"
 #include <sys/stat.h>
 #include "nsString.h"
-#include "nsILocalFile.h"
+#include "nsIFile.h"
 #include "nsIPrefBranch.h"
 #include "nsIPrefService.h"
 
@@ -112,21 +78,21 @@ static void SearchForSoname(const char* name, char** soname)
     PR_CloseDir(fdDir);
 }
 
-static PRBool LoadExtraSharedLib(const char *name, char **soname, PRBool tryToGetSoname)
+static bool LoadExtraSharedLib(const char *name, char **soname, bool tryToGetSoname)
 {
-    PRBool ret = PR_TRUE;
+    bool ret = true;
     PRLibSpec tempSpec;
     PRLibrary *handle;
     tempSpec.type = PR_LibSpec_Pathname;
     tempSpec.value.pathname = name;
     handle = PR_LoadLibraryWithFlags(tempSpec, PR_LD_NOW|PR_LD_GLOBAL);
     if (!handle) {
-        ret = PR_FALSE;
+        ret = false;
         DisplayPR_LoadLibraryErrorMessage(name);
         if (tryToGetSoname) {
             SearchForSoname(name, soname);
             if (*soname) {
-                ret = LoadExtraSharedLib((const char *) *soname, NULL, PR_FALSE);
+                ret = LoadExtraSharedLib((const char *) *soname, NULL, false);
             }
         }
     }
@@ -152,13 +118,13 @@ static void LoadExtraSharedLibs()
     // check out if user's prefs.js has libs name
     nsresult res;
     nsCOMPtr<nsIPrefBranch> prefs(do_GetService(NS_PREFSERVICE_CONTRACTID, &res));
-    if (NS_SUCCEEDED(res) && (prefs != nsnull)) {
+    if (NS_SUCCEEDED(res) && (prefs != nullptr)) {
         char *sonameList = NULL;
-        PRBool prefSonameListIsSet = PR_TRUE;
+        bool prefSonameListIsSet = true;
         res = prefs->GetCharPref(PREF_PLUGINS_SONAME, &sonameList);
         if (!sonameList) {
             // pref is not set, lets use hardcoded list
-            prefSonameListIsSet = PR_FALSE;
+            prefSonameListIsSet = false;
             sonameList = PL_strdup(DEFAULT_EXTRA_LIBS_LIST);
         }
         if (sonameList) {
@@ -177,7 +143,7 @@ static void LoadExtraSharedLibs()
             char sonameListToSave[PLUGIN_MAX_LEN_OF_TMP_ARR] = "";
             for (int i=0; i<numOfLibs; i++) {
                 // trim out head/tail white spaces (just in case)
-                PRBool head = PR_TRUE;
+                bool head = true;
                 p = arrayOfLibs[i];
                 while (*p) {
                     if (*p == ' ' || *p == '\t') {
@@ -187,14 +153,14 @@ static void LoadExtraSharedLibs()
                             *p = 0;
                         }
                     } else {
-                        head = PR_FALSE;
+                        head = false;
                         p++;
                     }
                 }
                 if (!arrayOfLibs[i][0]) {
                     continue; // null string
                 }
-                PRBool tryToGetSoname = PR_TRUE;
+                bool tryToGetSoname = true;
                 if (PL_strchr(arrayOfLibs[i], '/')) {
                     //assuming it's real name, try to stat it
                     struct stat st;
@@ -202,7 +168,7 @@ static void LoadExtraSharedLibs()
                         //get just a file name
                         arrayOfLibs[i] = PL_strrchr(arrayOfLibs[i], '/') + 1;
                     } else
-                        tryToGetSoname = PR_FALSE;
+                        tryToGetSoname = false;
                 }
                 char *soname = NULL;
                 if (LoadExtraSharedLib(arrayOfLibs[i], &soname, tryToGetSoname)) {
@@ -241,24 +207,34 @@ static void LoadExtraSharedLibs()
 
 /* nsPluginsDir implementation */
 
-PRBool nsPluginsDir::IsPluginFile(nsIFile* file)
+bool nsPluginsDir::IsPluginFile(nsIFile* file)
 {
     nsCAutoString filename;
     if (NS_FAILED(file->GetNativeLeafName(filename)))
-        return PR_FALSE;
+        return false;
+
+#ifdef ANDROID
+    // It appears that if you load
+    // 'libstagefright_honeycomb.so' on froyo, or
+    // 'libstagefright_froyo.so' on honeycomb, we will abort.
+    // Since these are just helper libs, we can ignore.
+    const char *cFile = filename.get();
+    if (strstr(cFile, "libstagefright") != NULL)
+        return false;
+#endif
 
     NS_NAMED_LITERAL_CSTRING(dllSuffix, LOCAL_PLUGIN_DLL_SUFFIX);
     if (filename.Length() > dllSuffix.Length() &&
         StringEndsWith(filename, dllSuffix))
-        return PR_TRUE;
+        return true;
     
 #ifdef LOCAL_PLUGIN_DLL_ALT_SUFFIX
     NS_NAMED_LITERAL_CSTRING(dllAltSuffix, LOCAL_PLUGIN_DLL_ALT_SUFFIX);
     if (filename.Length() > dllAltSuffix.Length() &&
         StringEndsWith(filename, dllAltSuffix))
-        return PR_TRUE;
+        return true;
 #endif
-    return PR_FALSE;
+    return false;
 }
 
 /* nsPluginFile implementation */
@@ -276,7 +252,7 @@ nsresult nsPluginFile::LoadPlugin(PRLibrary **outLibrary)
 {
     PRLibSpec libSpec;
     libSpec.type = PR_LibSpec_Pathname;
-    PRBool exists = PR_FALSE;
+    bool exists = false;
     mPlugin->Exists(&exists);
     if (!exists)
         return NS_ERROR_FILE_NOT_FOUND;
@@ -327,19 +303,23 @@ nsresult nsPluginFile::LoadPlugin(PRLibrary **outLibrary)
     pLibrary = *outLibrary;
 #endif  // MOZ_WIDGET_GTK2
 
-#ifdef NS_DEBUG
+#ifdef DEBUG
     printf("LoadPlugin() %s returned %lx\n", 
            libSpec.value.pathname, (unsigned long)pLibrary);
 #endif
+
+    if (!pLibrary) {
+        return NS_ERROR_FAILURE;
+    }
     
     return NS_OK;
 }
 
 nsresult nsPluginFile::GetPluginInfo(nsPluginInfo& info, PRLibrary **outLibrary)
 {
-    *outLibrary = nsnull;
+    *outLibrary = nullptr;
 
-    info.fVersion = nsnull;
+    info.fVersion = nullptr;
 
     // Sadly we have to load the library for this to work.
     nsresult rv = LoadPlugin(outLibrary);
@@ -384,7 +364,7 @@ nsresult nsPluginFile::GetPluginInfo(nsPluginInfo& info, PRLibrary **outLibrary)
     }
 
     const char *name = NULL;
-    NPError nperr = npGetValue(NULL, NPPVpluginNameString, &name);
+    npGetValue(NULL, NPPVpluginNameString, &name);
     if (name) {
         info.fName = PL_strdup(name);
     }
@@ -393,7 +373,7 @@ nsresult nsPluginFile::GetPluginInfo(nsPluginInfo& info, PRLibrary **outLibrary)
     }
 
     const char *description = NULL;
-    nperr = npGetValue(NULL, NPPVpluginDescriptionString, &description);
+    npGetValue(NULL, NPPVpluginDescriptionString, &description);
     if (description) {
         info.fDescription = PL_strdup(description);
     }
@@ -406,20 +386,20 @@ nsresult nsPluginFile::GetPluginInfo(nsPluginInfo& info, PRLibrary **outLibrary)
 
 nsresult nsPluginFile::FreePluginInfo(nsPluginInfo& info)
 {
-    if (info.fName != nsnull)
+    if (info.fName != nullptr)
         PL_strfree(info.fName);
 
-    if (info.fDescription != nsnull)
+    if (info.fDescription != nullptr)
         PL_strfree(info.fDescription);
 
-    for (PRUint32 i = 0; i < info.fVariantCount; i++) {
-        if (info.fMimeTypeArray[i] != nsnull)
+    for (uint32_t i = 0; i < info.fVariantCount; i++) {
+        if (info.fMimeTypeArray[i] != nullptr)
             PL_strfree(info.fMimeTypeArray[i]);
 
-        if (info.fMimeDescriptionArray[i] != nsnull)
+        if (info.fMimeDescriptionArray[i] != nullptr)
             PL_strfree(info.fMimeDescriptionArray[i]);
 
-        if (info.fExtensionArray[i] != nsnull)
+        if (info.fExtensionArray[i] != nullptr)
             PL_strfree(info.fExtensionArray[i]);
     }
 
@@ -427,13 +407,13 @@ nsresult nsPluginFile::FreePluginInfo(nsPluginInfo& info)
     PR_FREEIF(info.fMimeDescriptionArray);
     PR_FREEIF(info.fExtensionArray);
 
-    if (info.fFullPath != nsnull)
+    if (info.fFullPath != nullptr)
         PL_strfree(info.fFullPath);
 
-    if (info.fFileName != nsnull)
+    if (info.fFileName != nullptr)
         PL_strfree(info.fFileName);
 
-    if (info.fVersion != nsnull)
+    if (info.fVersion != nullptr)
         PL_strfree(info.fVersion);
 
     return NS_OK;

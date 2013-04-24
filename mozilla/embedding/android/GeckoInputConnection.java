@@ -1,39 +1,7 @@
 /* -*- Mode: Java; c-basic-offset: 4; tab-width: 20; indent-tabs-mode: nil; -*-
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Android code.
- *
- * The Initial Developer of the Original Code is Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Michael Wu <mwu@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 package org.mozilla.gecko;
 
@@ -57,6 +25,27 @@ public class GeckoInputConnection
     extends BaseInputConnection
     implements TextWatcher
 {
+    private class ChangeNotification {
+        public String mText;
+        public int mStart;
+        public int mEnd;
+        public int mNewEnd;
+
+        ChangeNotification(String text, int start, int oldEnd, int newEnd) {
+            mText = text;
+            mStart = start;
+            mEnd = oldEnd;
+            mNewEnd = newEnd;
+        }
+
+        ChangeNotification(int start, int end) {
+            mText = null;
+            mStart = start;
+            mEnd = end;
+            mNewEnd = 0;
+        }
+    }
+
     public GeckoInputConnection (View targetView) {
         super(targetView, true);
         mQueryResult = new SynchronousQueue<String>();
@@ -65,7 +54,7 @@ public class GeckoInputConnection
     @Override
     public boolean beginBatchEdit() {
         //Log.d("GeckoAppJava", "IME: beginBatchEdit");
-
+        mBatchMode = true;
         return true;
     }
 
@@ -89,6 +78,8 @@ public class GeckoInputConnection
     @Override
     public boolean deleteSurroundingText(int leftLength, int rightLength) {
         //Log.d("GeckoAppJava", "IME: deleteSurroundingText");
+        if (leftLength == 0 && rightLength == 0)
+            return true;
 
         /* deleteSurroundingText is supposed to ignore the composing text,
             so we cancel any pending composition, delete the text, and then
@@ -141,6 +132,21 @@ public class GeckoInputConnection
     public boolean endBatchEdit() {
         //Log.d("GeckoAppJava", "IME: endBatchEdit");
 
+        mBatchMode = false;
+
+        if (!mBatchChanges.isEmpty()) {
+            InputMethodManager imm = (InputMethodManager)
+                GeckoApp.surfaceView.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                for (ChangeNotification n : mBatchChanges) {
+                    if (n.mText != null)
+                        notifyTextChange(imm, n.mText, n.mStart, n.mEnd, n.mNewEnd);
+                    else
+                        notifySelectionChange(imm, n.mStart, n.mEnd);
+                }
+            }
+            mBatchChanges.clear();
+        }
         return true;
     }
 
@@ -159,10 +165,12 @@ public class GeckoInputConnection
             mComposing = false;
             mComposingText = "";
 
-            // Make sure caret stays at the same position
-            GeckoAppShell.sendEventToGecko(
-                new GeckoEvent(GeckoEvent.IME_SET_SELECTION,
-                               mCompositionStart + mCompositionSelStart, 0));
+            if (!mBatchMode) {
+                // Make sure caret stays at the same position
+                GeckoAppShell.sendEventToGecko(
+                    new GeckoEvent(GeckoEvent.IME_SET_SELECTION,
+                                   mCompositionStart + mCompositionSelStart, 0));
+            }
         }
         return true;
     }
@@ -237,6 +245,11 @@ public class GeckoInputConnection
     @Override
     public ExtractedText getExtractedText(ExtractedTextRequest req, int flags) {
         if (req == null)
+            return null;
+
+        // Bail out here if gecko isn't running, otherwise we deadlock
+        // below when waiting for the reply to IME_GET_SELECTION.
+        if (!GeckoApp.checkLaunchState(GeckoApp.LaunchState.GeckoRunning))
             return null;
 
         //Log.d("GeckoAppJava", "IME: getExtractedText");
@@ -456,6 +469,41 @@ public class GeckoInputConnection
             new GeckoEvent(mCompositionSelStart + mCompositionSelLen, 0,
                            GeckoEvent.IME_RANGE_CARETPOSITION, 0, 0, 0,
                            mComposingText));
+
+        return true;
+    }
+
+    @Override
+    public boolean setComposingRegion(int start, int end) {
+        //Log.d("GeckoAppJava", "IME: setComposingRegion(start=" + start + ", end=" + end + ")");
+        if (start < 0 || end < start)
+            return true;
+
+        CharSequence text = null;
+        if (start == mCompositionStart && end - start == mComposingText.length()) {
+            // Use mComposingText to avoid extra call to Gecko
+            text = mComposingText;
+        }
+
+        finishComposingText();
+
+        if (text == null && start < end) {
+            GeckoAppShell.sendEventToGecko(
+                new GeckoEvent(GeckoEvent.IME_GET_TEXT, start, end - start));
+            try {
+                text = mQueryResult.take();
+            } catch (InterruptedException e) {
+                Log.e("GeckoAppJava", "IME: setComposingRegion interrupted", e);
+                return false;
+            }
+        }
+
+        GeckoAppShell.sendEventToGecko(
+            new GeckoEvent(GeckoEvent.IME_SET_SELECTION, start, end - start));
+
+        // Call setComposingText with the same text to start composition and let Gecko know about new composing region
+        setComposingText(text, 1);
+
         return true;
     }
 
@@ -512,6 +560,11 @@ public class GeckoInputConnection
         // Log.d("GeckoAppShell", String.format("IME: notifyTextChange: text=%s s=%d ne=%d oe=%d",
         //                                      text, start, newEnd, oldEnd));
 
+        if (mBatchMode) {
+            mBatchChanges.add(new ChangeNotification(text, start, oldEnd, newEnd));
+            return;
+        }
+
         mNumPendingChanges = Math.max(mNumPendingChanges - 1, 0);
 
         // If there are pending changes, that means this text is not the most up-to-date version
@@ -543,6 +596,10 @@ public class GeckoInputConnection
     public void notifySelectionChange(InputMethodManager imm,
                                       int start, int end) {
         // Log.d("GeckoAppJava", String.format("IME: notifySelectionChange: s=%d e=%d", start, end));
+        if (mBatchMode) {
+            mBatchChanges.add(new ChangeNotification(start, end));
+            return;
+        }
 
         if (mComposing)
             imm.updateSelection(GeckoApp.surfaceView,
@@ -569,6 +626,8 @@ public class GeckoInputConnection
         mComposingText = "";
         mUpdateRequest = null;
         mNumPendingChanges = 0;
+        mBatchMode = false;
+        mBatchChanges.clear();
     }
 
     // TextWatcher
@@ -628,6 +687,10 @@ public class GeckoInputConnection
     int mCompositionSelLen;
     // Number of in flight changes
     int mNumPendingChanges;
+
+    boolean mBatchMode;
+    private CopyOnWriteArrayList<ChangeNotification> mBatchChanges =
+        new CopyOnWriteArrayList<ChangeNotification>();
 
     ExtractedTextRequest mUpdateRequest;
     final ExtractedText mUpdateExtract = new ExtractedText();

@@ -8,11 +8,7 @@ http://www.cairographics.org/.
 VERSIONS:
 
   cairo (12d521df8acc483b2daa844d4f05dc2fe2765ba6)
-  pixman (2f4f2fb4859931bf6dc5632d8c919e7296736427)
-
-***** NOTE FOR VISUAL C++ 6.0 *****
-
-VC6 is not supported.  Please upgrade to VC8.
+  pixman (0.24.2)
 
 ==== Patches ====
 
@@ -169,6 +165,29 @@ pixman-image-transform.patch: Reset the transform on pixman images when using th
 fix-cairo-surface-wrapper-flush-build-warning.patch: Ensures that _cairo_surface_wrapper_flush always returns a status, to silence the build warning
 
 fixup-unbounded.patch: Hack to work around bad assumption.
+
+quartz-get-image-performance: Make cairo_quartz_get_image faster in the failure case by not flushing unless we are going to succeed.
+
+lround-c99-only.patch: Only use lround in C99 programs.
+
+unicode-printing.patch: Print as unicode (bug 454532)
+
+quartz-mark-dirty.patch: Add a quartz implementation of mark_dirty_rectangle (bug 715704)
+
+expose-snapshot.patch: Make functions to add snapshots public, as well as allow creating null surfaces publically. (bug 715658)
+
+fix-build-with-Werror=return-type.patch: Fix builds with -Werror=return-type (bug 737909)
+
+avoid-extend-none.patch: Avoid incorrectly using EXTEND_NONE (bug 751668)
+
+win32-ExtCreatePen-zero-size.patch: Don't pass zero width or dash lengths to ExtCreatePen (bug 768348)
+
+d2d-repeating-gradients.patch: Minimize number of gradient stops added to handle repeating with path fills (bug 768775)
+
+xlib-glyph-clip-region.patch: bug 709477, addressed upstream by be1ff2f45fdbc69537e513834fcffa0435e63073
+
+setlcdfilter_in_tree.patch bug 790139; force cairo to use FT_Library_SetLcdFilter from our in tree library rather than picking it up from the system
+
 ==== pixman patches ====
 
 pixman-android-cpu-detect.patch: Add CPU detection support for Android, where we can't reliably access /proc/self/auxv.
@@ -178,6 +197,16 @@ pixman-rename-and-endian.patch: include cairo-platform.h for renaming of externa
 NOTE: we previously supported ARM assembler on MSVC, this has been removed because of the maintenance burden
 
 pixman-export.patch: use cairo_public for PIXMAN_EXPORT to make sure pixman symbols are not exported in libxul
+
+pixman-limits.patch: include limits.h for SIZE_MAX
+
+pixman-lowres-interp.patch: Use lower quality interpolation for more speed.
+
+pixman-bilinear-fastpath.patch: Bilinear fast paths for non-neon
+
+pixman-16-bit-pipeline.patch: 16 bit pipeline for dithering
+
+pixman-dither.patch: Add dithering of 16 bit gradients
 
 ==== disable printing patch ====
 

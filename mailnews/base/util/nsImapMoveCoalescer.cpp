@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"
 #include "nsMsgImapCID.h"
@@ -57,7 +25,7 @@ nsImapMoveCoalescer::nsImapMoveCoalescer(nsIMsgFolder *sourceFolder, nsIMsgWindo
 {
   m_sourceFolder = sourceFolder; 
   m_msgWindow = msgWindow;
-  m_hasPendingMoves = PR_FALSE;
+  m_hasPendingMoves = false;
 }
 
 nsImapMoveCoalescer::~nsImapMoveCoalescer()
@@ -66,9 +34,9 @@ nsImapMoveCoalescer::~nsImapMoveCoalescer()
 
 nsresult nsImapMoveCoalescer::AddMove(nsIMsgFolder *folder, nsMsgKey key)
 {
-  m_hasPendingMoves = PR_TRUE;
-  PRInt32 folderIndex = m_destFolders.IndexOf(folder);
-  nsTArray<nsMsgKey> *keysToAdd = nsnull;
+  m_hasPendingMoves = true;
+  int32_t folderIndex = m_destFolders.IndexOf(folder);
+  nsTArray<nsMsgKey> *keysToAdd = nullptr;
 
   if (folderIndex >= 0)
     keysToAdd = &(m_sourceKeyArrays[folderIndex]);
@@ -80,25 +48,25 @@ nsresult nsImapMoveCoalescer::AddMove(nsIMsgFolder *folder, nsMsgKey key)
       return NS_ERROR_OUT_OF_MEMORY;
   }
 
-  if (keysToAdd->IndexOf(key) == -1)
+  if (keysToAdd->IndexOf(key) == nsTArray<nsMsgKey>::NoIndex)
     keysToAdd->AppendElement(key);
 
   return NS_OK;
 }
 
-nsresult nsImapMoveCoalescer::PlaybackMoves(PRBool doNewMailNotification /* = PR_FALSE */)
+nsresult nsImapMoveCoalescer::PlaybackMoves(bool doNewMailNotification /* = false */)
 {
-  PRInt32 numFolders = m_destFolders.Count();
+  int32_t numFolders = m_destFolders.Count();
   // Nothing to do, so don't change the member variables.
   if (numFolders == 0)
     return NS_OK;
 
   nsresult rv = NS_OK;
-  m_hasPendingMoves = PR_FALSE;
+  m_hasPendingMoves = false;
   m_doNewMailNotification = doNewMailNotification;
   m_outstandingMoves = 0;
 
-  for (PRInt32 i = 0; i < numFolders; ++i)
+  for (int32_t i = 0; i < numFolders; ++i)
   {
     // XXX TODO
     // JUNK MAIL RELATED
@@ -106,36 +74,36 @@ nsresult nsImapMoveCoalescer::PlaybackMoves(PRBool doNewMailNotification /* = PR
     // (and has proper flags?), before we start copying?
     nsCOMPtr <nsIMsgFolder> destFolder(m_destFolders[i]);
     nsTArray<nsMsgKey>& keysToAdd = m_sourceKeyArrays[i];
-    PRInt32 numNewMessages = 0;
-    PRInt32 numKeysToAdd = keysToAdd.Length();
+    int32_t numNewMessages = 0;
+    int32_t numKeysToAdd = keysToAdd.Length();
     if (numKeysToAdd == 0)
       continue;
 
     nsCOMPtr<nsIMutableArray> messages(do_CreateInstance(NS_ARRAY_CONTRACTID));
-    for (PRUint32 keyIndex = 0; keyIndex < keysToAdd.Length(); keyIndex++)
+    for (uint32_t keyIndex = 0; keyIndex < keysToAdd.Length(); keyIndex++)
     {
-      nsCOMPtr<nsIMsgDBHdr> mailHdr = nsnull;
+      nsCOMPtr<nsIMsgDBHdr> mailHdr = nullptr;
       rv = m_sourceFolder->GetMessageHeader(keysToAdd.ElementAt(keyIndex), getter_AddRefs(mailHdr));
       if (NS_SUCCEEDED(rv) && mailHdr)
       {
-        messages->AppendElement(mailHdr, PR_FALSE);
-        PRBool isRead = PR_FALSE;
+        messages->AppendElement(mailHdr, false);
+        bool isRead = false;
         mailHdr->GetIsRead(&isRead);
         if (!isRead)
           numNewMessages++;
       }
     }
-    PRUint32 destFlags;
+    uint32_t destFlags;
     destFolder->GetFlags(&destFlags);
     if (! (destFlags & nsMsgFolderFlags::Junk)) // don't set has new on junk folder
     {
       destFolder->SetNumNewMessages(numNewMessages);
       if (numNewMessages > 0)
-        destFolder->SetHasNewMessages(PR_TRUE);
+        destFolder->SetHasNewMessages(true);
     }
     // adjust the new message count on the source folder
-    PRInt32 oldNewMessageCount = 0;
-    m_sourceFolder->GetNumNewMessages(PR_FALSE, &oldNewMessageCount);
+    int32_t oldNewMessageCount = 0;
+    m_sourceFolder->GetNumNewMessages(false, &oldNewMessageCount);
     if (oldNewMessageCount >= numKeysToAdd)
       oldNewMessageCount -= numKeysToAdd;
     else
@@ -157,8 +125,8 @@ nsresult nsImapMoveCoalescer::PlaybackMoves(PRBool doNewMailNotification /* = PR
         if (copyListener)
           listener = do_QueryInterface(copyListener);
       }
-      rv = copySvc->CopyMessages(m_sourceFolder, messages, destFolder, PR_TRUE,
-                                 listener, m_msgWindow, PR_FALSE /*allowUndo*/);
+      rv = copySvc->CopyMessages(m_sourceFolder, messages, destFolder, true,
+                                 listener, m_msgWindow, false /*allowUndo*/);
       if (NS_SUCCEEDED(rv))
         m_outstandingMoves++;
     }
@@ -186,11 +154,11 @@ nsImapMoveCoalescer::OnStopRunningUrl(nsIURI *aUrl, nsresult aExitCode)
   return NS_OK;
 }
 
-nsTArray<nsMsgKey> *nsImapMoveCoalescer::GetKeyBucket(PRUint32 keyArrayIndex)
+nsTArray<nsMsgKey> *nsImapMoveCoalescer::GetKeyBucket(uint32_t keyArrayIndex)
 {
   if (keyArrayIndex >= m_keyBuckets.Length() &&
       !m_keyBuckets.SetLength(keyArrayIndex + 1))
-    return nsnull;
+    return nullptr;
 
   return &(m_keyBuckets[keyArrayIndex]);
 }
@@ -213,14 +181,14 @@ NS_IMETHODIMP nsMoveCoalescerCopyListener::OnStartCopy()
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
-/* void OnProgress (in PRUint32 aProgress, in PRUint32 aProgressMax); */
-NS_IMETHODIMP nsMoveCoalescerCopyListener::OnProgress(PRUint32 aProgress, PRUint32 aProgressMax)
+/* void OnProgress (in uint32_t aProgress, in uint32_t aProgressMax); */
+NS_IMETHODIMP nsMoveCoalescerCopyListener::OnProgress(uint32_t aProgress, uint32_t aProgressMax)
 {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
-/* void SetMessageKey (in PRUint32 aKey); */
-NS_IMETHODIMP nsMoveCoalescerCopyListener::SetMessageKey(PRUint32 aKey)
+/* void SetMessageKey (in uint32_t aKey); */
+NS_IMETHODIMP nsMoveCoalescerCopyListener::SetMessageKey(uint32_t aKey)
 {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
@@ -241,7 +209,7 @@ NS_IMETHODIMP nsMoveCoalescerCopyListener::OnStopCopy(nsresult aStatus)
     nsCOMPtr <nsIMsgImapMailFolder> imapFolder = do_QueryInterface(m_destFolder);
     if (imapFolder)
     {
-      PRUint32 folderFlags;
+      uint32_t folderFlags;
       m_destFolder->GetFlags(&folderFlags);
       if (!(folderFlags & (nsMsgFolderFlags::Junk | nsMsgFolderFlags::Trash)))
       {
@@ -249,14 +217,13 @@ NS_IMETHODIMP nsMoveCoalescerCopyListener::OnStopCopy(nsresult aStatus)
         NS_ENSURE_SUCCESS(rv, rv);
         nsCOMPtr <nsIURI> url;
         nsCOMPtr <nsIUrlListener> listener = do_QueryInterface(m_coalescer);
-        nsCOMPtr<nsIThread> thread(do_GetCurrentThread());
-        rv = imapService->SelectFolder(thread, m_destFolder, listener, nsnull, getter_AddRefs(url));
+        rv = imapService->SelectFolder(m_destFolder, listener, nullptr, getter_AddRefs(url));
       }
     }
     else // give junk filters a chance to run on new msgs in destination local folder
     {
-      PRBool filtersRun;
-      m_destFolder->CallFilterPlugins(nsnull, &filtersRun);
+      bool filtersRun;
+      m_destFolder->CallFilterPlugins(nullptr, &filtersRun);
     }
   }
   return rv;

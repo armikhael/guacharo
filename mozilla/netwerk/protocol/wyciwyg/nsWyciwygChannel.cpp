@@ -1,42 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Radha Kulkarni(radha@netscape.com)
- *   Michal Novotny <michal.novotny@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsWyciwyg.h"
 #include "nsWyciwygChannel.h"
@@ -44,11 +10,9 @@
 #include "nsILoadGroup.h"
 #include "nsIScriptSecurityManager.h"
 #include "nsNetUtil.h"
-#include "nsContentUtils.h"
 #include "nsICacheService.h"
 #include "nsICacheSession.h"
-#include "nsIParser.h"
-#include "nsThreadUtils.h"
+#include "nsCharsetSource.h"
 #include "nsProxyRelease.h"
 
 // Must release mChannel on the main thread
@@ -116,9 +80,9 @@ private:
 // nsWyciwygChannel methods 
 nsWyciwygChannel::nsWyciwygChannel()
   : mStatus(NS_OK),
-    mIsPending(PR_FALSE),
-    mCharsetAndSourceSet(PR_FALSE),
-    mNeedToWriteCharset(PR_FALSE),
+    mIsPending(false),
+    mCharsetAndSourceSet(false),
+    mNeedToWriteCharset(false),
     mCharsetSource(kCharsetUninitialized),
     mContentLength(-1),
     mLoadFlags(LOAD_NORMAL)
@@ -168,7 +132,7 @@ nsWyciwygChannel::GetName(nsACString &aName)
 }
  
 NS_IMETHODIMP
-nsWyciwygChannel::IsPending(PRBool *aIsPending)
+nsWyciwygChannel::IsPending(bool *aIsPending)
 {
   *aIsPending = mIsPending;
   return NS_OK;
@@ -232,14 +196,14 @@ nsWyciwygChannel::SetLoadGroup(nsILoadGroup* aLoadGroup)
 }
 
 NS_IMETHODIMP
-nsWyciwygChannel::SetLoadFlags(PRUint32 aLoadFlags)
+nsWyciwygChannel::SetLoadFlags(uint32_t aLoadFlags)
 {
   mLoadFlags = aLoadFlags;
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsWyciwygChannel::GetLoadFlags(PRUint32 * aLoadFlags)
+nsWyciwygChannel::GetLoadFlags(uint32_t * aLoadFlags)
 {
   *aLoadFlags = mLoadFlags;
   return NS_OK;
@@ -306,6 +270,7 @@ nsWyciwygChannel::SetNotificationCallbacks(nsIInterfaceRequestor* aNotificationC
                                 mLoadGroup,
                                 NS_GET_IID(nsIProgressEventSink),
                                 getter_AddRefs(mProgressSink));
+
   return NS_OK;
 }
 
@@ -344,14 +309,32 @@ nsWyciwygChannel::SetContentCharset(const nsACString &aContentCharset)
 }
 
 NS_IMETHODIMP
-nsWyciwygChannel::GetContentLength(PRInt32 *aContentLength)
+nsWyciwygChannel::GetContentDisposition(uint32_t *aContentDisposition)
+{
+  return NS_ERROR_NOT_AVAILABLE;
+}
+
+NS_IMETHODIMP
+nsWyciwygChannel::GetContentDispositionFilename(nsAString &aContentDispositionFilename)
+{
+  return NS_ERROR_NOT_AVAILABLE;
+}
+
+NS_IMETHODIMP
+nsWyciwygChannel::GetContentDispositionHeader(nsACString &aContentDispositionHeader)
+{
+  return NS_ERROR_NOT_AVAILABLE;
+}
+
+NS_IMETHODIMP
+nsWyciwygChannel::GetContentLength(int32_t *aContentLength)
 {
   *aContentLength = mContentLength;
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsWyciwygChannel::SetContentLength(PRInt32 aContentLength)
+nsWyciwygChannel::SetContentLength(int32_t aContentLength)
 {
   mContentLength = aContentLength;
 
@@ -389,12 +372,12 @@ nsWyciwygChannel::AsyncOpen(nsIStreamListener *listener, nsISupports *ctx)
     return rv;
   }
 
-  mIsPending = PR_TRUE;
+  mIsPending = true;
   mListener = listener;
   mListenerContext = ctx;
 
   if (mLoadGroup)
-    mLoadGroup->AddRequest(this, nsnull);
+    mLoadGroup->AddRequest(this, nullptr);
 
   return NS_OK;
 }
@@ -428,16 +411,21 @@ nsWyciwygChannel::WriteToCacheEntryInternal(const nsAString &aData, const nsACSt
     if (NS_FAILED(rv)) return rv;
   }
 
+  if (mLoadFlags & INHIBIT_PERSISTENT_CACHING) {
+    rv = mCacheEntry->SetMetaDataElement("inhibit-persistent-caching", "1");
+    if (NS_FAILED(rv)) return rv;
+  }
+
   if (mSecurityInfo) {
     mCacheEntry->SetSecurityInfo(mSecurityInfo);
   }
 
   if (mNeedToWriteCharset) {
     WriteCharsetAndSourceToCache(mCharsetSource, mCharset);
-    mNeedToWriteCharset = PR_FALSE;
+    mNeedToWriteCharset = false;
   }
   
-  PRUint32 out;
+  uint32_t out;
   if (!mCacheOutputStream) {
     // Get the outputstream from the cache entry.
     rv = mCacheEntry->OpenOutputStream(0, getter_AddRefs(mCacheOutputStream));    
@@ -489,12 +477,12 @@ nsWyciwygChannel::SetSecurityInfo(nsISupports *aSecurityInfo)
 }
 
 NS_IMETHODIMP
-nsWyciwygChannel::SetCharsetAndSource(PRInt32 aSource,
+nsWyciwygChannel::SetCharsetAndSource(int32_t aSource,
                                       const nsACString& aCharset)
 {
   NS_ENSURE_ARG(!aCharset.IsEmpty());
 
-  mCharsetAndSourceSet = PR_TRUE;
+  mCharsetAndSourceSet = true;
   mCharset = aCharset;
   mCharsetSource = aSource;
 
@@ -510,12 +498,12 @@ nsWyciwygChannel::SetCharsetAndSourceInternal()
   if (mCacheEntry) {
     WriteCharsetAndSourceToCache(mCharsetSource, mCharset);
   } else {
-    mNeedToWriteCharset = PR_TRUE;
+    mNeedToWriteCharset = true;
   }
 }
 
 NS_IMETHODIMP
-nsWyciwygChannel::GetCharsetAndSource(PRInt32* aSource, nsACString& aCharset)
+nsWyciwygChannel::GetCharsetAndSource(int32_t* aSource, nsACString& aCharset)
 {
   if (mCharsetAndSourceSet) {
     *aSource = mCharsetSource;
@@ -537,9 +525,8 @@ nsWyciwygChannel::GetCharsetAndSource(PRInt32* aSource, nsACString& aCharset)
   nsXPIDLCString sourceStr;
   mCacheEntry->GetMetaDataElement("charset-source", getter_Copies(sourceStr));
 
-  PRInt32 source;
-  // XXXbz ToInteger takes an PRInt32* but outputs an nsresult in it... :(
-  PRInt32 err;
+  int32_t source;
+  nsresult err;
   source = sourceStr.ToInteger(&err);
   if (NS_FAILED(err) || source == 0) {
     return NS_ERROR_NOT_AVAILABLE;
@@ -589,6 +576,12 @@ nsWyciwygChannel::OnCacheEntryAvailable(nsICacheEntryDescriptor * aCacheEntry, n
   return NS_OK;
 }
 
+NS_IMETHODIMP
+nsWyciwygChannel::OnCacheEntryDoomed(nsresult status)
+{
+    return NS_ERROR_NOT_IMPLEMENTED;
+}
+
 //-----------------------------------------------------------------------------
 // nsWyciwygChannel::nsIStreamListener
 //-----------------------------------------------------------------------------
@@ -596,7 +589,7 @@ nsWyciwygChannel::OnCacheEntryAvailable(nsICacheEntryDescriptor * aCacheEntry, n
 NS_IMETHODIMP
 nsWyciwygChannel::OnDataAvailable(nsIRequest *request, nsISupports *ctx,
                                   nsIInputStream *input,
-                                  PRUint32 offset, PRUint32 count)
+                                  uint32_t offset, uint32_t count)
 {
   LOG(("nsWyciwygChannel::OnDataAvailable [this=%x request=%x offset=%u count=%u]\n",
       this, request, offset, count));
@@ -607,8 +600,8 @@ nsWyciwygChannel::OnDataAvailable(nsIRequest *request, nsISupports *ctx,
 
   // XXX handle 64-bit stuff for real
   if (mProgressSink && NS_SUCCEEDED(rv) && !(mLoadFlags & LOAD_BACKGROUND))
-    mProgressSink->OnProgress(this, nsnull, PRUint64(offset + count),
-                              PRUint64(mContentLength));
+    mProgressSink->OnProgress(this, nullptr, uint64_t(offset + count),
+                              uint64_t(mContentLength));
 
   return rv; // let the pump cancel on failure
 }
@@ -641,11 +634,11 @@ nsWyciwygChannel::OnStopRequest(nsIRequest *request, nsISupports *ctx, nsresult 
   mListenerContext = 0;
 
   if (mLoadGroup)
-    mLoadGroup->RemoveRequest(this, nsnull, mStatus);
+    mLoadGroup->RemoveRequest(this, nullptr, mStatus);
 
   CloseCacheEntry(mStatus);
   mPump = 0;
-  mIsPending = PR_FALSE;
+  mIsPending = false;
 
   // Drop notification callbacks to prevent cycles.
   mCallbacks = 0;
@@ -677,16 +670,16 @@ nsWyciwygChannel::OpenCacheEntry(const nsACString & aCacheKey,
 
   nsCOMPtr<nsICacheSession> cacheSession;
   // Open a stream based cache session.
-  rv = cacheService->CreateSession("wyciwyg", storagePolicy, PR_TRUE,
+  rv = cacheService->CreateSession("wyciwyg", storagePolicy, true,
                                    getter_AddRefs(cacheSession));
   if (!cacheSession) 
     return NS_ERROR_FAILURE;
 
   if (aAccessMode == nsICache::ACCESS_WRITE)
-    rv = cacheSession->OpenCacheEntry(aCacheKey, aAccessMode, PR_FALSE,
+    rv = cacheSession->OpenCacheEntry(aCacheKey, aAccessMode, false,
                                       getter_AddRefs(mCacheEntry));
   else
-    rv = cacheSession->AsyncOpenCacheEntry(aCacheKey, aAccessMode, this);
+    rv = cacheSession->AsyncOpenCacheEntry(aCacheKey, aAccessMode, this, false);
 
   return rv;
 }
@@ -702,6 +695,12 @@ nsWyciwygChannel::ReadFromCache()
   // Get the stored security info
   mCacheEntry->GetSecurityInfo(getter_AddRefs(mSecurityInfo));
 
+  nsCAutoString tmpStr;
+  rv = mCacheEntry->GetMetaDataElement("inhibit-persistent-caching",
+                                       getter_Copies(tmpStr));
+  if (NS_SUCCEEDED(rv) && tmpStr == NS_LITERAL_CSTRING("1"))
+    mLoadFlags |= INHIBIT_PERSISTENT_CACHING;
+
   // Get a transport to the cached data...
   rv = mCacheEntry->OpenInputStream(0, getter_AddRefs(mCacheInputStream));
   if (NS_FAILED(rv))
@@ -712,11 +711,11 @@ nsWyciwygChannel::ReadFromCache()
   if (NS_FAILED(rv)) return rv;
 
   // Pump the cache data downstream
-  return mPump->AsyncRead(this, nsnull);
+  return mPump->AsyncRead(this, nullptr);
 }
 
 void
-nsWyciwygChannel::WriteCharsetAndSourceToCache(PRInt32 aSource,
+nsWyciwygChannel::WriteCharsetAndSourceToCache(int32_t aSource,
                                                const nsCString& aCharset)
 {
   NS_ASSERTION(IsOnCacheIOThread(), "wrong thread");
@@ -739,18 +738,18 @@ nsWyciwygChannel::NotifyListener()
     mListenerContext = 0;
   }
 
-  mIsPending = PR_FALSE;
+  mIsPending = false;
 
   // Remove ourselves from the load group.
   if (mLoadGroup) {
-    mLoadGroup->RemoveRequest(this, nsnull, mStatus);
+    mLoadGroup->RemoveRequest(this, nullptr, mStatus);
   }
 }
 
-PRBool
+bool
 nsWyciwygChannel::IsOnCacheIOThread()
 {
-  PRBool correctThread;
+  bool correctThread;
   mCacheIOTarget->IsOnCurrentThread(&correctThread);
   return correctThread;
 }

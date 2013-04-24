@@ -1,46 +1,20 @@
 /* -*- Mode: C++; tab-width: 20; indent-tabs-mode: nil; c-basic-offset: 4 -*-
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Oracle Corporation code.
- *
- * The Initial Developer of the Original Code is Oracle Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Stuart Parmenter <pavlov@pavlov.net>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef GFX_ASURFACE_H
 #define GFX_ASURFACE_H
 
+#ifdef MOZ_DUMP_PAINTING
+ #define MOZ_DUMP_IMAGES
+#endif
+
 #include "gfxTypes.h"
 #include "gfxRect.h"
 #include "nsAutoPtr.h"
+#include "nsAutoRef.h"
+#include "nsThreadUtils.h"
 
 typedef struct _cairo_surface cairo_surface_t;
 typedef struct _cairo_user_data_key cairo_user_data_key_t;
@@ -57,8 +31,23 @@ struct nsIntRect;
  */
 class THEBES_API gfxASurface {
 public:
+#ifdef MOZILLA_INTERNAL_API
     nsrefcnt AddRef(void);
     nsrefcnt Release(void);
+
+    // These functions exist so that browsercomps can refcount a gfxASurface
+    virtual nsrefcnt AddRefExternal(void)
+    {
+      return AddRef();
+    }
+    virtual nsrefcnt ReleaseExternal(void)
+    {
+      return Release();
+    }
+#else
+    virtual nsrefcnt AddRef(void);
+    virtual nsrefcnt Release(void);
+#endif
 
 public:
     /**
@@ -80,11 +69,11 @@ public:
         SurfaceTypePS,
         SurfaceTypeXlib,
         SurfaceTypeXcb,
-        SurfaceTypeGlitz,
+        SurfaceTypeGlitz,           // unused, but needed for cairo parity
         SurfaceTypeQuartz,
         SurfaceTypeWin32,
         SurfaceTypeBeOS,
-        SurfaceTypeDirectFB,
+        SurfaceTypeDirectFB,        // unused, but needed for cairo parity
         SurfaceTypeSVG,
         SurfaceTypeOS2,
         SurfaceTypeWin32Printing,
@@ -106,7 +95,8 @@ public:
     typedef enum {
         CONTENT_COLOR       = 0x1000,
         CONTENT_ALPHA       = 0x2000,
-        CONTENT_COLOR_ALPHA = 0x3000
+        CONTENT_COLOR_ALPHA = 0x3000,
+        CONTENT_SENTINEL    = 0xffff
     } gfxContentType;
 
     /** Wrap the given cairo surface and return a gfxASurface for it.
@@ -116,7 +106,7 @@ public:
 
     /*** this DOES NOT addref the surface */
     cairo_surface_t *CairoSurface() {
-        NS_ASSERTION(mSurface != nsnull, "gfxASurface::CairoSurface called with mSurface == nsnull!");
+        NS_ASSERTION(mSurface != nullptr, "gfxASurface::CairoSurface called with mSurface == nullptr!");
         return mSurface;
     }
 
@@ -127,7 +117,7 @@ public:
     void SetDeviceOffset(const gfxPoint& offset);
     gfxPoint GetDeviceOffset() const;
 
-    virtual PRBool GetRotateForLandscape() { return PR_FALSE; }
+    virtual bool GetRotateForLandscape() { return false; }
 
     void Flush() const;
     void MarkDirty();
@@ -156,13 +146,13 @@ public:
                                                                const gfxIntSize& aSize);
 
     /**
-     * Returns an image surface for this surface, or nsnull if not supported.
+     * Returns an image surface for this surface, or nullptr if not supported.
      * This will not copy image data, just wraps an image surface around
      * pixel data already available in memory.
      */
     virtual already_AddRefed<gfxImageSurface> GetAsImageSurface()
     {
-      return nsnull;
+      return nullptr;
     }
 
     int CairoStatus();
@@ -171,31 +161,30 @@ public:
      * using 4 bytes per pixel; optionally, make sure that either dimension
      * doesn't exceed the given limit.
      */
-    static PRBool CheckSurfaceSize(const gfxIntSize& sz, PRInt32 limit = 0);
+    static bool CheckSurfaceSize(const gfxIntSize& sz, int32_t limit = 0);
 
     /* Provide a stride value that will respect all alignment requirements of
      * the accelerated image-rendering code.
      */
-    static PRInt32 FormatStrideForWidth(gfxImageFormat format, PRInt32 width);
+    static int32_t FormatStrideForWidth(gfxImageFormat format, int32_t width);
 
     /* Return the default set of context flags for this surface; these are
      * hints to the context about any special rendering considerations.  See
      * gfxContext::SetFlag for documentation.
      */
-    virtual PRInt32 GetDefaultContextFlags() const { return 0; }
+    virtual int32_t GetDefaultContextFlags() const { return 0; }
 
     static gfxContentType ContentFromFormat(gfxImageFormat format);
-    static gfxImageFormat FormatFromContent(gfxContentType format);
 
-    void SetSubpixelAntialiasingEnabled(PRBool aEnabled);
-    PRBool GetSubpixelAntialiasingEnabled();
+    void SetSubpixelAntialiasingEnabled(bool aEnabled);
+    bool GetSubpixelAntialiasingEnabled();
 
     /**
      * Record number of bytes for given surface type.  Use positive bytes
      * for allocations and negative bytes for deallocations.
      */
     static void RecordMemoryUsedForSurfaceType(gfxASurface::gfxSurfaceType aType,
-                                               PRInt32 aBytes);
+                                               int32_t aBytes);
 
     /**
      * Same as above, but use current surface type as returned by GetType().
@@ -203,10 +192,10 @@ public:
      * in which case the value that was recorded for this surface will
      * be freed.
      */
-    void RecordMemoryUsed(PRInt32 aBytes);
+    void RecordMemoryUsed(int32_t aBytes);
     void RecordMemoryFreed();
 
-    virtual PRInt32 KnownMemoryUsed() { return mBytesRecorded; }
+    virtual int32_t KnownMemoryUsed() { return mBytesRecorded; }
 
     /**
      * The memory used by this surface (as reported by KnownMemoryUsed()) can
@@ -225,15 +214,41 @@ public:
      */
     virtual MemoryLocation GetMemoryLocation() const;
 
-    static PRInt32 BytePerPixelFromFormat(gfxImageFormat format);
+    static int32_t BytePerPixelFromFormat(gfxImageFormat format);
 
     virtual const gfxIntSize GetSize() const { return gfxIntSize(-1, -1); }
 
-    void DumpAsDataURL();
+#ifdef MOZ_DUMP_IMAGES
+    /**
+     * Debug functions to encode the current image as a PNG and export it.
+     */
+
+    /**
+     * Writes a binary PNG file.
+     */
+    void WriteAsPNG(const char* aFile);
+
+    /**
+     * Write as a PNG encoded Data URL to a file.
+     */
+    void DumpAsDataURL(FILE* aOutput = stdout);
+
+    /**
+     * Write as a PNG encoded Data URL to stdout.
+     */
+    void PrintAsDataURL();
+
+    /**
+     * Copy a PNG encoded Data URL to the clipboard.
+     */
+    void CopyAsDataURL();
+    
+    void WriteAsPNG_internal(FILE* aFile, bool aBinary);
+#endif
 
     void SetOpaqueRect(const gfxRect& aRect) {
         if (aRect.IsEmpty()) {
-            mOpaqueRect = nsnull;
+            mOpaqueRect = nullptr;
         } else if (mOpaqueRect) {
             *mOpaqueRect = aRect;
         } else {
@@ -263,12 +278,12 @@ public:
     /**
      * Mark the surface as being allowed/not allowed to be used as a source.
      */
-    void SetAllowUseAsSource(PRBool aAllow) { mAllowUseAsSource = aAllow; }
-    PRBool GetAllowUseAsSource() { return mAllowUseAsSource; }
+    void SetAllowUseAsSource(bool aAllow) { mAllowUseAsSource = aAllow; }
+    bool GetAllowUseAsSource() { return mAllowUseAsSource; }
 
 protected:
-    gfxASurface() : mSurface(nsnull), mFloatingRefs(0), mBytesRecorded(0),
-                    mSurfaceValid(PR_FALSE), mAllowUseAsSource(PR_TRUE)
+    gfxASurface() : mSurface(nullptr), mFloatingRefs(0), mBytesRecorded(0),
+                    mSurfaceValid(false), mAllowUseAsSource(true)
     {
         MOZ_COUNT_CTOR(gfxASurface);
     }
@@ -287,7 +302,7 @@ protected:
     // NB: Init() *must* be called from within subclass's
     // constructors.  It's unsafe to call it after the ctor finishes;
     // leaks and use-after-frees are possible.
-    void Init(cairo_surface_t *surface, PRBool existingSurface = PR_FALSE);
+    void Init(cairo_surface_t *surface, bool existingSurface = false);
 
     virtual ~gfxASurface()
     {
@@ -302,12 +317,12 @@ protected:
 private:
     static void SurfaceDestroyFunc(void *data);
 
-    PRInt32 mFloatingRefs;
-    PRInt32 mBytesRecorded;
+    int32_t mFloatingRefs;
+    int32_t mBytesRecorded;
 
 protected:
-    PRPackedBool mSurfaceValid;
-    PRPackedBool mAllowUseAsSource;
+    bool mSurfaceValid;
+    bool mAllowUseAsSource;
 };
 
 /**
@@ -316,10 +331,62 @@ protected:
 class THEBES_API gfxUnknownSurface : public gfxASurface {
 public:
     gfxUnknownSurface(cairo_surface_t *surf) {
-        Init(surf, PR_TRUE);
+        Init(surf, true);
     }
 
     virtual ~gfxUnknownSurface() { }
 };
 
+#ifndef XPCOM_GLUE_AVOID_NSPR
+/**
+ * We need to be able to hold a reference to a gfxASurface from Image
+ * subclasses. This is potentially a problem since Images can be addrefed
+ * or released off the main thread. We can ensure that we never AddRef
+ * a gfxASurface off the main thread, but we might want to Release due
+ * to an Image being destroyed off the main thread.
+ * 
+ * We use nsCountedRef<nsMainThreadSurfaceRef> to reference the
+ * gfxASurface. When AddRefing, we assert that we're on the main thread.
+ * When Releasing, if we're not on the main thread, we post an event to
+ * the main thread to do the actual release.
+ */
+class nsMainThreadSurfaceRef;
+
+template <>
+class nsAutoRefTraits<nsMainThreadSurfaceRef> {
+public:
+  typedef gfxASurface* RawRef;
+
+  /**
+   * The XPCOM event that will do the actual release on the main thread.
+   */
+  class SurfaceReleaser : public nsRunnable {
+  public:
+    SurfaceReleaser(RawRef aRef) : mRef(aRef) {}
+    NS_IMETHOD Run() {
+      mRef->Release();
+      return NS_OK;
+    }
+    RawRef mRef;
+  };
+
+  static RawRef Void() { return nullptr; }
+  static void Release(RawRef aRawRef)
+  {
+    if (NS_IsMainThread()) {
+      aRawRef->Release();
+      return;
+    }
+    nsCOMPtr<nsIRunnable> runnable = new SurfaceReleaser(aRawRef);
+    NS_DispatchToMainThread(runnable);
+  }
+  static void AddRef(RawRef aRawRef)
+  {
+    NS_ASSERTION(NS_IsMainThread(),
+                 "Can only add a reference on the main thread");
+    aRawRef->AddRef();
+  }
+};
+
+#endif
 #endif /* GFX_ASURFACE_H */

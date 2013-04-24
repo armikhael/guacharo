@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *   Joshua Cranmer <Pidgeot18@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"    // precompiled header...
 #include "nsISupportsObsolete.h"
@@ -63,12 +29,12 @@
 
 nsNntpUrl::nsNntpUrl()
 {
-  m_newsgroupPost = nsnull;
+  m_newsgroupPost = nullptr;
   m_newsAction = nsINntpUrl::ActionUnknown;
-  m_addDummyEnvelope = PR_FALSE;
-  m_canonicalLineEnding = PR_FALSE;
-  m_filePath = nsnull;
-  m_getOldMessages = PR_FALSE;
+  m_addDummyEnvelope = false;
+  m_canonicalLineEnding = false;
+  m_filePath = nullptr;
+  m_getOldMessages = false;
   m_key = nsMsgKey_None;
 }
 
@@ -112,10 +78,10 @@ NS_IMETHODIMP nsNntpUrl::SetSpec(const nsACString &aSpec)
   // For [s]news: URIs, we need to munge the spec if it is no authority, because
   // the URI parser guesses the wrong thing otherwise
   nsCString parseSpec(aSpec);
-  PRInt32 colon = parseSpec.Find(":");
+  int32_t colon = parseSpec.Find(":");
 
   // Our smallest scheme is 4 characters long, so colon must be at least 4
-  if (colon < 4 || colon + 1 == (PRInt32) parseSpec.Length())
+  if (colon < 4 || colon + 1 == (int32_t) parseSpec.Length())
     return NS_ERROR_MALFORMED_URI;
 
   if (Substring(parseSpec, colon - 4, 4).EqualsLiteral("news") &&
@@ -174,8 +140,8 @@ nsresult nsNntpUrl::ParseNewsURL()
     // Set group, key for ?group=foo&key=123 uris
     nsCAutoString spec;
     GetSpec(spec);
-    PRInt32 groupPos = spec.Find(kNewsURIGroupQuery); // find ?group=
-    PRInt32 keyPos   = spec.Find(kNewsURIKeyQuery);   // find &key=
+    int32_t groupPos = spec.Find(kNewsURIGroupQuery); // find ?group=
+    int32_t keyPos   = spec.Find(kNewsURIKeyQuery);   // find &key=
     if (groupPos != kNotFound && keyPos != kNotFound)
     {
       // get group name and message key
@@ -204,7 +170,7 @@ nsresult nsNntpUrl::ParseNntpURL()
   if (path.IsEmpty())
     return NS_ERROR_MALFORMED_URI;
 
-  PRInt32 slash = path.FindChar('/');
+  int32_t slash = path.FindChar('/');
   if (slash == -1)
   {
     m_group = path;
@@ -289,13 +255,13 @@ nsresult nsNntpUrl::DetermineNewsAction()
   return NS_OK;
 }
 
-NS_IMETHODIMP nsNntpUrl::SetGetOldMessages(PRBool aGetOldMessages)
+NS_IMETHODIMP nsNntpUrl::SetGetOldMessages(bool aGetOldMessages)
 {
   m_getOldMessages = aGetOldMessages;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsNntpUrl::GetGetOldMessages(PRBool * aGetOldMessages)
+NS_IMETHODIMP nsNntpUrl::GetGetOldMessages(bool * aGetOldMessages)
 {
   NS_ENSURE_ARG(aGetOldMessages);
   *aGetOldMessages = m_getOldMessages;
@@ -328,7 +294,7 @@ NS_IMETHODIMP nsNntpUrl::GetMessageID(nsACString &messageID)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsNntpUrl::GetKey(PRUint32 *key)
+NS_IMETHODIMP nsNntpUrl::GetKey(uint32_t *key)
 {
   NS_ENSURE_ARG_POINTER(key);
   *key = m_key;
@@ -361,8 +327,8 @@ NS_IMETHODIMP nsNntpUrl::GetUri(char ** aURI)
 }
 
 
-NS_IMPL_GETSET(nsNntpUrl, AddDummyEnvelope, PRBool, m_addDummyEnvelope)
-NS_IMPL_GETSET(nsNntpUrl, CanonicalLineEnding, PRBool, m_canonicalLineEnding)
+NS_IMPL_GETSET(nsNntpUrl, AddDummyEnvelope, bool, m_addDummyEnvelope)
+NS_IMPL_GETSET(nsNntpUrl, CanonicalLineEnding, bool, m_canonicalLineEnding)
 
 NS_IMETHODIMP nsNntpUrl::SetMessageFile(nsIFile * aFile)
 {
@@ -396,6 +362,11 @@ nsresult nsNntpUrl::GetMessageToPost(nsINNTPNewsgroupPost **aPost)
   return NS_OK;
 }
 
+NS_IMETHODIMP nsNntpUrl::SetMessageHeader(nsIMsgDBHdr *aMsgHdr)
+{
+  return NS_ERROR_NOT_IMPLEMENTED;
+}
+
 NS_IMETHODIMP nsNntpUrl::GetMessageHeader(nsIMsgDBHdr ** aMsgHdr)
 {
   nsresult rv;
@@ -416,7 +387,7 @@ NS_IMETHODIMP nsNntpUrl::GetMessageHeader(nsIMsgDBHdr ** aMsgHdr)
   return msgService->MessageURIToMsgHdr(spec.get(), aMsgHdr);
 }
 
-NS_IMETHODIMP nsNntpUrl::IsUrlType(PRUint32 type, PRBool *isType)
+NS_IMETHODIMP nsNntpUrl::IsUrlType(uint32_t type, bool *isType)
 {
   NS_ENSURE_ARG(isType);
 
@@ -426,7 +397,7 @@ NS_IMETHODIMP nsNntpUrl::IsUrlType(PRUint32 type, PRBool *isType)
       *isType = (m_newsAction == nsINntpUrl::ActionFetchArticle);
       break;
     default:
-      *isType = PR_FALSE;
+      *isType = false;
   };
 
   return NS_OK;
@@ -464,7 +435,7 @@ nsNntpUrl::GetServer(nsIMsgIncomingServer **aServer)
   // No authority -> no server
   if (host.IsEmpty())
   {
-    *aServer = nsnull;
+    *aServer = nullptr;
     return NS_OK;
   }
 
@@ -473,10 +444,10 @@ nsNntpUrl::GetServer(nsIMsgIncomingServer **aServer)
   // attribute. nntp is never used internally, so it probably refers to the real
   // one. news is used both internally and externally, so it could refer to
   // either one. We'll assume it's an internal one first, though.
-  PRBool isNews = scheme.EqualsLiteral("news") || scheme.EqualsLiteral("snews");
-  PRBool isNntp = scheme.EqualsLiteral("nntp") || scheme.EqualsLiteral("nntps");
+  bool isNews = scheme.EqualsLiteral("news") || scheme.EqualsLiteral("snews");
+  bool isNntp = scheme.EqualsLiteral("nntp") || scheme.EqualsLiteral("nntps");
   
-  PRBool tryReal = isNntp;
+  bool tryReal = isNntp;
 
   nsCOMPtr<nsIMsgAccountManager> accountManager = 
     do_GetService(NS_MSGACCOUNTMANAGER_CONTRACTID, &rv);
@@ -485,7 +456,7 @@ nsNntpUrl::GetServer(nsIMsgIncomingServer **aServer)
   // Ignoring return results: it is perfectly acceptable for the server to not
   // exist, but FindServer (and not FindRealServer) throws NS_ERROR_UNEXPECTED
   // in this case.
-  *aServer = nsnull;
+  *aServer = nullptr;
   if (tryReal)
     accountManager->FindRealServer(user, host, NS_LITERAL_CSTRING("nntp"), 0,
       aServer);
@@ -517,7 +488,7 @@ NS_IMETHODIMP nsNntpUrl::GetFolder(nsIMsgFolder **msgFolder)
   // Need a server and a group to get the folder
   if (!server || m_group.IsEmpty())
   {
-    *msgFolder = nsnull;
+    *msgFolder = nullptr;
     return NS_OK;
   }
 
@@ -525,13 +496,13 @@ NS_IMETHODIMP nsNntpUrl::GetFolder(nsIMsgFolder **msgFolder)
   nsCOMPtr<nsINntpIncomingServer> nntpServer = do_QueryInterface(server, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool hasGroup = PR_FALSE;
+  bool hasGroup = false;
   rv = nntpServer->ContainsNewsgroup(m_group, &hasGroup);
   NS_ENSURE_SUCCESS(rv, rv);
 
   if (!hasGroup)
   {
-    *msgFolder = nsnull;
+    *msgFolder = nullptr;
     return NS_OK;
   }
 
@@ -557,7 +528,7 @@ nsNntpUrl::GetFolderCharset(char **aCharacterSet)
   return rv;
 }
 
-NS_IMETHODIMP nsNntpUrl::GetFolderCharsetOverride(PRBool * aCharacterSetOverride)
+NS_IMETHODIMP nsNntpUrl::GetFolderCharsetOverride(bool * aCharacterSetOverride)
 {
   nsCOMPtr<nsIMsgFolder> folder;
   nsresult rv = GetFolder(getter_AddRefs(folder));
@@ -573,7 +544,7 @@ NS_IMETHODIMP nsNntpUrl::GetCharsetOverRide(char ** aCharacterSet)
   if (!mCharsetOverride.IsEmpty())
     *aCharacterSet = ToNewCString(mCharsetOverride);
   else
-    *aCharacterSet = nsnull;
+    *aCharacterSet = nullptr;
   return NS_OK;
 }
 

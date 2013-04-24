@@ -1,40 +1,9 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Mozilla GNOME integration code.
- *
- * The Initial Developer of the Original Code is
- * Canonical Ltd.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Chris Coulson <chris.coulson@canonical.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "mozilla/Util.h"
 
 #include "nsGSettingsService.h"
 #include "nsStringAPI.h"
@@ -42,9 +11,13 @@
 #include "nsMemory.h"
 #include "prlink.h"
 #include "nsComponentManagerUtils.h"
+#include "nsIMutableArray.h"
+#include "nsISupportsPrimitives.h"
 
 #include <glib.h>
 #include <glib-object.h>
+
+using namespace mozilla;
 
 typedef struct _GSettings GSettings;
 typedef struct _GVariantType GVariantType;
@@ -57,6 +30,9 @@ typedef struct _GVariant GVariant;
 # define G_VARIANT_TYPE_OBJECT_PATH  ((const GVariantType *) "o")
 # define G_VARIANT_TYPE_SIGNATURE    ((const GVariantType *) "g")
 #endif
+#ifndef G_VARIANT_TYPE_STRING_ARRAY
+# define G_VARIANT_TYPE_STRING_ARRAY ((const GVariantType *) "as")
+#endif
 
 #define GSETTINGS_FUNCTIONS \
   FUNC(g_settings_new, GSettings *, (const char* schema)) \
@@ -68,6 +44,7 @@ typedef struct _GVariant GVariant;
   FUNC(g_variant_get_int32, gint32, (GVariant* variant)) \
   FUNC(g_variant_get_boolean, gboolean, (GVariant* variant)) \
   FUNC(g_variant_get_string, const char *, (GVariant* value, gsize* length)) \
+  FUNC(g_variant_get_strv, const char **, (GVariant* value, gsize* length)) \
   FUNC(g_variant_is_of_type, gboolean, (GVariant* value, const GVariantType* type)) \
   FUNC(g_variant_new_int32, GVariant *, (gint32 value)) \
   FUNC(g_variant_new_boolean, GVariant *, (gboolean value)) \
@@ -91,13 +68,14 @@ GSETTINGS_FUNCTIONS
 #define g_variant_get_int32 _g_variant_get_int32
 #define g_variant_get_boolean _g_variant_get_boolean
 #define g_variant_get_string _g_variant_get_string
+#define g_variant_get_strv _g_variant_get_strv
 #define g_variant_is_of_type _g_variant_is_of_type
 #define g_variant_new_int32 _g_variant_new_int32
 #define g_variant_new_boolean _g_variant_new_boolean
 #define g_variant_new_string _g_variant_new_string
 #define g_variant_unref _g_variant_unref
 
-static PRLibrary *gioLib = nsnull;
+static PRLibrary *gioLib = nullptr;
 
 class nsGSettingsCollection : public nsIGSettingsCollection
 {
@@ -110,8 +88,8 @@ public:
   ~nsGSettingsCollection();
 
 private:
-  PRBool KeyExists(const nsACString& aKey);
-  PRBool SetValue(const nsACString& aKey,
+  bool KeyExists(const nsACString& aKey);
+  bool SetValue(const nsACString& aKey,
                   GVariant *aValue);
 
   GSettings *mSettings;
@@ -124,21 +102,21 @@ nsGSettingsCollection::~nsGSettingsCollection()
   g_object_unref(mSettings);
 }
 
-PRBool
+bool
 nsGSettingsCollection::KeyExists(const nsACString& aKey)
 {
   if (!mKeys)
     mKeys = g_settings_list_keys(mSettings);
 
-  for (PRUint32 i = 0; mKeys[i] != NULL; i++) {
+  for (uint32_t i = 0; mKeys[i] != NULL; i++) {
     if (aKey.Equals(mKeys[i]))
-      return PR_TRUE;
+      return true;
   }
 
-  return PR_FALSE;
+  return false;
 }
 
-PRBool
+bool
 nsGSettingsCollection::SetValue(const nsACString& aKey,
                                 GVariant *aValue)
 {
@@ -147,7 +125,7 @@ nsGSettingsCollection::SetValue(const nsACString& aKey,
                               PromiseFlatCString(aKey).get(),
                               aValue)) {
     g_variant_unref(aValue);
-    return PR_FALSE;
+    return false;
   }
 
   return g_settings_set_value(mSettings,
@@ -165,33 +143,33 @@ nsGSettingsCollection::SetString(const nsACString& aKey,
   if (!value)
     return NS_ERROR_OUT_OF_MEMORY;
 
-  PRBool res = SetValue(aKey, value);
+  bool res = SetValue(aKey, value);
 
   return res ? NS_OK : NS_ERROR_FAILURE;
 }
 
 NS_IMETHODIMP
 nsGSettingsCollection::SetBoolean(const nsACString& aKey,
-                                  PRBool aValue)
+                                  bool aValue)
 {
   GVariant *value = g_variant_new_boolean(aValue);
   if (!value)
     return NS_ERROR_OUT_OF_MEMORY;
 
-  PRBool res = SetValue(aKey, value);
+  bool res = SetValue(aKey, value);
 
   return res ? NS_OK : NS_ERROR_FAILURE;
 }
 
 NS_IMETHODIMP
 nsGSettingsCollection::SetInt(const nsACString& aKey,
-                              PRInt32 aValue)
+                              int32_t aValue)
 {
   GVariant *value = g_variant_new_int32(aValue);
   if (!value)
     return NS_ERROR_OUT_OF_MEMORY;
 
-  PRBool res = SetValue(aKey, value);
+  bool res = SetValue(aKey, value);
 
   return res ? NS_OK : NS_ERROR_FAILURE;
 }
@@ -220,7 +198,7 @@ nsGSettingsCollection::GetString(const nsACString& aKey,
 
 NS_IMETHODIMP
 nsGSettingsCollection::GetBoolean(const nsACString& aKey,
-                                  PRBool* aResult)
+                                  bool* aResult)
 {
   NS_ENSURE_ARG_POINTER(aResult);
 
@@ -235,7 +213,7 @@ nsGSettingsCollection::GetBoolean(const nsACString& aKey,
   }
 
   gboolean res = g_variant_get_boolean(value);
-  *aResult = res ? PR_TRUE : PR_FALSE;
+  *aResult = res ? true : false;
   g_variant_unref(value);
 
   return NS_OK;
@@ -243,7 +221,7 @@ nsGSettingsCollection::GetBoolean(const nsACString& aKey,
 
 NS_IMETHODIMP
 nsGSettingsCollection::GetInt(const nsACString& aKey,
-                              PRInt32* aResult)
+                              int32_t* aResult)
 {
   NS_ENSURE_ARG_POINTER(aResult);
 
@@ -263,15 +241,63 @@ nsGSettingsCollection::GetInt(const nsACString& aKey,
   return NS_OK;
 }
 
+// These types are local to nsGSettingsService::Init, but ISO C++98 doesn't
+// allow a template (ArrayLength) to be instantiated based on a local type.
+// Boo-urns!
+typedef void (*nsGSettingsFunc)();
+struct nsGSettingsDynamicFunction {
+  const char *functionName;
+  nsGSettingsFunc *function;
+};
+
+NS_IMETHODIMP
+nsGSettingsCollection::GetStringList(const nsACString& aKey, nsIArray** aResult)
+{
+  if (!KeyExists(aKey))
+    return NS_ERROR_INVALID_ARG;
+
+  nsCOMPtr<nsIMutableArray> items(do_CreateInstance(NS_ARRAY_CONTRACTID));
+  if (!items) {
+    return NS_ERROR_OUT_OF_MEMORY;
+  }
+
+  GVariant *value = g_settings_get_value(mSettings,
+                                         PromiseFlatCString(aKey).get());
+
+  if (!g_variant_is_of_type(value, G_VARIANT_TYPE_STRING_ARRAY)) {
+    g_variant_unref(value);
+    return NS_ERROR_FAILURE;
+  }
+
+  const gchar ** gs_strings = g_variant_get_strv(value, NULL);
+  if (!gs_strings) {
+    // empty array
+    NS_ADDREF(*aResult = items);
+    g_variant_unref(value);
+    return NS_OK;
+  }
+
+  const gchar** p_gs_strings = gs_strings;
+  while (*p_gs_strings != NULL)
+  {
+    nsCOMPtr<nsISupportsCString> obj(do_CreateInstance(NS_SUPPORTS_CSTRING_CONTRACTID));
+    if (obj) {
+      obj->SetData(nsDependentCString(*p_gs_strings));
+      items->AppendElement(obj, false);
+    }
+    p_gs_strings++;
+  }
+  g_free(gs_strings);
+  NS_ADDREF(*aResult = items);
+  g_variant_unref(value);
+  return NS_OK;
+}
+
 nsresult
 nsGSettingsService::Init()
 {
 #define FUNC(name, type, params) { #name, (nsGSettingsFunc *)&_##name },
-  typedef void (*nsGSettingsFunc)();
-  static const struct nsGSettingsDynamicFunction {
-    const char *functionName;
-    nsGSettingsFunc *function;
-  } kGSettingsSymbols[] = {
+  static const nsGSettingsDynamicFunction kGSettingsSymbols[] = {
     GSETTINGS_FUNCTIONS
   };
 #undef FUNC
@@ -282,7 +308,7 @@ nsGSettingsService::Init()
       return NS_ERROR_FAILURE;
   }
 
-  for (PRUint32 i = 0; i < NS_ARRAY_LENGTH(kGSettingsSymbols); i++) {
+  for (uint32_t i = 0; i < ArrayLength(kGSettingsSymbols); i++) {
     *kGSettingsSymbols[i].function =
       PR_FindFunctionSymbol(gioLib, kGSettingsSymbols[i].functionName);
     if (!*kGSettingsSymbols[i].function) {
@@ -300,7 +326,7 @@ nsGSettingsService::~nsGSettingsService()
 {
   if (gioLib) {
     PR_UnloadLibrary(gioLib);
-    gioLib = nsnull;
+    gioLib = nullptr;
   }
 }
 
@@ -312,7 +338,7 @@ nsGSettingsService::GetCollectionForSchema(const nsACString& schema,
 
   const char * const *schemas = g_settings_list_schemas();
 
-  for (PRUint32 i = 0; schemas[i] != NULL; i++) {
+  for (uint32_t i = 0; schemas[i] != NULL; i++) {
     if (schema.Equals(schemas[i])) {
       GSettings *settings = g_settings_new(PromiseFlatCString(schema).get());
       nsGSettingsCollection *mozGSettings = new nsGSettingsCollection(settings);

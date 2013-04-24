@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   David Bienvenu <bienvenu@mozilla.org>
- *   Siddharth Agarwal <sid1337@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"
 #include "nsMsgFolderNotificationService.h"
@@ -59,7 +25,7 @@ nsMsgFolderNotificationService::~nsMsgFolderNotificationService()
   /* destructor code */
 }
 
-NS_IMETHODIMP nsMsgFolderNotificationService::GetHasListeners(PRBool *aHasListeners)
+NS_IMETHODIMP nsMsgFolderNotificationService::GetHasListeners(bool *aHasListeners)
 {
   NS_ENSURE_ARG_POINTER(aHasListeners);
   *aHasListeners = mListeners.Length() > 0;
@@ -82,7 +48,7 @@ NS_IMETHODIMP nsMsgFolderNotificationService::RemoveListener(nsIMsgFolderListene
 {
   NS_ENSURE_ARG_POINTER(aListener);
 
-  PRInt32 index = mListeners.IndexOf(aListener);
+  int32_t index = mListeners.IndexOf(aListener);
   NS_ASSERTION(index != -1, "removing non-existent listener");
   if (index != -1)
     mListeners.RemoveElementAt(index);
@@ -109,7 +75,7 @@ NS_IMETHODIMP nsMsgFolderNotificationService::NotifyMsgAdded(nsIMsgDBHdr *aMsg)
 
 /* void notifyMsgsClassified (in  */
 NS_IMETHODIMP nsMsgFolderNotificationService::NotifyMsgsClassified(
-  nsIArray *aMsgs, PRBool aJunkProcessed, PRBool aTraitProcessed)
+  nsIArray *aMsgs, bool aJunkProcessed, bool aTraitProcessed)
 {
   NOTIFY_MSGFOLDER_LISTENERS(msgsClassified, MsgsClassified,
                              (aMsgs, aJunkProcessed, aTraitProcessed));
@@ -126,14 +92,14 @@ NS_IMETHODIMP nsMsgFolderNotificationService::NotifyMsgsDeleted(nsIArray *aMsgs)
 /* void notifyMsgsMoveCopyCompleted (in boolean aMove, in nsIArray aSrcMsgs,
                                      in nsIMsgFolder aDestFolder); */
 NS_IMETHODIMP nsMsgFolderNotificationService::NotifyMsgsMoveCopyCompleted(
-  PRBool aMove, nsIArray *aSrcMsgs, nsIMsgFolder *aDestFolder,
+  bool aMove, nsIArray *aSrcMsgs, nsIMsgFolder *aDestFolder,
   nsIArray *aDestMsgs)
 {
-  PRUint32 count = mListeners.Length();
+  uint32_t count = mListeners.Length();
   
   // IMAP delete model means that a "move" isn't really a move, it is a copy,
   // followed by storing the IMAP deleted flag on the message.
-  PRBool isReallyMove = aMove;
+  bool isReallyMove = aMove;
   if (count > 0 && aMove)
   {
     nsresult rv;
@@ -155,7 +121,7 @@ NS_IMETHODIMP nsMsgFolderNotificationService::NotifyMsgsMoveCopyCompleted(
         nsMsgImapDeleteModel deleteModel;
         imapServer->GetDeleteModel(&deleteModel);
         if (deleteModel == nsMsgImapDeleteModels::IMAPDelete)
-          isReallyMove = PR_FALSE;
+          isReallyMove = false;
       }
     }
   }
@@ -188,7 +154,7 @@ NS_IMETHODIMP nsMsgFolderNotificationService::NotifyFolderDeleted(nsIMsgFolder *
 }
 
 /* void notifyFolderMoveCopyCompleted(in boolean aMove, in nsIMsgFolder aSrcFolder, in nsIMsgFolder aDestFolder); */
-NS_IMETHODIMP nsMsgFolderNotificationService::NotifyFolderMoveCopyCompleted(PRBool aMove, nsIMsgFolder *aSrcFolder, nsIMsgFolder *aDestFolder)
+NS_IMETHODIMP nsMsgFolderNotificationService::NotifyFolderMoveCopyCompleted(bool aMove, nsIMsgFolder *aSrcFolder, nsIMsgFolder *aDestFolder)
 {
   NOTIFY_MSGFOLDER_LISTENERS(folderMoveCopyCompleted, FolderMoveCopyCompleted,
                              (aMove, aSrcFolder, aDestFolder));

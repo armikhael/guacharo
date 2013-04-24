@@ -1,38 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Mail Client.
- *
- * The Initial Developer of the Original Code is
- *   Thomas Schmid <schmid-thomas@gmx.net>
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var elib = {};
 Cu.import('resource://mozmill/modules/elementslib.js', elib);
@@ -44,7 +12,9 @@ Cu.import('resource://mozmill/modules/elementslib.js', elib);
 var MODULE_NAME = "test-tabmail-dragndrop";
 
 var RELATIVE_ROOT = "../shared-modules";
-var MODULE_REQUIRES = ["folder-display-helpers", "window-helpers"];
+var MODULE_REQUIRES = ["folder-display-helpers", "window-helpers",
+                       'mouse-event-helpers'];
+
 
 var folder;
 let msgHdrsInFolder = [];
@@ -57,6 +27,8 @@ function setupModule(module) {
   fdh.installInto(module);
   let wh = collector.getModule("window-helpers");
   wh.installInto(module);
+  let meh = collector.getModule('mouse-event-helpers');
+  meh.installInto(module);
 
   folder = create_folder("MessageFolder");
   make_new_sets_in_folder(folder, [{count: NUM_MESSAGES_IN_FOLDER}]);
@@ -133,14 +105,8 @@ function test_tab_reorder_tabbar(){
   let tab1 = mc.tabmail.tabContainer.childNodes[1];
   let tab3 = mc.tabmail.tabContainer.childNodes[3];
 
-  let dt = _synthesizeDragStart(mc.window, tab1, mc.tabmail);
-
-  // Drop it onto the third tab ...
-  _synthesizeDragOver(mc.window, tab3, dt);
-
-  _synthesizeDrop(mc.window, tab3, dt,
-      { screenX : tab3.boxObject.screenX + (tab3.boxObject.width * 0.75),
-        screenY : tab3.boxObject.screenY });
+  drag_n_drop_element(tab1, mc.window, tab3, mc.window, 0.75, 0.0,
+                      mc.tabmail.tabContainer);
 
   wait_for_message_display_completion(mc);
 
@@ -148,8 +114,8 @@ function test_tab_reorder_tabbar(){
   assert_number_of_tabs_open(5);
 
   // ... we should find tab1 at the third position...
-  assert_true(tab1 == mc.tabmail.tabContainer.childNodes[3],
-              "Moving tab1 failed");
+  assert_equals(tab1, mc.tabmail.tabContainer.childNodes[3],
+                "Moving tab1 failed");
   switch_tab(3);
   assert_selected_and_displayed(msgHdrsInFolder[0]);
 
@@ -221,13 +187,8 @@ function test_tab_reorder_window(){
   let tabB = mc2.tabmail.tabContainer.childNodes[0];
   assert_true(tabB, "No movable Tab");
 
-  let dt = _synthesizeDragStart(mc.window,tabA,mc.tabmail);
-
-  _synthesizeDragOver(mc2.window, tabB,dt);
-
-  _synthesizeDrop(mc2.window,tabB, dt,
-      { screenX : tabB.boxObject.screenX + (tabB.boxObject.width * 0.75),
-        screenY : tabB.boxObject.screenY });
+  drag_n_drop_element(tabA, mc.window, tabB, mc2.window, 0.75, 0.0,
+                      mc.tabmail.tabContainer);
 
   wait_for_message_display_completion(mc2);
 
@@ -270,12 +231,12 @@ function test_tab_reorder_detach(){
   let dropContent = mc.e("tabpanelcontainer");
   let box = dropContent.boxObject;
 
-  let dt = _synthesizeDragStart(mc.window, tab1, mc.tabmail);
+  let dt = synthesize_drag_start(mc.window, tab1, mc.tabmail.tabContainer);
 
-  _synthesizeDragOver(mc.window, dropContent, dt);
+  synthesize_drag_over(mc.window, dropContent, dt);
 
   // notify tab1 drag has ended
-  _synthesizeDragEnd(mc.window, dropContent, tab1, dt,
+  synthesize_drag_end(mc.window, dropContent, tab1, dt,
       { screenX : (box.screenX + box.width / 2 ),
         screenY : (box.screenY + box.height / 2 ) });
 
@@ -335,51 +296,49 @@ function test_tab_undo() {
 }
 
 function _synthesizeRecentlyClosedMenu()
-{                  
+{
   mc.rightClick(new elib.Elem(mc.tabmail.tabContainer.childNodes[1]));
-  
-  wait_for_popup_to_open(
-    mc.window.document.getAnonymousElementByAttribute(
-      mc.tabmail,"anonid","tabContextMenu"));
-      
-  let menu = mc.window.document.getAnonymousElementByAttribute(
-                   mc.tabmail,"anonid","recentlyClosedTabs");      
 
-  EventUtils.synthesizeMouse(menu,5, 5, {},mc.window);
-  wait_for_popup_to_open(menu.menupopup);
-  
-  return menu;
+  let tabContextMenu = mc.window.document.getElementById("tabContextMenu");
+  wait_for_popup_to_open(tabContextMenu);
+
+  let recentlyClosedTabs = tabContextMenu
+                           .querySelector('[anonid="recentlyClosedTabs"]');
+
+  EventUtils.synthesizeMouse(recentlyClosedTabs, 5, 5, {}, mc.window);
+  wait_for_popup_to_open(recentlyClosedTabs.menupopup);
+
+  return recentlyClosedTabs;
 }
 
 function _teardownRecentlyClosedMenu()
-{  
-  let menu = mc.window.document.getAnonymousElementByAttribute(
-            mc.tabmail,"anonid","tabContextMenu")  
+{
+  let menu = mc.window.document.getElementById("tabContextMenu");
   close_popup(mc,new elib.Elem(menu));
 }
 
 /**
- * Tests the recently closed tabs menu. 
+ * Tests the recently closed tabs menu.
  */
 function test_tab_recentlyClosed() {
 
   // Ensure only one tab is open, otherwise our test most likey fail anyway.
   mc.tabmail.closeOtherTabs(0);
   assert_number_of_tabs_open(1);
-  
+
   // We start with a clean tab history.
   mc.tabmail.recentlyClosedTabs = [];
-        
+
   // The history is cleaned so let's open 15 tabs...
-  be_in_folder(folder);    
-                   
+  be_in_folder(folder);
+
   for (let idx = 0; idx < 15; idx++) {
     select_click_row(idx);
     open_selected_message_in_new_tab(true);
   }
 
   assert_number_of_tabs_open(16);
-    
+
   switch_tab(2);
   assert_selected_and_displayed(msgHdrsInFolder[1]);
 
@@ -391,180 +350,95 @@ function test_tab_recentlyClosed() {
   // Start the test by closing all tabs except the first two tabs...
   for (let idx = 0; idx < 14; idx++)
     mc.tabmail.closeTab(2);
-    
+
   assert_number_of_tabs_open(2);
-    
+
   // ...then open the context menu.
   let menu = _synthesizeRecentlyClosedMenu();
 
   // Check if the context menu was populated correctly...
   assert_true(menu.itemCount == 12, "Failed to populate context menu");
   for (let idx=0; idx < 10; idx++)
-    assert_true(tabTitles[idx] == menu.getItemAtIndex(idx).label, 
-        "Tab Title does not match Menu item");
-    
+    assert_true(tabTitles[idx] == menu.getItemAtIndex(idx).label,
+                "Tab Title does not match Menu item");
+
   // Restore the most recently closed tab
   EventUtils.synthesizeMouse(menu.getItemAtIndex(0),5, 5, {},mc.window);
   _teardownRecentlyClosedMenu();
-  
+
   wait_for_message_display_completion(mc);
   assert_number_of_tabs_open(3);
-  assert_selected_and_displayed(msgHdrsInFolder[14]);  
+  assert_selected_and_displayed(msgHdrsInFolder[14]);
 
   // The context menu should now contain one item less.
   _synthesizeRecentlyClosedMenu();
-      
+
 
   assert_true(menu.itemCount == 11, "Failed to populate context menu");
   for (let idx=0; idx < 9; idx++)
-    assert_true(tabTitles[idx+1] == menu.getItemAtIndex(idx).label, 
-        "Tab Title does not match Menu item");
-        
-  // Now we restore an "random" tab.  
+    assert_true(tabTitles[idx+1] == menu.getItemAtIndex(idx).label,
+                "Tab Title does not match Menu item");
+
+  // Now we restore an "random" tab.
   EventUtils.synthesizeMouse(menu.getItemAtIndex(5),5, 5, {},mc.window);
   _teardownRecentlyClosedMenu();
-   
+
   wait_for_message_display_completion(mc);
-  assert_number_of_tabs_open(4);    
+  assert_number_of_tabs_open(4);
   assert_selected_and_displayed(msgHdrsInFolder[8]);
-        
-  // finally restore all tabs 
+
+  // finally restore all tabs
   _synthesizeRecentlyClosedMenu();
-  
-  assert_true(menu.itemCount == 10, 
+
+  assert_true(menu.itemCount == 10,
       "Failed to populate context menu");
   assert_true(tabTitles[1] == menu.getItemAtIndex(0).label,
       "Tab Title does not match Menu item");
   assert_true(tabTitles[7] == menu.getItemAtIndex(5).label,
       "Tab Title does not match Menu item");
-    
+
   EventUtils.synthesizeMouse(menu.getItemAtIndex(menu.itemCount-1),5, 5, {},mc.window);
   _teardownRecentlyClosedMenu();
-  
+
   wait_for_message_display_completion(mc);
-    
-  // out of the 16 tab, we closed all except two. As the history can store 
+
+  // out of the 16 tab, we closed all except two. As the history can store
   // only 10 items we have to endup with exactly 10 + 2 tabs.
-  assert_number_of_tabs_open(12);    
+  assert_number_of_tabs_open(12);
 }
 
 function teardownTest(test)
 {
-  
+
   switch(test)
-  {    
+  {
     case test_tab_reorder_detach :
     case test_tab_reorder_window :
-      // Some test cases open new windows, thus we need to ensure all 
+      // Some test cases open new windows, thus we need to ensure all
       // opened windows get closed.
 
       let en = Cc["@mozilla.org/appshell/window-mediator;1"]
                  .getService(Ci.nsIWindowMediator)
                  .getEnumerator("mail:3pane");
-       
+
        while(en.hasMoreElements()) {
-        
+
          var win = en.getNext();
-         
+
          if(win != mc.window)
            close_window(new mozmill.controller.MozMillController(win));
        }
-       
+
        // fall through!
 
     case test_tab_reorder_tabbar :
-        
+
     case test_tab_recentlyClosed :
     case test_tab_undo :
-    
-      // clean up the tabbbar 
+
+      // clean up the tabbbar
       mc.tabmail.closeOtherTabs(0);
       assert_number_of_tabs_open(1);
   }
-  
-}
 
-/*
- * A set of private helper functions for drag'n'drop
- */
-
-/**
- * Starts a drag new session.
- * @param {} aWindow
- * @param {XULElement} aDispatcher
- *   the element from which the drag session should be started.
- * @param {XULElement} aListener
- *   the element who's drop target should be captured and returned.
- * @return {nsIDataTransfer}
- *   returns the DataTransfer Object of captured by aListener.
- */
-function _synthesizeDragStart(aWindow, aDispatcher, aListener)
-{
-  let dt;
-
-  var trapDrag = function(event) {
-
-    if ( !event.dataTransfer )
-      throw "no DataTransfer";
-
-    dt = event.dataTransfer;
-
-    //event.stopPropagation();
-    event.preventDefault();
-  };
-
-  aListener.addEventListener("dragstart", trapDrag, true);
-
-  EventUtils.synthesizeMouse(aDispatcher, 5, 5, {type:"mousedown"}, aWindow);
-  EventUtils.synthesizeMouse(aDispatcher, 5, 10, {type:"mousemove"}, aWindow);
-  EventUtils.synthesizeMouse(aDispatcher, 5, 15, {type:"mousemove"}, aWindow);
-
-  aListener.removeEventListener("dragstart", trapDrag, true);
-
-  return dt;
-}
-
-function _synthesizeDragOver(aWindow, aDispatcher, aDt, aArgs)
-{
-  _synthesizeDragEvent("dragover", aWindow, aDispatcher, aDt, aArgs);
-}
-
-function _synthesizeDragEnd(aWindow, aDispatcher, aListener, aDt, aArgs)
-{
-  _synthesizeDragEvent("dragend", aWindow, aListener, aDt, aArgs);
-
-  //Ensure drag has ended.
-  EventUtils.synthesizeMouse(aDispatcher, 5, 5, {type:"mousemove"}, aWindow);
-  EventUtils.synthesizeMouse(aDispatcher, 5, 10, {type:"mousemove"}, aWindow);
-  EventUtils.synthesizeMouse(aDispatcher, 5, 5, {type:"mouseup"}, aWindow);
-}
-
-function _synthesizeDrop(aWindow, aDispatcher, aDt, aArgs)
-{
-  _synthesizeDragEvent("drop", aWindow, aDispatcher, aDt, aArgs);
-
-  // Ensure drag has ended.
-  EventUtils.synthesizeMouse(aDispatcher, 5, 5, {type:"mousemove"}, aWindow);
-  EventUtils.synthesizeMouse(aDispatcher, 5, 10, {type:"mousemove"}, aWindow);
-  EventUtils.synthesizeMouse(aDispatcher, 5, 5, {type:"mouseup"}, aWindow);
-}
-
-function _synthesizeDragEvent(aType, aWindow, aDispatcher, aDt, aArgs)
-{
-  let screenX;
-  if (aArgs && ("screenX" in aArgs))
-    screenX = aArgs.screenX;
-  else
-    screenX = aDispatcher.boxObject.ScreenX;;
-
-  let screenY;
-  if (aArgs && ("screenY" in aArgs))
-    screenY = aArgs.screenY;
-  else
-    screenY = aDispatcher.boxObject.ScreenY;
-
-  let event = aWindow.document.createEvent("DragEvents");
-  event.initDragEvent(aType, true, true, aWindow, 0,
-      screenX, screenY, 0, 0, false, false, false, false, 0, null, aDt);
-  aDispatcher.dispatchEvent(event);
 }

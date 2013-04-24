@@ -12,6 +12,19 @@ Cu.import("resource://services-sync/status.js");
 Svc.DefaultPrefs.set("registerEngines", "");
 Cu.import("resource://services-sync/service.js");
 
+function CatapultEngine() {
+  SyncEngine.call(this, "Catapult");
+}
+CatapultEngine.prototype = {
+  __proto__: SyncEngine.prototype,
+  exception: null, // tests fill this in
+  _sync: function _sync() {
+    throw this.exception;
+  }
+};
+
+Engines.register(CatapultEngine);
+
 function sync_httpd_setup() {
   let global = new ServerWBO("global", {
     syncID: Service.syncID,
@@ -30,20 +43,19 @@ function sync_httpd_setup() {
     "/1.1/johndoe/info/collections": collectionsHelper.handler,
     "/1.1/johndoe/storage/crypto/keys":
       upd("crypto", (new ServerWBO("keys")).handler()),
-    "/1.1/johndoe/storage/clients": upd("clients", clientsColl.handler())
+    "/1.1/johndoe/storage/clients": upd("clients", clientsColl.handler()),
+    "/user/1.0/johndoe/node/weave": httpd_handler(200, "OK", "null")
   });
 }
 
 function setUp() {
-  Service.username = "johndoe";
-  Service.password = "ilovejane";
-  Service.passphrase = "abcdeabcdeabcdeabcdeabcdea";
-  Service.clusterURL = "http://localhost:8080/";
+  setBasicCredentials("johndoe", "ilovejane", "abcdeabcdeabcdeabcdeabcdea");
+  Service.clusterURL = TEST_CLUSTER_URL;
 
   generateNewKeys();
   let serverKeys = CollectionKeys.asWBO("crypto", "keys");
-  serverKeys.encrypt(Service.syncKeyBundle);
-  return serverKeys.upload(Service.cryptoKeysURL);
+  serverKeys.encrypt(Identity.syncKeyBundle);
+  return serverKeys.upload(Service.cryptoKeysURL).success;
 }
 
 function cleanUpAndGo(server) {
@@ -55,23 +67,6 @@ function cleanUpAndGo(server) {
       run_next_test();
     }
   });
-}
-
-let timer;
-function waitForZeroTimer(callback) {
-  // First wait >100ms (nsITimers can take up to that much time to fire, so
-  // we can account for the timer in delayedAutoconnect) and then two event
-  // loop ticks (to account for the Utils.nextTick() in autoConnect).
-  let ticks = 2;
-  function wait() {
-    if (ticks) {
-      ticks -= 1;
-      Utils.nextTick(wait);
-      return;
-    }
-    callback();
-  }
-  timer = Utils.namedTimer(wait, 150, {}, "timer");
 }
 
 function run_test() {
@@ -112,7 +107,7 @@ add_test(function test_prefAttributes() {
   do_check_eq(SyncScheduler.syncThreshold, THRESHOLD);
 
   _("'globalScore' corresponds to preference, defaults to zero.");
-  do_check_eq(Svc.Prefs.get('globalScore'), undefined);
+  do_check_eq(Svc.Prefs.get('globalScore'), 0);
   do_check_eq(SyncScheduler.globalScore, 0);
   SyncScheduler.globalScore = SCORE;
   do_check_eq(SyncScheduler.globalScore, SCORE);
@@ -216,14 +211,16 @@ add_test(function test_calculateBackoff() {
   // Test no interval larger than the maximum backoff is used if
   // Status.backoffInterval is smaller.
   Status.backoffInterval = 5;
-  let backoffInterval = Utils.calculateBackoff(50, MAXIMUM_BACKOFF_INTERVAL);
+  let backoffInterval = Utils.calculateBackoff(50, MAXIMUM_BACKOFF_INTERVAL,
+                                               Status.backoffInterval);
 
   do_check_eq(backoffInterval, MAXIMUM_BACKOFF_INTERVAL);
 
   // Test Status.backoffInterval is used if it is 
   // larger than MAXIMUM_BACKOFF_INTERVAL.
   Status.backoffInterval = MAXIMUM_BACKOFF_INTERVAL + 10;
-  backoffInterval = Utils.calculateBackoff(50, MAXIMUM_BACKOFF_INTERVAL);
+  backoffInterval = Utils.calculateBackoff(50, MAXIMUM_BACKOFF_INTERVAL,
+                                           Status.backoffInterval);
   
   do_check_eq(backoffInterval, MAXIMUM_BACKOFF_INTERVAL + 10);
 
@@ -469,9 +466,7 @@ add_test(function test_autoconnect_nextSync_future() {
     cleanUpAndGo();
   });
 
-  Service.username = "johndoe";
-  Service.password = "ilovejane";
-  Service.passphrase = "abcdeabcdeabcdeabcdeabcdea";
+  setBasicCredentials("johndoe", "ilovejane", "abcdeabcdeabcdeabcdeabcdea");
   SyncScheduler.delayedAutoConnect(0);
 });
 
@@ -483,9 +478,10 @@ add_test(function test_autoconnect_mp_locked() {
   let origLocked = Utils.mpLocked;
   Utils.mpLocked = function() true;
 
-  let origPP = Service.__lookupGetter__("passphrase");
-  delete Service.passphrase;
-  Service.__defineGetter__("passphrase", function() {
+  let origGetter = Identity.__lookupGetter__("syncKey");
+  let origSetter = Identity.__lookupSetter__("syncKey");
+  delete Identity.syncKey;
+  Identity.__defineGetter__("syncKey", function() {
     _("Faking Master Password entry cancelation.");
     throw "User canceled Master Password entry";
   });
@@ -498,8 +494,9 @@ add_test(function test_autoconnect_mp_locked() {
       do_check_eq(Status.login, MASTER_PASSWORD_LOCKED);
 
       Utils.mpLocked = origLocked;
-      delete Service.passphrase;
-      Service.__defineGetter__("passphrase", origPP);
+      delete Identity.syncKey;
+      Identity.__defineGetter__("syncKey", origGetter);
+      Identity.__defineSetter__("syncKey", origSetter);
 
       cleanUpAndGo(server);
     });
@@ -664,6 +661,78 @@ add_test(function test_back_debouncing() {
   }, IDLE_OBSERVER_BACK_DELAY * 1.5, {}, "timer");
 });
 
+add_test(function test_no_sync_node() {
+  // Test when Status.sync == NO_SYNC_NODE_FOUND
+  // it is not overwritten on sync:finish
+  let server = sync_httpd_setup();
+  setUp();
+
+  Service.serverURL = TEST_SERVER_URL;
+
+  Service.sync();
+  do_check_eq(Status.sync, NO_SYNC_NODE_FOUND);
+  do_check_eq(SyncScheduler.syncTimer.delay, NO_SYNC_NODE_INTERVAL);
+
+  cleanUpAndGo(server);
+});
+
+add_test(function test_sync_failed_partial_500s() {
+  _("Test a 5xx status calls handleSyncError.");
+  SyncScheduler._syncErrors = MAX_ERROR_COUNT_BEFORE_BACKOFF;
+  let server = sync_httpd_setup();
+
+  let engine = Engines.get("catapult");
+  engine.enabled = true;
+  engine.exception = {status: 500};
+
+  do_check_eq(Status.sync, SYNC_SUCCEEDED);
+
+  do_check_true(setUp());
+
+  Service.sync();
+
+  do_check_eq(Status.service, SYNC_FAILED_PARTIAL);
+
+  let maxInterval = SyncScheduler._syncErrors * (2 * MINIMUM_BACKOFF_INTERVAL);
+  do_check_eq(Status.backoffInterval, 0);
+  do_check_true(Status.enforceBackoff);
+  do_check_eq(SyncScheduler._syncErrors, 4);
+  do_check_true(SyncScheduler.nextSync <= (Date.now() + maxInterval));
+  do_check_true(SyncScheduler.syncTimer.delay <= maxInterval);
+
+  cleanUpAndGo(server);
+});
+
+add_test(function test_sync_failed_partial_400s() {
+  _("Test a non-5xx status doesn't call handleSyncError.");
+  SyncScheduler._syncErrors = MAX_ERROR_COUNT_BEFORE_BACKOFF;
+  let server = sync_httpd_setup();
+
+  let engine = Engines.get("catapult");
+  engine.enabled = true;
+  engine.exception = {status: 400};
+
+  // Have multiple devices for an active interval.
+  Clients._store.create({id: "foo", cleartext: "bar"});
+
+  do_check_eq(Status.sync, SYNC_SUCCEEDED);
+
+  do_check_true(setUp());
+
+  Service.sync();
+
+  do_check_eq(Status.service, SYNC_FAILED_PARTIAL);
+  do_check_eq(SyncScheduler.syncInterval, SyncScheduler.activeInterval);
+
+  do_check_eq(Status.backoffInterval, 0);
+  do_check_false(Status.enforceBackoff);
+  do_check_eq(SyncScheduler._syncErrors, 0);
+  do_check_true(SyncScheduler.nextSync <= (Date.now() + SyncScheduler.activeInterval));
+  do_check_true(SyncScheduler.syncTimer.delay <= SyncScheduler.activeInterval);
+
+  cleanUpAndGo(server);
+});
+
 add_test(function test_sync_X_Weave_Backoff() {
   let server = sync_httpd_setup();
   setUp();
@@ -776,4 +845,105 @@ add_test(function test_sync_503_Retry_After() {
   do_check_true(SyncScheduler.syncTimer.delay >= minimumExpectedDelay);
 
   cleanUpAndGo(server);
+});
+
+add_test(function test_loginError_recoverable_reschedules() {
+  _("Verify that a recoverable login error schedules a new sync.");
+  setBasicCredentials("johndoe", "ilovejane", "abcdeabcdeabcdeabcdeabcdea");
+  Service.serverURL = TEST_SERVER_URL;
+  Service.clusterURL = TEST_CLUSTER_URL;
+  Service.persistLogin();
+  Status.resetSync(); // reset Status.login
+
+  Svc.Obs.add("weave:service:login:error", function onLoginError() {
+    Svc.Obs.remove("weave:service:login:error", onLoginError);
+    Utils.nextTick(function aLittleBitAfterLoginError() {
+      do_check_eq(Status.login, LOGIN_FAILED_NETWORK_ERROR);
+
+      let expectedNextSync = Date.now() + SyncScheduler.syncInterval;
+      do_check_true(SyncScheduler.nextSync > Date.now());
+      do_check_true(SyncScheduler.nextSync <= expectedNextSync);
+      do_check_true(SyncScheduler.syncTimer.delay > 0);
+      do_check_true(SyncScheduler.syncTimer.delay <= SyncScheduler.syncInterval);
+
+      Svc.Obs.remove("weave:service:sync:start", onSyncStart);
+      cleanUpAndGo();
+    });
+  });
+
+  // Let's set it up so that a sync is overdue, both in terms of previously
+  // scheduled syncs and the global score. We still do not expect an immediate
+  // sync because we just tried (duh).
+  SyncScheduler.nextSync = Date.now() - 100000;
+  SyncScheduler.globalScore = SINGLE_USER_THRESHOLD + 1;
+  function onSyncStart() {
+    do_throw("Shouldn't have started a sync!");
+  }
+  Svc.Obs.add("weave:service:sync:start", onSyncStart);
+
+  // Sanity check.
+  do_check_eq(SyncScheduler.syncTimer, null);
+  do_check_eq(Status.checkSetup(), STATUS_OK);
+  do_check_eq(Status.login, LOGIN_SUCCEEDED);
+
+  SyncScheduler.scheduleNextSync(0);
+});
+
+add_test(function test_loginError_fatal_clearsTriggers() {
+  _("Verify that a fatal login error clears sync triggers.");
+  setBasicCredentials("johndoe", "ilovejane", "abcdeabcdeabcdeabcdeabcdea");
+  Service.serverURL = TEST_SERVER_URL;
+  Service.clusterURL = TEST_CLUSTER_URL;
+  Service.persistLogin();
+  Status.resetSync(); // reset Status.login
+
+  let server = httpd_setup({
+    "/1.1/johndoe/info/collections": httpd_handler(401, "Unauthorized")
+  });
+
+  Svc.Obs.add("weave:service:login:error", function onLoginError() {
+    Svc.Obs.remove("weave:service:login:error", onLoginError);
+    Utils.nextTick(function aLittleBitAfterLoginError() {
+      do_check_eq(Status.login, LOGIN_FAILED_LOGIN_REJECTED);
+
+      do_check_eq(SyncScheduler.nextSync, 0);
+      do_check_eq(SyncScheduler.syncTimer, null);
+
+      cleanUpAndGo(server);
+    });
+  });
+
+  // Sanity check.
+  do_check_eq(SyncScheduler.nextSync, 0);
+  do_check_eq(SyncScheduler.syncTimer, null);
+  do_check_eq(Status.checkSetup(), STATUS_OK);
+  do_check_eq(Status.login, LOGIN_SUCCEEDED);
+
+  SyncScheduler.scheduleNextSync(0);
+});
+
+add_test(function test_proper_interval_on_only_failing() {
+  _("Ensure proper behavior when only failed records are applied.");
+
+  // If an engine reports that no records succeeded, we shouldn't decrease the
+  // sync interval.
+  do_check_false(SyncScheduler.hasIncomingItems);
+  const INTERVAL = 10000000;
+  SyncScheduler.syncInterval = INTERVAL;
+
+  Svc.Obs.notify("weave:service:sync:applied", {
+    applied: 2,
+    succeeded: 0,
+    failed: 2,
+    newFailed: 2,
+    reconciled: 0
+  });
+
+  Utils.nextTick(function() {
+    SyncScheduler.adjustSyncInterval();
+    do_check_false(SyncScheduler.hasIncomingItems);
+    do_check_eq(SyncScheduler.syncInterval, SyncScheduler.singleDeviceInterval);
+
+    run_next_test();
+  });
 });

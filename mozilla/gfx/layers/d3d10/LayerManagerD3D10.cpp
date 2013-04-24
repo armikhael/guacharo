@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 20; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Corporation code.
- *
- * The Initial Developer of the Original Code is Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Bas Schouten <bschouten@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <algorithm>
 
@@ -52,6 +20,7 @@
 #include "ReadbackLayerD3D10.h"
 #include "ImageLayerD3D10.h"
 #include "mozilla/layers/PLayerChild.h"
+#include "mozilla/WidgetUtils.h"
 
 #include "../d3d9/Nv3DVUtils.h"
 
@@ -125,9 +94,9 @@ LayerManagerD3D10::~LayerManagerD3D10()
 }
 
 bool
-LayerManagerD3D10::Initialize()
+LayerManagerD3D10::Initialize(bool force)
 {
-  ScopedGfxFeatureReporter reporter("D3D10 Layers");
+  ScopedGfxFeatureReporter reporter("D3D10 Layers", force);
 
   HRESULT hr;
 
@@ -231,59 +200,100 @@ LayerManagerD3D10::Initialize()
     mInputLayout = attachments->mInputLayout;
   }
 
-  if (HasShadowManager()) {
+  if (ShadowLayerForwarder::HasShadowManager()) {
     reporter.SetSuccessful();
     return true;
   }
 
   nsRefPtr<IDXGIDevice> dxgiDevice;
   nsRefPtr<IDXGIAdapter> dxgiAdapter;
-  nsRefPtr<IDXGIFactory> dxgiFactory;
 
   mDevice->QueryInterface(dxgiDevice.StartAssignment());
   dxgiDevice->GetAdapter(getter_AddRefs(dxgiAdapter));
+  
+#ifdef MOZ_METRO
+  if (gfxWindowsPlatform::IsRunningInWindows8Metro()) {
+    nsRefPtr<IDXGIFactory2> dxgiFactory;
+    dxgiAdapter->GetParent(IID_PPV_ARGS(dxgiFactory.StartAssignment()));
 
-  dxgiAdapter->GetParent(IID_PPV_ARGS(dxgiFactory.StartAssignment()));
+    nsIntRect rect;
+    mWidget->GetClientBounds(rect);
 
-  DXGI_SWAP_CHAIN_DESC swapDesc;
-  ::ZeroMemory(&swapDesc, sizeof(swapDesc));
-
-  swapDesc.BufferDesc.Width = 0;
-  swapDesc.BufferDesc.Height = 0;
-  swapDesc.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-  swapDesc.BufferDesc.RefreshRate.Numerator = 60;
-  swapDesc.BufferDesc.RefreshRate.Denominator = 1;
-  swapDesc.SampleDesc.Count = 1;
-  swapDesc.SampleDesc.Quality = 0;
-  swapDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-  swapDesc.BufferCount = 1;
-  // We don't really need this flag, however it seems on some NVidia hardware
-  // smaller area windows do not present properly without this flag. This flag
-  // should have no negative consequences by itself. See bug 613790. This flag
-  // is broken on optimus devices. As a temporary solution we don't set it
-  // there, the only way of reliably detecting we're on optimus is looking for
-  // the DLL. See Bug 623807.
-  if (gfxWindowsPlatform::IsOptimus()) {
+    DXGI_SWAP_CHAIN_DESC1 swapDesc = { 0 };
+    // Automatically detect the width and the height from the winrt CoreWindow
+    swapDesc.Width = rect.width;
+    swapDesc.Height = rect.height;
+    // This is the most common swapchain format
+    swapDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    swapDesc.Stereo = false; 
+    // Don't use multi-sampling
+    swapDesc.SampleDesc.Count = 1;
+    swapDesc.SampleDesc.Quality = 0;
+    swapDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    // Use double buffering to enable flip
+    swapDesc.BufferCount = 2;
+    swapDesc.Scaling = DXGI_SCALING_STRETCH;
+    // All Metro style apps must use this SwapEffect
+    swapDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
     swapDesc.Flags = 0;
-  } else {
-    swapDesc.Flags = DXGI_SWAP_CHAIN_FLAG_GDI_COMPATIBLE;
+
+    /**
+     * Create a swap chain, this swap chain will contain the backbuffer for
+     * the window we draw to. The front buffer is the full screen front
+     * buffer.
+    */
+    nsRefPtr<IDXGISwapChain1> swapChain1;
+    hr = dxgiFactory->CreateSwapChainForCoreWindow(
+           dxgiDevice, (IUnknown *)mWidget->GetNativeData(NS_NATIVE_WINDOW),
+           &swapDesc, nullptr, getter_AddRefs(swapChain1));
+    if (FAILED(hr)) {
+        return false;
+    }
+    mSwapChain = swapChain1;
+  } else
+#endif
+  {
+    nsRefPtr<IDXGIFactory> dxgiFactory;
+    dxgiAdapter->GetParent(IID_PPV_ARGS(dxgiFactory.StartAssignment()));
+
+    DXGI_SWAP_CHAIN_DESC swapDesc;
+    ::ZeroMemory(&swapDesc, sizeof(swapDesc));
+    swapDesc.BufferDesc.Width = 0;
+    swapDesc.BufferDesc.Height = 0;
+    swapDesc.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    swapDesc.BufferDesc.RefreshRate.Numerator = 60;
+    swapDesc.BufferDesc.RefreshRate.Denominator = 1;
+    swapDesc.SampleDesc.Count = 1;
+    swapDesc.SampleDesc.Quality = 0;
+    swapDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    swapDesc.BufferCount = 1;
+    swapDesc.OutputWindow = (HWND)mWidget->GetNativeData(NS_NATIVE_WINDOW);
+    swapDesc.Windowed = TRUE;
+    // We don't really need this flag, however it seems on some NVidia hardware
+    // smaller area windows do not present properly without this flag. This flag
+    // should have no negative consequences by itself. See bug 613790. This flag
+    // is broken on optimus devices. As a temporary solution we don't set it
+    // there, the only way of reliably detecting we're on optimus is looking for
+    // the DLL. See Bug 623807.
+    if (gfxWindowsPlatform::IsOptimus()) {
+      swapDesc.Flags = 0;
+    } else {
+      swapDesc.Flags = DXGI_SWAP_CHAIN_FLAG_GDI_COMPATIBLE;
+    }
+
+    /**
+     * Create a swap chain, this swap chain will contain the backbuffer for
+     * the window we draw to. The front buffer is the full screen front
+     * buffer.
+    */
+    hr = dxgiFactory->CreateSwapChain(dxgiDevice, &swapDesc, getter_AddRefs(mSwapChain));
+    if (FAILED(hr)) {
+     return false;
+    }
+
+    // We need this because we don't want DXGI to respond to Alt+Enter.
+    dxgiFactory->MakeWindowAssociation(swapDesc.OutputWindow, DXGI_MWA_NO_WINDOW_CHANGES);
   }
-  swapDesc.OutputWindow = (HWND)mWidget->GetNativeData(NS_NATIVE_WINDOW);
-  swapDesc.Windowed = TRUE;
-
-  /**
-   * Create a swap chain, this swap chain will contain the backbuffer for
-   * the window we draw to. The front buffer is the full screen front
-   * buffer.
-   */
-  hr = dxgiFactory->CreateSwapChain(dxgiDevice, &swapDesc, getter_AddRefs(mSwapChain));
-
-  if (FAILED(hr)) {
-    return false;
-  }
-
-  // We need this because we don't want DXGI to respond to Alt+Enter.
-  dxgiFactory->MakeWindowAssociation(swapDesc.OutputWindow, DXGI_MWA_NO_WINDOW_CHANGES);
 
   reporter.SetSuccessful();
   return true;
@@ -296,7 +306,7 @@ LayerManagerD3D10::Destroy()
     if (mRoot) {
       static_cast<LayerD3D10*>(mRoot->ImplData())->LayerManagerDestroyed();
     }
-    mRootForShadowTree = nsnull;
+    mRootForShadowTree = nullptr;
     // XXX need to be careful here about surface destruction
     // racing with share-to-chrome message
   }
@@ -312,6 +322,8 @@ LayerManagerD3D10::SetRoot(Layer *aRoot)
 void
 LayerManagerD3D10::BeginTransaction()
 {
+  mInTransaction = true;
+
 #ifdef MOZ_LAYERS_HAVE_LOG
   MOZ_LAYERS_LOG(("[----- BeginTransaction"));
   Log();
@@ -321,24 +333,30 @@ LayerManagerD3D10::BeginTransaction()
 void
 LayerManagerD3D10::BeginTransactionWithTarget(gfxContext* aTarget)
 {
+  mInTransaction = true;
   mTarget = aTarget;
 }
 
 bool
-LayerManagerD3D10::EndEmptyTransaction()
+LayerManagerD3D10::EndEmptyTransaction(EndTransactionFlags aFlags)
 {
+  mInTransaction = false;
+
   if (!mRoot)
     return false;
 
-  EndTransaction(nsnull, nsnull);
+  EndTransaction(nullptr, nullptr, aFlags);
   return true;
 }
 
 void
 LayerManagerD3D10::EndTransaction(DrawThebesLayerCallback aCallback,
-                                  void* aCallbackData)
+                                  void* aCallbackData,
+                                  EndTransactionFlags aFlags)
 {
-  if (mRoot) {
+  mInTransaction = false;
+
+  if (mRoot && !(aFlags & END_NO_IMMEDIATE_REDRAW)) {
     mCurrentCallbackInfo.Callback = aCallback;
     mCurrentCallbackInfo.CallbackData = aCallbackData;
 
@@ -351,9 +369,9 @@ LayerManagerD3D10::EndTransaction(DrawThebesLayerCallback aCallback,
     Log();
 #endif
 
-    Render();
-    mCurrentCallbackInfo.Callback = nsnull;
-    mCurrentCallbackInfo.CallbackData = nsnull;
+    Render(aFlags);
+    mCurrentCallbackInfo.Callback = nullptr;
+    mCurrentCallbackInfo.CallbackData = nullptr;
   }
 
 #ifdef MOZ_LAYERS_HAVE_LOG
@@ -361,7 +379,7 @@ LayerManagerD3D10::EndTransaction(DrawThebesLayerCallback aCallback,
   MOZ_LAYERS_LOG(("]----- EndTransaction"));
 #endif
 
-  mTarget = nsnull;
+  mTarget = nullptr;
 }
 
 already_AddRefed<ThebesLayer>
@@ -420,13 +438,6 @@ LayerManagerD3D10::CreateReadbackLayer()
   return layer.forget();
 }
 
-already_AddRefed<ImageContainer>
-LayerManagerD3D10::CreateImageContainer()
-{
-  nsRefPtr<ImageContainer> layer = new ImageContainerD3D10(mDevice);
-  return layer.forget();
-}
-
 static void ReleaseTexture(void *texture)
 {
   static_cast<ID3D10Texture2D*>(texture)->Release();
@@ -469,12 +480,22 @@ LayerManagerD3D10::CreateOptimalSurface(const gfxIntSize &aSize,
   return surface.forget();
 }
 
+
+already_AddRefed<gfxASurface>
+LayerManagerD3D10::CreateOptimalMaskSurface(const gfxIntSize &aSize)
+{
+  return CreateOptimalSurface(aSize, gfxASurface::ImageFormatARGB32);
+}
+
+
 TemporaryRef<DrawTarget>
 LayerManagerD3D10::CreateDrawTarget(const IntSize &aSize,
                                     SurfaceFormat aFormat)
 {
   if ((aFormat != FORMAT_B8G8R8A8 &&
-       aFormat != FORMAT_B8G8R8X8)) {
+       aFormat != FORMAT_B8G8R8X8) ||
+       !gfxPlatform::GetPlatform()->SupportsAzureCanvas() ||
+       gfxPlatform::GetPlatform()->GetPreferredCanvasBackend() != BACKEND_DIRECT2D) {
     return LayerManager::CreateDrawTarget(aSize, aFormat);
   }
 
@@ -482,7 +503,6 @@ LayerManagerD3D10::CreateDrawTarget(const IntSize &aSize,
   
   CD3D10_TEXTURE2D_DESC desc(DXGI_FORMAT_B8G8R8A8_UNORM, aSize.width, aSize.height, 1, 1);
   desc.BindFlags = D3D10_BIND_RENDER_TARGET | D3D10_BIND_SHADER_RESOURCE;
-  desc.MiscFlags = D3D10_RESOURCE_MISC_GDI_COMPATIBLE;
   
   HRESULT hr = device()->CreateTexture2D(&desc, NULL, getter_AddRefs(texture));
 
@@ -544,6 +564,18 @@ LayerManagerD3D10::SetViewport(const nsIntSize &aViewport)
 }
 
 void
+LayerManagerD3D10::SetupInputAssembler()
+{
+  mDevice->IASetInputLayout(mInputLayout);
+
+  UINT stride = sizeof(Vertex);
+  UINT offset = 0;
+  ID3D10Buffer *buffer = mVertexBuffer;
+  mDevice->IASetVertexBuffers(0, 1, &buffer, &stride, &offset);
+  mDevice->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+}
+
+void
 LayerManagerD3D10::SetupPipeline()
 {
   VerifyBufferSize();
@@ -564,13 +596,8 @@ LayerManagerD3D10::SetupPipeline()
 
   ID3D10RenderTargetView *view = mRTView;
   mDevice->OMSetRenderTargets(1, &view, NULL);
-  mDevice->IASetInputLayout(mInputLayout);
 
-  UINT stride = sizeof(Vertex);
-  UINT offset = 0;
-  ID3D10Buffer *buffer = mVertexBuffer;
-  mDevice->IASetVertexBuffers(0, 1, &buffer, &stride, &offset);
-  mDevice->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+  SetupInputAssembler();
 
   SetViewport(nsIntSize(rect.width, rect.height));
 }
@@ -604,7 +631,6 @@ LayerManagerD3D10::VerifyBufferSize()
   nsIntRect rect;
   mWidget->GetClientBounds(rect);
 
-  HRESULT hr;
   if (mSwapChain) {
     DXGI_SWAP_CHAIN_DESC swapDesc;
     mSwapChain->GetDesc(&swapDesc);
@@ -614,9 +640,13 @@ LayerManagerD3D10::VerifyBufferSize()
       return;
     }
 
-    mRTView = nsnull;
-    if (gfxWindowsPlatform::IsOptimus()) {
+    mRTView = nullptr;
+    if (gfxWindowsPlatform::IsOptimus()) { 
       mSwapChain->ResizeBuffers(1, rect.width, rect.height,
+                                DXGI_FORMAT_B8G8R8A8_UNORM,
+                                0);
+    } else if (gfxWindowsPlatform::IsRunningInWindows8Metro()) {
+      mSwapChain->ResizeBuffers(2, rect.width, rect.height,
                                 DXGI_FORMAT_B8G8R8A8_UNORM,
                                 0);
     } else {
@@ -642,15 +672,15 @@ LayerManagerD3D10::VerifyBufferSize()
     desc.MiscFlags = D3D10_RESOURCE_MISC_SHARED
                      // FIXME/bug 662109: synchronize using KeyedMutex
                      /*D3D10_RESOURCE_MISC_SHARED_KEYEDMUTEX*/;
-    hr = device()->CreateTexture2D(&desc, nsnull, getter_AddRefs(mBackBuffer));
+    HRESULT hr = device()->CreateTexture2D(&desc, nullptr, getter_AddRefs(mBackBuffer));
     if (FAILED(hr)) {
-        ReportFailure(nsDependentCString("Failed to create shared texture"),
-                      hr);
-        NS_RUNTIMEABORT("Failed to create back buffer");
+      ReportFailure(NS_LITERAL_CSTRING("LayerManagerD3D10::VerifyBufferSize(): Failed to create shared texture"),
+                    hr);
+      NS_RUNTIMEABORT("Failed to create back buffer");
     }
 
     // XXX resize texture?
-    mRTView = nsnull;
+    mRTView = nullptr;
   }
 }
 
@@ -681,9 +711,13 @@ LayerManagerD3D10::EnsureReadbackManager()
 }
 
 void
-LayerManagerD3D10::Render()
+LayerManagerD3D10::Render(EndTransactionFlags aFlags)
 {
   static_cast<LayerD3D10*>(mRoot->ImplData())->Validate();
+
+  if (aFlags & END_NO_COMPOSITE) {
+    return;
+  }
 
   SetupPipeline();
 
@@ -712,7 +746,8 @@ LayerManagerD3D10::Render()
   if (mTarget) {
     PaintToTarget();
   } else if (mBackBuffer) {
-    ShadowLayerForwarder::BeginTransaction();
+    ShadowLayerForwarder::BeginTransaction(mWidget->GetNaturalBounds(),
+                                           ROTATION_0);
     
     nsIntRect contentRect = nsIntRect(0, 0, rect.width, rect.height);
     if (!mRootForShadowTree) {
@@ -728,12 +763,7 @@ LayerManagerD3D10::Render()
         windowLayer = new WindowLayer(this);
         windowLayer->SetShadow(ConstructShadowFor(windowLayer));
         CreatedThebesLayer(windowLayer);
-        ShadowLayerForwarder::CreatedThebesBuffer(windowLayer,
-                                                  contentRect,
-                                                  contentRect,
-                                                  SurfaceDescriptor());
-
-        mRootForShadowTree->InsertAfter(windowLayer, nsnull);
+        mRootForShadowTree->InsertAfter(windowLayer, nullptr);
         ShadowLayerForwarder::InsertAfter(mRootForShadowTree, windowLayer);
     }
 
@@ -783,6 +813,7 @@ LayerManagerD3D10::Render()
   } else {
     mSwapChain->Present(0, 0);
   }
+  LayerManager::PostPresent();
 }
 
 void
@@ -803,7 +834,12 @@ LayerManagerD3D10::PaintToTarget()
 
   nsRefPtr<ID3D10Texture2D> readTexture;
 
-  device()->CreateTexture2D(&softDesc, NULL, getter_AddRefs(readTexture));
+  HRESULT hr = device()->CreateTexture2D(&softDesc, NULL, getter_AddRefs(readTexture));
+  if (FAILED(hr)) {
+    ReportFailure(NS_LITERAL_CSTRING("LayerManagerD3D10::PaintToTarget(): Failed to create texture"),
+                  hr);
+    return;
+  }
 
   device()->CopyResource(readTexture, backBuf);
 
@@ -830,7 +866,7 @@ LayerManagerD3D10::ReportFailure(const nsACString &aMsg, HRESULT aCode)
   nsCString msg;
   msg.Append(aMsg);
   msg.AppendLiteral(" Error code: ");
-  msg.AppendInt(PRUint32(aCode));
+  msg.AppendInt(uint32_t(aCode));
   NS_WARNING(msg.BeginReading());
 
   gfx::LogFailure(msg);
@@ -841,8 +877,89 @@ LayerD3D10::LayerD3D10(LayerManagerD3D10 *aManager)
 {
 }
 
+ID3D10EffectTechnique*
+LayerD3D10::SelectShader(uint8_t aFlags)
+{
+  switch (aFlags) {
+  case (SHADER_RGBA | SHADER_NON_PREMUL | SHADER_LINEAR | SHADER_MASK):
+    return effect()->GetTechniqueByName("RenderRGBALayerNonPremulMask");
+  case (SHADER_RGBA | SHADER_NON_PREMUL | SHADER_LINEAR | SHADER_NO_MASK):
+    return effect()->GetTechniqueByName("RenderRGBALayerNonPremul");
+  case (SHADER_RGBA | SHADER_NON_PREMUL | SHADER_POINT | SHADER_NO_MASK):
+    return effect()->GetTechniqueByName("RenderRGBALayerNonPremulPoint");
+  case (SHADER_RGBA | SHADER_NON_PREMUL | SHADER_POINT | SHADER_MASK):
+    return effect()->GetTechniqueByName("RenderRGBALayerNonPremulPointMask");
+  case (SHADER_RGBA | SHADER_PREMUL | SHADER_LINEAR | SHADER_MASK_3D):
+    return effect()->GetTechniqueByName("RenderRGBALayerPremulMask3D");
+  case (SHADER_RGBA | SHADER_PREMUL | SHADER_LINEAR | SHADER_MASK):
+    return effect()->GetTechniqueByName("RenderRGBALayerPremulMask");
+  case (SHADER_RGBA | SHADER_PREMUL | SHADER_LINEAR | SHADER_NO_MASK):
+    return effect()->GetTechniqueByName("RenderRGBALayerPremul");
+  case (SHADER_RGBA | SHADER_PREMUL | SHADER_POINT | SHADER_MASK):
+    return effect()->GetTechniqueByName("RenderRGBALayerPremulPointMask");
+  case (SHADER_RGBA | SHADER_PREMUL | SHADER_POINT | SHADER_NO_MASK):
+    return effect()->GetTechniqueByName("RenderRGBALayerPremulPoint");
+  case (SHADER_RGB | SHADER_PREMUL | SHADER_POINT | SHADER_MASK):
+    return effect()->GetTechniqueByName("RenderRGBLayerPremulPointMask");
+  case (SHADER_RGB | SHADER_PREMUL | SHADER_POINT | SHADER_NO_MASK):
+    return effect()->GetTechniqueByName("RenderRGBLayerPremulPoint");
+  case (SHADER_RGB | SHADER_PREMUL | SHADER_LINEAR | SHADER_MASK):
+    return effect()->GetTechniqueByName("RenderRGBLayerPremulMask");
+  case (SHADER_RGB | SHADER_PREMUL | SHADER_LINEAR | SHADER_NO_MASK):
+    return effect()->GetTechniqueByName("RenderRGBLayerPremul");
+  case (SHADER_SOLID | SHADER_MASK):
+    return effect()->GetTechniqueByName("RenderSolidColorLayerMask");
+  case (SHADER_SOLID | SHADER_NO_MASK):
+    return effect()->GetTechniqueByName("RenderSolidColorLayer");
+  case (SHADER_COMPONENT_ALPHA | SHADER_MASK):
+    return effect()->GetTechniqueByName("RenderComponentAlphaLayerMask");
+  case (SHADER_COMPONENT_ALPHA | SHADER_NO_MASK):
+    return effect()->GetTechniqueByName("RenderComponentAlphaLayer");
+  case (SHADER_YCBCR | SHADER_MASK):
+    return effect()->GetTechniqueByName("RenderYCbCrLayerMask");
+  case (SHADER_YCBCR | SHADER_NO_MASK):
+    return effect()->GetTechniqueByName("RenderYCbCrLayer");
+  default:
+    NS_ERROR("Invalid shader.");
+    return nullptr;
+  }
+}
+
+uint8_t
+LayerD3D10::LoadMaskTexture()
+{
+  if (Layer* maskLayer = GetLayer()->GetMaskLayer()) {
+    gfxIntSize size;
+    nsRefPtr<ID3D10ShaderResourceView> maskSRV =
+      static_cast<LayerD3D10*>(maskLayer->ImplData())->GetAsTexture(&size);
+  
+    if (!maskSRV) {
+      return SHADER_NO_MASK;
+    }
+
+    gfxMatrix maskTransform;
+    bool maskIs2D = maskLayer->GetEffectiveTransform().CanDraw2D(&maskTransform);
+    NS_ASSERTION(maskIs2D, "How did we end up with a 3D transform here?!");
+    gfxRect bounds = gfxRect(gfxPoint(), size);
+    bounds = maskTransform.TransformBounds(bounds);
+
+    effect()->GetVariableByName("vMaskQuad")->AsVector()->SetFloatVector(
+      ShaderConstantRectD3D10(
+        (float)bounds.x,
+        (float)bounds.y,
+        (float)bounds.width,
+        (float)bounds.height)
+      );
+
+    effect()->GetVariableByName("tMask")->AsShaderResource()->SetResource(maskSRV);
+    return SHADER_MASK;
+  }
+
+  return SHADER_NO_MASK; 
+}
+
 WindowLayer::WindowLayer(LayerManagerD3D10* aManager)
-  : ThebesLayer(aManager, nsnull)
+  : ThebesLayer(aManager, nullptr)
 {
  }
 
@@ -852,13 +969,13 @@ WindowLayer::~WindowLayer()
 }
 
 DummyRoot::DummyRoot(LayerManagerD3D10* aManager)
-  : ContainerLayer(aManager, nsnull)
+  : ContainerLayer(aManager, nullptr)
 {
 }
 
 DummyRoot::~DummyRoot()
 {
-  RemoveChild(nsnull);
+  RemoveChild(nullptr);
   PLayerChild::Send__delete__(GetShadow());
 }
 
@@ -875,6 +992,11 @@ DummyRoot::RemoveChild(Layer* aNull)
 {
   NS_ABORT_IF_FALSE(!aNull, "Unused argument should be null");
   NS_IF_RELEASE(mFirstChild);
+}
+
+void
+DummyRoot::RepositionChild(Layer* aUnused1, Layer* aUnused2)
+{
 }
 
 

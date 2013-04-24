@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Peter Van der Beken.
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Peter Van der Beken <peterv@propagandism.org>
- *
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsAbOSXCard.h"
 #include "nsAbOSXDirectory.h"
@@ -74,7 +40,7 @@ GetPropertType(ABRecord *aCard, NSString *aProperty)
 
 static void
 SetStringProperty(nsAbOSXCard *aCard, const nsString &aValue,
-                  const char *aMemberName, PRBool aNotify,
+                  const char *aMemberName, bool aNotify,
                   nsIAbManager *aAbManager)
 {
   nsString oldValue;
@@ -97,7 +63,7 @@ SetStringProperty(nsAbOSXCard *aCard, const nsString &aValue,
 
 static void
 SetStringProperty(nsAbOSXCard *aCard, NSString *aValue, const char *aMemberName,
-                  PRBool aNotify, nsIAbManager *aAbManager)
+                  bool aNotify, nsIAbManager *aAbManager)
 {
   nsAutoString value;
   if (aValue)
@@ -108,7 +74,7 @@ SetStringProperty(nsAbOSXCard *aCard, NSString *aValue, const char *aMemberName,
 
 static void
 MapStringProperty(nsAbOSXCard *aCard, ABRecord *aOSXCard, NSString *aProperty,
-                  const char *aMemberName, PRBool aNotify,
+                  const char *aMemberName, bool aNotify,
                   nsIAbManager *aAbManager)
 {
   NS_ASSERTION(aProperty, "This is bad! You asked for an unresolved symbol.");
@@ -131,26 +97,26 @@ GetMultiValue(ABRecord *aCard, NSString *aProperty)
 
 static void
 MapDate(nsAbOSXCard *aCard, NSDate *aDate, const char *aYearPropName,
-        const char *aMonthPropName, const char *aDayPropName, PRBool aNotify,
+        const char *aMonthPropName, const char *aDayPropName, bool aNotify,
         nsIAbManager *aAbManager)
 {
   // XXX Should we pass a format and timezone?
   NSCalendarDate *date = [aDate dateWithCalendarFormat:nil timeZone:nil];
   
   nsAutoString value;
-  value.AppendInt(static_cast<PRInt32>([date yearOfCommonEra]));
+  value.AppendInt(static_cast<int32_t>([date yearOfCommonEra]));
   SetStringProperty(aCard, value, aYearPropName, aNotify, aAbManager);
   value.Truncate();
-  value.AppendInt(static_cast<PRInt32>([date monthOfYear]));
+  value.AppendInt(static_cast<int32_t>([date monthOfYear]));
   SetStringProperty(aCard, value, aMonthPropName, aNotify, aAbManager);
   value.Truncate();
-  value.AppendInt(static_cast<PRInt32>([date dayOfMonth]));
+  value.AppendInt(static_cast<int32_t>([date dayOfMonth]));
   SetStringProperty(aCard, value, aDayPropName, aNotify, aAbManager);
 }
 
-static PRBool
+static bool
 MapMultiValue(nsAbOSXCard *aCard, ABRecord *aOSXCard,
-              const nsAbOSXPropertyMap &aMap, PRBool aNotify,
+              const nsAbOSXPropertyMap &aMap, bool aNotify,
               nsIAbManager *aAbManager)
 {
   ABMultiValue *value = GetMultiValue(aOSXCard, aMap.mOSXProperty);
@@ -166,7 +132,7 @@ MapMultiValue(nsAbOSXCard *aCard, ABRecord *aOSXCard,
         SetStringProperty(aCard, stringValue, aMap.mPropertyName, aNotify,
                           aAbManager);
         
-        return PR_TRUE;
+        return true;
       }
     }
   }
@@ -174,7 +140,7 @@ MapMultiValue(nsAbOSXCard *aCard, ABRecord *aOSXCard,
   SetStringProperty(aCard, EmptyString(), aMap.mPropertyName, aNotify,
                     aAbManager);
   
-  return PR_FALSE;
+  return false;
 }
 
 nsresult
@@ -188,7 +154,7 @@ nsAbOSXCard::Init(const char *aUri)
 
   SetLocalId(nsDependentCString(aUri));
 
-  return Update(PR_FALSE);
+  return Update(false);
 }
 
 nsresult
@@ -202,7 +168,7 @@ nsAbOSXCard::GetURI(nsACString &aURI)
 }
 
 nsresult
-nsAbOSXCard::Update(PRBool aNotify)
+nsAbOSXCard::Update(bool aNotify)
 {
   ABAddressBook *addressBook = [ABAddressBook sharedAddressBook];
 
@@ -218,7 +184,7 @@ nsAbOSXCard::Update(PRBool aNotify)
   }
 
   if ([card isKindOfClass:[ABGroup class]]) {
-    m_IsMailList = PR_TRUE;
+    m_IsMailList = true;
     m_MailListURI.AssignLiteral(NS_ABOSXDIRECTORY_URI_PREFIX);
     m_MailListURI.Append(uid);
     MapStringProperty(this, card, kABGroupNameProperty, "DisplayName", aNotify,
@@ -229,9 +195,9 @@ nsAbOSXCard::Update(PRBool aNotify)
     return NS_OK;
   }
   
-  PRBool foundHome = PR_FALSE, foundWork = PR_FALSE;
+  bool foundHome = false, foundWork = false;
   
-  PRUint32 i;
+  uint32_t i;
   for (i = 0; i < nsAbOSXUtils::kPropertyMapSize; ++i) {
     const nsAbOSXPropertyMap &propertyMap = nsAbOSXUtils::kPropertyMap[i];
     if (!propertyMap.mOSXProperty)
@@ -241,9 +207,9 @@ nsAbOSXCard::Update(PRBool aNotify)
       if (MapMultiValue(this, card, propertyMap, aNotify,
                         abManager) && propertyMap.mOSXProperty == kABAddressProperty) {
         if (propertyMap.mOSXLabel == kABAddressHomeLabel) 
-          foundHome = PR_TRUE;
+          foundHome = true;
         else
-          foundWork = PR_TRUE;
+          foundWork = true;
       }
     }
     else {
@@ -391,7 +357,7 @@ nsAbOSXCard::Update(PRBool aNotify)
   date = [card valueForProperty:kABModificationDateProperty];
   if (date) 
     SetPropertyAsUint32("LastModifiedDate",
-                        PRUint32([date timeIntervalSince1970]));
+                        uint32_t([date timeIntervalSince1970]));
     // XXX No way to notify about this?
   
   return NS_OK;

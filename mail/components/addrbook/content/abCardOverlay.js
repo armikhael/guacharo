@@ -1,43 +1,13 @@
-# -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
-# The Original Code is mozilla.org code.
-#
-# The Initial Developer of the Original Code is
-# Netscape Communications Corporation.
-# Portions created by the Initial Developer are Copyright (C) 1998
-# the Initial Developer. All Rights Reserved.
-#
-# Contributor(s):
-#   Seth Spitzer <sspitzer@netscape.com>
-#
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
+/* -*- Mode: Javascript; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+Components.utils.import("resource://gre/modules/Services.jsm");
+Components.utils.import("resource:///modules/mailServices.js");
 
 const kNonVcardFields =
-        ["nickNameContainer", "secondaryEmailContainer", "screenNameContainer",
+        ["NickNameContainer", "SecondaryEmailContainer", "ScreenNameContainer",
          "customFields", "allowRemoteContent", "preferDisplayName"];
 
 const kPhoneticFields =
@@ -54,7 +24,6 @@ const kVcardFields =
           // Contact > Internet
          ["PrimaryEmail", "PrimaryEmail"],
          ["SecondEmail", "SecondEmail"],
-         ["ScreenName", "_AimScreenName"], // NB: AIM.
           // Contact > Phones
          ["WorkPhone", "WorkPhone"],
          ["HomePhone", "HomePhone"],
@@ -86,7 +55,17 @@ const kVcardFields =
          ["Custom3", "Custom3"],
          ["Custom4", "Custom4"],
           // Other > Notes
-         ["Notes", "Notes"]];
+         ["Notes", "Notes"],
+          // Chat
+         ["Gtalk", "_GoogleTalk"],
+         ["AIM", "_AimScreenName"],
+         ["Yahoo", "_Yahoo"],
+         ["Skype", "_Skype"],
+         ["QQ", "_QQ"],
+         ["MSN", "_MSN"],
+         ["ICQ", "_ICQ"],
+         ["XMPP", "_JabberId"]
+        ];
 
 const kDefaultYear = 2000;
 var gEditCard;
@@ -136,7 +115,7 @@ function OnLoadNewCard()
       // if we've got a display name, don't generate
       // a display name (and stomp on the existing display name)
       // when the user types a first or last name
-      if (gEditCard.card.displayName.length)
+      if (gEditCard.card.displayName)
         gEditCard.generateDisplayName = false;
     }
     if ("aimScreenName" in window.arguments[0])
@@ -153,9 +132,7 @@ function OnLoadNewCard()
       // hide non vcard values
       HideNonVcardFields();
       gEditCard.card =
-        Components.classes["@mozilla.org/abmanager;1"]
-                  .getService(Components.interfaces.nsIAbManager)
-                  .escapedVCardToAbCard(window.arguments[0].escapedVCardStr);
+        MailServices.ab.escapedVCardToAbCard(window.arguments[0].escapedVCardStr);
     }
 
     if ("titleProperty" in window.arguments[0])
@@ -206,28 +183,37 @@ function EditCardOKButton()
     directory = GetDirectoryFromURI(parentURI);
   }
 
-  var listDirectoriesCount = directory.addressLists.length;
-  var foundDirectories = new Array();
-  var foundDirectoriesCount = 0;
-  var i;
+  let listDirectoriesCount = directory.addressLists.length;
+  let foundDirectories = [];
+
   // create a list of mailing lists and the index where the card is at.
-  for ( i=0;  i < listDirectoriesCount; i++ ) {
-    var subdirectory = directory.addressLists.queryElementAt(i, Components.interfaces.nsIAbDirectory);
-    try {
-      var index = subdirectory.indexOf(gEditCard);
-      foundDirectories[foundDirectoriesCount] = {directory:subdirectory, index:index};
-      foundDirectoriesCount++;
-    } catch (ex) {}
+  for (let i = 0; i < listDirectoriesCount; i++) {
+    let subdir = directory.addressLists
+                          .queryElementAt(i, Components.interfaces.nsIAbDirectory);
+    if (subdir.isMailList) {
+      // See if any card in this list is the one we edited.
+      // Must compare card contents using .equals() instead of .indexOf()
+      // because gEditCard is not really a member of the .addressLists array.
+      let listCardsCount = subdir.addressLists.length;
+      for (let index = 0; index < listCardsCount; index++) {
+        let card = subdir.addressLists
+                         .queryElementAt(index, Components.interfaces.nsIAbCard);
+        if (card.equals(gEditCard.card))
+          foundDirectories.push({directory:subdir, cardIndex:index});
+      }
+    }
   }
-  
+
   CheckAndSetCardValues(gEditCard.card, document, false);
 
   directory.modifyCard(gEditCard.card);
-  
-  for (i=0; i < foundDirectoriesCount; i++) {
+
+  while (foundDirectories.length) {
     // Update the addressLists item for this card
-    foundDirectories[i].directory.addressLists
-                       .replaceElementAt(gEditCard.card, foundDirectories[i].index, false);
+    let foundItem = foundDirectories.pop();
+    foundItem.directory
+             .addressLists
+             .replaceElementAt(gEditCard.card, foundItem.cardIndex, false);
   }
 
   NotifySaveListeners(directory);
@@ -379,8 +365,8 @@ function NotifySaveListeners(directory)
 function InitPhoneticFields()
 {
   var showPhoneticFields =
-        gPrefs.getComplexValue("mail.addr_book.show_phonetic_fields", 
-                               Components.interfaces.nsIPrefLocalizedString).data;
+    Services.prefs.getComplexValue("mail.addr_book.show_phonetic_fields",
+      Components.interfaces.nsIPrefLocalizedString).data;
 
   // hide phonetic fields if indicated by the pref
   if (showPhoneticFields == "true")
@@ -400,16 +386,14 @@ function InitEditCard()
   //   file.
   gEditCard = new Object();
 
-  gEditCard.prefs = gPrefs;
-
   // get specific prefs that gEditCard will need
   try {
     var displayLastNameFirst =
-        gPrefs.getComplexValue("mail.addr_book.displayName.lastnamefirst", 
-                               Components.interfaces.nsIPrefLocalizedString).data;
+      Services.prefs.getComplexValue("mail.addr_book.displayName.lastnamefirst",
+        Components.interfaces.nsIPrefLocalizedString).data;
     gEditCard.displayLastNameFirst = (displayLastNameFirst == "true");
     gEditCard.generateDisplayName =
-      gPrefs.getBoolPref("mail.addr_book.displayName.autoGeneration");
+      Services.prefs.getBoolPref("mail.addr_book.displayName.autoGeneration");
   }
   catch (ex) {
     dump("ex: failed to get pref" + ex + "\n");
@@ -539,6 +523,8 @@ function GetCardValues(cardproperty, doc)
   document.getElementById("PhotoType").value = photoType;
   loadPhoto(cardproperty);
   setCardEditorPhoto(photoType, cardproperty);
+
+  updateChatName();
 }
 
 // when the ab card dialog is being loaded to show a vCard,
@@ -630,18 +616,15 @@ function CheckCardRequiredDataPresence(doc)
   //            organization (company name).
   var primaryEmail = doc.getElementById("PrimaryEmail");
   if (primaryEmail.textLength == 0 &&
-      doc.getElementById("FirstName").textLength == 0 &&
-      doc.getElementById("LastName").textLength == 0 &&
-      doc.getElementById("DisplayName").textLength == 0 &&
-      doc.getElementById("Company").textLength == 0)
+    doc.getElementById("FirstName").textLength == 0 &&
+    doc.getElementById("LastName").textLength == 0 &&
+    doc.getElementById("DisplayName").textLength == 0 &&
+    doc.getElementById("Company").textLength == 0)
   {
-    Components
-      .classes["@mozilla.org/embedcomp/prompt-service;1"]
-      .getService(Components.interfaces.nsIPromptService)
-      .alert(
-        window,
-        gAddressBookBundle.getString("cardRequiredDataMissingTitle"),
-        gAddressBookBundle.getString("cardRequiredDataMissingMessage"));
+    Services.prompt.alert(
+      window,
+      gAddressBookBundle.getString("cardRequiredDataMissingTitle"),
+      gAddressBookBundle.getString("cardRequiredDataMissingMessage"));
 
     return false;
   }
@@ -651,13 +634,10 @@ function CheckCardRequiredDataPresence(doc)
   // as some other field must have something as per the check above.
   if (primaryEmail.textLength != 0 && !/.@./.test(primaryEmail.value))
   {
-    Components
-      .classes["@mozilla.org/embedcomp/prompt-service;1"]
-      .getService(Components.interfaces.nsIPromptService)
-      .alert(
-        window,
-        gAddressBookBundle.getString("incorrectEmailAddressFormatTitle"),
-        gAddressBookBundle.getString("incorrectEmailAddressFormatMessage"));
+    Services.prompt.alert(
+      window,
+      gAddressBookBundle.getString("incorrectEmailAddressFormatTitle"),
+      gAddressBookBundle.getString("incorrectEmailAddressFormatMessage"));
 
     // Focus the dialog field, to help the user.
     document.getElementById("abTabs").selectedIndex = 0;
@@ -901,6 +881,44 @@ function modifyDatepicker(aDatepicker) {
   }
 }
 
+const chatNameFieldIds =
+  ["Gtalk", "AIM", "Yahoo", "Skype", "QQ", "MSN", "ICQ", "XMPP"];
+
+/**
+ * Show the 'Chat' tab and focus the first field that has a value, or
+ * the first field if none of them has a value.
+ */
+function showChat()
+{
+  document.getElementById('abTabPanels').parentNode.selectedTab =
+    document.getElementById('chatTabButton');
+  for each (let id in chatNameFieldIds) {
+    let elt = document.getElementById(id);
+    if (elt.value) {
+      elt.focus();
+      return;
+    }
+  }
+  document.getElementById(chatNameFieldIds[0]).focus();
+}
+
+/**
+ * Fill in the value of the ChatName readonly field with the first
+ * value of the fields in the Chat tab.
+ */
+function updateChatName()
+{
+  let value = "";
+  for each (let id in chatNameFieldIds) {
+    let val = document.getElementById(id).value;
+    if (val) {
+      value = val;
+      break;
+    }
+  }
+  document.getElementById("ChatName").value = value;
+}
+
 /**
  * Updates the photo displayed in the contact editor based on the
  * type of photo selected.  If the type is not recognized, the
@@ -1063,7 +1081,8 @@ var genericPhotoHandler = {
   onSave: function(aCard, aDocument) {
     // If we had the photo saved locally, clear it.
     removePhoto(aCard.getProperty("PhotoName", null));
-    aCard.setProperty("PhotoName", null);
+    aCard.setProperty("PhotoName", "");
+    aCard.setProperty("PhotoURI", "");
     aCard.setProperty("PhotoType", "generic");
     return true;
   }
@@ -1074,11 +1093,9 @@ var filePhotoHandler = {
   onLoad: function(aCard, aDocument) {
     var photoURI = aCard.getProperty("PhotoURI", "");
     try {
-      var file = Components.classes["@mozilla.org/network/io-service;1"]
-                           .getService(Components.interfaces.nsIIOService)
-                           .newURI(photoURI, null, null)
-                           .QueryInterface(Components.interfaces.nsIFileURL)
-                           .file;
+      var file = Services.io.newURI(photoURI, null, null)
+                            .QueryInterface(Components.interfaces.nsIFileURL)
+                            .file;
     } catch (e) {}
 
     if (!file)
@@ -1091,10 +1108,7 @@ var filePhotoHandler = {
   onShow: function(aCard, aDocument, aTargetID) {
     var file = aDocument.getElementById("PhotoFile").file;
     try {
-      var value = Components.classes["@mozilla.org/network/io-service;1"]
-                            .getService(Components.interfaces.nsIIOService)
-                            .newFileURI(file)
-                            .spec;
+      var value = Services.io.newFileURI(file).spec;
     } catch (e) {}
 
     if (!value)
@@ -1109,10 +1123,7 @@ var filePhotoHandler = {
     if (!file)
       return false;
 
-    var photoURI = Components.classes["@mozilla.org/network/io-service;1"]
-                             .getService(Components.interfaces.nsIIOService)
-                             .newFileURI(file)
-                             .spec;
+    var photoURI = Services.io.newFileURI(file).spec;
 
     var file = storePhoto(photoURI);
 

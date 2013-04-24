@@ -9,9 +9,13 @@ https://bugzilla.mozilla.org/show_bug.cgi?id=428248
 
   <script type="application/javascript"
           src="chrome://mochikit/content/tests/SimpleTest/SimpleTest.js"></script>
+  <script type="application/javascript"
+          src="chrome://mochikit/content/tests/SimpleTest/EventUtils.js"></script>
 
   <script type="application/javascript"
           src="../common.js"></script>
+  <script type="application/javascript"
+          src="../events.js"></script>
 
   <script type="application/javascript">
     var gParagraphAcc;
@@ -35,6 +39,13 @@ https://bugzilla.mozilla.org/show_bug.cgi?id=428248
 
       // Just test the link's name to make sure we get the right one.
       is(linkAcc.getAnchor(0).name, aName, "Wrong name for " + aID + "!");
+    }
+
+    //gA11yEventDumpToConsole = true;
+    function doPreTest()
+    {
+      var imgMap = document.getElementById("imgmap");
+      waitForImageMap(imgMap, doTest);
     }
 
     function doTest()
@@ -95,8 +106,9 @@ https://bugzilla.mozilla.org/show_bug.cgi?id=428248
     }
 
     SimpleTest.waitForExplicitFinish();
-    addA11yLoadEvent(doTest);
+    addA11yLoadEvent(doPreTest);
   </script>
+
 </head>
 <body>
 
@@ -131,7 +143,7 @@ https://bugzilla.mozilla.org/show_bug.cgi?id=428248
    ><img width="447" id="imgmap"
          height="15"
          usemap="#atoz_map"
-         src="letters.gif"></img><br
+         src="../letters.gif"></img><br
   >Empty link:<br
   ><a id="emptyLink" href=""><img src=""></img></a><br
   >Link with embedded span<br

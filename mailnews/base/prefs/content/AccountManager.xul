@@ -1,4 +1,8 @@
 <?xml version="1.0"?>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
 
 <?xml-stylesheet href="chrome://messenger/skin/accountManage.css" type="text/css"?>
 
@@ -23,7 +27,7 @@
 
   <hbox flex="1">
     <vbox style="&accountTree.width;">
-      <tree flex="1" onselect="onAccountTreeSelect()" id="accounttree"
+      <tree flex="1" onselect="onAccountTreeSelect(null, null);" id="accounttree"
             seltype="single" hidecolumnpicker="true">
         <treecols>
           <treecol id="AccountCol" flex="1" primary="true" hideheader="true"/>
@@ -36,12 +40,17 @@
               label="&accountActionsButton.label;"
               accesskey="&accountActionsButton.accesskey;">
         <menupopup id="accountActionsDropdown"
-                   onpopupshowing="initAcountActionsButton(this)">
+                   onpopupshowing="initAccountActionsButtons(this);">
           <menuitem id="accountActionsAddMailAccount"
                     label="&addMailAccountButton.label;"
                     accesskey="&addMailAccountButton.accesskey;"
                     prefstring="mail.disable_new_account_addition"
                     oncommand="AddMailAccount(event); event.stopPropagation();"/>
+          <menuitem id="accountActionsAddIMAccount"
+                    label="&addIMAccountButton.label;"
+                    accesskey="&addIMAccountButton.accesskey;"
+                    prefstring="mail.disable_new_account_addition"
+                    oncommand="AddIMAccount(event); event.stopPropagation();"/>
           <menuitem id="accountActionsAddOtherAccount"
                     label="&addOtherAccountButton.label;"
                     accesskey="&addOtherAccountButton.accesskey;"

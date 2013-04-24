@@ -1,6 +1,10 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * vim: set ts=8 sw=4 et tw=99:
  */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 
 #include "tests.h"
 #include "jsdbgapi.h"
@@ -17,7 +21,7 @@ catch (e)          \n\
 {                  \n\
 	 xx += 1;  \n\
 }\n\
-//@sourceMappingURL=http://example.com/path/to/source-map.json";
+//@ sourceMappingURL=http://example.com/path/to/source-map.json";
 
 
 static bool
@@ -32,20 +36,20 @@ CharsMatch(const jschar *p, const char *q) {
 // Bug 670958 - fix JS_GetScriptLineExtent, among others
 BEGIN_TEST(testScriptInfo)
 {
-    uintN startLine = 1000;
+    unsigned startLine = 1000;
 
-    JSObject *scriptObj = JS_CompileScript(cx, global, code, strlen(code),
-                                           __FILE__, startLine);
+    JSScript *script = JS_CompileScript(cx, global, code, strlen(code), __FILE__, startLine);
 
-    CHECK(scriptObj);
+    CHECK(script);
 
-    JSScript *script = JS_GetScriptFromObject(scriptObj);
     jsbytecode *start = JS_LineNumberToPC(cx, script, startLine);
     CHECK_EQUAL(JS_GetScriptBaseLineNumber(cx, script), startLine);
     CHECK_EQUAL(JS_PCToLineNumber(cx, script, start), startLine);
-    CHECK_EQUAL(JS_GetScriptLineExtent(cx, script), 10);
+    CHECK_EQUAL(JS_GetScriptLineExtent(cx, script), 11);
     CHECK(strcmp(JS_GetScriptFilename(cx, script), __FILE__) == 0);
-    CHECK(CharsMatch(JS_GetScriptSourceMap(cx, script), "http://example.com/path/to/source-map.json"));
+    const jschar *sourceMap = JS_GetScriptSourceMap(cx, script);
+    CHECK(sourceMap);
+    CHECK(CharsMatch(sourceMap, "http://example.com/path/to/source-map.json"));
 
     return true;
 }

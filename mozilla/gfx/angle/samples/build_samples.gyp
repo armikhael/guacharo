@@ -17,23 +17,31 @@
         'translator/translator.cpp',
       ],
     },
-    {
-      'target_name': 'essl_to_hlsl',
-      'type': 'executable',
-      'dependencies': [
-        '../src/build_angle.gyp:translator_hlsl',
-      ],
-      'include_dirs': [
-        '../include',
-      ],
-      'sources': [
-        'translator/translator.cpp',
-      ],
-    },
   ],
   'conditions': [
     ['OS=="win"', {
       'targets': [
+        {
+          'target_name': 'essl_to_hlsl',
+          'type': 'executable',
+          'dependencies': [
+            '../src/build_angle.gyp:translator_hlsl',
+          ],
+          'include_dirs': [
+            '../include',
+            '../src',
+          ],
+          'sources': [
+            'translator/translator.cpp',
+            '../src/common/debug.cpp',
+          ],
+          'msvs_settings': {
+            'VCLinkerTool': {
+              'AdditionalLibraryDirectories': ['$(DXSDK_DIR)/lib/x86'],
+              'AdditionalDependencies': ['d3d9.lib'],
+            }
+          }
+        },
         {
           'target_name': 'es_util',
           'type': 'static_library',
@@ -149,6 +157,14 @@
           'dependencies': ['es_util'],
           'sources': [
             'gles2_book/TextureWrap/TextureWrap.c',
+          ],
+        },
+        {
+          'target_name': 'post_sub_buffer',
+          'type': 'executable',
+          'dependencies': ['es_util'],
+          'sources': [
+            'gles2_book/PostSubBuffer/PostSubBuffer.c',
           ],
         },
       ],

@@ -1,42 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *   Seth Spitzer <sspitzer@netscape.com>
- *   Eric Ballet Baz BT Global Services / Etat francais Ministere de la Defense
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h" // for pre-compiled headers
 #include "nsMsgIdentity.h"
@@ -138,10 +103,10 @@ nsMsgIdentity::ToString(nsAString& aResult)
 /* Identity attribute accessors */
 
 NS_IMETHODIMP
-nsMsgIdentity::GetSignature(nsILocalFile **sig)
+nsMsgIdentity::GetSignature(nsIFile **sig)
 {
-  PRBool gotRelPref;
-  nsresult rv = NS_GetPersistentFile("sig_file" REL_FILE_PREF_SUFFIX, "sig_file", nsnull, gotRelPref, sig, mPrefBranch);
+  bool gotRelPref;
+  nsresult rv = NS_GetPersistentFile("sig_file" REL_FILE_PREF_SUFFIX, "sig_file", nullptr, gotRelPref, sig, mPrefBranch);
   if (NS_SUCCEEDED(rv) && !gotRelPref)
   {
     rv = NS_SetPersistentFile("sig_file" REL_FILE_PREF_SUFFIX, "sig_file", *sig, mPrefBranch);
@@ -151,7 +116,7 @@ nsMsgIdentity::GetSignature(nsILocalFile **sig)
 }
 
 NS_IMETHODIMP
-nsMsgIdentity::SetSignature(nsILocalFile *sig)
+nsMsgIdentity::SetSignature(nsIFile *sig)
 {
   nsresult rv = NS_OK;
   if (sig)
@@ -207,7 +172,7 @@ NS_IMPL_IDPREF_BOOL(DoCc, "doCc")
 NS_IMPL_IDPREF_STR (DoCcList, "doCcList")
 
 NS_IMETHODIMP
-nsMsgIdentity::GetDoBcc(PRBool *aValue)
+nsMsgIdentity::GetDoBcc(bool *aValue)
 {
   if (!mPrefBranch)
     return NS_ERROR_NOT_INITIALIZED;
@@ -216,10 +181,10 @@ nsMsgIdentity::GetDoBcc(PRBool *aValue)
   if (NS_SUCCEEDED(rv))
     return rv;
 
-  PRBool bccSelf = PR_FALSE;
+  bool bccSelf = false;
   GetBccSelf(&bccSelf);
 
-  PRBool bccOthers = PR_FALSE;
+  bool bccOthers = false;
   GetBccOthers(&bccOthers);
 
   nsCString others;
@@ -231,7 +196,7 @@ nsMsgIdentity::GetDoBcc(PRBool *aValue)
 }
 
 NS_IMETHODIMP
-nsMsgIdentity::SetDoBcc(PRBool aValue)
+nsMsgIdentity::SetDoBcc(bool aValue)
 {
   return SetBoolAttribute("doBcc", aValue);
 }
@@ -248,14 +213,14 @@ nsMsgIdentity::GetDoBccList(nsACString& aValue)
   if (NS_SUCCEEDED(rv))
     return rv;
 
-  PRBool bccSelf = PR_FALSE;
+  bool bccSelf = false;
   rv = GetBccSelf(&bccSelf);
   NS_ENSURE_SUCCESS(rv,rv);
 
   if (bccSelf)
     GetEmail(aValue);
 
-  PRBool bccOthers = PR_FALSE;
+  bool bccOthers = false;
   rv = GetBccOthers(&bccOthers);
   NS_ENSURE_SUCCESS(rv,rv);
 
@@ -295,7 +260,7 @@ NS_IMPL_IDPREF_BOOL(Valid, "valid")
 
 nsresult
 nsMsgIdentity::getFolderPref(const char *prefname, nsCString& retval,
-                             const char *folderName, PRUint32 folderflag)
+                             const char *folderName, uint32_t folderflag)
 {
   if (!mPrefBranch)
     return NS_ERROR_NOT_INITIALIZED;
@@ -351,7 +316,7 @@ nsMsgIdentity::getFolderPref(const char *prefname, nsCString& retval,
   nsCOMPtr<nsIMsgIncomingServer> server(do_QueryElementAt(servers, 0, &rv));
   if (NS_SUCCEEDED(rv))
   {
-    PRBool defaultToServer;
+    bool defaultToServer;
     server->GetDefaultCopiesAndFoldersPrefsToServer(&defaultToServer);
     // if we should default to special folders on the server,
     // use the local folders server
@@ -379,7 +344,7 @@ nsMsgIdentity::getFolderPref(const char *prefname, nsCString& retval,
 }
 
 nsresult
-nsMsgIdentity::setFolderPref(const char *prefname, const nsACString& value, PRUint32 folderflag)
+nsMsgIdentity::setFolderPref(const char *prefname, const nsACString& value, uint32_t folderflag)
 {
   if (!mPrefBranch)
     return NS_ERROR_NOT_INITIALIZED;
@@ -401,7 +366,7 @@ nsMsgIdentity::setFolderPref(const char *prefname, const nsACString& value, PRUi
     nsCOMPtr<nsISupportsArray> servers;
     rv = accountManager->GetServersForIdentity(this, getter_AddRefs(servers));
     NS_ENSURE_SUCCESS(rv,rv);
-    PRUint32 cnt = 0;
+    uint32_t cnt = 0;
     servers->Count(&cnt);
     if (cnt > 0)
     {
@@ -506,7 +471,7 @@ NS_IMETHODIMP nsMsgIdentity::GetCharAttribute(const char *aName, nsACString& val
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgIdentity::SetBoolAttribute(const char *aName, PRBool val)
+NS_IMETHODIMP nsMsgIdentity::SetBoolAttribute(const char *aName, bool val)
 {
   if (!mPrefBranch)
     return NS_ERROR_NOT_INITIALIZED;
@@ -514,13 +479,13 @@ NS_IMETHODIMP nsMsgIdentity::SetBoolAttribute(const char *aName, PRBool val)
   return mPrefBranch->SetBoolPref(aName, val);
 }
 
-NS_IMETHODIMP nsMsgIdentity::GetBoolAttribute(const char *aName, PRBool *val)
+NS_IMETHODIMP nsMsgIdentity::GetBoolAttribute(const char *aName, bool *val)
 {
   NS_ENSURE_ARG_POINTER(val);
   if (!mPrefBranch)
     return NS_ERROR_NOT_INITIALIZED;
 
-  *val = PR_FALSE;
+  *val = false;
 
   if (NS_FAILED(mPrefBranch->GetBoolPref(aName, val)))
     mDefPrefBranch->GetBoolPref(aName, val);
@@ -528,7 +493,7 @@ NS_IMETHODIMP nsMsgIdentity::GetBoolAttribute(const char *aName, PRBool *val)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgIdentity::SetIntAttribute(const char *aName, PRInt32 val)
+NS_IMETHODIMP nsMsgIdentity::SetIntAttribute(const char *aName, int32_t val)
 {
   if (!mPrefBranch)
     return NS_ERROR_NOT_INITIALIZED;
@@ -536,7 +501,7 @@ NS_IMETHODIMP nsMsgIdentity::SetIntAttribute(const char *aName, PRInt32 val)
   return mPrefBranch->SetIntPref(aName, val);
 }
 
-NS_IMETHODIMP nsMsgIdentity::GetIntAttribute(const char *aName, PRInt32 *val)
+NS_IMETHODIMP nsMsgIdentity::GetIntAttribute(const char *aName, int32_t *val)
 {
   NS_ENSURE_ARG_POINTER(val);
 
@@ -554,7 +519,7 @@ NS_IMETHODIMP nsMsgIdentity::GetIntAttribute(const char *aName, PRInt32 *val)
 #define COPY_IDENTITY_FILE_VALUE(SRC_ID,MACRO_GETTER,MACRO_SETTER)   \
   {  \
     nsresult macro_rv;  \
-    nsCOMPtr <nsILocalFile>macro_spec;   \
+    nsCOMPtr <nsIFile>macro_spec;   \
           macro_rv = SRC_ID->MACRO_GETTER(getter_AddRefs(macro_spec)); \
           if (NS_SUCCEEDED(macro_rv)) \
             this->MACRO_SETTER(macro_spec);     \
@@ -563,7 +528,7 @@ NS_IMETHODIMP nsMsgIdentity::GetIntAttribute(const char *aName, PRInt32 *val)
 #define COPY_IDENTITY_INT_VALUE(SRC_ID,MACRO_GETTER,MACRO_SETTER)   \
   {  \
         nsresult macro_rv;  \
-          PRInt32 macro_oldInt;  \
+          int32_t macro_oldInt;  \
           macro_rv = SRC_ID->MACRO_GETTER(&macro_oldInt);  \
           if (NS_SUCCEEDED(macro_rv)) \
             this->MACRO_SETTER(macro_oldInt);     \
@@ -572,7 +537,7 @@ NS_IMETHODIMP nsMsgIdentity::GetIntAttribute(const char *aName, PRInt32 *val)
 #define COPY_IDENTITY_BOOL_VALUE(SRC_ID,MACRO_GETTER,MACRO_SETTER)   \
   {  \
         nsresult macro_rv;  \
-          PRBool macro_oldBool;  \
+          bool macro_oldBool;  \
           macro_rv = SRC_ID->MACRO_GETTER(&macro_oldBool);  \
           if (NS_SUCCEEDED(macro_rv)) \
             this->MACRO_SETTER(macro_oldBool);     \
@@ -637,11 +602,11 @@ nsMsgIdentity::Copy(nsIMsgIdentity *identity)
 }
 
 NS_IMETHODIMP
-nsMsgIdentity::GetRequestReturnReceipt(PRBool *aVal)
+nsMsgIdentity::GetRequestReturnReceipt(bool *aVal)
 {
   NS_ENSURE_ARG_POINTER(aVal);
 
-  PRBool useCustomPrefs = PR_FALSE;
+  bool useCustomPrefs = false;
   nsresult rv = GetBoolAttribute("use_custom_prefs", &useCustomPrefs);
   NS_ENSURE_SUCCESS(rv, rv);
   if (useCustomPrefs)
@@ -653,11 +618,11 @@ nsMsgIdentity::GetRequestReturnReceipt(PRBool *aVal)
 }
 
 NS_IMETHODIMP
-nsMsgIdentity::GetReceiptHeaderType(PRInt32 *aType)
+nsMsgIdentity::GetReceiptHeaderType(int32_t *aType)
 {
   NS_ENSURE_ARG_POINTER(aType);
 
-  PRBool useCustomPrefs = PR_FALSE;
+  bool useCustomPrefs = false;
   nsresult rv = GetBoolAttribute("use_custom_prefs", &useCustomPrefs);
   NS_ENSURE_SUCCESS(rv, rv);
   if (useCustomPrefs)
@@ -669,11 +634,11 @@ nsMsgIdentity::GetReceiptHeaderType(PRInt32 *aType)
 }
 
 NS_IMETHODIMP
-nsMsgIdentity::GetRequestDSN(PRBool *aVal)
+nsMsgIdentity::GetRequestDSN(bool *aVal)
 {
   NS_ENSURE_ARG_POINTER(aVal);
 
-  PRBool useCustomPrefs = PR_FALSE;
+  bool useCustomPrefs = false;
   nsresult rv = GetBoolAttribute("dsn_use_custom_prefs", &useCustomPrefs);
   NS_ENSURE_SUCCESS(rv, rv);
   if (useCustomPrefs)

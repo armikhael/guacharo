@@ -1,41 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  * vim: sw=2 ts=2 et lcs=trail\:.,tab\:>~ :
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Places code.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Shawn Wilsher <me@shawnwilsher.com> (Original Author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsPlacesTables.h"
 
@@ -50,27 +17,6 @@
  *  7 - FRAMED_LINK
  **/
 #define EXCLUDED_VISIT_TYPES "0, 4, 7, 8"
-/**
- * Trigger checks to ensure that at least one bookmark is still using a keyword
- * when any bookmark is deleted.  If there are no more bookmarks using it, the
- * keyword is deleted.
- */
-#define CREATE_KEYWORD_VALIDITY_TRIGGER NS_LITERAL_CSTRING( \
-  "CREATE TRIGGER moz_bookmarks_beforedelete_v1_trigger " \
-  "BEFORE DELETE ON moz_bookmarks FOR EACH ROW " \
-  "WHEN OLD.keyword_id NOT NULL " \
-  "BEGIN " \
-    "DELETE FROM moz_keywords " \
-    "WHERE id = OLD.keyword_id " \
-    "AND NOT EXISTS ( " \
-      "SELECT id " \
-      "FROM moz_bookmarks " \
-      "WHERE keyword_id = OLD.keyword_id " \
-      "AND id <> OLD.id " \
-      "LIMIT 1 " \
-    ");" \
-  "END" \
-)
 
 /**
  * This triggers update visit_count and last_visit_date based on historyvisits
@@ -97,6 +43,108 @@
                          "WHERE place_id = OLD.place_id " \
                          "ORDER BY visit_date DESC LIMIT 1) " \
     "WHERE id = OLD.place_id;" \
+  "END" \
+)
+
+/**
+ * Select the best prefix for a host, based on existing pages registered for it.
+ * Prefixes have a priority, from the top to the bottom, so that secure pages
+ * have higher priority, and more generically "www." prefixed hosts come before
+ * unprefixed ones.
+ * Each condition just checks if a page exists for a specific prefixed host,
+ * and if so returns the relative prefix.
+ */
+#define HOSTS_PREFIX_PRIORITY_FRAGMENT \
+  "SELECT CASE " \
+    "WHEN EXISTS( " \
+      "SELECT 1 FROM moz_places WHERE url BETWEEN 'https://www.' || host || '/' " \
+                                             "AND 'https://www.' || host || '/' || X'FFFF' " \
+    ") THEN 'https://www.' " \
+    "WHEN EXISTS( " \
+      "SELECT 1 FROM moz_places WHERE url BETWEEN 'https://' || host || '/' " \
+                                             "AND 'https://' || host || '/' || X'FFFF' " \
+    ") THEN 'https://' " \
+    "WHEN EXISTS( " \
+      "SELECT 1 FROM moz_places WHERE url BETWEEN 'ftp://' || host || '/' " \
+                                             "AND 'ftp://' || host || '/' || X'FFFF' " \
+    ") THEN 'ftp://' " \
+    "WHEN EXISTS( " \
+      "SELECT 1 FROM moz_places WHERE url BETWEEN 'http://www.' || host || '/' " \
+                                             "AND 'http://www.' || host || '/' || X'FFFF' " \
+    ") THEN 'www.' " \
+  "END "
+
+/**
+ * These triggers update the hostnames table whenever moz_places changes.
+ */
+#define CREATE_PLACES_AFTERINSERT_TRIGGER NS_LITERAL_CSTRING( \
+  "CREATE TEMP TRIGGER moz_places_afterinsert_trigger " \
+  "AFTER INSERT ON moz_places FOR EACH ROW " \
+  "WHEN LENGTH(NEW.rev_host) > 1 " \
+  "BEGIN " \
+    "INSERT OR REPLACE INTO moz_hosts (id, host, frecency, typed, prefix) " \
+    "VALUES (" \
+      "(SELECT id FROM moz_hosts WHERE host = fixup_url(get_unreversed_host(NEW.rev_host))), " \
+      "fixup_url(get_unreversed_host(NEW.rev_host)), " \
+      "MAX(IFNULL((SELECT frecency FROM moz_hosts WHERE host = fixup_url(get_unreversed_host(NEW.rev_host))), -1), NEW.frecency), " \
+      "MAX(IFNULL((SELECT typed FROM moz_hosts WHERE host = fixup_url(get_unreversed_host(NEW.rev_host))), 0), NEW.typed), " \
+      "(" HOSTS_PREFIX_PRIORITY_FRAGMENT \
+       "FROM ( " \
+          "SELECT fixup_url(get_unreversed_host(NEW.rev_host)) AS host " \
+        ") AS match " \
+      ") " \
+    "); " \
+  "END" \
+)
+
+#define CREATE_PLACES_AFTERDELETE_TRIGGER NS_LITERAL_CSTRING( \
+  "CREATE TEMP TRIGGER moz_places_afterdelete_trigger " \
+  "AFTER DELETE ON moz_places FOR EACH ROW " \
+  "BEGIN " \
+    "DELETE FROM moz_hosts " \
+    "WHERE host = fixup_url(get_unreversed_host(OLD.rev_host)) " \
+      "AND NOT EXISTS(" \
+        "SELECT 1 FROM moz_places " \
+          "WHERE rev_host = get_unreversed_host(host || '.') || '.' " \
+             "OR rev_host = get_unreversed_host(host || '.') || '.www.' " \
+      "); " \
+    "UPDATE moz_hosts " \
+    "SET prefix = (" \
+      HOSTS_PREFIX_PRIORITY_FRAGMENT \
+    ") " \
+    "WHERE host = fixup_url(get_unreversed_host(OLD.rev_host)); " \
+  "END" \
+)
+
+// For performance reasons the host frecency is updated only when the page
+// frecency changes by a meaningful percentage.  This is because the frecency
+// decay algorithm requires to update all the frecencies at once, causing a
+// too high overhead, while leaving the ordering unchanged.
+#define CREATE_PLACES_AFTERUPDATE_FRECENCY_TRIGGER NS_LITERAL_CSTRING( \
+  "CREATE TEMP TRIGGER moz_places_afterupdate_frecency_trigger " \
+  "AFTER UPDATE OF frecency ON moz_places FOR EACH ROW " \
+  "WHEN NEW.frecency >= 0 " \
+    "AND ABS(" \
+      "IFNULL((NEW.frecency - OLD.frecency) / CAST(NEW.frecency AS REAL), " \
+             "(NEW.frecency - OLD.frecency))" \
+    ") > .05 " \
+  "BEGIN " \
+    "UPDATE moz_hosts " \
+    "SET frecency = (SELECT MAX(frecency) FROM moz_places " \
+                    "WHERE rev_host = get_unreversed_host(host || '.') || '.' " \
+                       "OR rev_host = get_unreversed_host(host || '.') || '.www.') " \
+    "WHERE host = fixup_url(get_unreversed_host(NEW.rev_host)); " \
+  "END" \
+)
+
+#define CREATE_PLACES_AFTERUPDATE_TYPED_TRIGGER NS_LITERAL_CSTRING( \
+  "CREATE TEMP TRIGGER moz_places_afterupdate_typed_trigger " \
+  "AFTER UPDATE OF typed ON moz_places FOR EACH ROW " \
+  "WHEN NEW.typed = 1 " \
+  "BEGIN " \
+    "UPDATE moz_hosts " \
+    "SET typed = 1 " \
+    "WHERE host = fixup_url(get_unreversed_host(NEW.rev_host)); " \
   "END" \
 )
 

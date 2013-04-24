@@ -1,4 +1,8 @@
 <?xml version="1.0"?>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
 
 <bindings id="popupBindings"
    xmlns="http://www.mozilla.org/xbl"
@@ -237,7 +241,7 @@
           try {
             let tmp = {};
             Components.utils.import("resource://gre/modules/WindowDraggingUtils.jsm", tmp);
-            let draghandle = new tmp.WindowDraggingElement(this, window);
+            let draghandle = new tmp.WindowDraggingElement(this);
             draghandle.mouseDownCheck = function () this._dragBindingAlive;
           } catch (e) {}
         }
@@ -302,23 +306,22 @@
 
   <binding id="arrowpanel" extends="chrome://global/content/bindings/popup.xml#panel">
     <content flip="both" side="top" position="bottomcenter topleft">
-      <xul:box anonid="container" class="panel-arrowcontainer" flex="1">
+      <xul:box anonid="container" class="panel-arrowcontainer" flex="1"
+               xbl:inherits="side,panelopen">
         <xul:box anonid="arrowbox" class="panel-arrowbox">
           <xul:image anonid="arrow" class="panel-arrow"/>
         </xul:box>
-        <xul:box class="panel-arrowcontent" flex="1">
-          <xul:box class="panel-inner-arrowcontent" xbl:inherits="align,dir,orient,pack" flex="1">
-            <children/>
-            <xul:box class="panel-inner-arrowcontentfooter" xbl:inherits="footertype" hidden="true"/>
-          </xul:box>
+        <xul:box class="panel-arrowcontent" xbl:inherits="side,align,dir,orient,pack" flex="1">
+          <children/>
+          <xul:box class="panel-inner-arrowcontentfooter" xbl:inherits="footertype" hidden="true"/>
         </xul:box>
       </xul:box>
     </content>
     <implementation>
-      <field name="_fadeTimer"/>
+      <field name="_fadeTimer">null</field>
     </implementation>
     <handlers>
-      <handler event="popupshowing">
+      <handler event="popupshowing" phase="target">
       <![CDATA[
         var container = document.getAnonymousElementByAttribute(this, "anonid", "container");
         var arrowbox = document.getAnonymousElementByAttribute(this, "anonid", "arrowbox");
@@ -383,10 +386,10 @@
 
             // If the popup is on the left of the anchor.
             if (smallerTo(popupLeft, anchorLeft, epsilon) && smallerTo(popupRight, anchorRight, epsilon)) {
-              pack = (popupLeft + popupRect.width / 2 < anchorLeft) ? "end" : "start";
+              pack = "end";
             // If the popup is on the right of the anchor.
             } else if (smallerTo(anchorLeft, popupLeft, epsilon) && smallerTo(anchorRight, popupRight, epsilon)) {
-              pack = (popupLeft + popupRect.width / 2 > anchorRight) ? "start" : "end";
+              pack = "start"; //(popupLeft + popupRect.width / 2 > anchorRight) ? "start" : "end";
             // If the popup is not on the right nor on the left.
             // Basically, that means one is above the other and one is bigger
             // than the other.
@@ -420,15 +423,20 @@
             hideAnchor = true;
           }
           else {
+            let dir = "";
             arrowbox.pack = popupTop + popupRect.height / 2 < anchorTop ? "end" : "start";
             if (horizPos == 1) {
-              container.dir = "";
               anchorClass = "left";
             }
             else if (horizPos == -1) {
-              container.dir = "reverse";
+              dir = "reverse";
               anchorClass = "right";
             }
+            // In RTL, everything should be inverted.
+            if (window.getComputedStyle(this).direction == "rtl") {
+              dir = (dir == "") ? "reverse" : "";
+            }
+            container.dir = dir;
           }
         }
         else {
@@ -454,11 +462,18 @@
       </handler>
       <handler event="transitionend" phase="target">
       <![CDATA[
-        if (event.propertyName == "opacity") {
+        if (event.propertyName == "opacity" &&
+            event.originalTarget == this) {
           this.hidePopup();
           this.style.removeProperty("opacity");
         }
       ]]>
+      </handler>
+      <handler event="popupshown" phase="target">
+        this.setAttribute("panelopen", "true");
+      </handler>
+      <handler event="popuphidden" phase="target">
+        this.removeAttribute("panelopen");
       </handler>
     </handlers>
   </binding>

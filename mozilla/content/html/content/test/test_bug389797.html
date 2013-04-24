@@ -31,11 +31,11 @@ function HTML_TAG(aTagName, aImplClass) {
   allTags.push(aTagName);
   classInfos[aTagName] = aImplClass;
   interfaces[aTagName] =
-    [ "nsIDOMNSElement",
-      "nsIDOMEventTarget",
-      "nsIDOMNSHTMLElement",
+    [ "nsIDOMEventTarget",
       "nsIDOMElementCSSInlineStyle",
-      "nsIDOMNodeSelector" ];
+      "nsIDOMNodeSelector",
+      "nsITouchEventReceiver",
+      "nsIInlineEventHandlers" ];
 
   // Some interfaces don't appear in classinfo because other interfaces that
   // inherit from them do.
@@ -143,7 +143,7 @@ HTML_TAG("figure", "")
 HTML_TAG("font", "Font");
 HTML_TAG("footer", "")
 HTML_TAG("form", "Form", [], [ "nsIWebProgressListener" ]);
-HTML_TAG("frame", "Frame", [], [ "nsIFrameLoaderOwner" ]);
+HTML_TAG("frame", "Frame", [ "nsIDOMMozBrowserFrame" ], [ "nsIFrameLoaderOwner" ]);
 HTML_TAG("frameset", "FrameSet");
 HTML_TAG("h1", "Heading");
 HTML_TAG("h2", "Heading");
@@ -157,7 +157,7 @@ HTML_TAG("hgroup", "")
 HTML_TAG("hr", "HR");
 HTML_TAG("html", "Html");
 HTML_TAG("i", "");
-HTML_TAG("iframe", "IFrame", [ "nsIDOMNSHTMLFrameElement", "nsIDOMGetSVGDocument" ],
+HTML_TAG("iframe", "IFrame", [ "nsIDOMGetSVGDocument", "nsIDOMMozBrowserFrame" ],
                              [ "nsIFrameLoaderOwner" ]);
 HTML_TAG("image", "Span");
 HTML_TAG("img", "Image", [], [ "imgIDecoderObserver",
@@ -178,6 +178,7 @@ HTML_TAG("mark", "");
 HTML_TAG("marquee", "Div");
 HTML_TAG("menu", "Menu");
 HTML_TAG("meta", "Meta");
+HTML_TAG("meter", "Meter");
 HTML_TAG("multicol", "Span");
 HTML_TAG("nav", "")
 HTML_TAG("nobr", "");

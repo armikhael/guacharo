@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is The Browser Profile Migrator.
- *
- * The Initial Developer of the Original Code is Ben Goodger.
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Ben Goodger <ben@bengoodger.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsSuiteProfileMigratorUtils.h"
 #include "nsCRT.h"
@@ -78,12 +46,12 @@ nsThunderbirdProfileMigrator::~nsThunderbirdProfileMigrator()
 // nsISuiteProfileMigrator
 
 NS_IMETHODIMP
-nsThunderbirdProfileMigrator::Migrate(PRUint16 aItems,
+nsThunderbirdProfileMigrator::Migrate(uint16_t aItems,
                                       nsIProfileStartup* aStartup,
                                       const PRUnichar* aProfile)
 {
   nsresult rv = NS_OK;
-  PRBool aReplace = aStartup ? PR_TRUE : PR_FALSE;
+  bool aReplace = aStartup ? true : false;
 
   if (!mTargetProfile) {
     GetProfilePath(aStartup, getter_AddRefs(mTargetProfile));
@@ -96,7 +64,7 @@ nsThunderbirdProfileMigrator::Migrate(PRUint16 aItems,
       return NS_ERROR_FILE_NOT_FOUND;
   }
 
-  NOTIFY_OBSERVERS(MIGRATION_STARTED, nsnull);
+  NOTIFY_OBSERVERS(MIGRATION_STARTED, nullptr);
 
   COPY_DATA(CopyPreferences,  aReplace, nsISuiteProfileMigrator::SETTINGS);
   COPY_DATA(CopyCookies,      aReplace, nsISuiteProfileMigrator::COOKIES);
@@ -140,8 +108,8 @@ nsThunderbirdProfileMigrator::Migrate(PRUint16 aItems,
 
 NS_IMETHODIMP
 nsThunderbirdProfileMigrator::GetMigrateData(const PRUnichar* aProfile,
-                                             PRBool aReplace,
-                                             PRUint16* aResult)
+                                             bool aReplace,
+                                             uint16_t* aResult)
 {
   *aResult = 0;
 
@@ -160,25 +128,25 @@ nsThunderbirdProfileMigrator::GetMigrateData(const PRUnichar* aProfile,
 
   MigrationData data[] = { { FILE_NAME_PREFS,
                              nsISuiteProfileMigrator::SETTINGS,
-                             PR_TRUE },
+                             true },
                            { FILE_NAME_USER_PREFS,
                              nsISuiteProfileMigrator::SETTINGS,
-                             PR_TRUE },
+                             true },
                            { FILE_NAME_COOKIES,
                              nsISuiteProfileMigrator::COOKIES,
-                             PR_FALSE },
+                             false },
                            { FILE_NAME_HISTORY,
                              nsISuiteProfileMigrator::HISTORY,
-                             PR_TRUE },
+                             true },
                            { FILE_NAME_DOWNLOADS,
                              nsISuiteProfileMigrator::OTHERDATA,
-                             PR_TRUE },
+                             true },
                            { FILE_NAME_MIMETYPES,
                              nsISuiteProfileMigrator::OTHERDATA,
-                             PR_TRUE },
+                             true },
                            { FILE_NAME_JUNKTRAINING,
                              nsISuiteProfileMigrator::JUNKTRAINING,
-                             PR_TRUE } };
+                             true } };
                                                                   
   GetMigrateDataFromArray(data, sizeof(data)/sizeof(MigrationData),
                           aReplace, mSourceProfile, aResult);
@@ -194,7 +162,7 @@ nsThunderbirdProfileMigrator::GetMigrateData(const PRUnichar* aProfile,
     mSourceProfile->Clone(getter_AddRefs(sourcePasswordsFile));
     sourcePasswordsFile->Append(fileName);
     
-    PRBool exists;
+    bool exists;
     sourcePasswordsFile->Exists(&exists);
     if (exists)
       *aResult |= nsISuiteProfileMigrator::PASSWORDS;
@@ -204,7 +172,7 @@ nsThunderbirdProfileMigrator::GetMigrateData(const PRUnichar* aProfile,
 }
 
 NS_IMETHODIMP
-nsThunderbirdProfileMigrator::GetSupportedItems(PRUint16 *aSupportedItems)
+nsThunderbirdProfileMigrator::GetSupportedItems(uint16_t *aSupportedItems)
 {
   NS_ENSURE_ARG_POINTER(aSupportedItems);
 
@@ -231,38 +199,33 @@ nsThunderbirdProfileMigrator::FillProfileDataFromRegistry()
   // Find the Thunderbird Registry
   nsCOMPtr<nsIProperties> fileLocator(
     do_GetService("@mozilla.org/file/directory_service;1"));
-  nsCOMPtr<nsILocalFile> thunderbirdData;
+  nsCOMPtr<nsIFile> thunderbirdData;
 #ifdef XP_WIN
-#define REGISTRY_FILE "registry.dat"
-  fileLocator->Get(NS_WIN_APPDATA_DIR, NS_GET_IID(nsILocalFile),
+  fileLocator->Get(NS_WIN_APPDATA_DIR, NS_GET_IID(nsIFile),
                    getter_AddRefs(thunderbirdData));
 
   thunderbirdData->Append(NS_LITERAL_STRING("Thunderbird"));
 
 #elif defined(XP_MACOSX)
-#define REGISTRY_FILE "Application Registry"
-  fileLocator->Get(NS_MAC_USER_LIB_DIR, NS_GET_IID(nsILocalFile),
+  fileLocator->Get(NS_MAC_USER_LIB_DIR, NS_GET_IID(nsIFile),
                    getter_AddRefs(thunderbirdData));
   
   thunderbirdData->Append(NS_LITERAL_STRING("Thunderbird"));
 
 #elif defined(XP_UNIX)
-#define REGISTRY_FILE "appreg"
-  fileLocator->Get(NS_UNIX_HOME_DIR, NS_GET_IID(nsILocalFile),
+  fileLocator->Get(NS_UNIX_HOME_DIR, NS_GET_IID(nsIFile),
                    getter_AddRefs(thunderbirdData));
   
   thunderbirdData->Append(NS_LITERAL_STRING(".thunderbird"));
 
 #elif defined(XP_BEOS)
-#define REGISTRY_FILE "appreg"
-   fileLocator->Get(NS_BEOS_SETTINGS_DIR, NS_GET_IID(nsILocalFile),
+   fileLocator->Get(NS_BEOS_SETTINGS_DIR, NS_GET_IID(nsIFile),
                     getter_AddRefs(thunderbirdData));
 
    thunderbirdData->Append(NS_LITERAL_STRING("Thunderbird"));
 
 #elif defined(XP_OS2)
-#define REGISTRY_FILE "registry.dat"
-  fileLocator->Get(NS_OS2_HOME_DIR, NS_GET_IID(nsILocalFile),
+  fileLocator->Get(NS_OS2_HOME_DIR, NS_GET_IID(nsIFile),
                    getter_AddRefs(thunderbirdData));
   
   thunderbirdData->Append(NS_LITERAL_STRING("Thunderbird"));
@@ -272,18 +235,9 @@ nsThunderbirdProfileMigrator::FillProfileDataFromRegistry()
 #endif
 
   // Try profiles.ini first
-  nsresult rv = GetProfileDataFromProfilesIni(thunderbirdData,
-                                              mProfileNames,
-                                              mProfileLocations);
-
-  if (rv != NS_ERROR_FILE_NOT_FOUND)
-    return rv;
-
-  thunderbirdData->Append(NS_LITERAL_STRING(REGISTRY_FILE));
-
-  // Then try the old registry format
-  return GetProfileDataFromRegistry(thunderbirdData, mProfileNames,
-                                    mProfileLocations);
+  return GetProfileDataFromProfilesIni(thunderbirdData,
+                                       mProfileNames,
+                                       mProfileLocations);
 }
 
 static
@@ -503,12 +457,9 @@ nsThunderbirdProfileMigrator::PrefTransform gTransforms[] = {
   MAKESAMETYPEPREFTRANSFORM("offline.download.download_messages",      Int),
   MAKESAMETYPEPREFTRANSFORM("offline.send.unsent_messages",            Int),
   MAKESAMETYPEPREFTRANSFORM("offline.startup_state",                   Int),
-
   MAKESAMETYPEPREFTRANSFORM("plugin.override_internal_types",          Bool),
   MAKESAMETYPEPREFTRANSFORM("plugin.expose_full_path",                 Bool),
-
   MAKESAMETYPEPREFTRANSFORM("security.default_personal_cert",          String),
-  MAKESAMETYPEPREFTRANSFORM("security.enable_ssl2",                    Bool),
   MAKESAMETYPEPREFTRANSFORM("security.enable_ssl3",                    Bool),
   MAKESAMETYPEPREFTRANSFORM("security.enable_tls",                     Bool),
   MAKESAMETYPEPREFTRANSFORM("security.password_lifetime",              Int),
@@ -588,7 +539,7 @@ nsThunderbirdProfileMigrator::TransformPreferences(
   };
 
   PBStructArray branches[NS_ARRAY_LENGTH(branchNames)];
-  PRUint32 i;
+  uint32_t i;
   for (i = 0; i < NS_ARRAY_LENGTH(branchNames); ++i)
     ReadBranch(branchNames[i], psvc, branches[i]);
 
@@ -612,7 +563,7 @@ nsThunderbirdProfileMigrator::TransformPreferences(
   mTargetProfile->Clone(getter_AddRefs(targetPrefsFile));
   targetPrefsFile->AppendNative(nsDependentCString(aTargetPrefFileName));
 
-  // Don't use nsnull here as we're too early in the cycle for the prefs
+  // Don't use nullptr here as we're too early in the cycle for the prefs
   // service to get its default file (because the NS_GetDirectoryService items
   // aren't fully set up yet).
   psvc->ReadUserPrefs(targetPrefsFile);
@@ -629,7 +580,7 @@ nsThunderbirdProfileMigrator::TransformPreferences(
 }
 
 nsresult
-nsThunderbirdProfileMigrator::CopyPreferences(PRBool aReplace)
+nsThunderbirdProfileMigrator::CopyPreferences(bool aReplace)
 {
   nsresult rv = NS_OK;
   if (!aReplace)
@@ -652,7 +603,7 @@ nsThunderbirdProfileMigrator::CopyPreferences(PRBool aReplace)
 }
 
 nsresult
-nsThunderbirdProfileMigrator::CopyHistory(PRBool aReplace)
+nsThunderbirdProfileMigrator::CopyHistory(bool aReplace)
 {
   return aReplace ? CopyFile(FILE_NAME_HISTORY, FILE_NAME_HISTORY) : NS_OK;
 }

@@ -1,43 +1,10 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Neil Deakin <enndeakin@sympatico.ca>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsCOMPtr.h"
-#include "nsDOMError.h"
+#include "nsError.h"
 #include "nsDOMStorage.h"
 #include "nsDOMStorageDBWrapper.h"
 #include "nsDOMStoragePersistentDB.h"
@@ -53,12 +20,17 @@
 #include "mozIStorageValueArray.h"
 #include "mozIStorageFunction.h"
 #include "nsNetUtil.h"
+#include "mozilla/Attributes.h"
+
+#include "sampler.h"
+
+using namespace mozilla;
 
 // Temporary tables for a storage scope will be flushed if found older
 // then this time in seconds since the load
 #define TEMP_TABLE_MAX_AGE (10) // seconds
 
-class nsReverseStringSQLFunction : public mozIStorageFunction
+class nsReverseStringSQLFunction MOZ_FINAL : public mozIStorageFunction
 {
   NS_DECL_ISUPPORTS
   NS_DECL_MOZISTORAGEFUNCTION
@@ -91,7 +63,7 @@ nsReverseStringSQLFunction::OnFunctionCall(
   return NS_OK;
 }
 
-class nsIsOfflineSQLFunction : public mozIStorageFunction
+class nsIsOfflineSQLFunction MOZ_FINAL : public mozIStorageFunction
 {
   NS_DECL_ISUPPORTS
   NS_DECL_MOZISTORAGEFUNCTION
@@ -100,6 +72,7 @@ class nsIsOfflineSQLFunction : public mozIStorageFunction
 NS_IMPL_ISUPPORTS1(nsIsOfflineSQLFunction, mozIStorageFunction)
 
 nsDOMStoragePersistentDB::nsDOMStoragePersistentDB()
+: mStatements(mConnection)
 {
   mTempTableLoads.Init(16);
 }
@@ -118,7 +91,7 @@ nsIsOfflineSQLFunction::OnFunctionCall(
   rv = nsDOMStorageDBWrapper::GetDomainFromScopeKey(scope, domain);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool hasOfflinePermission = IsOfflineAllowed(domain);
+  bool hasOfflinePermission = IsOfflineAllowed(domain);
   NS_ENSURE_SUCCESS(rv, rv);
 
   nsCOMPtr<nsIWritableVariant> outVar(do_CreateInstance(
@@ -131,53 +104,6 @@ nsIsOfflineSQLFunction::OnFunctionCall(
   *aResult = outVar.get();
   outVar.forget();
   return NS_OK;
-}
-
-class Binder 
-{
-public:
-  Binder(mozIStorageStatement* statement, nsresult *rv);
-
-  mozIStorageBindingParams* operator->();
-  nsresult Add();
-
-private:
-  mozIStorageStatement* mStmt;
-  nsCOMPtr<mozIStorageBindingParamsArray> mArray;
-  nsCOMPtr<mozIStorageBindingParams> mParams;
-};
-
-Binder::Binder(mozIStorageStatement* statement, nsresult *rv)
- : mStmt(statement) 
-{
-  *rv = mStmt->NewBindingParamsArray(getter_AddRefs(mArray));
-  if (NS_FAILED(*rv))
-    return;
-
-  *rv = mArray->NewBindingParams(getter_AddRefs(mParams));
-  if (NS_FAILED(*rv))
-    return;
-
-  *rv = NS_OK;
-}
-
-mozIStorageBindingParams*
-Binder::operator->()
-{
-  return mParams;
-}
-
-nsresult
-Binder::Add()
-{
-  nsresult rv;
-
-  rv = mArray->AddParams(mParams);
-  NS_ENSURE_SUCCESS(rv, rv);
-  rv = mStmt->BindParameters(mArray);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  return rv;
 }
 
 nsresult
@@ -196,20 +122,20 @@ nsDOMStoragePersistentDB::Init(const nsString& aDatabaseName)
 
   service = do_GetService(MOZ_STORAGE_SERVICE_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
-  rv = service->OpenDatabase(storageFile, getter_AddRefs(mConnection));
+  rv = service->OpenUnsharedDatabase(storageFile, getter_AddRefs(mConnection));
   if (rv == NS_ERROR_FILE_CORRUPTED) {
     // delete the db and try opening again
-    rv = storageFile->Remove(PR_FALSE);
+    rv = storageFile->Remove(false);
     NS_ENSURE_SUCCESS(rv, rv);
-    rv = service->OpenDatabase(storageFile, getter_AddRefs(mConnection));
+    rv = service->OpenUnsharedDatabase(storageFile, getter_AddRefs(mConnection));
   }
   NS_ENSURE_SUCCESS(rv, rv);
 
   rv = mConnection->ExecuteSimpleSQL(NS_LITERAL_CSTRING(
-        "PRAGMA temp_store = MEMORY"));
+        MOZ_STORAGE_UNIQUIFY_QUERY_STR "PRAGMA temp_store = MEMORY"));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  mozStorageTransaction transaction(mConnection, PR_FALSE);
+  mozStorageTransaction transaction(mConnection, false);
 
   // Ensure Gecko 1.9.1 storage table
   rv = mConnection->ExecuteSimpleSQL(NS_LITERAL_CSTRING(
@@ -232,7 +158,8 @@ nsDOMStoragePersistentDB::Init(const nsString& aDatabaseName)
          "key TEXT, "
          "value TEXT, "
          "secure INTEGER, "
-         "owner TEXT)"));
+         "owner TEXT, "
+         "modified INTEGER DEFAULT 0)"));
   NS_ENSURE_SUCCESS(rv, rv);
 
   rv = mConnection->ExecuteSimpleSQL(NS_LITERAL_CSTRING(
@@ -243,9 +170,9 @@ nsDOMStoragePersistentDB::Init(const nsString& aDatabaseName)
 
   rv = mConnection->ExecuteSimpleSQL(NS_LITERAL_CSTRING(
         "CREATE TEMPORARY VIEW webappsstore2_view AS "
-        "SELECT * FROM webappsstore2_temp "
+        "SELECT scope, key, value, secure, owner FROM webappsstore2_temp "
         "UNION ALL "
-        "SELECT * FROM webappsstore2 "
+        "SELECT scope, key, value, secure, owner FROM webappsstore2 "
           "WHERE NOT EXISTS ("
             "SELECT scope, key FROM webappsstore2_temp "
             "WHERE scope = webappsstore2.scope AND key = webappsstore2.key)"));
@@ -275,7 +202,7 @@ nsDOMStoragePersistentDB::Init(const nsString& aDatabaseName)
   rv = mConnection->CreateFunction(NS_LITERAL_CSTRING("ISOFFLINE"), 1, function2);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool exists;
+  bool exists;
 
   // Check if there is storage of Gecko 1.9.0 and if so, upgrade that storage
   // to actual webappsstore2 table and drop the obsolete table. First process
@@ -318,133 +245,20 @@ nsDOMStoragePersistentDB::Init(const nsString& aDatabaseName)
       NS_ENSURE_SUCCESS(rv, rv);
   }
 
-  // temporary - disk synchronization statements
-  rv = mConnection->CreateStatement(NS_LITERAL_CSTRING(
-         "INSERT INTO webappsstore2_temp"
-         " SELECT * FROM webappsstore2"
-         " WHERE scope = :scope AND NOT EXISTS ("
-            "SELECT scope, key FROM webappsstore2_temp "
-            "WHERE scope = webappsstore2.scope AND key = webappsstore2.key)"),
-         getter_AddRefs(mCopyToTempTableStatement));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  rv = mConnection->CreateStatement(NS_LITERAL_CSTRING(
-         "INSERT OR REPLACE INTO webappsstore2"
-         " SELECT * FROM webappsstore2_temp"
-         " WHERE scope = :scope;"),
-         getter_AddRefs(mCopyBackToDiskStatement));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  rv = mConnection->CreateStatement(NS_LITERAL_CSTRING(
-         "DELETE FROM webappsstore2_temp"
-         " WHERE scope = :scope;"),
-         getter_AddRefs(mDeleteTemporaryTableStatement));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // retrieve all keys associated with a domain
-  rv = mConnection->CreateStatement(NS_LITERAL_CSTRING(
-         "SELECT key, value, secure FROM webappsstore2_temp "
-         "WHERE scope = :scope"),
-         getter_AddRefs(mGetAllKeysStatement));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // retrieve a value given a domain and a key
-  rv = mConnection->CreateStatement(NS_LITERAL_CSTRING(
-         "SELECT value, secure FROM webappsstore2_temp "
-         "WHERE scope = :scope "
-         "AND key = :key"),
-         getter_AddRefs(mGetKeyValueStatement));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // insert a new key
-  rv = mConnection->CreateStatement(NS_LITERAL_CSTRING(
-         "INSERT OR REPLACE INTO "
-         "webappsstore2_temp(scope, key, value, secure) "
-         "VALUES (:scope, :key, :value, :secure)"),
-         getter_AddRefs(mInsertKeyStatement));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // update the secure status of an existing key
-  rv = mConnection->CreateStatement(NS_LITERAL_CSTRING(
-         "UPDATE webappsstore2_temp "
-         "SET secure = :secure "
-         "WHERE scope = :scope "
-         "AND key = :key "),
-         getter_AddRefs(mSetSecureStatement));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // remove a key
-  rv = mConnection->CreateStatement(NS_LITERAL_CSTRING(
-         "DELETE FROM webappsstore2_view "
-         "WHERE scope = :scope "
-         "AND key = :key"),
-         getter_AddRefs(mRemoveKeyStatement));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // remove keys owned by a specific domain
-  rv = mConnection->CreateStatement(NS_LITERAL_CSTRING(
-         "DELETE FROM webappsstore2_view "
-         "WHERE scope GLOB :scope"),
-         getter_AddRefs(mRemoveOwnerStatement));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // remove keys belonging exactly only to a specific domain
-  rv = mConnection->CreateStatement(NS_LITERAL_CSTRING(
-         "DELETE FROM webappsstore2_view "
-         "WHERE scope = :scope"),
-         getter_AddRefs(mRemoveStorageStatement));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // remove all keys
-  rv = mConnection->CreateStatement(NS_LITERAL_CSTRING(
-         "DELETE FROM webappsstore2_view"),
-         getter_AddRefs(mRemoveAllStatement));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // check the usage for a given owner that is an offline-app allowed domain
-  rv = mConnection->CreateStatement(NS_LITERAL_CSTRING(
-         "SELECT SUM(LENGTH(key) + LENGTH(value)) "
-         "FROM ("
-           "SELECT key,value FROM webappsstore2_temp "
-           "WHERE scope GLOB :scope "
-           "UNION ALL "
-           "SELECT key,value FROM webappsstore2 "
-           "WHERE scope GLOB :scope "
-           "AND NOT EXISTS ("
-             "SELECT scope, key "
-             "FROM webappsstore2_temp "
-             "WHERE scope = webappsstore2.scope "
-             "AND key = webappsstore2.key"
-           ")"
-         ")"),
-         getter_AddRefs(mGetFullUsageStatement));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  // check the usage for a given owner that is not an offline-app allowed domain
-  rv = mConnection->CreateStatement(NS_LITERAL_CSTRING(
-         "SELECT SUM(LENGTH(key) + LENGTH(value)) "
-         "FROM ("
-           "SELECT key, value FROM webappsstore2_temp "
-           "WHERE scope GLOB :scope "
-           "AND NOT ISOFFLINE(scope) "
-           "UNION ALL "
-           "SELECT key, value FROM webappsstore2 "
-           "WHERE scope GLOB :scope "
-           "AND NOT ISOFFLINE(scope) "
-           "AND NOT EXISTS ("
-             "SELECT scope, key "
-             "FROM webappsstore2_temp "
-             "WHERE scope = webappsstore2.scope "
-             "AND key = webappsstore2.key"
-           ")"
-         ")"),
-         getter_AddRefs(mGetOfflineExcludedUsageStatement));
-  NS_ENSURE_SUCCESS(rv, rv);
-
   rv = transaction.Commit();
   NS_ENSURE_SUCCESS(rv, rv);
 
   return NS_OK;
+}
+
+void
+nsDOMStoragePersistentDB::Close()
+{
+  // Finalize the cached statements.
+  mStatements.FinalizeStatements();
+
+  DebugOnly<nsresult> rv = mConnection->Close();
+  MOZ_ASSERT(NS_SUCCEEDED(rv));
 }
 
 nsresult
@@ -458,19 +272,23 @@ nsDOMStoragePersistentDB::EnsureLoadTemporaryTableForStorage(DOMStorageImpl* aSt
     rv = MaybeCommitInsertTransaction();
     NS_ENSURE_SUCCESS(rv, rv);
 
-    mozStorageStatementScoper scope(mCopyToTempTableStatement);
+    nsCOMPtr<mozIStorageStatement> stmt = mStatements.GetCachedStatement(
+      "INSERT INTO webappsstore2_temp (scope, key, value, secure, owner) "
+        "SELECT scope, key, value, secure, owner FROM webappsstore2 "
+        "WHERE scope = :scope "
+          "AND NOT EXISTS ( "
+            "SELECT scope, key FROM webappsstore2_temp "
+            "WHERE scope = webappsstore2.scope AND key = webappsstore2.key "
+          ") "
+    );
+    NS_ENSURE_STATE(stmt);
+    mozStorageStatementScoper scope(stmt);
 
-    Binder binder(mCopyToTempTableStatement, &rv);
+    rv = stmt->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"), 
+                                    aStorage->GetScopeDBKey());
     NS_ENSURE_SUCCESS(rv, rv);
 
-    rv = binder->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"), 
-                                      aStorage->GetScopeDBKey());
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    rv = binder.Add();
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    rv = mCopyToTempTableStatement->Execute();
+    rv = stmt->Execute();
     NS_ENSURE_SUCCESS(rv, rv);
 
     mTempTableLoads.Put(aStorage->GetScopeDBKey(), TimeStamp::Now());
@@ -494,34 +312,35 @@ nsDOMStoragePersistentDB::FlushTemporaryTable(nsCStringHashKey::KeyType aKey,
     return PL_DHASH_NEXT;
 
   {
-    mozStorageStatementScoper scope(data->mDB->mCopyBackToDiskStatement);
+    nsCOMPtr<mozIStorageStatement> stmt =
+      data->mDB->mStatements.GetCachedStatement(
+        "INSERT OR REPLACE INTO webappsstore2 "
+         "SELECT scope, key, value, secure, owner FROM webappsstore2_temp "
+         "WHERE scope = :scope AND modified = 1"
+      );
+    NS_ENSURE_TRUE(stmt, PL_DHASH_STOP);
+    mozStorageStatementScoper scope(stmt);
 
-    Binder binder(data->mDB->mCopyBackToDiskStatement, &data->mRV);
+    data->mRV = stmt->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"), aKey);
     NS_ENSURE_SUCCESS(data->mRV, PL_DHASH_STOP);
 
-    data->mRV = binder->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"), aKey);
-    NS_ENSURE_SUCCESS(data->mRV, PL_DHASH_STOP);
-
-    data->mRV = binder.Add();
-    NS_ENSURE_SUCCESS(data->mRV, PL_DHASH_STOP);
-
-    data->mRV = data->mDB->mCopyBackToDiskStatement->Execute();
+    data->mRV = stmt->Execute();
     NS_ENSURE_SUCCESS(data->mRV, PL_DHASH_STOP);
   }
 
   {
-    mozStorageStatementScoper scope(data->mDB->mDeleteTemporaryTableStatement);
+    nsCOMPtr<mozIStorageStatement> stmt =
+      data->mDB->mStatements.GetCachedStatement(
+        "DELETE FROM webappsstore2_temp "
+         "WHERE scope = :scope "
+      );
+    NS_ENSURE_TRUE(stmt, PL_DHASH_STOP);
+    mozStorageStatementScoper scope(stmt);
 
-    Binder binder(data->mDB->mDeleteTemporaryTableStatement, &data->mRV);
+    data->mRV = stmt->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"), aKey);
     NS_ENSURE_SUCCESS(data->mRV, PL_DHASH_STOP);
 
-    data->mRV = binder->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"), aKey);
-    NS_ENSURE_SUCCESS(data->mRV, PL_DHASH_STOP);
-
-    data->mRV = binder.Add();
-    NS_ENSURE_SUCCESS(data->mRV, PL_DHASH_STOP);
-
-    data->mRV = data->mDB->mDeleteTemporaryTableStatement->Execute();
+    data->mRV = stmt->Execute();
     NS_ENSURE_SUCCESS(data->mRV, PL_DHASH_STOP);
   }
 
@@ -531,7 +350,7 @@ nsDOMStoragePersistentDB::FlushTemporaryTable(nsCStringHashKey::KeyType aKey,
 nsresult
 nsDOMStoragePersistentDB::FlushTemporaryTables(bool force)
 {
-  mozStorageTransaction trans(mConnection, PR_FALSE);
+  mozStorageTransaction trans(mConnection, false);
 
   nsresult rv;
 
@@ -564,32 +383,29 @@ nsDOMStoragePersistentDB::GetAllKeys(DOMStorageImpl* aStorage,
   rv = EnsureLoadTemporaryTableForStorage(aStorage);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  mozStorageStatementScoper scope(mGetAllKeysStatement);
+  nsCOMPtr<mozIStorageStatement> stmt = mStatements.GetCachedStatement(
+    "SELECT key, value, secure FROM webappsstore2_temp "
+    "WHERE scope = :scope "
+  );
+  NS_ENSURE_STATE(stmt);
+  mozStorageStatementScoper scope(stmt);
 
-  Binder binder(mGetAllKeysStatement, &rv);
+  rv = stmt->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"),
+                                  aStorage->GetScopeDBKey());
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = binder->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"),
-                                    aStorage->GetScopeDBKey());
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  rv = binder.Add();
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  PRBool exists;
-  while (NS_SUCCEEDED(rv = mGetAllKeysStatement->ExecuteStep(&exists)) &&
-         exists) {
-
+  bool exists;
+  while (NS_SUCCEEDED(rv = stmt->ExecuteStep(&exists)) && exists) {
     nsAutoString key;
-    rv = mGetAllKeysStatement->GetString(0, key);
+    rv = stmt->GetString(0, key);
     NS_ENSURE_SUCCESS(rv, rv);
 
     nsAutoString value;
-    rv = mGetAllKeysStatement->GetString(1, value);
+    rv = stmt->GetString(1, value);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    PRInt32 secureInt = 0;
-    rv = mGetAllKeysStatement->GetInt32(2, &secureInt);
+    int32_t secureInt = 0;
+    rv = stmt->GetInt32(2, &secureInt);
     NS_ENSURE_SUCCESS(rv, rv);
 
     nsSessionStorageEntry* entry = aKeys->PutEntry(key);
@@ -609,8 +425,9 @@ nsresult
 nsDOMStoragePersistentDB::GetKeyValue(DOMStorageImpl* aStorage,
                                       const nsAString& aKey,
                                       nsAString& aValue,
-                                      PRBool* aSecure)
+                                      bool* aSecure)
 {
+  SAMPLE_LABEL("nsDOMStoragePersistentDB", "GetKeyValue");
   nsresult rv;
 
   rv = MaybeCommitInsertTransaction();
@@ -619,31 +436,31 @@ nsDOMStoragePersistentDB::GetKeyValue(DOMStorageImpl* aStorage,
   rv = EnsureLoadTemporaryTableForStorage(aStorage);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  mozStorageStatementScoper scope(mGetKeyValueStatement);
+  nsCOMPtr<mozIStorageStatement> stmt = mStatements.GetCachedStatement(
+    "SELECT value, secure FROM webappsstore2_temp "
+    "WHERE scope = :scope "
+      "AND key = :key "
+  );
+  NS_ENSURE_STATE(stmt);
+  mozStorageStatementScoper scope(stmt);
 
-  Binder binder(mGetKeyValueStatement, &rv);
+  rv = stmt->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"),
+                                  aStorage->GetScopeDBKey());
+  NS_ENSURE_SUCCESS(rv, rv);
+  rv = stmt->BindStringByName(NS_LITERAL_CSTRING("key"),
+                              aKey);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = binder->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"),
-                                    aStorage->GetScopeDBKey());
-  NS_ENSURE_SUCCESS(rv, rv);
-  rv = binder->BindStringByName(NS_LITERAL_CSTRING("key"),
-                                aKey);
+  bool exists;
+  rv = stmt->ExecuteStep(&exists);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = binder.Add();
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  PRBool exists;
-  rv = mGetKeyValueStatement->ExecuteStep(&exists);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  PRInt32 secureInt = 0;
+  int32_t secureInt = 0;
   if (exists) {
-    rv = mGetKeyValueStatement->GetString(0, aValue);
+    rv = stmt->GetString(0, aValue);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    rv = mGetKeyValueStatement->GetInt32(1, &secureInt);
+    rv = stmt->GetInt32(1, &secureInt);
     NS_ENSURE_SUCCESS(rv, rv);
   }
   else {
@@ -659,28 +476,26 @@ nsresult
 nsDOMStoragePersistentDB::SetKey(DOMStorageImpl* aStorage,
                                  const nsAString& aKey,
                                  const nsAString& aValue,
-                                 PRBool aSecure,
-                                 PRInt32 aQuota,
-                                 PRBool aExcludeOfflineFromUsage,
-                                 PRInt32 *aNewUsage)
+                                 bool aSecure,
+                                 int32_t aQuota,
+                                 bool aExcludeOfflineFromUsage,
+                                 int32_t *aNewUsage)
 {
   nsresult rv;
 
   rv = EnsureLoadTemporaryTableForStorage(aStorage);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRInt32 usage = 0;
+  int32_t usage = 0;
   if (!aStorage->GetQuotaDomainDBKey(!aExcludeOfflineFromUsage).IsEmpty()) {
     rv = GetUsage(aStorage, aExcludeOfflineFromUsage, &usage);
     NS_ENSURE_SUCCESS(rv, rv);
   }
 
-  aStorage->CacheKeysFromDB();
-
   usage += aKey.Length() + aValue.Length();
 
   nsAutoString previousValue;
-  PRBool secure;
+  bool secure;
   rv = aStorage->GetCachedValue(aKey, previousValue, &secure);
   if (NS_SUCCEEDED(rv)) {
     if (!aSecure && secure)
@@ -695,36 +510,37 @@ nsDOMStoragePersistentDB::SetKey(DOMStorageImpl* aStorage,
   rv = EnsureInsertTransaction();
   NS_ENSURE_SUCCESS(rv, rv);
 
-  mozStorageStatementScoper scopeinsert(mInsertKeyStatement);
+  nsCOMPtr<mozIStorageStatement> stmt = mStatements.GetCachedStatement(
+    "INSERT OR REPLACE INTO webappsstore2_temp (scope, key, value, secure, modified) "
+    "VALUES (:scope, :key, :value, :secure, 1) "
+  );
+  NS_ENSURE_STATE(stmt);
+  mozStorageStatementScoper scopeinsert(stmt);
 
-  Binder binder(mInsertKeyStatement, &rv);
+  rv = stmt->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"),
+                                  aStorage->GetScopeDBKey());
+  NS_ENSURE_SUCCESS(rv, rv);
+  rv = stmt->BindStringByName(NS_LITERAL_CSTRING("key"),
+                              aKey);
+  NS_ENSURE_SUCCESS(rv, rv);
+  rv = stmt->BindStringByName(NS_LITERAL_CSTRING("value"),
+                              aValue);
+  NS_ENSURE_SUCCESS(rv, rv);
+  rv = stmt->BindInt32ByName(NS_LITERAL_CSTRING("secure"),
+                             aSecure ? 1 : 0);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = binder->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"),
-                                    aStorage->GetScopeDBKey());
-  NS_ENSURE_SUCCESS(rv, rv);
-  rv = binder->BindStringByName(NS_LITERAL_CSTRING("key"),
-                                aKey);
-  NS_ENSURE_SUCCESS(rv, rv);
-  rv = binder->BindStringByName(NS_LITERAL_CSTRING("value"),
-                                aValue);
-  NS_ENSURE_SUCCESS(rv, rv);
-  rv = binder->BindInt32ByName(NS_LITERAL_CSTRING("secure"),
-                               aSecure ? 1 : 0);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  rv = binder.Add();
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  rv = mInsertKeyStatement->Execute();
+  rv = stmt->Execute();
   NS_ENSURE_SUCCESS(rv, rv);
 
   if (!aStorage->GetQuotaDomainDBKey(!aExcludeOfflineFromUsage).IsEmpty()) {
-    mCachedOwner = aStorage->GetQuotaDomainDBKey(!aExcludeOfflineFromUsage);
+    // No need to set mCachedOwner since it was set by GetUsage()
     mCachedUsage = usage;
   }
 
   *aNewUsage = usage;
+
+  MarkScopeDirty(aStorage);
 
   return NS_OK;
 }
@@ -732,7 +548,7 @@ nsDOMStoragePersistentDB::SetKey(DOMStorageImpl* aStorage,
 nsresult
 nsDOMStoragePersistentDB::SetSecure(DOMStorageImpl* aStorage,
                                     const nsAString& aKey,
-                                    const PRBool aSecure)
+                                    const bool aSecure)
 {
   nsresult rv;
 
@@ -742,59 +558,69 @@ nsDOMStoragePersistentDB::SetSecure(DOMStorageImpl* aStorage,
   rv = EnsureInsertTransaction();
   NS_ENSURE_SUCCESS(rv, rv);
 
-  mozStorageStatementScoper scope(mSetSecureStatement);
+  nsCOMPtr<mozIStorageStatement> stmt = mStatements.GetCachedStatement(
+    "UPDATE webappsstore2_temp "
+    "SET secure = :secure, modified = 1 "
+    "WHERE scope = :scope "
+      "AND key = :key "
+  );
+  NS_ENSURE_STATE(stmt);
+  mozStorageStatementScoper scope(stmt);
 
-  Binder binder(mSetSecureStatement, &rv);
+  rv = stmt->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"),
+                                  aStorage->GetScopeDBKey());
+  NS_ENSURE_SUCCESS(rv, rv);
+  rv = stmt->BindStringByName(NS_LITERAL_CSTRING("key"),
+                              aKey);
+  NS_ENSURE_SUCCESS(rv, rv);
+  rv = stmt->BindInt32ByName(NS_LITERAL_CSTRING("secure"),
+                             aSecure ? 1 : 0);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = binder->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"),
-                                    aStorage->GetScopeDBKey());
-  NS_ENSURE_SUCCESS(rv, rv);
-  rv = binder->BindStringByName(NS_LITERAL_CSTRING("key"),
-                                aKey);
-  NS_ENSURE_SUCCESS(rv, rv);
-  rv = binder->BindInt32ByName(NS_LITERAL_CSTRING("secure"),
-                               aSecure ? 1 : 0);
+  rv = stmt->Execute();
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = binder.Add();
-  NS_ENSURE_SUCCESS(rv, rv);
+  MarkScopeDirty(aStorage);
 
-  return mSetSecureStatement->Execute();
+  return NS_OK;
 }
 
 nsresult
 nsDOMStoragePersistentDB::RemoveKey(DOMStorageImpl* aStorage,
                                     const nsAString& aKey,
-                                    PRBool aExcludeOfflineFromUsage,
-                                    PRInt32 aKeyUsage)
+                                    bool aExcludeOfflineFromUsage,
+                                    int32_t aKeyUsage)
 {
   nsresult rv;
 
   rv = MaybeCommitInsertTransaction();
   NS_ENSURE_SUCCESS(rv, rv);
 
-  mozStorageStatementScoper scope(mRemoveKeyStatement);
+  nsCOMPtr<mozIStorageStatement> stmt = mStatements.GetCachedStatement(
+    "DELETE FROM webappsstore2_view "
+    "WHERE scope = :scope "
+      "AND key = :key "
+  );
+  NS_ENSURE_STATE(stmt);
+  mozStorageStatementScoper scope(stmt);
 
-  if (aStorage->GetQuotaDomainDBKey(!aExcludeOfflineFromUsage) == mCachedOwner) {
-    mCachedUsage -= aKeyUsage;
+  if (DomainMaybeCached(
+      aStorage->GetQuotaDomainDBKey(!aExcludeOfflineFromUsage))) {
+    mCachedUsage = 0;
+    mCachedOwner.Truncate();
   }
 
-  Binder binder(mRemoveKeyStatement, &rv);
+  rv = stmt->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"),
+                                  aStorage->GetScopeDBKey());
+  NS_ENSURE_SUCCESS(rv, rv);
+  rv = stmt->BindStringByName(NS_LITERAL_CSTRING("key"),
+                              aKey);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = binder->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"),
-                                    aStorage->GetScopeDBKey());
-  NS_ENSURE_SUCCESS(rv, rv);
-  rv = binder->BindStringByName(NS_LITERAL_CSTRING("key"),
-                                aKey);
+  rv = stmt->Execute();
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = binder.Add();
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  rv = mRemoveKeyStatement->Execute();
-  NS_ENSURE_SUCCESS(rv, rv);
+  MarkScopeDirty(aStorage);
 
   return NS_OK;
 }
@@ -807,62 +633,64 @@ nsDOMStoragePersistentDB::ClearStorage(DOMStorageImpl* aStorage)
   rv = MaybeCommitInsertTransaction();
   NS_ENSURE_SUCCESS(rv, rv);
 
-  mozStorageStatementScoper scope(mRemoveStorageStatement);
+  nsCOMPtr<mozIStorageStatement> stmt = mStatements.GetCachedStatement(
+    "DELETE FROM webappsstore2_view "
+    "WHERE scope = :scope "
+  );
+  NS_ENSURE_STATE(stmt);
+  mozStorageStatementScoper scope(stmt);
 
   mCachedUsage = 0;
   mCachedOwner.Truncate();
 
-  Binder binder(mRemoveStorageStatement, &rv);
+  rv = stmt->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"),
+                                  aStorage->GetScopeDBKey());
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = binder->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"),
-                                    aStorage->GetScopeDBKey());
+  rv = stmt->Execute();
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = binder.Add();
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  rv = mRemoveStorageStatement->Execute();
-  NS_ENSURE_SUCCESS(rv, rv);
+  MarkScopeDirty(aStorage);
 
   return NS_OK;
 }
 
 nsresult
 nsDOMStoragePersistentDB::RemoveOwner(const nsACString& aOwner,
-                                      PRBool aIncludeSubDomains)
+                                      bool aIncludeSubDomains)
 {
   nsresult rv;
 
   rv = MaybeCommitInsertTransaction();
   NS_ENSURE_SUCCESS(rv, rv);
 
-  mozStorageStatementScoper scope(mRemoveOwnerStatement);
+  nsCOMPtr<mozIStorageStatement> stmt = mStatements.GetCachedStatement(
+    "DELETE FROM webappsstore2_view "
+    "WHERE scope GLOB :scope "
+  );
+  NS_ENSURE_STATE(stmt);
+  mozStorageStatementScoper scope(stmt);
 
   nsCAutoString subdomainsDBKey;
   nsDOMStorageDBWrapper::CreateDomainScopeDBKey(aOwner, subdomainsDBKey);
+
+  if (DomainMaybeCached(subdomainsDBKey)) {
+    mCachedUsage = 0;
+    mCachedOwner.Truncate();
+  }
 
   if (!aIncludeSubDomains)
     subdomainsDBKey.AppendLiteral(":");
   subdomainsDBKey.AppendLiteral("*");
 
-  if (subdomainsDBKey == mCachedOwner) {
-    mCachedUsage = 0;
-    mCachedOwner.Truncate();
-  }
-
-  Binder binder(mRemoveOwnerStatement, &rv);
+  rv = stmt->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"),
+                                  subdomainsDBKey);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = binder->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"),
-                                    subdomainsDBKey);
+  rv = stmt->Execute();
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = binder.Add();
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  rv = mRemoveOwnerStatement->Execute();
-  NS_ENSURE_SUCCESS(rv, rv);
+  MarkAllScopesDirty();
 
   return NS_OK;
 }
@@ -870,8 +698,8 @@ nsDOMStoragePersistentDB::RemoveOwner(const nsACString& aOwner,
 
 nsresult
 nsDOMStoragePersistentDB::RemoveOwners(const nsTArray<nsString> &aOwners,
-                                       PRBool aIncludeSubDomains,
-                                       PRBool aMatch)
+                                       bool aIncludeSubDomains,
+                                       bool aMatch)
 {
   if (aOwners.Length() == 0) {
     if (aMatch) {
@@ -890,7 +718,7 @@ nsDOMStoragePersistentDB::RemoveOwners(const nsTArray<nsString> &aOwners,
     expression.AppendLiteral("DELETE FROM webappsstore2_view WHERE scope NOT IN (");
   }
 
-  for (PRUint32 i = 0; i < aOwners.Length(); i++) {
+  for (uint32_t i = 0; i < aOwners.Length(); i++) {
     if (i)
       expression.AppendLiteral(" UNION ");
 
@@ -915,13 +743,15 @@ nsDOMStoragePersistentDB::RemoveOwners(const nsTArray<nsString> &aOwners,
                                     getter_AddRefs(statement));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  Binder binder(statement, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  for (PRUint32 i = 0; i < aOwners.Length(); i++) {
+  for (uint32_t i = 0; i < aOwners.Length(); i++) {
     nsCAutoString quotaKey;
     rv = nsDOMStorageDBWrapper::CreateDomainScopeDBKey(
       NS_ConvertUTF16toUTF8(aOwners[i]), quotaKey);
+
+    if (DomainMaybeCached(quotaKey)) {
+      mCachedUsage = 0;
+      mCachedOwner.Truncate();
+    }
 
     if (!aIncludeSubDomains)
       quotaKey.AppendLiteral(":");
@@ -931,15 +761,14 @@ nsDOMStoragePersistentDB::RemoveOwners(const nsTArray<nsString> &aOwners,
     paramName.Assign("scope");
     paramName.AppendInt(i);
 
-    rv = binder->BindUTF8StringByName(paramName, quotaKey);
+    rv = statement->BindUTF8StringByName(paramName, quotaKey);
     NS_ENSURE_SUCCESS(rv, rv);
   }
 
-  rv = binder.Add();
-  NS_ENSURE_SUCCESS(rv, rv);
-
   rv = statement->Execute();
   NS_ENSURE_SUCCESS(rv, rv);
+
+  MarkAllScopesDirty();
 
   return NS_OK;
 }
@@ -952,18 +781,24 @@ nsDOMStoragePersistentDB::RemoveAll()
   rv = MaybeCommitInsertTransaction();
   NS_ENSURE_SUCCESS(rv, rv);
 
-  mozStorageStatementScoper scope(mRemoveAllStatement);
+  nsCOMPtr<mozIStorageStatement> stmt = mStatements.GetCachedStatement(
+    "DELETE FROM webappsstore2_view "
+  );
+  NS_ENSURE_STATE(stmt);
+  mozStorageStatementScoper scope(stmt);
 
-  rv = mRemoveAllStatement->Execute();
+  rv = stmt->Execute();
   NS_ENSURE_SUCCESS(rv, rv);
+
+  MarkAllScopesDirty();
 
   return NS_OK;
 }
 
 nsresult
 nsDOMStoragePersistentDB::GetUsage(DOMStorageImpl* aStorage,
-                                   PRBool aExcludeOfflineFromUsage,
-                                   PRInt32 *aUsage)
+                                   bool aExcludeOfflineFromUsage,
+                                   int32_t *aUsage)
 {
   return GetUsageInternal(aStorage->GetQuotaDomainDBKey(!aExcludeOfflineFromUsage),
                                                         aExcludeOfflineFromUsage,
@@ -972,25 +807,25 @@ nsDOMStoragePersistentDB::GetUsage(DOMStorageImpl* aStorage,
 
 nsresult
 nsDOMStoragePersistentDB::GetUsage(const nsACString& aDomain,
-                                   PRBool aIncludeSubDomains,
-                                   PRInt32 *aUsage)
+                                   bool aIncludeSubDomains,
+                                   int32_t *aUsage)
 {
   nsresult rv;
 
   nsCAutoString quotadomainDBKey;
   rv = nsDOMStorageDBWrapper::CreateQuotaDomainDBKey(aDomain,
                                                      aIncludeSubDomains,
-                                                     PR_FALSE,
+                                                     false,
                                                      quotadomainDBKey);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  return GetUsageInternal(quotadomainDBKey, PR_FALSE, aUsage);
+  return GetUsageInternal(quotadomainDBKey, false, aUsage);
 }
 
 nsresult
 nsDOMStoragePersistentDB::GetUsageInternal(const nsACString& aQuotaDomainDBKey,
-                                           PRBool aExcludeOfflineFromUsage,
-                                           PRInt32 *aUsage)
+                                           bool aExcludeOfflineFromUsage,
+                                           int32_t *aUsage)
 {
   if (aQuotaDomainDBKey == mCachedOwner) {
     *aUsage = mCachedUsage;
@@ -1002,25 +837,55 @@ nsDOMStoragePersistentDB::GetUsageInternal(const nsACString& aQuotaDomainDBKey,
   rv = MaybeCommitInsertTransaction();
   NS_ENSURE_SUCCESS(rv, rv);
 
-  mozIStorageStatement* statement = aExcludeOfflineFromUsage
-    ? mGetOfflineExcludedUsageStatement : mGetFullUsageStatement;
-
-  mozStorageStatementScoper scope(statement);
+  nsCOMPtr<mozIStorageStatement> stmt;
+  if (aExcludeOfflineFromUsage) {
+    stmt = mStatements.GetCachedStatement(
+      "SELECT SUM(LENGTH(key) + LENGTH(value)) "
+      "FROM ( "
+        "SELECT key, value FROM webappsstore2_temp "
+        "WHERE scope GLOB :scope "
+          "AND NOT ISOFFLINE(scope) "
+        "UNION ALL "
+        "SELECT key, value FROM webappsstore2 "
+        "WHERE scope GLOB :scope "
+          "AND NOT ISOFFLINE(scope) "
+          "AND NOT EXISTS ( "
+            "SELECT scope, key "
+            "FROM webappsstore2_temp "
+            "WHERE scope = webappsstore2.scope "
+              "AND key = webappsstore2.key "
+          ") "
+      ") "
+    );
+  } else {
+    stmt = mStatements.GetCachedStatement(
+      "SELECT SUM(LENGTH(key) + LENGTH(value)) "
+      "FROM ( "
+        "SELECT key,value FROM webappsstore2_temp "
+        "WHERE scope GLOB :scope "
+        "UNION ALL "
+        "SELECT key,value FROM webappsstore2 "
+        "WHERE scope GLOB :scope "
+          "AND NOT EXISTS ( "
+            "SELECT scope, key "
+            "FROM webappsstore2_temp "
+            "WHERE scope = webappsstore2.scope "
+              "AND key = webappsstore2.key "
+          ") "
+      ") "
+    );
+  }
+  NS_ENSURE_STATE(stmt);
+  mozStorageStatementScoper scope(stmt);
 
   nsCAutoString scopeValue(aQuotaDomainDBKey);
   scopeValue += NS_LITERAL_CSTRING("*");
 
-  Binder binder(statement, &rv);
+  rv = stmt->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"), scopeValue);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = binder->BindUTF8StringByName(NS_LITERAL_CSTRING("scope"), scopeValue);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  rv = binder.Add();
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  PRBool exists;
-  rv = statement->ExecuteStep(&exists);
+  bool exists;
+  rv = stmt->ExecuteStep(&exists);
   NS_ENSURE_SUCCESS(rv, rv);
 
   if (!exists) {
@@ -1028,7 +893,7 @@ nsDOMStoragePersistentDB::GetUsageInternal(const nsACString& aQuotaDomainDBKey,
     return NS_OK;
   }
 
-  rv = statement->GetInt32(0, aUsage);
+  rv = stmt->GetInt32(0, aUsage);
   NS_ENSURE_SUCCESS(rv, rv);
 
   if (!aQuotaDomainDBKey.IsEmpty()) {
@@ -1045,7 +910,7 @@ nsDOMStoragePersistentDB::EnsureInsertTransaction()
   if (!mConnection)
     return NS_ERROR_UNEXPECTED;
 
-  PRBool transactionInProgress;
+  bool transactionInProgress;
   nsresult rv = mConnection->GetTransactionInProgress(&transactionInProgress);
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -1064,7 +929,7 @@ nsDOMStoragePersistentDB::MaybeCommitInsertTransaction()
   if (!mConnection)
     return NS_ERROR_UNEXPECTED;
 
-  PRBool transactionInProgress;
+  bool transactionInProgress;
   nsresult rv = mConnection->GetTransactionInProgress(&transactionInProgress);
   if (NS_FAILED(rv)) {
     NS_WARNING("nsDOMStoragePersistentDB::MaybeCommitInsertTransaction: "
@@ -1078,4 +943,18 @@ nsDOMStoragePersistentDB::MaybeCommitInsertTransaction()
   NS_ENSURE_SUCCESS(rv, rv);
 
   return NS_OK;
+}
+
+bool
+nsDOMStoragePersistentDB::DomainMaybeCached(const nsACString& aDomain)
+{
+  if (mCachedOwner.IsEmpty())
+    return false;
+
+  // if cached owner contains colon we must ignore it
+  if (mCachedOwner[mCachedOwner.Length() - 1] == ':')
+    return StringBeginsWith(aDomain, Substring(mCachedOwner, 0,
+                                               mCachedOwner.Length() - 1));
+  else
+    return StringBeginsWith(aDomain, mCachedOwner);
 }

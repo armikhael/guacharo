@@ -1,3 +1,6 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # Removed-files.in is processed at build time to create a list of files that
 # should be removed during an application update.
 # These files are in alphabetical order, except that files removed only on
@@ -9,6 +12,8 @@
 @DLL_PREFIX@xpcom_compat@DLL_SUFFIX@
 @DLL_PREFIX@xpistub@DLL_SUFFIX@
 @DLL_PREFIX@zlib@DLL_SUFFIX@
+@DLL_PREFIX@jemalloc@DLL_SUFFIX@
+@DLL_PREFIX@mozutils@DLL_SUFFIX@
 #ifdef MOZ_STATIC_JS
 @DLL_PREFIX@mozjs@DLL_SUFFIX@
 #endif
@@ -41,6 +46,9 @@ components/@DLL_PREFIX@brwsrdir@DLL_SUFFIX@
 components/@DLL_PREFIX@myspell@DLL_SUFFIX@
 components/@DLL_PREFIX@spellchecker@DLL_SUFFIX@
 components/@DLL_PREFIX@spellchk@DLL_SUFFIX@
+#ifdef XP_MACOSX
+components/libalerts_s.dylib
+#endif
 components/aboutCertError.js
 components/aboutPrivateBrowsing.js
 components/aboutRights.js
@@ -66,6 +74,12 @@ components/nsUrlClassifierTable.js
 components/nsXmlRpcClient.js
 components/pluginGlue.js
 components/sidebar.xpt
+#ifdef MOZ_B2G_RIL
+components/dom_telephony.xpt
+components/dom_wifi.xpt
+components/dom_system_b2g.xpt
+#endif
+components/uconvd.dll
 components/WeaveCrypto.js
 components/WeaveCrypto.manifest
 components/xmlextras.xpt
@@ -106,6 +120,7 @@ extensions/talkback@mozilla.org/components/qfaservices.xpt
 extensions/talkback@mozilla.org/install.rdf
 extensions/{641d8d09-7dda-4850-8228-ac0ab65e2ac9}/
 extensions/{641d8d09-7dda-4850-8228-ac0ab65e2ac9}/install.rdf
+extensions/{972ce4c6-7e08-4474-a285-3208198ce6fd}/preview.png
 extensions/testpilot@labs.mozilla.com/chrome.manifest
 extensions/testpilot@labs.mozilla.com/components/TestPilot.js
 extensions/testpilot@labs.mozilla.com/content/all-studies-window.js
@@ -222,11 +237,14 @@ extensions/testpilot@labs.mozilla.com/skin/win/feedback.css
 extensions/testpilot@labs.mozilla.com/skin/win/notification-tail-down.png
 extensions/testpilot@labs.mozilla.com/skin/win/notification-tail-up.png
 extensions/testpilot@labs.mozilla.com/tests/test_data_store.js
+extensions/uriloader@pdf.js.xpi
 greprefs/all.js
 greprefs/security-prefs.js
 greprefs/xpinstall.js
 install.rdf
 modules/JSON.jsm
+modules/SpatialNavigation.js
+modules/utils.js
 mozilla-runtime@BIN_SUFFIX@
 old-homepage-default.properties
 README.txt
@@ -248,6 +266,7 @@ res/fonts/mathfontMath4.properties
 res/fonts/mathfontPUA.properties
 res/fonts/pangoFontEncoding.properties
 res/forms.css
+res/full-screen-override.css
 res/hiddenWindow.html
 res/html.css
 res/html/gopher-audio.gif
@@ -310,6 +329,7 @@ searchplugins/atlas-sk.src
 searchplugins/baidu.gif
 searchplugins/baidu.png
 searchplugins/baidu.src
+searchplugins/bluu.xml
 searchplugins/bok-NO.gif
 searchplugins/bok-NO.png
 searchplugins/bok-NO.src
@@ -679,8 +699,18 @@ uninstall/UninstallDeerPark.exe
 uninstall/UninstallFirefox.exe
 uninstall/uninst.exe
 uninstall/uninstall.exe
+update.locale
+#ifndef MOZ_UPDATER
+  #ifdef XP_MACOSX
+    updater.app/
+  #else
+    updater@BIN_SUFFIX@
+  #endif
+  updater.ini
+#endif
 xpicleanup@BIN_SUFFIX@
 #ifdef MOZ_OMNIJAR
+  omni.jar
   chrome/af.jar
   chrome/af.manifest
   chrome/ar.jar
@@ -846,6 +876,9 @@ xpicleanup@BIN_SUFFIX@
   components/amContentHandler.js
   components/amWebInstallListener.js
   components/browser.xpt
+  components/BrowserElementParent.js
+  components/BrowserElementParent.manifest
+  components/BrowserElementPromptService.jsm
   components/components.manifest
   components/contentAreaDropListener.js
   components/contentSecurityPolicy.js
@@ -905,8 +938,20 @@ xpicleanup@BIN_SUFFIX@
   components/PlacesProtocolHandler.js
   components/storage-Legacy.js
   components/storage-mozStorage.js
+#ifdef MOZ_B2G_RIL
+  components/nsTelephonyWorker.manifest
+  components/nsTelephonyWorker.js
+  components/Telephony.manifest
+  components/Telephony.js
+  components/WifiWorker.js
+  components/WifiWorker.manifest
+  components/DOMWifiManager.js
+  components/DOMWifiManager.manifest
+#endif
   components/txEXSLTRegExFunctions.js
   components/Weave.js
+  components/Webapps.js
+  components/Webapps.manifest
   components/WebContentConverter.js
   defaults/autoconfig/platform.js
   defaults/autoconfig/prefcalls.js
@@ -921,6 +966,42 @@ xpicleanup@BIN_SUFFIX@
   defaults/profile/mimeTypes.rdf
   defaults/profile/prefs.js
   greprefs.js
+  hyphenation/
+  hyphenation/hyph_af.dic
+  hyphenation/hyph_bg.dic
+  hyphenation/hyph_ca.dic
+  hyphenation/hyph_cy.dic
+  hyphenation/hyph_da.dic
+  hyphenation/hyph_de-1901.dic
+  hyphenation/hyph_de-1996.dic
+  hyphenation/hyph_de-CH.dic
+  hyphenation/hyph_en_US.dic
+  hyphenation/hyph_eo.dic
+  hyphenation/hyph_es.dic
+  hyphenation/hyph_et.dic
+  hyphenation/hyph_fi.dic
+  hyphenation/hyph_fr.dic
+  hyphenation/hyph_gl.dic
+  hyphenation/hyph_hr.dic
+  hyphenation/hyph_hsb.dic
+  hyphenation/hyph_hu.dic
+  hyphenation/hyph_ia.dic
+  hyphenation/hyph_is.dic
+  hyphenation/hyph_it.dic
+  hyphenation/hyph_kmr.dic
+  hyphenation/hyph_la.dic
+  hyphenation/hyph_lt.dic
+  hyphenation/hyph_mn.dic
+  hyphenation/hyph_nb.dic
+  hyphenation/hyph_nl.dic
+  hyphenation/hyph_nn.dic
+  hyphenation/hyph_pt.dic
+  hyphenation/hyph_ru.dic
+  hyphenation/hyph_sh.dic
+  hyphenation/hyph_sl.dic
+  hyphenation/hyph_sv.dic
+  hyphenation/hyph_tr.dic
+  hyphenation/hyph_uk.dic
   modules/AddonLogging.jsm
   modules/AddonManager.jsm
   modules/AddonRepository.jsm
@@ -958,6 +1039,13 @@ xpicleanup@BIN_SUFFIX@
   modules/PropertyPanel.jsm
   modules/reflect.jsm
   modules/Services.jsm
+  modules/services-common/async.js
+  modules/services-common/log4moz.js
+  modules/services-common/observers.js
+  modules/services-common/preferences.js
+  modules/services-common/rest.js
+  modules/services-common/stringbundle.js
+  modules/services-common/utils.js
   modules/services-sync/auth.js
   modules/services-sync/base_records/collection.js
   modules/services-sync/base_records/crypto.js
@@ -996,7 +1084,7 @@ xpicleanup@BIN_SUFFIX@
   modules/tabview/AllTabs.jsm
   modules/tabview/groups.jsm
   modules/tabview/utils.jsm
-  modules/utils.js
+  modules/Webapps.jsm
   modules/WindowDraggingUtils.jsm
   #ifdef XP_WIN
     modules/WindowsJumpLists.jsm
@@ -1050,6 +1138,7 @@ xpicleanup@BIN_SUFFIX@
 #else
   components/binary.manifest
   omni.jar
+  omni.ja
 #endif
 #ifdef XP_MACOSX
   ../Plug-Ins/PrintPDE.plugin/Contents/Info.plist
@@ -1086,12 +1175,19 @@ xpicleanup@BIN_SUFFIX@
   components/directory.xpt
   components/docshell.xpt
   components/dom.xpt
+  components/dom_apps.xpt
   components/dom_base.xpt
+#ifdef MOZ_B2G_RIL
+  components/dom_telephony.xpt
+  components/dom_wifi.xpt
+  components/dom_system_b2g.xpt
+#endif
   components/dom_canvas.xpt
   components/dom_core.xpt
   components/dom_css.xpt
   components/dom_events.xpt
   components/dom_geolocation.xpt
+  components/dom_devicestorage.xpt
   components/dom_html.xpt
   components/dom_json.xpt
   components/dom_loadsave.xpt
@@ -1121,6 +1217,7 @@ xpicleanup@BIN_SUFFIX@
   components/fuel.xpt
   components/gfx.xpt
   components/gksvgrenderer.xpt
+  components/html5.xpt
   components/htmlparser.xpt
   components/imgicon.xpt
   components/imglib2.xpt
@@ -1256,9 +1353,9 @@ xpicleanup@BIN_SUFFIX@
     components/libimgicon.so
     dictionaries/PL.aff
     dictionaries/PL.dic
+    icons/document.png
     icons/mozicon16.xpm
     icons/mozicon50.xpm
-    libjemalloc.so
     plugins/libnullplugin.so
     readme.txt
   #endif
@@ -1271,15 +1368,32 @@ xpicleanup@BIN_SUFFIX@
   components/jsd3250.dll
   components/nsPostUpdateWin.js
   js3250.dll
-  plugins/npnul32.dll
-  #ifdef MOZ_MEMORY
+  mozcpp19.dll
+  mozcrt19.dll
+  #if MOZ_MSVC_REDIST != 1400
     Microsoft.VC80.CRT.manifest
     msvcm80.dll
     msvcp80.dll
     msvcr80.dll
-  #else
-    mozcrt19.dll
   #endif
+  #if MOZ_MSVC_REDIST != 1500
+    Microsoft.VC90.CRT.manifest
+    msvcm90.dll
+    msvcp90.dll
+    msvcr90.dll
+  #endif
+  #if MOZ_MSVC_REDIST != 1600
+    msvcp100.dll
+    msvcr100.dll
+  #endif
+  #if MOZ_MSVC_REDIST != 1700
+    msvcp110.dll
+    msvcr110.dll
+    #ifdef MOZ_METRO
+      vccorlib110.dll
+    #endif
+  #endif
+  plugins/npnul32.dll
 #endif
 @DLL_PREFIX@xpcom_core@DLL_SUFFIX@
 components/@DLL_PREFIX@jar50@DLL_SUFFIX@
@@ -1376,3 +1490,8 @@ extensions/inspector@mozilla.org/chrome/icons/default/winInspectorMain.ico
 components/nsPlacesTransactionsService.js
 components/browserplaces.xpt
 components/nsPlacesDBFlush.js
+#ifndef MOZ_MAINTENANCE_SERVICE
+maintenanceservice.exe
+maintenanceservice_installer.exe
+#endif
+jssubloader/

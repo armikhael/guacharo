@@ -1,40 +1,8 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK *****
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  * This Original Code has been modified by IBM Corporation. Modifications made by IBM
  * described herein are Copyright (c) International Business Machines Corporation, 2000.
  * Modifications to Mozilla code or documentation identified per MPL Section 3.3
@@ -52,13 +20,13 @@
 #include "nsMimeStringResources.h"
 
 extern "C" int
-mime_GrowBuffer (PRUint32 desired_size, PRUint32 element_size, PRUint32 quantum,
-        char **buffer, PRInt32 *size)
+mime_GrowBuffer (uint32_t desired_size, uint32_t element_size, uint32_t quantum,
+        char **buffer, int32_t *size)
 {
-  if ((PRUint32) *size <= desired_size)
+  if ((uint32_t) *size <= desired_size)
   {
     char *new_buf;
-    PRUint32 increment = desired_size - *size;
+    uint32_t increment = desired_size - *size;
     if (increment < quantum) /* always grow by a minimum of N bytes */
     increment = quantum;
 
@@ -82,16 +50,16 @@ mime_GrowBuffer (PRUint32 desired_size, PRUint32 element_size, PRUint32 quantum,
    in the very last call to this function.)
  */
 extern "C" int
-mime_ReBuffer (const char *net_buffer, PRInt32 net_buffer_size,
-        PRUint32 desired_buffer_size,
-        char **bufferP, PRInt32 *buffer_sizeP, PRUint32 *buffer_fpP,
-        PRInt32 (*per_buffer_fn) (char *buffer, PRUint32 buffer_size,
+mime_ReBuffer (const char *net_buffer, int32_t net_buffer_size,
+        uint32_t desired_buffer_size,
+        char **bufferP, int32_t *buffer_sizeP, uint32_t *buffer_fpP,
+        int32_t (*per_buffer_fn) (char *buffer, uint32_t buffer_size,
                     void *closure),
         void *closure)
 {
   int status = 0;
 
-  if (desired_buffer_size >= (PRUint32) (*buffer_sizeP))
+  if (desired_buffer_size >= (uint32_t) (*buffer_sizeP))
   {
     status = mime_GrowBuffer (desired_buffer_size, sizeof(char), 1024,
                  bufferP, buffer_sizeP);
@@ -100,7 +68,7 @@ mime_ReBuffer (const char *net_buffer, PRInt32 net_buffer_size,
 
   do
   {
-    PRInt32 size = *buffer_sizeP - *buffer_fpP;
+    int32_t size = *buffer_sizeP - *buffer_fpP;
     if (size > net_buffer_size)
     size = net_buffer_size;
     if (size > 0)
@@ -125,9 +93,9 @@ mime_ReBuffer (const char *net_buffer, PRInt32 net_buffer_size,
 }
 
 static int
-convert_and_send_buffer(char* buf, int length, PRBool convert_newlines_p,
-              PRInt32 (* per_line_fn) (char *line,
-                          PRUint32 line_length,
+convert_and_send_buffer(char* buf, int length, bool convert_newlines_p,
+              int32_t (* per_line_fn) (char *line,
+                          uint32_t line_length,
                           void *closure),
               void *closure)
 {
@@ -185,10 +153,10 @@ convert_and_send_buffer(char* buf, int length, PRBool convert_newlines_p,
 }
 
 extern "C" int
-mime_LineBuffer (const char *net_buffer, PRInt32 net_buffer_size,
-        char **bufferP, PRInt32 *buffer_sizeP, PRUint32 *buffer_fpP,
-        PRBool convert_newlines_p,
-        PRInt32 (* per_line_fn) (char *line, PRUint32 line_length,
+mime_LineBuffer (const char *net_buffer, int32_t net_buffer_size,
+        char **bufferP, int32_t *buffer_sizeP, uint32_t *buffer_fpP,
+        bool convert_newlines_p,
+        int32_t (* per_line_fn) (char *line, uint32_t line_length,
                     void *closure),
         void *closure)
 {
@@ -197,8 +165,8 @@ mime_LineBuffer (const char *net_buffer, PRInt32 net_buffer_size,
     net_buffer_size > 0 && net_buffer[0] != '\n') {
   /* The last buffer ended with a CR.  The new buffer does not start
      with a LF.  This old buffer should be shipped out and discarded. */
-  NS_ASSERTION((PRUint32) *buffer_sizeP > *buffer_fpP, "1.1 <rhp@netscape.com> 19 Mar 1999 12:00");
-  if ((PRUint32) *buffer_sizeP <= *buffer_fpP) return -1;
+  NS_ASSERTION((uint32_t) *buffer_sizeP > *buffer_fpP, "1.1 <rhp@netscape.com> 19 Mar 1999 12:00");
+  if ((uint32_t) *buffer_sizeP <= *buffer_fpP) return -1;
   status = convert_and_send_buffer(*bufferP, *buffer_fpP,
                      convert_newlines_p,
                      per_line_fn, closure);
@@ -245,9 +213,9 @@ mime_LineBuffer (const char *net_buffer, PRInt32 net_buffer_size,
      chunk of data to it. */
     {
     const char *end = (newline ? newline : net_buffer_end);
-    PRUint32 desired_size = (end - net_buffer) + (*buffer_fpP) + 1;
+    uint32_t desired_size = (end - net_buffer) + (*buffer_fpP) + 1;
 
-    if (desired_size >= (PRUint32) (*buffer_sizeP))
+    if (desired_size >= (uint32_t) (*buffer_sizeP))
       {
       status = mime_GrowBuffer (desired_size, sizeof(char), 1024,
                    bufferP, buffer_sizeP);

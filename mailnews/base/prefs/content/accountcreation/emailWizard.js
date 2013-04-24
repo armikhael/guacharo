@@ -1,40 +1,7 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * David Ascher <davida@mozilla.com> and
- * Ben Bucksch <ben.bucksch beonex.com>
- * Portions created by the Initial Developer are Copyright (C) 2008-2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://gre/modules/Services.jsm");
 
@@ -191,6 +158,8 @@ EmailConfigWizard.prototype =
       }
     }
 
+    gEmailWizardLogger.info("Email account setup dialog loaded.");
+
     gStringsBundle = e("strings");
     gMessengerBundle = e("bundle_messenger");
     gBrandShortName = e("bundle_brand").getString("brandShortName");
@@ -211,6 +180,11 @@ EmailConfigWizard.prototype =
 
     e("incoming_port").value = gStringsBundle.getString("port_auto");
     this.fillPortDropdown("smtp");
+
+    // If the account provisioner is preffed off, don't display
+    // the account provisioner button.
+    if (!Services.prefs.getBoolPref("mail.provider.enabled"))
+      _hide("provisioner_button");
 
     // Populate SMTP server dropdown with already configured SMTP servers from
     // other accounts.
@@ -234,7 +208,7 @@ EmailConfigWizard.prototype =
     menuitem.serverKey = null;
 
     // admin-locked prefs hurray
-    if (!Application.prefs.getValue("signon.rememberSignons", true)) {
+    if (!Services.prefs.getBoolPref("signon.rememberSignons")) {
       let rememberPasswordE = e("remember_password");
       rememberPasswordE.checked = false;
       rememberPasswordE.disabled = true;
@@ -687,7 +661,7 @@ EmailConfigWizard.prototype =
     if (!this._realname || !this._email) {
       return;
     }
-    return this._foundConfig2(config);
+    this._foundConfig2(config);
   },
 
   // Continuation of foundConfig2() after custom fields.
@@ -927,8 +901,8 @@ EmailConfigWizard.prototype =
     }
     config.incoming.type = sanitize.translate(e("incoming_protocol").value,
         { 1: "imap", 2 : "pop3", 0 : null });
-    config.incoming.socketType = parseInt(e("incoming_ssl").value);
-    config.incoming.auth = parseInt(e("incoming_authMethod").value);
+    config.incoming.socketType = sanitize.integer(e("incoming_ssl").value);
+    config.incoming.auth = sanitize.integer(e("incoming_authMethod").value);
     config.incoming.username = e("incoming_username").value;
 
     // Outgoing server
@@ -958,8 +932,8 @@ EmailConfigWizard.prototype =
       } catch (e) {
         config.outgoing.port = undefined; // incl. default "Auto"
       }
-      config.outgoing.socketType = e("outgoing_ssl").value;
-      config.outgoing.auth = e("outgoing_authMethod").value;
+      config.outgoing.socketType = sanitize.integer(e("outgoing_ssl").value);
+      config.outgoing.auth = sanitize.integer(e("outgoing_authMethod").value);
       config.outgoing.username = config.incoming.username;
     }
 
@@ -1325,6 +1299,25 @@ EmailConfigWizard.prototype =
   },
 
   /**
+   * [Switch to provisioner] button click handler. Always active, allows
+   * one to switch to the account provisioner screen.
+   */
+  onSwitchToProvisioner : function ()
+  {
+    // We have to close this window first, otherwise msgNewMailAccount
+    // in accountUtils.js will think that this window still
+    // exists when it's called from the account provisioner window.
+    // This is because the account provisioner window is modal,
+    // and therefore blocks.  Therefore, we override the _okCallback
+    // with a function that spawns the account provisioner, and then
+    // close the window.
+    this._okCallback = function() {
+      NewMailAccountProvisioner(window.arguments[0].msgWindow, window.arguments[0].extraData);
+    }
+    window.close();
+  },
+
+  /**
    * [Advanced Setup...] button click handler
    * Only active in manual edit mode, and goes straight into
    * Account Settings (pref UI) dialog. Requires a backend account,
@@ -1432,6 +1425,7 @@ EmailConfigWizard.prototype =
       _show(which);
       _show(which + "icon");
       e(which).textContent = gStringsBundle.getString(msg_name);
+      window.sizeToContent();
     } catch (ex) { alertPrompt("missing error string", msg_name); }
   },
 
@@ -1553,6 +1547,8 @@ EmailConfigWizard.prototype =
         // should back-port it to the current config.
         self._currentConfig.incoming.auth = successfulConfig.incoming.auth;
         self._currentConfig.outgoing.auth = successfulConfig.outgoing.auth;
+        self._currentConfig.incoming.username = successfulConfig.incoming.username;
+        self._currentConfig.outgoing.username = successfulConfig.outgoing.username;
         self.finish();
       },
       function(e) // failed
@@ -1579,8 +1575,6 @@ EmailConfigWizard.prototype =
 };
 
 var gEmailConfigWizard = new EmailConfigWizard();
-gEmailWizardLogger.info("email account setup dialog");
-
 
 function serverMatches(a, b)
 {

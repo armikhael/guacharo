@@ -1,45 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   David Bienvenu <bienvenu@nventure.com>
- *   Jeff Tsai <jefft@netscape.com>
- *   Scott MacGregor <mscott@netscape.com>
- *   Seth Spitzer <sspitzer@netscape.com>
- *   Alec Flett <alecf@netscape.com>
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"
 #include "nsMsgImapCID.h"
@@ -84,6 +46,7 @@
 #include "nsServiceManagerUtils.h"
 #include "nsComponentManagerUtils.h"
 #include "nsCRTGlue.h"
+#include "mozilla/Services.h"
 
 using namespace mozilla;
 
@@ -109,11 +72,11 @@ nsImapIncomingServer::nsImapIncomingServer()
   : mLock("nsImapIncomingServer.mLock")
 {
   m_capability = kCapabilityUndefined;
-  mDoingSubscribeDialog = PR_FALSE;
-  mDoingLsub = PR_FALSE;
-  m_canHaveFilters = PR_TRUE;
-  m_userAuthenticated = PR_FALSE;
-  m_shuttingDown = PR_FALSE;
+  mDoingSubscribeDialog = false;
+  mDoingLsub = false;
+  m_canHaveFilters = true;
+  m_userAuthenticated = false;
+  m_shuttingDown = false;
 }
 
 nsImapIncomingServer::~nsImapIncomingServer()
@@ -174,10 +137,6 @@ NS_IMETHODIMP nsImapIncomingServer::SetKey(const nsACString& aKey)  // override 
   if (!otherUsersNamespace.IsEmpty())
       hostSession->SetNamespaceFromPrefForHost(key.get(), otherUsersNamespace.get(),
                                                kOtherUsersNamespace);
-  PRInt32 capability;
-  rv = GetCapabilityPref(&capability);
-  NS_ENSURE_SUCCESS(rv, rv);
-  hostSession->SetCapabilityForHost(key.get(), capability);
   return rv;
 }
 
@@ -250,13 +209,13 @@ nsImapIncomingServer::SetServerDirectory(const nsACString& serverDirectory)
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetOverrideNamespaces(PRBool *bVal)
+nsImapIncomingServer::GetOverrideNamespaces(bool *bVal)
 {
   return GetBoolValue("override_namespaces", bVal);
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::SetOverrideNamespaces(PRBool bVal)
+nsImapIncomingServer::SetOverrideNamespaces(bool bVal)
 {
   nsCString serverKey;
   GetKey(serverKey);
@@ -271,13 +230,13 @@ nsImapIncomingServer::SetOverrideNamespaces(PRBool bVal)
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetUsingSubscription(PRBool *bVal)
+nsImapIncomingServer::GetUsingSubscription(bool *bVal)
 {
   return GetBoolValue("using_subscription", bVal);
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::SetUsingSubscription(PRBool bVal)
+nsImapIncomingServer::SetUsingSubscription(bool bVal)
 {
   nsCString serverKey;
   GetKey(serverKey);
@@ -334,7 +293,7 @@ NS_IMPL_SERVERPREF_INT(nsImapIncomingServer, AutoSyncMaxAgeDays,
                         "autosync_max_age_days")
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetShuttingDown(PRBool *retval)
+nsImapIncomingServer::GetShuttingDown(bool *retval)
 {
   NS_ENSURE_ARG_POINTER(retval);
   *retval = m_shuttingDown;
@@ -342,21 +301,21 @@ nsImapIncomingServer::GetShuttingDown(PRBool *retval)
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::SetShuttingDown(PRBool val)
+nsImapIncomingServer::SetShuttingDown(bool val)
 {
   m_shuttingDown = val;
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetDeleteModel(PRInt32 *retval)
+nsImapIncomingServer::GetDeleteModel(int32_t *retval)
 {
   NS_ENSURE_ARG(retval);
   return GetIntValue("delete_model", retval);
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::SetDeleteModel(PRInt32 ivalue)
+nsImapIncomingServer::SetDeleteModel(int32_t ivalue)
 {
   nsresult rv = SetIntValue("delete_model", ivalue);
   if (NS_SUCCEEDED(rv))
@@ -366,15 +325,37 @@ nsImapIncomingServer::SetDeleteModel(PRInt32 ivalue)
     NS_ENSURE_SUCCESS(rv,rv);
     hostSession->SetDeleteIsMoveToTrashForHost(m_serverKey.get(), ivalue == nsMsgImapDeleteModels::MoveToTrash);
     hostSession->SetShowDeletedMessagesForHost(m_serverKey.get(), ivalue == nsMsgImapDeleteModels::IMAPDelete);
+
+    nsAutoString trashFolderName;
+    nsresult rv = GetTrashFolderName(trashFolderName);
+    if (NS_SUCCEEDED(rv))
+    {
+      nsCAutoString trashFolderNameUtf7;
+      rv = CopyUTF16toMUTF7(trashFolderName, trashFolderNameUtf7);
+      if (NS_SUCCEEDED(rv))
+      {
+        nsCOMPtr<nsIMsgFolder> trashFolder;
+        rv = GetFolder(trashFolderNameUtf7, getter_AddRefs(trashFolder));
+        NS_ENSURE_SUCCESS(rv, rv);
+        nsCString trashURI;
+        trashFolder->GetURI(trashURI);
+        GetMsgFolderFromURI(trashFolder, trashURI, getter_AddRefs(trashFolder));
+        if (NS_SUCCEEDED(rv) && trashFolder)
+        {
+           // If the trash folder is used, set the flag, otherwise clear it.
+          if (ivalue == nsMsgImapDeleteModels::MoveToTrash)
+            trashFolder->SetFlag(nsMsgFolderFlags::Trash);
+          else
+            trashFolder->ClearFlag(nsMsgFolderFlags::Trash);
+        }
+      }
+    }
   }
   return rv;
 }
 
 NS_IMPL_SERVERPREF_INT(nsImapIncomingServer, TimeOutLimits,
                        "timeout")
-
-NS_IMPL_SERVERPREF_INT(nsImapIncomingServer, CapabilityPref,
-                       "capability")
 
 NS_IMPL_SERVERPREF_STR(nsImapIncomingServer, ServerIDPref,
                        "serverIDResponse")
@@ -397,8 +378,13 @@ NS_IMPL_SERVERPREF_BOOL(nsImapIncomingServer, MimePartsOnDemand,
 NS_IMPL_SERVERPREF_BOOL(nsImapIncomingServer, SendID,
                        "send_client_info")
 
+NS_IMPL_SERVERPREF_BOOL(nsImapIncomingServer, CapabilityACL,
+                       "cacheCapa.acl")
+NS_IMPL_SERVERPREF_BOOL(nsImapIncomingServer, CapabilityQuota,
+                       "cacheCapa.quota")
+
 NS_IMETHODIMP
-nsImapIncomingServer::GetIsAOLServer(PRBool *aBool)
+nsImapIncomingServer::GetIsAOLServer(bool *aBool)
 {
   NS_ENSURE_ARG_POINTER(aBool);
   *aBool = ((m_capability & kAOLImapCapability) != 0);
@@ -406,7 +392,7 @@ nsImapIncomingServer::GetIsAOLServer(PRBool *aBool)
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::SetIsAOLServer(PRBool aBool)
+nsImapIncomingServer::SetIsAOLServer(bool aBool)
 {
   if (aBool)
     m_capability |= kAOLImapCapability;
@@ -416,13 +402,20 @@ nsImapIncomingServer::SetIsAOLServer(PRBool aBool)
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetImapConnectionAndLoadUrl(nsIEventTarget * aClientEventTarget,
-                                                  nsIImapUrl* aImapUrl,
+nsImapIncomingServer::UpdateTrySTARTTLSPref(bool aStartTLSSucceeded)
+{
+  SetSocketType(aStartTLSSucceeded ? nsMsgSocketType::alwaysSTARTTLS :
+                                     nsMsgSocketType::plain);
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsImapIncomingServer::GetImapConnectionAndLoadUrl(nsIImapUrl* aImapUrl,
                                                   nsISupports* aConsumer)
 {
   nsCOMPtr<nsIImapProtocol> aProtocol;
 
-  nsresult rv = GetImapConnection(aClientEventTarget, aImapUrl, getter_AddRefs(aProtocol));
+  nsresult rv = GetImapConnection(aImapUrl, getter_AddRefs(aProtocol));
   NS_ENSURE_SUCCESS(rv, rv);
 
   nsCOMPtr<nsIMsgMailNewsUrl> mailnewsurl = do_QueryInterface(aImapUrl, &rv);
@@ -434,13 +427,13 @@ nsImapIncomingServer::GetImapConnectionAndLoadUrl(nsIEventTarget * aClientEventT
     // to run the url
     if (NS_FAILED(rv))
     {
-      NS_ASSERTION(PR_FALSE, "shouldn't get an error loading url");
+      NS_ASSERTION(false, "shouldn't get an error loading url");
       rv = aProtocol->LoadImapUrl(mailnewsurl, aConsumer);
     }
   }
   else
   {   // unable to get an imap connection to run the url; add to the url
-    // queue
+     // queue
     nsImapProtocol::LogImapUrl("queuing url", aImapUrl);
     PR_CEnterMonitor(this);
     m_urlQueue.AppendObject(aImapUrl);
@@ -448,8 +441,8 @@ nsImapIncomingServer::GetImapConnectionAndLoadUrl(nsIEventTarget * aClientEventT
     NS_IF_ADDREF(aConsumer);
     PR_CExitMonitor(this);
     // let's try running it now - maybe the connection is free now.
-    PRBool urlRun;
-    rv = LoadNextQueuedUrl(nsnull, &urlRun);
+    bool urlRun;
+    rv = LoadNextQueuedUrl(nullptr, &urlRun);
   }
 
   return rv;
@@ -472,7 +465,7 @@ nsImapIncomingServer::SuspendUrl(nsIImapUrl *aImapUrl)
   nsImapProtocol::LogImapUrl("suspending url", aImapUrl);
   PR_CEnterMonitor(this);
   m_urlQueue.AppendObject(aImapUrl);
-  m_urlConsumers.AppendElement(nsnull);
+  m_urlConsumers.AppendElement(nullptr);
   PR_CExitMonitor(this);
   return NS_OK;
 }
@@ -486,14 +479,14 @@ nsImapIncomingServer::RetryUrl(nsIImapUrl *aImapUrl, nsIImapMockChannel *aChanne
   nsCOMPtr <nsIImapProtocol> protocolInstance;
   nsImapProtocol::LogImapUrl("creating protocol instance to retry queued url", aImapUrl);
   nsCOMPtr<nsIThread> thread(do_GetCurrentThread());
-  rv = GetImapConnection(thread, aImapUrl, getter_AddRefs(protocolInstance));
+  rv = GetImapConnection(aImapUrl, getter_AddRefs(protocolInstance));
   if (NS_SUCCEEDED(rv) && protocolInstance)
   {
     nsCOMPtr<nsIURI> url = do_QueryInterface(aImapUrl, &rv);
     if (NS_SUCCEEDED(rv) && url)
     {
       nsImapProtocol::LogImapUrl("retrying  url", aImapUrl);
-      rv = protocolInstance->LoadImapUrl(url, nsnull); // ### need to save the display consumer.
+      rv = protocolInstance->LoadImapUrl(url, nullptr); // ### need to save the display consumer.
       NS_ASSERTION(NS_SUCCEEDED(rv), "failed running queued url");
     }
   }
@@ -504,22 +497,25 @@ nsImapIncomingServer::RetryUrl(nsIImapUrl *aImapUrl, nsIImapMockChannel *aChanne
 // and if so, tries to run the oldest one. Returns true if the url is run
 // on the passed in protocol connection.
 NS_IMETHODIMP
-nsImapIncomingServer::LoadNextQueuedUrl(nsIImapProtocol *aProtocol, PRBool *aResult)
+nsImapIncomingServer::LoadNextQueuedUrl(nsIImapProtocol *aProtocol, bool *aResult)
 {
+  if (WeAreOffline())
+    return NS_MSG_ERROR_OFFLINE;
+
   nsresult rv = NS_OK;
-  PRBool urlRun = PR_FALSE;
-  PRBool keepGoing = PR_TRUE;
+  bool urlRun = false;
+  bool keepGoing = true;
   nsCOMPtr <nsIImapProtocol>  protocolInstance ;
 
   MutexAutoLock mon(mLock);
-  PRInt32 cnt = m_urlQueue.Count();
+  int32_t cnt = m_urlQueue.Count();
 
   while (cnt > 0 && !urlRun && keepGoing)
   {
     nsCOMPtr<nsIImapUrl> aImapUrl(m_urlQueue[0]);
     nsCOMPtr<nsIMsgMailNewsUrl> aMailNewsUrl(do_QueryInterface(aImapUrl, &rv));
 
-    PRBool removeUrlFromQueue = PR_FALSE;
+    bool removeUrlFromQueue = false;
     if (aImapUrl)
     {
       nsImapProtocol::LogImapUrl("considering playing queued url", aImapUrl);
@@ -532,7 +528,7 @@ nsImapIncomingServer::LoadNextQueuedUrl(nsIImapProtocol *aProtocol, PRBool *aRes
         NS_IF_ADDREF(aConsumer);
 
         nsImapProtocol::LogImapUrl("creating protocol instance to play queued url", aImapUrl);
-        rv = GetImapConnection(nsnull, aImapUrl, getter_AddRefs(protocolInstance));
+        rv = GetImapConnection(aImapUrl, getter_AddRefs(protocolInstance));
         if (NS_SUCCEEDED(rv) && protocolInstance)
         {
           nsCOMPtr<nsIURI> url = do_QueryInterface(aImapUrl, &rv);
@@ -541,17 +537,17 @@ nsImapIncomingServer::LoadNextQueuedUrl(nsIImapProtocol *aProtocol, PRBool *aRes
             nsImapProtocol::LogImapUrl("playing queued url", aImapUrl);
             rv = protocolInstance->LoadImapUrl(url, aConsumer);
             NS_ASSERTION(NS_SUCCEEDED(rv), "failed running queued url");
-            PRBool isInbox;
+            bool isInbox;
             protocolInstance->IsBusy(&urlRun, &isInbox);
             if (!urlRun)
               nsImapProtocol::LogImapUrl("didn't need to run", aImapUrl);
-            removeUrlFromQueue = PR_TRUE;
+            removeUrlFromQueue = true;
           }
         }
         else
         {
           nsImapProtocol::LogImapUrl("failed creating protocol instance to play queued url", aImapUrl);
-          keepGoing = PR_FALSE;
+          keepGoing = false;
         }
         NS_IF_RELEASE(aConsumer);
       }
@@ -575,12 +571,12 @@ nsImapIncomingServer::AbortQueuedUrls()
   nsresult rv = NS_OK;
 
   MutexAutoLock mon(mLock);
-  PRInt32 cnt = m_urlQueue.Count();
+  int32_t cnt = m_urlQueue.Count();
 
   while (cnt > 0)
   {
     nsCOMPtr<nsIImapUrl> aImapUrl(m_urlQueue[cnt - 1]);
-    PRBool removeUrlFromQueue = PR_FALSE;
+    bool removeUrlFromQueue = false;
 
     if (aImapUrl)
     {
@@ -600,7 +596,7 @@ nsImapIncomingServer::AbortQueuedUrls()
 
 // if this url has a channel with an error, doom it and its mem cache entries,
 // and notify url listeners.
-nsresult nsImapIncomingServer::DoomUrlIfChannelHasError(nsIImapUrl *aImapUrl, PRBool *urlDoomed)
+nsresult nsImapIncomingServer::DoomUrlIfChannelHasError(nsIImapUrl *aImapUrl, bool *urlDoomed)
 {
   nsresult rv = NS_OK;
 
@@ -620,7 +616,7 @@ nsresult nsImapIncomingServer::DoomUrlIfChannelHasError(nsIImapUrl *aImapUrl, PR
       if (NS_FAILED(requestStatus))
       {
         nsresult res;
-        *urlDoomed = PR_TRUE;
+        *urlDoomed = true;
         nsImapProtocol::LogImapUrl("dooming url", aImapUrl);
 
         mockChannel->Close(); // try closing it to get channel listener nulled out.
@@ -632,7 +628,7 @@ nsresult nsImapIncomingServer::DoomUrlIfChannelHasError(nsIImapUrl *aImapUrl, PR
           if (NS_SUCCEEDED(res) && cacheEntry)
             cacheEntry->Doom();
           // we're aborting this url - tell listeners
-          aMailNewsUrl->SetUrlState(PR_FALSE, NS_MSG_ERROR_URL_ABORTED);
+          aMailNewsUrl->SetUrlState(false, NS_MSG_ERROR_URL_ABORTED);
         }
       }
     }
@@ -651,14 +647,14 @@ nsImapIncomingServer::RemoveConnection(nsIImapProtocol* aImapConnection)
   return NS_OK;
 }
 
-PRBool
+bool
 nsImapIncomingServer::ConnectionTimeOut(nsIImapProtocol* aConnection)
 {
-  PRBool retVal = PR_FALSE;
+  bool retVal = false;
   if (!aConnection) return retVal;
   nsresult rv;
 
-  PRInt32 timeoutInMinutes = 0;
+  int32_t timeoutInMinutes = 0;
   rv = GetTimeOutLimits(&timeoutInMinutes);
   if (NS_FAILED(rv) || timeoutInMinutes <= 0 || timeoutInMinutes > 29)
   {
@@ -666,47 +662,41 @@ nsImapIncomingServer::ConnectionTimeOut(nsIImapProtocol* aConnection)
     SetTimeOutLimits(timeoutInMinutes);
   }
 
-  PRTime cacheTimeoutLimits;
-
-  LL_I2L(cacheTimeoutLimits, timeoutInMinutes * 60 * 1000000); // in
-                                                            // microseconds
+  PRTime cacheTimeoutLimits = timeoutInMinutes * 60 * PR_USEC_PER_SEC;
   PRTime lastActiveTimeStamp;
   rv = aConnection->GetLastActiveTimeStamp(&lastActiveTimeStamp);
 
-  PRTime elapsedTime;
-  LL_SUB(elapsedTime, PR_Now(), lastActiveTimeStamp);
-  PRTime t;
-  LL_SUB(t, elapsedTime, cacheTimeoutLimits);
-  if (LL_GE_ZERO(t))
+  if (PR_Now() - lastActiveTimeStamp >= cacheTimeoutLimits)
   {
       nsCOMPtr<nsIImapProtocol> aProtocol(do_QueryInterface(aConnection,
                                                             &rv));
       if (NS_SUCCEEDED(rv) && aProtocol)
       {
         RemoveConnection(aConnection);
-        aProtocol->TellThreadToDie(PR_FALSE);
-        retVal = PR_TRUE;
+        aProtocol->TellThreadToDie(false);
+        retVal = true;
       }
   }
   return retVal;
 }
 
 nsresult
-nsImapIncomingServer::GetImapConnection(nsIEventTarget *aEventTarget,
-                                           nsIImapUrl * aImapUrl,
-                                           nsIImapProtocol ** aImapConnection)
+nsImapIncomingServer::GetImapConnection(nsIImapUrl * aImapUrl,
+                                        nsIImapProtocol ** aImapConnection)
 {
+  NS_ENSURE_ARG_POINTER(aImapUrl);
+
   nsresult rv = NS_OK;
-  PRBool canRunUrlImmediately = PR_FALSE;
-  PRBool canRunButBusy = PR_FALSE;
+  bool canRunUrlImmediately = false;
+  bool canRunButBusy = false;
   nsCOMPtr<nsIImapProtocol> connection;
   nsCOMPtr<nsIImapProtocol> freeConnection;
-  PRBool isBusy = PR_FALSE;
-  PRBool isInboxConnection = PR_FALSE;
+  bool isBusy = false;
+  bool isInboxConnection = false;
 
   PR_CEnterMonitor(this);
 
-  PRInt32 maxConnections = 5; // default to be five
+  int32_t maxConnections = 5; // default to be five
   rv = GetMaximumConnectionsNumber(&maxConnections);
   if (NS_FAILED(rv) || maxConnections == 0)
   {
@@ -719,19 +709,19 @@ nsImapIncomingServer::GetImapConnection(nsIEventTarget *aEventTarget,
     rv = SetMaximumConnectionsNumber(maxConnections);
   }
 
-  PRInt32 cnt = m_connectionCache.Count();
+  int32_t cnt = m_connectionCache.Count();
 
-  *aImapConnection = nsnull;
+  *aImapConnection = nullptr;
   // iterate through the connection cache for a connection that can handle this url.
-  PRBool userCancelled = PR_FALSE;
+  bool userCancelled = false;
 
   // loop until we find a connection that can run the url, or doesn't have to wait?
-  for (PRInt32 i = cnt - 1; i >= 0 && !canRunUrlImmediately && !canRunButBusy; i--)
+  for (int32_t i = cnt - 1; i >= 0 && !canRunUrlImmediately && !canRunButBusy; i--)
   {
     connection = m_connectionCache[i];
     if (connection)
     {
-      PRBool badConnection = ConnectionTimeOut(connection);
+      bool badConnection = ConnectionTimeOut(connection);
       if (!badConnection)
       {
         badConnection = NS_FAILED(connection->CanHandleUrl(aImapUrl,
@@ -744,7 +734,7 @@ nsImapIncomingServer::GetImapConnection(nsIEventTarget *aEventTarget,
         // check that no other connection is in the same selected state.
         if (!curSelectedFolderName.IsEmpty())
         {
-          for (PRUint32 j = 0; j < cnt; j++)
+          for (uint32_t j = 0; j < cnt; j++)
           {
             if (j != i)
             {
@@ -763,7 +753,7 @@ nsImapIncomingServer::GetImapConnection(nsIEventTarget *aEventTarget,
       }
       if (badConnection)
       {
-        connection = nsnull;
+        connection = nullptr;
         continue;
       }
     }
@@ -791,7 +781,7 @@ nsImapIncomingServer::GetImapConnection(nsIEventTarget *aEventTarget,
     }
     // don't leave this loop with connection set if we can't use it!
     if (!canRunButBusy && !canRunUrlImmediately)
-      connection = nsnull;
+      connection = nullptr;
   }
 
   nsImapState requiredState;
@@ -818,9 +808,9 @@ nsImapIncomingServer::GetImapConnection(nsIEventTarget *aEventTarget,
   // (e.g., a folder delete or msg append) but we shouldn't create new connections
   // for these types of urls if we have a free connection. So we check the actual
   // required state here.
-  else if (cnt < maxConnections && aEventTarget
+  else if (cnt < maxConnections
       && (!freeConnection || requiredState == nsIImapUrl::nsImapSelectedState))
-    rv = CreateProtocolInstance(aEventTarget, aImapConnection);
+    rv = CreateProtocolInstance(aImapConnection);
   else if (freeConnection)
   {
     *aImapConnection = freeConnection;
@@ -838,14 +828,13 @@ nsImapIncomingServer::GetImapConnection(nsIEventTarget *aEventTarget,
 }
 
 nsresult
-nsImapIncomingServer::CreateProtocolInstance(nsIEventTarget *aEventTarget,
-                                             nsIImapProtocol ** aImapConnection)
+nsImapIncomingServer::CreateProtocolInstance(nsIImapProtocol ** aImapConnection)
 {
   // create a new connection and add it to the connection cache
   // we may need to flag the protocol connection as busy so we don't get
   // a race condition where someone else goes through this code
 
-  PRInt32 authMethod;
+  int32_t authMethod;
   GetAuthMethod(&authMethod);
   nsresult rv;
   // pre-flight that we have nss - on the ui thread - for MD5 etc.
@@ -870,7 +859,7 @@ nsImapIncomingServer::CreateProtocolInstance(nsIEventTarget *aEventTarget,
     nsCOMPtr<nsIImapHostSessionList> hostSession =
       do_GetService(kCImapHostSessionListCID, &rv);
     if (NS_SUCCEEDED(rv))
-      rv = protocolInstance->Initialize(hostSession, this, aEventTarget);
+      rv = protocolInstance->Initialize(hostSession, this);
   }
 
   // take the protocol instance and add it to the connectionCache
@@ -884,7 +873,7 @@ NS_IMETHODIMP nsImapIncomingServer::CloseConnectionForFolder(nsIMsgFolder *aMsgF
 {
   nsresult rv = NS_OK;
   nsCOMPtr<nsIImapProtocol> connection;
-  PRBool isBusy = PR_FALSE, isInbox = PR_FALSE;
+  bool isBusy = false, isInbox = false;
   nsCString inFolderName;
   nsCString connectionFolderName;
   nsCOMPtr <nsIMsgImapMailFolder> imapFolder = do_QueryInterface(aMsgFolder);
@@ -892,13 +881,13 @@ NS_IMETHODIMP nsImapIncomingServer::CloseConnectionForFolder(nsIMsgFolder *aMsgF
   if (!imapFolder)
     return NS_ERROR_NULL_POINTER;
 
-  PRInt32 cnt = m_connectionCache.Count();
+  int32_t cnt = m_connectionCache.Count();
   NS_ENSURE_SUCCESS(rv, rv);
 
   imapFolder->GetOnlineName(inFolderName);
   PR_CEnterMonitor(this);
 
-  for (PRInt32 i = 0; i < cnt; ++i)
+  for (int32_t i = 0; i < cnt; ++i)
   {
     connection = m_connectionCache[i];
     if (connection)
@@ -908,7 +897,7 @@ NS_IMETHODIMP nsImapIncomingServer::CloseConnectionForFolder(nsIMsgFolder *aMsgF
       {
         rv = connection->IsBusy(&isBusy, &isInbox);
         if (!isBusy)
-          rv = connection->TellThreadToDie(PR_TRUE);
+          rv = connection->TellThreadToDie(true);
         break; // found it, end of the loop
       }
     }
@@ -922,14 +911,14 @@ NS_IMETHODIMP nsImapIncomingServer::ResetConnection(const nsACString& folderName
 {
   nsresult rv = NS_OK;
   nsCOMPtr<nsIImapProtocol> connection;
-  PRBool isBusy = PR_FALSE, isInbox = PR_FALSE;
+  bool isBusy = false, isInbox = false;
   nsCString curFolderName;
 
-  PRInt32 cnt = m_connectionCache.Count();
+  int32_t cnt = m_connectionCache.Count();
 
   PR_CEnterMonitor(this);
 
-  for (PRInt32 i = 0; i < cnt; ++i)
+  for (int32_t i = 0; i < cnt; ++i)
   {
     connection = m_connectionCache[i];
     if (connection)
@@ -960,7 +949,7 @@ nsImapIncomingServer::PerformExpand(nsIMsgWindow *aMsgWindow)
   if (password.IsEmpty())
     return NS_OK;
 
-  rv = ResetFoldersToUnverified(nsnull);
+  rv = ResetFoldersToUnverified(nullptr);
 
   nsCOMPtr<nsIMsgFolder> rootMsgFolder;
   rv = GetRootFolder(getter_AddRefs(rootMsgFolder));
@@ -971,8 +960,8 @@ nsImapIncomingServer::PerformExpand(nsIMsgWindow *aMsgWindow)
   nsCOMPtr<nsIImapService> imapService = do_GetService(NS_IMAPSERVICE_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
   nsCOMPtr<nsIThread> thread(do_GetCurrentThread());
-  rv = imapService->DiscoverAllFolders(thread, rootMsgFolder,
-                                       this, aMsgWindow, nsnull);
+  rv = imapService->DiscoverAllFolders(rootMsgFolder,
+                                       this, aMsgWindow, nullptr);
   return rv;
 }
 
@@ -998,8 +987,8 @@ NS_IMETHODIMP nsImapIncomingServer::PerformBiff(nsIMsgWindow* aMsgWindow)
   nsresult rv = GetRootMsgFolder(getter_AddRefs(rootMsgFolder));
   if(NS_SUCCEEDED(rv))
   {
-    SetPerformingBiff(PR_TRUE);
-    rv = rootMsgFolder->GetNewMessages(aMsgWindow, nsnull);
+    SetPerformingBiff(true);
+    rv = rootMsgFolder->GetNewMessages(aMsgWindow, nullptr);
   }
   return rv;
 }
@@ -1012,13 +1001,13 @@ nsImapIncomingServer::CloseCachedConnections()
   PR_CEnterMonitor(this);
 
   // iterate through the connection cache closing open connections.
-  PRInt32 cnt = m_connectionCache.Count();
+  int32_t cnt = m_connectionCache.Count();
 
-  for (PRInt32 i = cnt; i > 0; --i)
+  for (int32_t i = cnt; i > 0; --i)
   {
     connection = m_connectionCache[i - 1];
     if (connection)
-      connection->TellThreadToDie(PR_TRUE);
+      connection->TellThreadToDie(true);
   }
 
   PR_CExitMonitor(this);
@@ -1041,20 +1030,20 @@ nsImapIncomingServer::CreateRootFolderFromUri(const nsCString &serverUri,
 // aNewFolder will not be set if we're listing for the subscribe UI, since that's the way 4.x worked.
 NS_IMETHODIMP nsImapIncomingServer::PossibleImapMailbox(const nsACString& folderPath,
                                                         char hierarchyDelimiter,
-                                                        PRInt32 boxFlags, PRBool *aNewFolder)
+                                                        int32_t boxFlags, bool *aNewFolder)
 {
   NS_ENSURE_ARG_POINTER(aNewFolder);
   NS_ENSURE_TRUE(!folderPath.IsEmpty(), NS_ERROR_FAILURE);
 
   // folderPath is in canonical format, i.e., hierarchy separator has been replaced with '/'
   nsresult rv;
-  PRBool found = PR_FALSE;
-  PRBool haveParent = PR_FALSE;
+  bool found = false;
+  bool haveParent = false;
   nsCOMPtr<nsIMsgImapMailFolder> hostFolder;
   nsCOMPtr<nsIMsgFolder> aFolder;
-  PRBool explicitlyVerify = PR_FALSE;
+  bool explicitlyVerify = false;
 
-  *aNewFolder = PR_FALSE;
+  *aNewFolder = false;
   nsCOMPtr<nsIMsgFolder> a_nsIFolder;
   rv = GetRootFolder(getter_AddRefs(a_nsIFolder));
 
@@ -1078,8 +1067,8 @@ NS_IMETHODIMP nsImapIncomingServer::PossibleImapMailbox(const nsACString& folder
     if (a_nsIFolder && !dupFolderPath.IsEmpty())
     {
       nsCOMPtr<nsIMsgFolder> msgFolder;
-      PRBool isNamespace = PR_FALSE;
-      PRBool noSelect = PR_FALSE;
+      bool isNamespace = false;
+      bool noSelect = false;
 
       rv = a_nsIFolder->FindSubFolder(dupFolderPath, getter_AddRefs(msgFolder));
       NS_ENSURE_SUCCESS(rv,rv);
@@ -1103,7 +1092,7 @@ NS_IMETHODIMP nsImapIncomingServer::PossibleImapMailbox(const nsACString& folder
 
   nsCAutoString tempFolderName(dupFolderPath);
   nsCAutoString tokenStr, remStr, changedStr;
-  PRInt32 slashPos = tempFolderName.FindChar('/');
+  int32_t slashPos = tempFolderName.FindChar('/');
   if (slashPos > 0)
   {
     tokenStr = StringHead(tempFolderName, slashPos);
@@ -1112,7 +1101,7 @@ NS_IMETHODIMP nsImapIncomingServer::PossibleImapMailbox(const nsACString& folder
   else
     tokenStr.Assign(tempFolderName);
 
-  if ((PRInt32(PL_strcasecmp(tokenStr.get(), "INBOX"))==0) && (strcmp(tokenStr.get(), "INBOX") != 0))
+  if ((int32_t(PL_strcasecmp(tokenStr.get(), "INBOX"))==0) && (strcmp(tokenStr.get(), "INBOX") != 0))
     changedStr.Append("INBOX");
   else
     changedStr.Append(tokenStr);
@@ -1127,7 +1116,7 @@ NS_IMETHODIMP nsImapIncomingServer::PossibleImapMailbox(const nsACString& folder
   nsCString serverUri;
   GetServerURI(serverUri);
   uri.Assign(serverUri);
-  PRInt32 leafPos = folderName.RFindChar('/');
+  int32_t leafPos = folderName.RFindChar('/');
   nsCAutoString parentName(folderName);
   nsCAutoString parentUri(uri);
 
@@ -1137,7 +1126,7 @@ NS_IMETHODIMP nsImapIncomingServer::PossibleImapMailbox(const nsACString& folder
     // Don't strip off slash if it's the first character
     parentName.SetLength(leafPos);
     folderName.Cut(0, leafPos + 1);	// get rid of the parent name
-    haveParent = PR_TRUE;
+    haveParent = true;
     parentUri.Append('/');
     parentUri.Append(parentName);
   }
@@ -1153,21 +1142,21 @@ NS_IMETHODIMP nsImapIncomingServer::PossibleImapMailbox(const nsACString& folder
   // nsCString possibleName(aSpec->allocatedPathName);
   uri.Append('/');
   uri.Append(dupFolderPath);
-  PRBool caseInsensitive = MsgLowerCaseEqualsLiteral(dupFolderPath, "inbox");
-  a_nsIFolder->GetChildWithURI(uri, PR_TRUE, caseInsensitive, getter_AddRefs(child));
+  bool caseInsensitive = MsgLowerCaseEqualsLiteral(dupFolderPath, "inbox");
+  a_nsIFolder->GetChildWithURI(uri, true, caseInsensitive, getter_AddRefs(child));
   // if we couldn't find this folder by URI, tell the imap code it's a new folder to us
   *aNewFolder = !child;
   if (child)
-    found = PR_TRUE;
+    found = true;
   if (!found)
   {
     // trying to find/discover the parent
     if (haveParent)
     {
       nsCOMPtr <nsIMsgFolder> parent;
-      PRBool parentIsNew;
+      bool parentIsNew;
       caseInsensitive = MsgLowerCaseEqualsLiteral(parentName, "inbox");
-      a_nsIFolder->GetChildWithURI(parentUri, PR_TRUE, caseInsensitive, getter_AddRefs(parent));
+      a_nsIFolder->GetChildWithURI(parentUri, true, caseInsensitive, getter_AddRefs(parent));
       if (!parent /* || parentFolder->GetFolderNeedsAdded()*/)
       {
         PossibleImapMailbox(parentName, hierarchyDelimiter, kNoselect | // be defensive
@@ -1175,10 +1164,10 @@ NS_IMETHODIMP nsImapIncomingServer::PossibleImapMailbox(const nsACString& folder
           (kPublicMailbox | kOtherUsersMailbox | kPersonalMailbox))), &parentIsNew);
       }
     }
-    rv = hostFolder->CreateClientSubfolderInfo(dupFolderPath, hierarchyDelimiter,boxFlags, PR_FALSE);
+    rv = hostFolder->CreateClientSubfolderInfo(dupFolderPath, hierarchyDelimiter,boxFlags, false);
     NS_ENSURE_SUCCESS(rv, rv);
     caseInsensitive = MsgLowerCaseEqualsLiteral(dupFolderPath, "inbox");
-    a_nsIFolder->GetChildWithURI(uri, PR_TRUE, caseInsensitive, getter_AddRefs(child));
+    a_nsIFolder->GetChildWithURI(uri, true, caseInsensitive, getter_AddRefs(child));
   }
   if (child)
   {
@@ -1187,18 +1176,15 @@ NS_IMETHODIMP nsImapIncomingServer::PossibleImapMailbox(const nsACString& folder
     {
       nsCAutoString onlineName;
       nsAutoString unicodeName;
-      imapFolder->SetVerifiedAsOnlineFolder(PR_TRUE);
+      imapFolder->SetVerifiedAsOnlineFolder(true);
       imapFolder->SetHierarchyDelimiter(hierarchyDelimiter);
       if (boxFlags & kImapTrash)
       {
-        PRInt32 deleteModel;
+        int32_t deleteModel;
         GetDeleteModel(&deleteModel);
         if (deleteModel == nsMsgImapDeleteModels::MoveToTrash)
           child->SetFlag(nsMsgFolderFlags::Trash);
       }
-      // only GMail will have an AllMail folder.
-      if (boxFlags & kImapAllMail)
-        SetIsGMailServer(PR_TRUE);
 
       imapFolder->SetBoxFlags(boxFlags);
       imapFolder->SetExplicitlyVerify(explicitlyVerify);
@@ -1224,7 +1210,7 @@ NS_IMETHODIMP nsImapIncomingServer::PossibleImapMailbox(const nsACString& folder
     }
   }
   if (!found && child)
-    child->SetMsgDatabase(nsnull); // close the db, so we don't hold open all the .msf files for new folders
+    child->SetMsgDatabase(nullptr); // close the db, so we don't hold open all the .msf files for new folders
   return NS_OK;
 }
 
@@ -1248,7 +1234,7 @@ NS_IMETHODIMP nsImapIncomingServer::AddFolderRights(const nsACString& mailboxNam
 }
 
 NS_IMETHODIMP nsImapIncomingServer::FolderNeedsACLInitialized(const nsACString& folderPath,
-                                                              PRBool *aNeedsACLInitialized)
+                                                              bool *aNeedsACLInitialized)
 {
   NS_ENSURE_ARG_POINTER(aNeedsACLInitialized);
   nsCOMPtr <nsIMsgFolder> rootFolder;
@@ -1268,7 +1254,7 @@ NS_IMETHODIMP nsImapIncomingServer::FolderNeedsACLInitialized(const nsACString& 
       }
     }
   }
-  *aNeedsACLInitialized = PR_FALSE; // maybe we want to say TRUE here...
+  *aNeedsACLInitialized = false; // maybe we want to say TRUE here...
   return NS_OK;
 }
 
@@ -1295,7 +1281,7 @@ nsresult nsImapIncomingServer::GetFolder(const nsACString& name, nsIMsgFolder** 
   NS_ENSURE_ARG_POINTER(pFolder);
   NS_ENSURE_TRUE(!name.IsEmpty(), NS_ERROR_FAILURE);
   nsresult rv;
-  *pFolder = nsnull;
+  *pFolder = nullptr;
 
   nsCOMPtr<nsIMsgFolder> rootFolder;
   rv = GetRootFolder(getter_AddRefs(rootFolder));
@@ -1346,7 +1332,7 @@ NS_IMETHODIMP nsImapIncomingServer::OnlineFolderRename(nsIMsgWindow *msgWindow, 
 
     nsCOMPtr<nsIMsgFolder> parent;
     nsCString tmpNewName (newName);
-    PRInt32 folderStart = tmpNewName.RFindChar('/');
+    int32_t folderStart = tmpNewName.RFindChar('/');
     if (folderStart > 0)
     {
       rv = GetFolder(StringHead(tmpNewName, folderStart), getter_AddRefs(parent));
@@ -1383,19 +1369,19 @@ NS_IMETHODIMP nsImapIncomingServer::OnlineFolderRename(nsIMsgWindow *msgWindow, 
   return rv;
 }
 
-NS_IMETHODIMP  nsImapIncomingServer::FolderIsNoSelect(const nsACString& aFolderName, PRBool *result)
+NS_IMETHODIMP  nsImapIncomingServer::FolderIsNoSelect(const nsACString& aFolderName, bool *result)
 {
   NS_ENSURE_ARG_POINTER(result);
   nsCOMPtr<nsIMsgFolder> msgFolder;
   nsresult rv = GetFolder(aFolderName, getter_AddRefs(msgFolder));
   if (NS_SUCCEEDED(rv) && msgFolder)
   {
-    PRUint32 flags;
+    uint32_t flags;
     msgFolder->GetFlags(&flags);
     *result = ((flags & nsMsgFolderFlags::ImapNoselect) != 0);
   }
   else
-   *result = PR_FALSE;
+   *result = false;
   return NS_OK;
 }
 
@@ -1417,10 +1403,10 @@ NS_IMETHODIMP nsImapIncomingServer::SetFolderAdminURL(const nsACString& aFolderN
   return rv;
 }
 
-NS_IMETHODIMP  nsImapIncomingServer::FolderVerifiedOnline(const nsACString& folderName, PRBool *aResult)
+NS_IMETHODIMP  nsImapIncomingServer::FolderVerifiedOnline(const nsACString& folderName, bool *aResult)
 {
   NS_ENSURE_ARG_POINTER(aResult);
-  *aResult = PR_FALSE;
+  *aResult = false;
   nsCOMPtr<nsIMsgFolder> rootFolder;
   nsresult rv = GetRootFolder(getter_AddRefs(rootFolder));
   if (NS_SUCCEEDED(rv) && rootFolder)
@@ -1481,7 +1467,7 @@ NS_IMETHODIMP nsImapIncomingServer::DiscoveryDone()
         identity->SetDraftFolder(existingUri);
         identity->SetDraftsFolderPickerMode(NS_LITERAL_CSTRING("1"));
       }
-      PRBool archiveEnabled;
+      bool archiveEnabled;
       identity->GetArchiveEnabled(&archiveEnabled);
       if (archiveEnabled)
       {
@@ -1503,7 +1489,7 @@ NS_IMETHODIMP nsImapIncomingServer::DiscoveryDone()
       }
     }
 
-    PRBool isGMailServer;
+    bool isGMailServer;
     GetIsGMailServer(&isGMailServer);
 
     // Verify there is only one trash folder. Another might be present if
@@ -1515,14 +1501,14 @@ NS_IMETHODIMP nsImapIncomingServer::DiscoveryDone()
 
     if (NS_SUCCEEDED(rv) && trashFolders)
     {
-      PRUint32 numFolders;
+      uint32_t numFolders;
       trashFolders->GetLength(&numFolders);
       if (numFolders > 1)
       {
         nsAutoString trashName;
         if (NS_SUCCEEDED(GetTrashFolderName(trashName)))
         {
-          for (PRUint32 i = 0; i < numFolders; i++)
+          for (uint32_t i = 0; i < numFolders; i++)
           {
             nsCOMPtr<nsIMsgFolder> trashFolder(do_QueryElementAt(trashFolders, i));
             if (trashFolder)
@@ -1531,11 +1517,11 @@ NS_IMETHODIMP nsImapIncomingServer::DiscoveryDone()
               // without the kImapXListTrash flag. For normal servers, we clear
               // the trash folder flag if the folder name doesn't match the
               // pref trash folder name.
-              PRBool clearFlag;
+              bool clearFlag;
               if (isGMailServer)
               {
                 nsCOMPtr<nsIMsgImapMailFolder> imapFolder(do_QueryInterface(trashFolder));
-                PRInt32 boxFlags;
+                int32_t boxFlags;
                 imapFolder->GetBoxFlags(&boxFlags);
                 clearFlag = !(boxFlags & kImapXListTrash);
               }
@@ -1554,18 +1540,18 @@ NS_IMETHODIMP nsImapIncomingServer::DiscoveryDone()
     }
   }
 
-  PRBool usingSubscription = PR_TRUE;
+  bool usingSubscription = true;
   GetUsingSubscription(&usingSubscription);
 
   nsCOMArray<nsIMsgImapMailFolder> unverifiedFolders;
   GetUnverifiedFolders(unverifiedFolders);
 
-  PRInt32 count = unverifiedFolders.Count();
-  for (PRInt32 k = 0; k < count; ++k)
+  int32_t count = unverifiedFolders.Count();
+  for (int32_t k = 0; k < count; ++k)
   {
-    PRBool explicitlyVerify = PR_FALSE;
-    PRBool hasSubFolders = PR_FALSE;
-    PRUint32 folderFlags;
+    bool explicitlyVerify = false;
+    bool hasSubFolders = false;
+    uint32_t folderFlags;
     nsCOMPtr<nsIMsgImapMailFolder> currentImapFolder(unverifiedFolders[k]);
     nsCOMPtr<nsIMsgFolder> currentFolder(do_QueryInterface(currentImapFolder, &rv));
     if (NS_FAILED(rv))
@@ -1582,7 +1568,7 @@ NS_IMETHODIMP nsImapIncomingServer::DiscoveryDone()
           hasSubFolders) &&
          !NoDescendentsAreVerified(currentFolder)))
     {
-      PRBool isNamespace;
+      bool isNamespace;
       currentImapFolder->GetIsNamespace(&isNamespace);
       if (!isNamespace) // don't list namespaces explicitly
       {
@@ -1593,7 +1579,7 @@ NS_IMETHODIMP nsImapIncomingServer::DiscoveryDone()
         // Only if there are subfolders and at least one of them is verified
         // do we want to refresh that folder's flags, because it won't be going
         // away.
-        currentImapFolder->SetExplicitlyVerify(PR_FALSE);
+        currentImapFolder->SetExplicitlyVerify(false);
         currentImapFolder->List();
       }
     }
@@ -1611,17 +1597,17 @@ NS_IMETHODIMP nsImapIncomingServer::DiscoveryDone()
 // it will be there if and when the folder is created.
 // Return true if we found an existing special folder different than
 // the one specified in prefs, and the one specified by prefs doesn't exist.
-PRBool nsImapIncomingServer::CheckSpecialFolder(nsIRDFService *rdf,
+bool nsImapIncomingServer::CheckSpecialFolder(nsIRDFService *rdf,
                                                 nsCString &folderUri,
-                                                PRUint32 folderFlag,
+                                                uint32_t folderFlag,
                                                 nsCString &existingUri)
 {
-  PRBool foundExistingFolder = PR_FALSE;
+  bool foundExistingFolder = false;
   nsCOMPtr<nsIRDFResource> res;
   nsCOMPtr<nsIMsgFolder> folder;
   nsCOMPtr<nsIMsgFolder> rootMsgFolder;
   nsresult rv = GetRootFolder(getter_AddRefs(rootMsgFolder));
-  NS_ENSURE_SUCCESS(rv, PR_FALSE);
+  NS_ENSURE_SUCCESS(rv, false);
 
   if (!folderUri.IsEmpty() && NS_SUCCEEDED(rdf->GetResource(folderUri, getter_AddRefs(res))))
   {
@@ -1639,7 +1625,7 @@ PRBool nsImapIncomingServer::CheckSpecialFolder(nsIRDFService *rdf,
         if (existingFolder)
         {
           existingFolder->GetURI(existingUri);
-          foundExistingFolder = PR_TRUE;
+          foundExistingFolder = true;
         }
       }
       if (!foundExistingFolder)
@@ -1656,7 +1642,7 @@ PRBool nsImapIncomingServer::CheckSpecialFolder(nsIRDFService *rdf,
 
 nsresult nsImapIncomingServer::DeleteNonVerifiedFolders(nsIMsgFolder *curFolder)
 {
-  PRBool autoUnsubscribeFromNoSelectFolders = PR_TRUE;
+  bool autoUnsubscribeFromNoSelectFolders = true;
   nsresult rv;
   nsCOMPtr<nsIPrefBranch> prefBranch = do_GetService(NS_PREFSERVICE_CONTRACTID, &rv);
   if (NS_SUCCEEDED(rv))
@@ -1667,7 +1653,7 @@ nsresult nsImapIncomingServer::DeleteNonVerifiedFolders(nsIMsgFolder *curFolder)
   rv = curFolder->GetSubFolders(getter_AddRefs(subFolders));
   if(NS_SUCCEEDED(rv))
   {
-    PRBool moreFolders;
+    bool moreFolders;
 
     while (NS_SUCCEEDED(subFolders->HasMoreElements(&moreFolders)) && moreFolders)
     {
@@ -1675,27 +1661,27 @@ nsresult nsImapIncomingServer::DeleteNonVerifiedFolders(nsIMsgFolder *curFolder)
       rv = subFolders->GetNext(getter_AddRefs(child));
       if (NS_SUCCEEDED(rv) && child)
       {
-        PRBool childVerified = PR_FALSE;
+        bool childVerified = false;
         nsCOMPtr <nsIMsgImapMailFolder> childImapFolder = do_QueryInterface(child, &rv);
         if (NS_SUCCEEDED(rv) && childImapFolder)
         {
-          PRUint32 flags;
+          uint32_t flags;
 
           nsCOMPtr <nsIMsgFolder> childFolder = do_QueryInterface(child, &rv);
           rv = childImapFolder->GetVerifiedAsOnlineFolder(&childVerified);
 
           rv = childFolder->GetFlags(&flags);
-          PRBool folderIsNoSelectFolder = NS_SUCCEEDED(rv) && ((flags & nsMsgFolderFlags::ImapNoselect) != 0);
+          bool folderIsNoSelectFolder = NS_SUCCEEDED(rv) && ((flags & nsMsgFolderFlags::ImapNoselect) != 0);
 
-          PRBool usingSubscription = PR_TRUE;
+          bool usingSubscription = true;
           GetUsingSubscription(&usingSubscription);
           if (usingSubscription)
           {
-            PRBool folderIsNameSpace = PR_FALSE;
-            PRBool noDescendentsAreVerified = NoDescendentsAreVerified(childFolder);
-            PRBool shouldDieBecauseNoSelect = (folderIsNoSelectFolder ?
+            bool folderIsNameSpace = false;
+            bool noDescendentsAreVerified = NoDescendentsAreVerified(childFolder);
+            bool shouldDieBecauseNoSelect = (folderIsNoSelectFolder ?
               ((noDescendentsAreVerified || AllDescendentsAreNoSelect(childFolder)) && !folderIsNameSpace)
-              : PR_FALSE);
+              : false);
             if (!childVerified && (noDescendentsAreVerified || shouldDieBecauseNoSelect))
             {
             }
@@ -1721,14 +1707,14 @@ nsresult nsImapIncomingServer::DeleteNonVerifiedFolders(nsIMsgFolder *curFolder)
   return rv;
 }
 
-PRBool nsImapIncomingServer::NoDescendentsAreVerified(nsIMsgFolder *parentFolder)
+bool nsImapIncomingServer::NoDescendentsAreVerified(nsIMsgFolder *parentFolder)
 {
-  PRBool nobodyIsVerified = PR_TRUE;
+  bool nobodyIsVerified = true;
   nsCOMPtr<nsISimpleEnumerator> subFolders;
   nsresult rv = parentFolder->GetSubFolders(getter_AddRefs(subFolders));
   if(NS_SUCCEEDED(rv))
   {
-    PRBool moreFolders;
+    bool moreFolders;
     while (NS_SUCCEEDED(subFolders->HasMoreElements(&moreFolders)) &&
            moreFolders && nobodyIsVerified)
     {
@@ -1736,7 +1722,7 @@ PRBool nsImapIncomingServer::NoDescendentsAreVerified(nsIMsgFolder *parentFolder
       rv = subFolders->GetNext(getter_AddRefs(child));
       if (NS_SUCCEEDED(rv) && child)
       {
-        PRBool childVerified = PR_FALSE;
+        bool childVerified = false;
         nsCOMPtr <nsIMsgImapMailFolder> childImapFolder = do_QueryInterface(child, &rv);
         if (NS_SUCCEEDED(rv) && childImapFolder)
         {
@@ -1751,14 +1737,14 @@ PRBool nsImapIncomingServer::NoDescendentsAreVerified(nsIMsgFolder *parentFolder
 }
 
 
-PRBool nsImapIncomingServer::AllDescendentsAreNoSelect(nsIMsgFolder *parentFolder)
+bool nsImapIncomingServer::AllDescendentsAreNoSelect(nsIMsgFolder *parentFolder)
 {
-  PRBool allDescendentsAreNoSelect = PR_TRUE;
+  bool allDescendentsAreNoSelect = true;
   nsCOMPtr<nsISimpleEnumerator> subFolders;
   nsresult rv = parentFolder->GetSubFolders(getter_AddRefs(subFolders));
   if(NS_SUCCEEDED(rv))
   {
-    PRBool moreFolders;
+    bool moreFolders;
     while (NS_SUCCEEDED(subFolders->HasMoreElements(&moreFolders)) &&
            moreFolders && allDescendentsAreNoSelect)
     {
@@ -1766,11 +1752,11 @@ PRBool nsImapIncomingServer::AllDescendentsAreNoSelect(nsIMsgFolder *parentFolde
       rv = subFolders->GetNext(getter_AddRefs(child));
       if (NS_SUCCEEDED(rv) && child)
       {
-        PRBool childIsNoSelect = PR_FALSE;
+        bool childIsNoSelect = false;
         nsCOMPtr <nsIMsgImapMailFolder> childImapFolder = do_QueryInterface(child, &rv);
         if (NS_SUCCEEDED(rv) && childImapFolder)
         {
-          PRUint32 flags;
+          uint32_t flags;
           nsCOMPtr <nsIMsgFolder> childFolder = do_QueryInterface(child, &rv);
           rv = childFolder->GetFlags(&flags);
           childIsNoSelect = NS_SUCCEEDED(rv) && (flags & nsMsgFolderFlags::ImapNoselect);
@@ -1794,7 +1780,7 @@ PRBool nsImapIncomingServer::AllDescendentsAreNoSelect(nsIMsgFolder *parentFolde
 
 NS_IMETHODIMP
 nsImapIncomingServer::PromptLoginFailed(nsIMsgWindow *aMsgWindow,
-                                        PRInt32 *aResult)
+                                        int32_t *aResult)
 {
   nsCAutoString hostName;
   GetRealHostName(hostName);
@@ -1838,7 +1824,7 @@ nsresult nsImapIncomingServer::AlertUser(const nsAString& aString,
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::FEAlertWithID(PRInt32 aMsgId, nsIMsgMailNewsUrl *aUrl)
+nsImapIncomingServer::FEAlertWithID(int32_t aMsgId, nsIMsgMailNewsUrl *aUrl)
 {
   // don't bother the user if we're shutting down.
   if (m_shuttingDown)
@@ -1881,7 +1867,7 @@ NS_IMETHODIMP  nsImapIncomingServer::FEAlertFromServer(const nsACString& aString
 
   // Skip over the first two words (the command tag and "NO").
   // Find the first word break.
-  PRInt32 pos = message.FindChar(' ');
+  int32_t pos = message.FindChar(' ');
 
   // Find the second word break.
   if (pos != -1)
@@ -1897,12 +1883,12 @@ NS_IMETHODIMP  nsImapIncomingServer::FEAlertFromServer(const nsACString& aString
   const PRUnichar *formatStrings[] =
   {
     hostName.get(),
-    nsnull,
-    nsnull
+    nullptr,
+    nullptr
   };
 
-  PRUint32 msgID;
-  PRInt32 numStrings;
+  uint32_t msgID;
+  int32_t numStrings;
   nsString fullMessage;
   nsCOMPtr<nsIImapUrl> imapUrl = do_QueryInterface(aUrl);
   NS_ENSURE_TRUE(imapUrl, NS_ERROR_INVALID_ARG);
@@ -1952,19 +1938,17 @@ NS_IMETHODIMP  nsImapIncomingServer::FEAlertFromServer(const nsACString& aString
 
 nsresult nsImapIncomingServer::GetStringBundle()
 {
-  nsresult res;
-  if (!m_stringBundle)
-  {
-    static const char propertyURL[] = IMAP_MSGS_URL;
-    nsCOMPtr<nsIStringBundleService> sBundleService = do_GetService(NS_STRINGBUNDLE_CONTRACTID, &res);
-    if (NS_SUCCEEDED(res) && (nsnull != sBundleService))
-      res = sBundleService->CreateBundle(propertyURL, getter_AddRefs(m_stringBundle));
-  }
-  return (m_stringBundle) ? NS_OK : res;
+  if (m_stringBundle)
+    return NS_OK;
+
+  nsCOMPtr<nsIStringBundleService> sBundleService =
+    mozilla::services::GetStringBundleService();
+  NS_ENSURE_TRUE(sBundleService, NS_ERROR_UNEXPECTED);
+  return sBundleService->CreateBundle(IMAP_MSGS_URL, getter_AddRefs(m_stringBundle));
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetImapStringByID(PRInt32 aMsgId, nsAString& aString)
+nsImapIncomingServer::GetImapStringByID(int32_t aMsgId, nsAString& aString)
 {
   nsresult res = NS_OK;
   GetStringBundle();
@@ -2019,11 +2003,11 @@ nsresult nsImapIncomingServer::ResetFoldersToUnverified(nsIMsgFolder *parentFold
     nsCOMPtr<nsISimpleEnumerator> subFolders;
     nsCOMPtr<nsIMsgImapMailFolder> imapFolder = do_QueryInterface(parentFolder, &rv);
     NS_ENSURE_SUCCESS(rv, rv);
-    rv = imapFolder->SetVerifiedAsOnlineFolder(PR_FALSE);
+    rv = imapFolder->SetVerifiedAsOnlineFolder(false);
     rv = parentFolder->GetSubFolders(getter_AddRefs(subFolders));
     NS_ENSURE_SUCCESS(rv, rv);
 
-    PRBool moreFolders = PR_FALSE;
+    bool moreFolders = false;
     while (NS_SUCCEEDED(subFolders->HasMoreElements(&moreFolders)) && moreFolders)
     {
       nsCOMPtr<nsISupports> child;
@@ -2053,7 +2037,7 @@ nsImapIncomingServer::GetUnverifiedFolders(nsCOMArray<nsIMsgImapMailFolder> &aFo
   nsCOMPtr<nsIMsgImapMailFolder> imapRoot(do_QueryInterface(rootFolder));
   // don't need to verify the root.
   if (imapRoot)
-    imapRoot->SetVerifiedAsOnlineFolder(PR_TRUE);
+    imapRoot->SetVerifiedAsOnlineFolder(true);
 
   GetUnverifiedSubFolders(rootFolder, aFoldersArray);
 }
@@ -2064,7 +2048,7 @@ nsImapIncomingServer::GetUnverifiedSubFolders(nsIMsgFolder *parentFolder,
 {
   nsCOMPtr<nsIMsgImapMailFolder> imapFolder(do_QueryInterface(parentFolder));
 
-  PRBool verified = PR_FALSE, explicitlyVerify = PR_FALSE;
+  bool verified = false, explicitlyVerify = false;
   if (imapFolder)
   {
     nsresult rv = imapFolder->GetVerifiedAsOnlineFolder(&verified);
@@ -2078,7 +2062,7 @@ nsImapIncomingServer::GetUnverifiedSubFolders(nsIMsgFolder *parentFolder,
   nsCOMPtr<nsISimpleEnumerator> subFolders;
   if (NS_SUCCEEDED(parentFolder->GetSubFolders(getter_AddRefs(subFolders))))
   {
-    PRBool moreFolders;
+    bool moreFolders;
 
     while (NS_SUCCEEDED(subFolders->HasMoreElements(&moreFolders)) && moreFolders)
     {
@@ -2111,11 +2095,11 @@ NS_IMETHODIMP nsImapIncomingServer::ForgetSessionPassword()
   // see nsMsgBiffManager::PerformBiff())
   // performing biff without a password will pop up the prompt dialog
   // which is pretty wacky, when it happens after you quit the application
-  m_userAuthenticated = PR_FALSE;
+  m_userAuthenticated = false;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsImapIncomingServer::GetServerRequiresPasswordForBiff(PRBool *aServerRequiresPasswordForBiff)
+NS_IMETHODIMP nsImapIncomingServer::GetServerRequiresPasswordForBiff(bool *aServerRequiresPasswordForBiff)
 {
   NS_ENSURE_ARG_POINTER(aServerRequiresPasswordForBiff);
   // if the user has already been authenticated, we've got the password
@@ -2131,7 +2115,7 @@ NS_IMETHODIMP nsImapIncomingServer::ForgetPassword()
 
 NS_IMETHODIMP
 nsImapIncomingServer::AsyncGetPassword(nsIImapProtocol *aProtocol,
-                                       PRBool aNewPasswordRequested,
+                                       bool aNewPasswordRequested,
                                        nsACString &aPassword)
 {
   if (m_password.IsEmpty())
@@ -2183,10 +2167,12 @@ nsImapIncomingServer::PromptPassword(nsIMsgWindow *aMsgWindow,
 }
 
 // for the nsIImapServerSink interface
-NS_IMETHODIMP nsImapIncomingServer::SetCapability(PRUint32 capability)
+NS_IMETHODIMP nsImapIncomingServer::SetCapability(eIMAPCapabilityFlags capability)
 {
   m_capability = capability;
-  SetCapabilityPref(capability);
+  SetIsGMailServer((capability & kGmailImapCapability) != 0);
+  SetCapabilityACL(capability & kACLCapability);
+  SetCapabilityQuota(capability & kQuotaCapability);
   return NS_OK;
 }
 
@@ -2204,16 +2190,16 @@ NS_IMETHODIMP  nsImapIncomingServer::CommitNamespaces()
 }
 
 NS_IMETHODIMP nsImapIncomingServer::PseudoInterruptMsgLoad(nsIMsgFolder *aImapFolder, nsIMsgWindow *aMsgWindow,
-                                                          PRBool *interrupted)
+                                                          bool *interrupted)
 {
   nsresult rv = NS_OK;
   nsCOMPtr<nsIImapProtocol> connection;
   PR_CEnterMonitor(this);
   // iterate through the connection cache for a connection that is loading
   // a message in this folder and should be pseudo-interrupted.
-  PRInt32 cnt = m_connectionCache.Count();
+  int32_t cnt = m_connectionCache.Count();
 
-  for (PRInt32 i = 0; i < cnt; ++i)
+  for (int32_t i = 0; i < cnt; ++i)
   {
     connection = m_connectionCache[i];
     if (connection)
@@ -2237,7 +2223,7 @@ NS_IMETHODIMP nsImapIncomingServer::ResetNamespaceReferences()
   return rv;
 }
 
-NS_IMETHODIMP nsImapIncomingServer::SetUserAuthenticated(PRBool aUserAuthenticated)
+NS_IMETHODIMP nsImapIncomingServer::SetUserAuthenticated(bool aUserAuthenticated)
 {
   m_userAuthenticated = aUserAuthenticated;
   if (aUserAuthenticated)
@@ -2247,12 +2233,12 @@ NS_IMETHODIMP nsImapIncomingServer::SetUserAuthenticated(PRBool aUserAuthenticat
       do_GetService(NS_MSGACCOUNTMANAGER_CONTRACTID, &rv);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    accountManager->SetUserNeedsToAuthenticate(PR_FALSE);
+    accountManager->SetUserNeedsToAuthenticate(false);
   }
   return NS_OK;
 }
 
-NS_IMETHODIMP nsImapIncomingServer::GetUserAuthenticated(PRBool *aUserAuthenticated)
+NS_IMETHODIMP nsImapIncomingServer::GetUserAuthenticated(bool *aUserAuthenticated)
 {
   NS_ENSURE_ARG_POINTER(aUserAuthenticated);
   *aUserAuthenticated = m_userAuthenticated;
@@ -2279,10 +2265,12 @@ NS_IMETHODIMP nsImapIncomingServer::GetManageMailAccountUrl(nsACString& manageMa
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::StartPopulatingWithUri(nsIMsgWindow *aMsgWindow, PRBool aForceToServer /*ignored*/, const char *uri)
+nsImapIncomingServer::StartPopulatingWithUri(nsIMsgWindow *aMsgWindow, bool aForceToServer /*ignored*/, const char *uri)
 {
+  NS_ENSURE_ARG_POINTER (uri);
+
   nsresult rv;
-  mDoingSubscribeDialog = PR_TRUE;
+  mDoingSubscribeDialog = true;
 
   rv = EnsureInner();
   NS_ENSURE_SUCCESS(rv,rv);
@@ -2293,7 +2281,7 @@ nsImapIncomingServer::StartPopulatingWithUri(nsIMsgWindow *aMsgWindow, PRBool aF
   rv = SetDelimiter('/');
   NS_ENSURE_SUCCESS(rv,rv);
 
-  rv = SetShowFullName(PR_FALSE);
+  rv = SetShowFullName(false);
   NS_ENSURE_SUCCESS(rv,rv);
 
   nsCString serverUri;
@@ -2312,10 +2300,10 @@ nsImapIncomingServer::StartPopulatingWithUri(nsIMsgWindow *aMsgWindow, PRBool aF
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::StartPopulating(nsIMsgWindow *aMsgWindow, PRBool aForceToServer /*ignored*/, PRBool aGetOnlyNew)
+nsImapIncomingServer::StartPopulating(nsIMsgWindow *aMsgWindow, bool aForceToServer /*ignored*/, bool aGetOnlyNew)
 {
   nsresult rv;
-  mDoingSubscribeDialog = PR_TRUE;
+  mDoingSubscribeDialog = true;
 
   rv = EnsureInner();
   NS_ENSURE_SUCCESS(rv,rv);
@@ -2326,7 +2314,7 @@ nsImapIncomingServer::StartPopulating(nsIMsgWindow *aMsgWindow, PRBool aForceToS
   rv = SetDelimiter('/');
   NS_ENSURE_SUCCESS(rv,rv);
 
-  rv = SetShowFullName(PR_FALSE);
+  rv = SetShowFullName(false);
   NS_ENSURE_SUCCESS(rv,rv);
 
   nsCOMPtr<nsIImapService> imapService = do_GetService(NS_IMAPSERVICE_CONTRACTID, &rv);
@@ -2356,7 +2344,7 @@ nsImapIncomingServer::OnStopRunningUrl(nsIURI *url, nsresult exitCode)
     case nsIImapUrl::nsImapDiscoverChildrenUrl:
       rv = UpdateSubscribed();
       NS_ENSURE_SUCCESS(rv, rv);
-      mDoingSubscribeDialog = PR_FALSE;
+      mDoingSubscribeDialog = false;
       rv = StopPopulating(msgWindow);
       NS_ENSURE_SUCCESS(rv, rv);
       break;
@@ -2375,10 +2363,10 @@ nsImapIncomingServer::OnStopRunningUrl(nsIURI *url, nsresult exitCode)
         nsCOMPtr<nsIMsgMailSession> session =
                  do_GetService(NS_MSGMAILSESSION_CONTRACTID, &rv);
         NS_ENSURE_SUCCESS(rv, rv);
-        PRBool folderOpen;
+        bool folderOpen;
         rv = session->IsFolderOpenInWindow(msgFolder, &folderOpen);
         if (NS_SUCCEEDED(rv) && !folderOpen && msgFolder)
-          msgFolder->SetMsgDatabase(nsnull);
+          msgFolder->SetMsgDatabase(nullptr);
         nsCOMPtr<nsIMsgImapMailFolder> imapFolder = do_QueryInterface(msgFolder);
         m_foldersToStat.RemoveObject(imapFolder);
       }
@@ -2387,7 +2375,7 @@ nsImapIncomingServer::OnStopRunningUrl(nsIURI *url, nsresult exitCode)
       if (NS_FAILED(exitCode) && exitCode != NS_MSG_ERROR_IMAP_COMMAND_FAILED)
         m_foldersToStat.Clear();
       if (m_foldersToStat.Count() > 0)
-        m_foldersToStat[0]->UpdateStatus(this, nsnull);
+        m_foldersToStat[0]->UpdateStatus(this, nullptr);
       break;
     }
     default:
@@ -2406,7 +2394,7 @@ nsImapIncomingServer::SetIncomingServer(nsIMsgIncomingServer *aServer)
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::SetShowFullName(PRBool showFullName)
+nsImapIncomingServer::SetShowFullName(bool showFullName)
 {
   nsresult rv = EnsureInner();
   NS_ENSURE_SUCCESS(rv,rv);
@@ -2444,8 +2432,8 @@ nsImapIncomingServer::UpdateSubscribed()
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::AddTo(const nsACString &aName, PRBool addAsSubscribed,
-                            PRBool aSubscribable, PRBool changeIfExists)
+nsImapIncomingServer::AddTo(const nsACString &aName, bool addAsSubscribed,
+                            bool aSubscribable, bool changeIfExists)
 {
   nsresult rv = EnsureInner();
   NS_ENSURE_SUCCESS(rv,rv);
@@ -2507,7 +2495,7 @@ nsImapIncomingServer::Subscribe(const PRUnichar *aName)
 {
   NS_ENSURE_ARG_POINTER(aName);
   
-  return SubscribeToFolder(nsDependentString(aName), PR_TRUE, nsnull);
+  return SubscribeToFolder(nsDependentString(aName), true, nullptr);
 }
 
 NS_IMETHODIMP
@@ -2515,11 +2503,11 @@ nsImapIncomingServer::Unsubscribe(const PRUnichar *aName)
 {
   NS_ENSURE_ARG_POINTER(aName);
 
-  return SubscribeToFolder(nsDependentString(aName), PR_FALSE, nsnull);
+  return SubscribeToFolder(nsDependentString(aName), false, nullptr);
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::SubscribeToFolder(const nsAString& aName, PRBool subscribe, nsIURI **aUri)
+nsImapIncomingServer::SubscribeToFolder(const nsAString& aName, bool subscribe, nsIURI **aUri)
 {
   nsresult rv;
   nsCOMPtr<nsIImapService> imapService = do_GetService(NS_IMAPSERVICE_CONTRACTID, &rv);
@@ -2545,21 +2533,21 @@ nsImapIncomingServer::SubscribeToFolder(const nsAString& aName, PRBool subscribe
   NS_ENSURE_SUCCESS(rv, rv);
 
   if (subscribe)
-    rv = imapService->SubscribeFolder(thread, msgFolder, unicodeName, nsnull, aUri);
+    rv = imapService->SubscribeFolder(msgFolder, unicodeName, nullptr, aUri);
   else
-    rv = imapService->UnsubscribeFolder(thread, msgFolder, unicodeName, nsnull, nsnull);
+    rv = imapService->UnsubscribeFolder(msgFolder, unicodeName, nullptr, nullptr);
   return rv;
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::SetDoingLsub(PRBool doingLsub)
+nsImapIncomingServer::SetDoingLsub(bool doingLsub)
 {
   mDoingLsub = doingLsub;
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetDoingLsub(PRBool *doingLsub)
+nsImapIncomingServer::GetDoingLsub(bool *doingLsub)
 {
   NS_ENSURE_ARG_POINTER(doingLsub);
   *doingLsub = mDoingLsub;
@@ -2569,12 +2557,12 @@ nsImapIncomingServer::GetDoingLsub(PRBool *doingLsub)
 NS_IMETHODIMP
 nsImapIncomingServer::ReDiscoverAllFolders()
 {
-  return PerformExpand(nsnull);
+  return PerformExpand(nullptr);
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::SetState(const nsACString &path, PRBool state,
-                               PRBool *stateChanged)
+nsImapIncomingServer::SetState(const nsACString &path, bool state,
+                               bool *stateChanged)
 {
   nsresult rv = EnsureInner();
   NS_ENSURE_SUCCESS(rv,rv);
@@ -2582,7 +2570,7 @@ nsImapIncomingServer::SetState(const nsACString &path, PRBool state,
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::HasChildren(const nsACString &path, PRBool *aHasChildren)
+nsImapIncomingServer::HasChildren(const nsACString &path, bool *aHasChildren)
 {
   nsresult rv = EnsureInner();
   NS_ENSURE_SUCCESS(rv,rv);
@@ -2591,7 +2579,7 @@ nsImapIncomingServer::HasChildren(const nsACString &path, PRBool *aHasChildren)
 
 NS_IMETHODIMP
 nsImapIncomingServer::IsSubscribed(const nsACString &path,
-                                   PRBool *aIsSubscribed)
+                                   bool *aIsSubscribed)
 {
   nsresult rv = EnsureInner();
   NS_ENSURE_SUCCESS(rv,rv);
@@ -2599,7 +2587,7 @@ nsImapIncomingServer::IsSubscribed(const nsACString &path,
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::IsSubscribable(const nsACString &path, PRBool *aIsSubscribable)
+nsImapIncomingServer::IsSubscribable(const nsACString &path, bool *aIsSubscribable)
 {
   nsresult rv = EnsureInner();
   NS_ENSURE_SUCCESS(rv,rv);
@@ -2651,11 +2639,11 @@ nsImapIncomingServer::ClearInner()
   nsresult rv = NS_OK;
   if (mInner)
   {
-    rv = mInner->SetSubscribeListener(nsnull);
+    rv = mInner->SetSubscribeListener(nullptr);
     NS_ENSURE_SUCCESS(rv,rv);
-    rv = mInner->SetIncomingServer(nsnull);
+    rv = mInner->SetIncomingServer(nullptr);
     NS_ENSURE_SUCCESS(rv,rv);
-    mInner = nsnull;
+    mInner = nullptr;
   }
   return NS_OK;
 }
@@ -2667,60 +2655,50 @@ nsImapIncomingServer::CommitSubscribeChanges()
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetCanBeDefaultServer(PRBool *canBeDefaultServer)
+nsImapIncomingServer::GetCanBeDefaultServer(bool *canBeDefaultServer)
 {
   NS_ENSURE_ARG_POINTER(canBeDefaultServer);
-  *canBeDefaultServer = PR_TRUE;
+  *canBeDefaultServer = true;
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetCanCompactFoldersOnServer(PRBool *canCompactFoldersOnServer)
+nsImapIncomingServer::GetCanCompactFoldersOnServer(bool *canCompactFoldersOnServer)
 {
   NS_ENSURE_ARG_POINTER(canCompactFoldersOnServer);
   // Initialize canCompactFoldersOnServer true, a default value for IMAP
-  *canCompactFoldersOnServer = PR_TRUE;
+  *canCompactFoldersOnServer = true;
   GetPrefForServerAttribute("canCompactFoldersOnServer", canCompactFoldersOnServer);
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetCanUndoDeleteOnServer(PRBool *canUndoDeleteOnServer)
+nsImapIncomingServer::GetCanUndoDeleteOnServer(bool *canUndoDeleteOnServer)
 {
   NS_ENSURE_ARG_POINTER(canUndoDeleteOnServer);
   // Initialize canUndoDeleteOnServer true, a default value for IMAP
-  *canUndoDeleteOnServer = PR_TRUE;
+  *canUndoDeleteOnServer = true;
   GetPrefForServerAttribute("canUndoDeleteOnServer", canUndoDeleteOnServer);
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetCanSearchMessages(PRBool *canSearchMessages)
+nsImapIncomingServer::GetCanSearchMessages(bool *canSearchMessages)
 {
   NS_ENSURE_ARG_POINTER(canSearchMessages);
   // Initialize canSearchMessages true, a default value for IMAP
-  *canSearchMessages = PR_TRUE;
+  *canSearchMessages = true;
   GetPrefForServerAttribute("canSearchMessages", canSearchMessages);
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetCanEmptyTrashOnExit(PRBool *canEmptyTrashOnExit)
+nsImapIncomingServer::GetCanEmptyTrashOnExit(bool *canEmptyTrashOnExit)
 {
   NS_ENSURE_ARG_POINTER(canEmptyTrashOnExit);
   // Initialize canEmptyTrashOnExit true, a default value for IMAP
-  *canEmptyTrashOnExit = PR_TRUE;
+  *canEmptyTrashOnExit = true;
   GetPrefForServerAttribute("canEmptyTrashOnExit", canEmptyTrashOnExit);
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsImapIncomingServer::GetIsSecureServer(PRBool *isSecureServer)
-{
-  NS_ENSURE_ARG_POINTER(isSecureServer);
-  // Initialize isSecureServer true, a default value for IMAP
-  *isSecureServer = PR_TRUE;
-  GetPrefForServerAttribute("isSecureServer", isSecureServer);
   return NS_OK;
 }
 
@@ -2740,7 +2718,7 @@ nsImapIncomingServer::CreateHostSpecificPrefName(const char *prefPrefix, nsCAuto
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetSupportsDiskSpace(PRBool *aSupportsDiskSpace)
+nsImapIncomingServer::GetSupportsDiskSpace(bool *aSupportsDiskSpace)
 {
   NS_ENSURE_ARG_POINTER(aSupportsDiskSpace);
   nsCAutoString prefName;
@@ -2754,27 +2732,27 @@ nsImapIncomingServer::GetSupportsDiskSpace(PRBool *aSupportsDiskSpace)
   // Couldn't get the default value with the hostname.
   // Fall back on IMAP default value
   if (NS_FAILED(rv)) // set default value
-     *aSupportsDiskSpace = PR_TRUE;
+     *aSupportsDiskSpace = true;
   return NS_OK;
 }
 
 // count number of non-busy connections in cache
 NS_IMETHODIMP
-nsImapIncomingServer::GetNumIdleConnections(PRInt32 *aNumIdleConnections)
+nsImapIncomingServer::GetNumIdleConnections(int32_t *aNumIdleConnections)
 {
   NS_ENSURE_ARG_POINTER(aNumIdleConnections);
   *aNumIdleConnections = 0;
 
   nsresult rv = NS_OK;
   nsCOMPtr<nsIImapProtocol> connection;
-  PRBool isBusy = PR_FALSE;
-  PRBool isInboxConnection;
+  bool isBusy = false;
+  bool isInboxConnection;
   PR_CEnterMonitor(this);
 
-  PRInt32 cnt = m_connectionCache.Count();
+  int32_t cnt = m_connectionCache.Count();
 
   // loop counting idle connections
-  for (PRInt32 i = 0; i < cnt; ++i)
+  for (int32_t i = 0; i < cnt; ++i)
   {
     connection = m_connectionCache[i];
     if (connection)
@@ -2799,17 +2777,17 @@ nsImapIncomingServer::GetNumIdleConnections(PRInt32 *aNumIdleConnections)
  * and take them out of the account picker in the Copies and Folder panel.
  */
 NS_IMETHODIMP
-nsImapIncomingServer::GetCanCreateFoldersOnServer(PRBool *aCanCreateFoldersOnServer)
+nsImapIncomingServer::GetCanCreateFoldersOnServer(bool *aCanCreateFoldersOnServer)
 {
   NS_ENSURE_ARG_POINTER(aCanCreateFoldersOnServer);
   // Initialize aCanCreateFoldersOnServer true, a default value for IMAP
-  *aCanCreateFoldersOnServer = PR_TRUE;
+  *aCanCreateFoldersOnServer = true;
   GetPrefForServerAttribute("canCreateFolders", aCanCreateFoldersOnServer);
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetOfflineSupportLevel(PRInt32 *aSupportLevel)
+nsImapIncomingServer::GetOfflineSupportLevel(int32_t *aSupportLevel)
 {
   NS_ENSURE_ARG_POINTER(aSupportLevel);
   nsresult rv = NS_OK;
@@ -2854,36 +2832,36 @@ nsImapIncomingServer::GeneratePrettyNameForMigration(nsAString& aPrettyName)
   rv = GetHostName(hostName);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRInt32 defaultServerPort;
-  PRInt32 defaultSecureServerPort;
+  int32_t defaultServerPort;
+  int32_t defaultSecureServerPort;
 
   nsCOMPtr <nsIMsgProtocolInfo> protocolInfo = do_GetService("@mozilla.org/messenger/protocol/info;1?type=imap", &rv);
   NS_ENSURE_SUCCESS(rv,rv);
 
   // Get the default port
-  rv = protocolInfo->GetDefaultServerPort(PR_FALSE, &defaultServerPort);
+  rv = protocolInfo->GetDefaultServerPort(false, &defaultServerPort);
   NS_ENSURE_SUCCESS(rv,rv);
 
   // Get the default secure port
-  rv = protocolInfo->GetDefaultServerPort(PR_TRUE, &defaultSecureServerPort);
+  rv = protocolInfo->GetDefaultServerPort(true, &defaultSecureServerPort);
   NS_ENSURE_SUCCESS(rv,rv);
 
   // Get the current server port
-  PRInt32 serverPort = PORT_NOT_SET;
+  int32_t serverPort = PORT_NOT_SET;
   rv = GetPort(&serverPort);
   NS_ENSURE_SUCCESS(rv,rv);
 
   // Is the server secure ?
-  PRInt32 socketType;
+  int32_t socketType;
   rv = GetSocketType(&socketType);
   NS_ENSURE_SUCCESS(rv,rv);
-  PRBool isSecure = (socketType == nsMsgSocketType::SSL);
+  bool isSecure = (socketType == nsMsgSocketType::SSL);
 
   // Is server port a default port ?
-  PRBool isItDefaultPort = PR_FALSE;
+  bool isItDefaultPort = false;
   if (((serverPort == defaultServerPort) && !isSecure)||
       ((serverPort == defaultSecureServerPort) && isSecure))
-      isItDefaultPort = PR_TRUE;
+      isItDefaultPort = true;
 
   // Construct pretty name from username and hostname
   nsAutoString constructedPrettyName;
@@ -2902,7 +2880,7 @@ nsImapIncomingServer::GeneratePrettyNameForMigration(nsAString& aPrettyName)
 }
 
 nsresult
-nsImapIncomingServer::GetFormattedStringFromID(const nsAString& aValue, PRInt32 aID, nsAString& aResult)
+nsImapIncomingServer::GetFormattedStringFromID(const nsAString& aValue, int32_t aID, nsAString& aResult)
 {
   nsresult rv = GetStringBundle();
   if (m_stringBundle)
@@ -2923,7 +2901,7 @@ nsImapIncomingServer::GetFormattedStringFromID(const nsAString& aValue, PRInt32 
 }
 
 nsresult
-nsImapIncomingServer::GetPrefForServerAttribute(const char *prefSuffix, PRBool *prefValue)
+nsImapIncomingServer::GetPrefForServerAttribute(const char *prefSuffix, bool *prefValue)
 {
   // Any caller of this function must initialize prefValue with a default value
   // as this code will not set prefValue when the pref does not exist and return
@@ -2941,11 +2919,11 @@ nsImapIncomingServer::GetPrefForServerAttribute(const char *prefSuffix, PRBool *
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetCanFileMessagesOnServer(PRBool *aCanFileMessagesOnServer)
+nsImapIncomingServer::GetCanFileMessagesOnServer(bool *aCanFileMessagesOnServer)
 {
   NS_ENSURE_ARG_POINTER(aCanFileMessagesOnServer);
   // Initialize aCanFileMessagesOnServer true, a default value for IMAP
-  *aCanFileMessagesOnServer = PR_TRUE;
+  *aCanFileMessagesOnServer = true;
   GetPrefForServerAttribute("canFileMessages", aCanFileMessagesOnServer);
   return NS_OK;
 }
@@ -2957,10 +2935,10 @@ nsImapIncomingServer::SetSearchValue(const nsAString &searchValue)
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetSupportsSubscribeSearch(PRBool *retVal)
+nsImapIncomingServer::GetSupportsSubscribeSearch(bool *retVal)
 {
   NS_ENSURE_ARG_POINTER(retVal);
-  *retVal = PR_FALSE;
+  *retVal = false;
   return NS_OK;
 }
 
@@ -3003,23 +2981,23 @@ nsImapIncomingServer::GetSearchScope(nsMsgSearchScopeValue *searchScope)
 NS_IMETHODIMP
 nsImapIncomingServer::GetNewMessagesForNonInboxFolders(nsIMsgFolder *aFolder,
                                                        nsIMsgWindow *aWindow,
-                                                       PRBool forceAllFolders,
-                                                       PRBool performingBiff)
+                                                       bool forceAllFolders,
+                                                       bool performingBiff)
 {
   NS_ENSURE_ARG_POINTER(aFolder);
-  static PRBool gGotStatusPref = PR_FALSE;
-  static PRBool gUseStatus = PR_FALSE;
+  static bool gGotStatusPref = false;
+  static bool gUseStatus = false;
 
-  PRBool isServer;
+  bool isServer;
   (void) aFolder->GetIsServer(&isServer);
   // Check this folder for new messages if it is marked to be checked
   // or if we are forced to check all folders
-  PRUint32 flags = 0;
+  uint32_t flags = 0;
   aFolder->GetFlags(&flags);
   nsresult rv;
   nsCOMPtr<nsIMsgImapMailFolder> imapFolder = do_QueryInterface(aFolder, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
-  PRBool canOpen;
+  bool canOpen;
   imapFolder->GetCanOpenFolder(&canOpen);
   if (canOpen && ((forceAllFolders &&
                  !(flags & (nsMsgFolderFlags::Inbox | nsMsgFolderFlags::Trash |
@@ -3027,10 +3005,10 @@ nsImapIncomingServer::GetNewMessagesForNonInboxFolders(nsIMsgFolder *aFolder,
                 flags & nsMsgFolderFlags::CheckNew))
   {
     // Get new messages for this folder.
-    aFolder->SetGettingNewMessages(PR_TRUE);
+    aFolder->SetGettingNewMessages(true);
     if (performingBiff)
-      imapFolder->SetPerformingBiff(PR_TRUE);
-    PRBool isOpen = PR_FALSE;
+      imapFolder->SetPerformingBiff(true);
+    bool isOpen = false;
     nsCOMPtr <nsIMsgMailSession> mailSession = do_GetService(NS_MSGMAILSESSION_CONTRACTID);
     if (mailSession && aFolder)
       mailSession->IsFolderOpenInWindow(aFolder, &isOpen);
@@ -3041,7 +3019,7 @@ nsImapIncomingServer::GetNewMessagesForNonInboxFolders(nsIMsgFolder *aFolder,
       nsCOMPtr<nsIPrefBranch> prefBranch = do_GetService(NS_PREFSERVICE_CONTRACTID);
       if(prefBranch)
         prefBranch->GetBoolPref("mail.imap.use_status_for_biff", &gUseStatus);
-      gGotStatusPref = PR_TRUE;
+      gGotStatusPref = true;
     }
     if (gUseStatus && !isOpen)
     {
@@ -3058,7 +3036,7 @@ nsImapIncomingServer::GetNewMessagesForNonInboxFolders(nsIMsgFolder *aFolder,
   if (NS_FAILED(rv))
     return rv;
 
-  PRBool hasMore;
+  bool hasMore;
   while (NS_SUCCEEDED(enumerator->HasMoreElements(&hasMore)) && hasMore)
   {
     nsCOMPtr<nsISupports> item;
@@ -3074,7 +3052,7 @@ nsImapIncomingServer::GetNewMessagesForNonInboxFolders(nsIMsgFolder *aFolder,
                                      performingBiff);
   }
   if (isServer && m_foldersToStat.Count() > 0)
-    m_foldersToStat[0]->UpdateStatus(this, nsnull);
+    m_foldersToStat[0]->UpdateStatus(this, nullptr);
   return NS_OK;
 }
 
@@ -3082,16 +3060,16 @@ NS_IMETHODIMP
 nsImapIncomingServer::GetArbitraryHeaders(nsACString &aResult)
 {
   nsCOMPtr <nsIMsgFilterList> filterList;
-  nsresult rv = GetFilterList(nsnull, getter_AddRefs(filterList));
+  nsresult rv = GetFilterList(nullptr, getter_AddRefs(filterList));
   NS_ENSURE_SUCCESS(rv,rv);
   return filterList->GetArbitraryHeaders(aResult);
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetShowAttachmentsInline(PRBool *aResult)
+nsImapIncomingServer::GetShowAttachmentsInline(bool *aResult)
 {
   NS_ENSURE_ARG_POINTER(aResult);
-  *aResult = PR_TRUE; // true per default
+  *aResult = true; // true per default
   nsresult rv;
   nsCOMPtr<nsIPrefBranch> prefBranch = do_GetService(NS_PREFSERVICE_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv,rv);
@@ -3100,9 +3078,9 @@ nsImapIncomingServer::GetShowAttachmentsInline(PRBool *aResult)
   return NS_OK; // In case this pref is not set we need to return NS_OK.
 }
 
-NS_IMETHODIMP nsImapIncomingServer::SetSocketType(PRInt32 aSocketType)
+NS_IMETHODIMP nsImapIncomingServer::SetSocketType(int32_t aSocketType)
 {
-  PRInt32 oldSocketType;
+  int32_t oldSocketType;
   nsresult rv = GetSocketType(&oldSocketType);
   if (NS_SUCCEEDED(rv) && oldSocketType != aSocketType)
     CloseCachedConnections();
@@ -3110,11 +3088,13 @@ NS_IMETHODIMP nsImapIncomingServer::SetSocketType(PRInt32 aSocketType)
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::OnUserOrHostNameChanged(const nsACString& oldName, const nsACString& newName)
+nsImapIncomingServer::OnUserOrHostNameChanged(const nsACString& oldName,
+                                              const nsACString& newName,
+                                              bool hostnameChanged)
 {
   nsresult rv;
   // 1. Do common things in the base class.
-  rv = nsMsgIncomingServer::OnUserOrHostNameChanged(oldName, newName);
+  rv = nsMsgIncomingServer::OnUserOrHostNameChanged(oldName, newName, hostnameChanged);
   NS_ENSURE_SUCCESS(rv,rv);
 
   // 2. Reset 'HaveWeEverDiscoveredFolders' flag so the new folder list can be
@@ -3124,16 +3104,16 @@ nsImapIncomingServer::OnUserOrHostNameChanged(const nsACString& oldName, const n
   nsCAutoString serverKey;
   rv = GetKey(serverKey);
   NS_ENSURE_SUCCESS(rv, rv);
-  hostSessionList->SetHaveWeEverDiscoveredFoldersForHost(serverKey.get(), PR_FALSE);
+  hostSessionList->SetHaveWeEverDiscoveredFoldersForHost(serverKey.get(), false);
   // 3. Make all the existing folders 'unverified' so that they can be
   //    removed from the folder pane after users log into the new server.
-  ResetFoldersToUnverified(nsnull);
+  ResetFoldersToUnverified(nullptr);
   return NS_OK;
 }
 
 // use canonical format in originalUri & convertedUri
 NS_IMETHODIMP
-nsImapIncomingServer::GetUriWithNamespacePrefixIfNecessary(PRInt32 namespaceType,
+nsImapIncomingServer::GetUriWithNamespacePrefixIfNecessary(int32_t namespaceType,
                                                            const nsACString& originalUri,
                                                            nsACString& convertedUri)
 {
@@ -3142,7 +3122,7 @@ nsImapIncomingServer::GetUriWithNamespacePrefixIfNecessary(PRInt32 namespaceType
   rv = GetKey(serverKey);
   NS_ENSURE_SUCCESS(rv, rv);
   nsCOMPtr<nsIImapHostSessionList> hostSessionList = do_GetService(kCImapHostSessionListCID, &rv);
-  nsIMAPNamespace *ns = nsnull;
+  nsIMAPNamespace *ns = nullptr;
   rv = hostSessionList->GetDefaultNamespaceOfTypeForHost(serverKey.get(), (EIMAPNamespaceType)namespaceType, ns);
   if (ns)
   {
@@ -3164,12 +3144,12 @@ nsImapIncomingServer::GetUriWithNamespacePrefixIfNecessary(PRInt32 namespaceType
 
       MsgReplaceChar(namespacePrefix, ns->GetDelimiter(), '/'); // use canonical format
       nsCString uri(originalUri);
-      PRInt32 index = uri.Find("//");           // find scheme
+      int32_t index = uri.Find("//");           // find scheme
       index = uri.FindChar('/', index + 2);       // find '/' after scheme
       // it may be the case that this is the INBOX uri, in which case
       // we don't want to prepend the namespace. In that case, the uri ends with "INBOX",
       // but the namespace is "INBOX/", so they don't match.
-      if (MsgFind(uri, namespacePrefix, PR_FALSE, index + 1) != index + 1 &&
+      if (MsgFind(uri, namespacePrefix, false, index + 1) != index + 1 &&
           !MsgLowerCaseEqualsLiteral(Substring(uri, index + 1), "inbox"))
         uri.Insert(namespacePrefix, index + 1);   // insert namespace prefix
       convertedUri = uri;
@@ -3209,33 +3189,24 @@ NS_IMETHODIMP nsImapIncomingServer::SetTrashFolderName(const nsAString& chvalue)
 }
 
 NS_IMETHODIMP
-nsImapIncomingServer::GetMsgFolderFromURI(nsIMsgFolder *aFolderResource, const nsACString& aURI, nsIMsgFolder **aFolder)
+nsImapIncomingServer::GetMsgFolderFromURI(nsIMsgFolder *aFolderResource,
+                                          const nsACString& aURI,
+                                          nsIMsgFolder **aFolder)
 {
-  nsCOMPtr<nsIMsgFolder> rootMsgFolder;
-  nsresult rv = GetRootMsgFolder(getter_AddRefs(rootMsgFolder));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  nsCOMPtr <nsIMsgFolder> msgFolder;
-  PRBool namespacePrefixAdded = PR_FALSE;
+  nsCOMPtr<nsIMsgFolder> msgFolder;
+  bool namespacePrefixAdded = false;
   nsCString folderUriWithNamespace;
 
-  // Check if the folder exists as is...Even if we have a personal namespace,
-  // it might be in another namespace (e.g., shared) and this will catch that.
-  rv = rootMsgFolder->GetChildWithURI(aURI, PR_TRUE, PR_FALSE, getter_AddRefs(msgFolder));
+  // Check if the folder exists as is...
+  nsresult rv = GetExistingMsgFolder(aURI, folderUriWithNamespace,
+                                     namespacePrefixAdded, false,
+                                     getter_AddRefs(msgFolder));
 
-  // If we couldn't find the folder as is, check if we need to prepend the
-  // personal namespace
-  if (!msgFolder)
-  {
-    GetUriWithNamespacePrefixIfNecessary(kPersonalNamespace, aURI, folderUriWithNamespace);
-    if (!folderUriWithNamespace.IsEmpty())
-    {
-      namespacePrefixAdded = PR_TRUE;
-      rv = rootMsgFolder->GetChildWithURI(folderUriWithNamespace, PR_TRUE, PR_FALSE, getter_AddRefs(msgFolder));
-    }
-    else
-      rv = rootMsgFolder->GetChildWithURI(aURI, PR_TRUE, PR_FALSE, getter_AddRefs(msgFolder));
-  }
+  // Or try again with a case-insensitive lookup
+  if (NS_FAILED(rv) || !msgFolder)
+    rv = GetExistingMsgFolder(aURI, folderUriWithNamespace,
+                              namespacePrefixAdded, true,
+                              getter_AddRefs(msgFolder));
 
   if (NS_FAILED(rv) || !msgFolder) {
     // we didn't find the folder so we will have to create a new one.
@@ -3259,6 +3230,38 @@ nsImapIncomingServer::GetMsgFolderFromURI(nsIMsgFolder *aFolderResource, const n
 
   msgFolder.swap(*aFolder);
   return NS_OK;
+}
+
+nsresult
+nsImapIncomingServer::GetExistingMsgFolder(const nsACString& aURI,
+                                           nsACString& aFolderUriWithNamespace,
+                                           bool& aNamespacePrefixAdded,
+                                           bool aCaseInsensitive,
+                                           nsIMsgFolder **aFolder)
+{
+  nsCOMPtr<nsIMsgFolder> rootMsgFolder;
+  nsresult rv = GetRootMsgFolder(getter_AddRefs(rootMsgFolder));
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  aNamespacePrefixAdded = false;
+  // Check if the folder exists as is...Even if we have a personal namespace,
+  // it might be in another namespace (e.g., shared) and this will catch that.
+  rv = rootMsgFolder->GetChildWithURI(aURI, true, aCaseInsensitive, aFolder);
+
+  // If we couldn't find the folder as is, check if we need to prepend the
+  // personal namespace
+  if (!*aFolder)
+  {
+    GetUriWithNamespacePrefixIfNecessary(kPersonalNamespace, aURI,
+                                         aFolderUriWithNamespace);
+    if (!aFolderUriWithNamespace.IsEmpty())
+    {
+      aNamespacePrefixAdded = true;
+      rv = rootMsgFolder->GetChildWithURI(aFolderUriWithNamespace, true,
+                                          aCaseInsensitive, aFolder);
+    }
+  }
+  return rv;
 }
 
 NS_IMETHODIMP

@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
   nsPluginsDirWin.cpp
@@ -42,6 +10,8 @@
   
   by Alex Musil
  */
+
+#include "mozilla/Util.h"
 
 #include "nsPluginsDir.h"
 #include "prlink.h"
@@ -53,9 +23,10 @@
 #include "winbase.h"
 
 #include "nsString.h"
-#include "nsILocalFile.h"
+#include "nsIFile.h"
 #include "nsUnicharUtils.h"
-#include "nsSetDllDirectory.h"
+
+using namespace mozilla;
 
 /* Local helper functions */
 
@@ -68,17 +39,17 @@ static char* GetKeyValue(void* verbuf, const WCHAR* key,
   WCHAR *buf = NULL;
   UINT blen;
 
-  if (_snwprintf_s(keybuf, NS_ARRAY_LENGTH(keybuf), _TRUNCATE,
+  if (_snwprintf_s(keybuf, ArrayLength(keybuf), _TRUNCATE,
                    keyFormat, language, codepage, key) < 0)
   {
     NS_NOTREACHED("plugin info key too long for buffer!");
-    return nsnull;
+    return nullptr;
   }
 
   if (::VerQueryValueW(verbuf, keybuf, (void **)&buf, &blen) == 0 ||
-      buf == nsnull || blen == 0)
+      buf == nullptr || blen == 0)
   {
-    return nsnull;
+    return nullptr;
   }
 
   return PL_strdup(NS_ConvertUTF16toUTF8(buf, blen).get());
@@ -99,12 +70,12 @@ static char* GetVersion(void* verbuf)
                        LOWORD(fileInfo->dwFileVersionLS));
   }
 
-  return nsnull;
+  return nullptr;
 }
 
-static PRUint32 CalculateVariantCount(char* mimeTypes)
+static uint32_t CalculateVariantCount(char* mimeTypes)
 {
-  PRUint32 variants = 1;
+  uint32_t variants = 1;
 
   if (!mimeTypes)
     return 0;
@@ -119,7 +90,7 @@ static PRUint32 CalculateVariantCount(char* mimeTypes)
   return variants;
 }
 
-static char** MakeStringArray(PRUint32 variants, char* data)
+static char** MakeStringArray(uint32_t variants, char* data)
 {
   // The number of variants has been calculated based on the mime
   // type array. Plugins are not explicitely required to match
@@ -136,7 +107,7 @@ static char** MakeStringArray(PRUint32 variants, char* data)
 
   char * start = data;
 
-  for (PRUint32 i = 0; i < variants; i++) {
+  for (uint32_t i = 0; i < variants; i++) {
     char * p = PL_strchr(start, '|');
     if (p)
       *p = 0;
@@ -157,12 +128,12 @@ static char** MakeStringArray(PRUint32 variants, char* data)
   return array;
 }
 
-static void FreeStringArray(PRUint32 variants, char ** array)
+static void FreeStringArray(uint32_t variants, char ** array)
 {
   if ((variants == 0) || !array)
     return;
 
-  for (PRUint32 i = 0; i < variants; i++) {
+  for (uint32_t i = 0; i < variants; i++) {
     if (array[i]) {
       PL_strfree(array[i]);
       array[i] = NULL;
@@ -171,10 +142,10 @@ static void FreeStringArray(PRUint32 variants, char ** array)
   PR_Free(array);
 }
 
-static PRBool CanLoadPlugin(const PRUnichar* aBinaryPath)
+static bool CanLoadPlugin(const PRUnichar* aBinaryPath)
 {
 #if defined(_M_IX86) || defined(_M_X64) || defined(_M_IA64)
-  PRBool canLoad = PR_FALSE;
+  bool canLoad = false;
 
   HANDLE file = CreateFileW(aBinaryPath, GENERIC_READ,
                             FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
@@ -208,18 +179,18 @@ static PRBool CanLoadPlugin(const PRUnichar* aBinaryPath)
   return canLoad;
 #else
   // Assume correct binaries for unhandled cases.
-  return PR_TRUE;
+  return true;
 #endif
 }
 
 /* nsPluginsDir implementation */
 
 // The file name must be in the form "np*.dll"
-PRBool nsPluginsDir::IsPluginFile(nsIFile* file)
+bool nsPluginsDir::IsPluginFile(nsIFile* file)
 {
   nsCAutoString path;
   if (NS_FAILED(file->GetNativePath(path)))
-    return PR_FALSE;
+    return false;
 
   const char *cPath = path.get();
 
@@ -234,19 +205,19 @@ PRBool nsPluginsDir::IsPluginFile(nsIFile* file)
   if (extension)
     ++extension;
 
-  PRUint32 fullLength = PL_strlen(filename);
-  PRUint32 extLength = PL_strlen(extension);
+  uint32_t fullLength = PL_strlen(filename);
+  uint32_t extLength = PL_strlen(extension);
   if (fullLength >= 7 && extLength == 3) {
     if (!PL_strncasecmp(filename, "np", 2) && !PL_strncasecmp(extension, "dll", 3)) {
       // don't load OJI-based Java plugins
       if (!PL_strncasecmp(filename, "npoji", 5) ||
           !PL_strncasecmp(filename, "npjava", 6))
-        return PR_FALSE;
-      return PR_TRUE;
+        return false;
+      return true;
     }
   }
 
-  return PR_FALSE;
+  return false;
 }
 
 /* nsPluginFile implementation */
@@ -268,22 +239,20 @@ nsPluginFile::~nsPluginFile()
  */
 nsresult nsPluginFile::LoadPlugin(PRLibrary **outLibrary)
 {
-  nsCOMPtr<nsILocalFile> plugin = do_QueryInterface(mPlugin);
-
-  if (!plugin)
+  if (!mPlugin)
     return NS_ERROR_NULL_POINTER;
 
-  PRBool protectCurrentDirectory = PR_TRUE;
+  bool protectCurrentDirectory = true;
 
   nsAutoString pluginFolderPath;
-  plugin->GetPath(pluginFolderPath);
+  mPlugin->GetPath(pluginFolderPath);
 
-  PRInt32 idx = pluginFolderPath.RFindChar('\\');
+  int32_t idx = pluginFolderPath.RFindChar('\\');
   if (kNotFound == idx)
     return NS_ERROR_FILE_INVALID_PATH;
 
   if (Substring(pluginFolderPath, idx).LowerCaseEqualsLiteral("\\np32dsw.dll")) {
-    protectCurrentDirectory = PR_FALSE;
+    protectCurrentDirectory = false;
   }
 
   pluginFolderPath.SetLength(idx);
@@ -299,15 +268,15 @@ nsresult nsPluginFile::LoadPlugin(PRLibrary **outLibrary)
   }
 
   if (protectCurrentDirectory) {
-    mozilla::NS_SetDllDirectory(NULL);
+    SetDllDirectory(NULL);
   }
 
-  nsresult rv = plugin->Load(outLibrary);
+  nsresult rv = mPlugin->Load(outLibrary);
   if (NS_FAILED(rv))
       *outLibrary = NULL;
 
   if (protectCurrentDirectory) {
-    mozilla::NS_SetDllDirectory(L"");
+    SetDllDirectory(L"");
   }
 
   if (restoreOrigDir) {
@@ -323,11 +292,11 @@ nsresult nsPluginFile::LoadPlugin(PRLibrary **outLibrary)
  */
 nsresult nsPluginFile::GetPluginInfo(nsPluginInfo& info, PRLibrary **outLibrary)
 {
-  *outLibrary = nsnull;
+  *outLibrary = nullptr;
 
   nsresult rv = NS_OK;
   DWORD zerome, versionsize;
-  void* verbuf = nsnull;
+  void* verbuf = nullptr;
 
   if (!mPlugin)
     return NS_ERROR_NULL_POINTER;

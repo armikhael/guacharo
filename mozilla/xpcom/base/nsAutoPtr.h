@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Scott Collins <scc@mozilla.org> (original author of nsCOMPtr)
- *   L. David Baron <dbaron@dbaron.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsAutoPtr_h___
 #define nsAutoPtr_h___
@@ -66,6 +32,7 @@ class nsAutoPtr
       void
       assign( T* newPtr )
         {
+          NS_ABORT_IF_FALSE(mRawPtr != newPtr || !newPtr, "This makes no sense!");
           T* oldPtr = mRawPtr;
           mRawPtr = newPtr;
           delete oldPtr;
@@ -197,19 +164,6 @@ class nsAutoPtr
         }
 #endif
 
-#ifdef CANT_RESOLVE_CPP_CONST_AMBIGUITY
-  // broken version for IRIX
-
-      nsAutoPtr<T>*
-      get_address() const
-          // This is not intended to be used by clients.  See |address_of|
-          // below.
-        {
-          return const_cast<nsAutoPtr<T>*>(this);
-        }
-
-#else // CANT_RESOLVE_CPP_CONST_AMBIGUITY
-
       nsAutoPtr<T>*
       get_address()
           // This is not intended to be used by clients.  See |address_of|
@@ -225,8 +179,6 @@ class nsAutoPtr
         {
           return this;
         }
-
-#endif // CANT_RESOLVE_CPP_CONST_AMBIGUITY
 
     public:
       T&
@@ -248,20 +200,6 @@ class nsAutoPtr
         }
   };
 
-#ifdef CANT_RESOLVE_CPP_CONST_AMBIGUITY
-
-// This is the broken version for IRIX, which can't handle the version below.
-
-template <class T>
-inline
-nsAutoPtr<T>*
-address_of( const nsAutoPtr<T>& aPtr )
-  {
-    return aPtr.get_address();
-  }
-
-#else // CANT_RESOLVE_CPP_CONST_AMBIGUITY
-
 template <class T>
 inline
 nsAutoPtr<T>*
@@ -277,8 +215,6 @@ address_of( const nsAutoPtr<T>& aPtr )
   {
     return aPtr.get_address();
   }
-
-#endif // CANT_RESOLVE_CPP_CONST_AMBIGUITY
 
 template <class T>
 class nsAutoPtrGetterTransfers
@@ -346,7 +282,7 @@ getter_Transfers( nsAutoPtr<T>& aSmartPtr )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator==( const nsAutoPtr<T>& lhs, const nsAutoPtr<U>& rhs )
   {
     return static_cast<const T*>(lhs.get()) == static_cast<const U*>(rhs.get());
@@ -355,7 +291,7 @@ operator==( const nsAutoPtr<T>& lhs, const nsAutoPtr<U>& rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator!=( const nsAutoPtr<T>& lhs, const nsAutoPtr<U>& rhs )
   {
     return static_cast<const T*>(lhs.get()) != static_cast<const U*>(rhs.get());
@@ -366,7 +302,7 @@ operator!=( const nsAutoPtr<T>& lhs, const nsAutoPtr<U>& rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator==( const nsAutoPtr<T>& lhs, const U* rhs )
   {
     return static_cast<const T*>(lhs.get()) == static_cast<const U*>(rhs);
@@ -374,7 +310,7 @@ operator==( const nsAutoPtr<T>& lhs, const U* rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator==( const U* lhs, const nsAutoPtr<T>& rhs )
   {
     return static_cast<const U*>(lhs) == static_cast<const T*>(rhs.get());
@@ -382,7 +318,7 @@ operator==( const U* lhs, const nsAutoPtr<T>& rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator!=( const nsAutoPtr<T>& lhs, const U* rhs )
   {
     return static_cast<const T*>(lhs.get()) != static_cast<const U*>(rhs);
@@ -390,7 +326,7 @@ operator!=( const nsAutoPtr<T>& lhs, const U* rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator!=( const U* lhs, const nsAutoPtr<T>& rhs )
   {
     return static_cast<const U*>(lhs) != static_cast<const T*>(rhs.get());
@@ -406,7 +342,7 @@ operator!=( const U* lhs, const nsAutoPtr<T>& rhs )
 #ifndef NSCAP_DONT_PROVIDE_NONCONST_OPEQ
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator==( const nsAutoPtr<T>& lhs, U* rhs )
   {
     return static_cast<const T*>(lhs.get()) == const_cast<const U*>(rhs);
@@ -414,7 +350,7 @@ operator==( const nsAutoPtr<T>& lhs, U* rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator==( U* lhs, const nsAutoPtr<T>& rhs )
   {
     return const_cast<const U*>(lhs) == static_cast<const T*>(rhs.get());
@@ -422,7 +358,7 @@ operator==( U* lhs, const nsAutoPtr<T>& rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator!=( const nsAutoPtr<T>& lhs, U* rhs )
   {
     return static_cast<const T*>(lhs.get()) != const_cast<const U*>(rhs);
@@ -430,7 +366,7 @@ operator!=( const nsAutoPtr<T>& lhs, U* rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator!=( U* lhs, const nsAutoPtr<T>& rhs )
   {
     return const_cast<const U*>(lhs) != static_cast<const T*>(rhs.get());
@@ -443,7 +379,7 @@ operator!=( U* lhs, const nsAutoPtr<T>& rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator==( const nsAutoPtr<T>& lhs, NSCAP_Zero* rhs )
     // specifically to allow |smartPtr == 0|
   {
@@ -452,7 +388,7 @@ operator==( const nsAutoPtr<T>& lhs, NSCAP_Zero* rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator==( NSCAP_Zero* lhs, const nsAutoPtr<T>& rhs )
     // specifically to allow |0 == smartPtr|
   {
@@ -461,7 +397,7 @@ operator==( NSCAP_Zero* lhs, const nsAutoPtr<T>& rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator!=( const nsAutoPtr<T>& lhs, NSCAP_Zero* rhs )
     // specifically to allow |smartPtr != 0|
   {
@@ -470,7 +406,7 @@ operator!=( const nsAutoPtr<T>& lhs, NSCAP_Zero* rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator!=( NSCAP_Zero* lhs, const nsAutoPtr<T>& rhs )
     // specifically to allow |0 != smartPtr|
   {
@@ -485,7 +421,7 @@ operator!=( NSCAP_Zero* lhs, const nsAutoPtr<T>& rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator==( const nsAutoPtr<T>& lhs, int rhs )
     // specifically to allow |smartPtr == 0|
   {
@@ -494,7 +430,7 @@ operator==( const nsAutoPtr<T>& lhs, int rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator==( int lhs, const nsAutoPtr<T>& rhs )
     // specifically to allow |0 == smartPtr|
   {
@@ -617,19 +553,6 @@ class nsAutoArrayPtr
           return get();
         }
 
-#ifdef CANT_RESOLVE_CPP_CONST_AMBIGUITY
-  // broken version for IRIX
-
-      nsAutoArrayPtr<T>*
-      get_address() const
-          // This is not intended to be used by clients.  See |address_of|
-          // below.
-        {
-          return const_cast<nsAutoArrayPtr<T>*>(this);
-        }
-
-#else // CANT_RESOLVE_CPP_CONST_AMBIGUITY
-
       nsAutoArrayPtr<T>*
       get_address()
           // This is not intended to be used by clients.  See |address_of|
@@ -645,8 +568,6 @@ class nsAutoArrayPtr
         {
           return this;
         }
-
-#endif // CANT_RESOLVE_CPP_CONST_AMBIGUITY
 
     public:
       T&
@@ -668,20 +589,6 @@ class nsAutoArrayPtr
         }
   };
 
-#ifdef CANT_RESOLVE_CPP_CONST_AMBIGUITY
-
-// This is the broken version for IRIX, which can't handle the version below.
-
-template <class T>
-inline
-nsAutoArrayPtr<T>*
-address_of( const nsAutoArrayPtr<T>& aPtr )
-  {
-    return aPtr.get_address();
-  }
-
-#else // CANT_RESOLVE_CPP_CONST_AMBIGUITY
-
 template <class T>
 inline
 nsAutoArrayPtr<T>*
@@ -697,8 +604,6 @@ address_of( const nsAutoArrayPtr<T>& aPtr )
   {
     return aPtr.get_address();
   }
-
-#endif // CANT_RESOLVE_CPP_CONST_AMBIGUITY
 
 template <class T>
 class nsAutoArrayPtrGetterTransfers
@@ -766,7 +671,7 @@ getter_Transfers( nsAutoArrayPtr<T>& aSmartPtr )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator==( const nsAutoArrayPtr<T>& lhs, const nsAutoArrayPtr<U>& rhs )
   {
     return static_cast<const T*>(lhs.get()) == static_cast<const U*>(rhs.get());
@@ -775,7 +680,7 @@ operator==( const nsAutoArrayPtr<T>& lhs, const nsAutoArrayPtr<U>& rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator!=( const nsAutoArrayPtr<T>& lhs, const nsAutoArrayPtr<U>& rhs )
   {
     return static_cast<const T*>(lhs.get()) != static_cast<const U*>(rhs.get());
@@ -786,7 +691,7 @@ operator!=( const nsAutoArrayPtr<T>& lhs, const nsAutoArrayPtr<U>& rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator==( const nsAutoArrayPtr<T>& lhs, const U* rhs )
   {
     return static_cast<const T*>(lhs.get()) == static_cast<const U*>(rhs);
@@ -794,7 +699,7 @@ operator==( const nsAutoArrayPtr<T>& lhs, const U* rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator==( const U* lhs, const nsAutoArrayPtr<T>& rhs )
   {
     return static_cast<const U*>(lhs) == static_cast<const T*>(rhs.get());
@@ -802,7 +707,7 @@ operator==( const U* lhs, const nsAutoArrayPtr<T>& rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator!=( const nsAutoArrayPtr<T>& lhs, const U* rhs )
   {
     return static_cast<const T*>(lhs.get()) != static_cast<const U*>(rhs);
@@ -810,7 +715,7 @@ operator!=( const nsAutoArrayPtr<T>& lhs, const U* rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator!=( const U* lhs, const nsAutoArrayPtr<T>& rhs )
   {
     return static_cast<const U*>(lhs) != static_cast<const T*>(rhs.get());
@@ -826,7 +731,7 @@ operator!=( const U* lhs, const nsAutoArrayPtr<T>& rhs )
 #ifndef NSCAP_DONT_PROVIDE_NONCONST_OPEQ
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator==( const nsAutoArrayPtr<T>& lhs, U* rhs )
   {
     return static_cast<const T*>(lhs.get()) == const_cast<const U*>(rhs);
@@ -834,7 +739,7 @@ operator==( const nsAutoArrayPtr<T>& lhs, U* rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator==( U* lhs, const nsAutoArrayPtr<T>& rhs )
   {
     return const_cast<const U*>(lhs) == static_cast<const T*>(rhs.get());
@@ -842,7 +747,7 @@ operator==( U* lhs, const nsAutoArrayPtr<T>& rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator!=( const nsAutoArrayPtr<T>& lhs, U* rhs )
   {
     return static_cast<const T*>(lhs.get()) != const_cast<const U*>(rhs);
@@ -850,7 +755,7 @@ operator!=( const nsAutoArrayPtr<T>& lhs, U* rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator!=( U* lhs, const nsAutoArrayPtr<T>& rhs )
   {
     return const_cast<const U*>(lhs) != static_cast<const T*>(rhs.get());
@@ -863,7 +768,7 @@ operator!=( U* lhs, const nsAutoArrayPtr<T>& rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator==( const nsAutoArrayPtr<T>& lhs, NSCAP_Zero* rhs )
     // specifically to allow |smartPtr == 0|
   {
@@ -872,7 +777,7 @@ operator==( const nsAutoArrayPtr<T>& lhs, NSCAP_Zero* rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator==( NSCAP_Zero* lhs, const nsAutoArrayPtr<T>& rhs )
     // specifically to allow |0 == smartPtr|
   {
@@ -881,7 +786,7 @@ operator==( NSCAP_Zero* lhs, const nsAutoArrayPtr<T>& rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator!=( const nsAutoArrayPtr<T>& lhs, NSCAP_Zero* rhs )
     // specifically to allow |smartPtr != 0|
   {
@@ -890,7 +795,7 @@ operator!=( const nsAutoArrayPtr<T>& lhs, NSCAP_Zero* rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator!=( NSCAP_Zero* lhs, const nsAutoArrayPtr<T>& rhs )
     // specifically to allow |0 != smartPtr|
   {
@@ -905,7 +810,7 @@ operator!=( NSCAP_Zero* lhs, const nsAutoArrayPtr<T>& rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator==( const nsAutoArrayPtr<T>& lhs, int rhs )
     // specifically to allow |smartPtr == 0|
   {
@@ -914,7 +819,7 @@ operator==( const nsAutoArrayPtr<T>& lhs, int rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator==( int lhs, const nsAutoArrayPtr<T>& rhs )
     // specifically to allow |0 == smartPtr|
   {
@@ -1131,19 +1036,6 @@ class nsRefPtr
         }
 #endif
 
-#ifdef CANT_RESOLVE_CPP_CONST_AMBIGUITY
-  // broken version for IRIX
-
-      nsRefPtr<T>*
-      get_address() const
-          // This is not intended to be used by clients.  See |address_of|
-          // below.
-        {
-          return const_cast<nsRefPtr<T>*>(this);
-        }
-
-#else // CANT_RESOLVE_CPP_CONST_AMBIGUITY
-
       nsRefPtr<T>*
       get_address()
           // This is not intended to be used by clients.  See |address_of|
@@ -1159,8 +1051,6 @@ class nsRefPtr
         {
           return this;
         }
-
-#endif // CANT_RESOLVE_CPP_CONST_AMBIGUITY
 
     public:
       T&
@@ -1182,20 +1072,6 @@ class nsRefPtr
         }
   };
 
-#ifdef CANT_RESOLVE_CPP_CONST_AMBIGUITY
-
-// This is the broken version for IRIX, which can't handle the version below.
-
-template <class T>
-inline
-nsRefPtr<T>*
-address_of( const nsRefPtr<T>& aPtr )
-  {
-    return aPtr.get_address();
-  }
-
-#else // CANT_RESOLVE_CPP_CONST_AMBIGUITY
-
 template <class T>
 inline
 nsRefPtr<T>*
@@ -1211,8 +1087,6 @@ address_of( const nsRefPtr<T>& aPtr )
   {
     return aPtr.get_address();
   }
-
-#endif // CANT_RESOLVE_CPP_CONST_AMBIGUITY
 
 template <class T>
 class nsRefPtrGetterAddRefs
@@ -1280,7 +1154,7 @@ getter_AddRefs( nsRefPtr<T>& aSmartPtr )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator==( const nsRefPtr<T>& lhs, const nsRefPtr<U>& rhs )
   {
     return static_cast<const T*>(lhs.get()) == static_cast<const U*>(rhs.get());
@@ -1289,7 +1163,7 @@ operator==( const nsRefPtr<T>& lhs, const nsRefPtr<U>& rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator!=( const nsRefPtr<T>& lhs, const nsRefPtr<U>& rhs )
   {
     return static_cast<const T*>(lhs.get()) != static_cast<const U*>(rhs.get());
@@ -1300,7 +1174,7 @@ operator!=( const nsRefPtr<T>& lhs, const nsRefPtr<U>& rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator==( const nsRefPtr<T>& lhs, const U* rhs )
   {
     return static_cast<const T*>(lhs.get()) == static_cast<const U*>(rhs);
@@ -1308,7 +1182,7 @@ operator==( const nsRefPtr<T>& lhs, const U* rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator==( const U* lhs, const nsRefPtr<T>& rhs )
   {
     return static_cast<const U*>(lhs) == static_cast<const T*>(rhs.get());
@@ -1316,7 +1190,7 @@ operator==( const U* lhs, const nsRefPtr<T>& rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator!=( const nsRefPtr<T>& lhs, const U* rhs )
   {
     return static_cast<const T*>(lhs.get()) != static_cast<const U*>(rhs);
@@ -1324,7 +1198,7 @@ operator!=( const nsRefPtr<T>& lhs, const U* rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator!=( const U* lhs, const nsRefPtr<T>& rhs )
   {
     return static_cast<const U*>(lhs) != static_cast<const T*>(rhs.get());
@@ -1340,7 +1214,7 @@ operator!=( const U* lhs, const nsRefPtr<T>& rhs )
 #ifndef NSCAP_DONT_PROVIDE_NONCONST_OPEQ
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator==( const nsRefPtr<T>& lhs, U* rhs )
   {
     return static_cast<const T*>(lhs.get()) == const_cast<const U*>(rhs);
@@ -1348,7 +1222,7 @@ operator==( const nsRefPtr<T>& lhs, U* rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator==( U* lhs, const nsRefPtr<T>& rhs )
   {
     return const_cast<const U*>(lhs) == static_cast<const T*>(rhs.get());
@@ -1356,7 +1230,7 @@ operator==( U* lhs, const nsRefPtr<T>& rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator!=( const nsRefPtr<T>& lhs, U* rhs )
   {
     return static_cast<const T*>(lhs.get()) != const_cast<const U*>(rhs);
@@ -1364,7 +1238,7 @@ operator!=( const nsRefPtr<T>& lhs, U* rhs )
 
 template <class T, class U>
 inline
-NSCAP_BOOL
+bool
 operator!=( U* lhs, const nsRefPtr<T>& rhs )
   {
     return const_cast<const U*>(lhs) != static_cast<const T*>(rhs.get());
@@ -1377,7 +1251,7 @@ operator!=( U* lhs, const nsRefPtr<T>& rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator==( const nsRefPtr<T>& lhs, NSCAP_Zero* rhs )
     // specifically to allow |smartPtr == 0|
   {
@@ -1386,7 +1260,7 @@ operator==( const nsRefPtr<T>& lhs, NSCAP_Zero* rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator==( NSCAP_Zero* lhs, const nsRefPtr<T>& rhs )
     // specifically to allow |0 == smartPtr|
   {
@@ -1395,7 +1269,7 @@ operator==( NSCAP_Zero* lhs, const nsRefPtr<T>& rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator!=( const nsRefPtr<T>& lhs, NSCAP_Zero* rhs )
     // specifically to allow |smartPtr != 0|
   {
@@ -1404,7 +1278,7 @@ operator!=( const nsRefPtr<T>& lhs, NSCAP_Zero* rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator!=( NSCAP_Zero* lhs, const nsRefPtr<T>& rhs )
     // specifically to allow |0 != smartPtr|
   {
@@ -1419,7 +1293,7 @@ operator!=( NSCAP_Zero* lhs, const nsRefPtr<T>& rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator==( const nsRefPtr<T>& lhs, int rhs )
     // specifically to allow |smartPtr == 0|
   {
@@ -1428,7 +1302,7 @@ operator==( const nsRefPtr<T>& lhs, int rhs )
 
 template <class T>
 inline
-NSCAP_BOOL
+bool
 operator==( int lhs, const nsRefPtr<T>& rhs )
     // specifically to allow |0 == smartPtr|
   {

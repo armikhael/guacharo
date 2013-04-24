@@ -18,7 +18,7 @@ function run_test() {
 
 // Finds the test plugin library
 function get_test_plugin() {
-  var plugins = Services.dirsvc.get("CurProcD", AM_Ci.nsILocalFile);
+  var plugins = Services.dirsvc.get("CurProcD", AM_Ci.nsIFile);
   plugins.append("plugins");
   do_check_true(plugins.exists());
 
@@ -61,7 +61,7 @@ function run_test_1() {
   var testPlugin = get_test_plugin();
   do_check_neq(testPlugin, null);
 
-  AddonManager.getAddonsByTypes("plugin", function(addons) {
+  AddonManager.getAddonsByTypes(["plugin"], function(addons) {
     do_check_true(addons.length > 0);
 
     addons.forEach(function(p) {

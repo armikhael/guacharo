@@ -1,43 +1,8 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 // vim:cindent:sw=4:et:ts=8:
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is Netscape Communications Corp.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jim Nance
- *   L. David Baron - JP_REALTIME, JPROF_PTHREAD_HACK, and SIGUSR1 handling
- *   Mike Shaver - JP_RTC_HZ support
- *   Randell Jesup - glibc backtrace() support
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // The linux glibc hides part of sigaction if _POSIX_SOURCE is defined
 #if defined(linux)
@@ -72,6 +37,18 @@
 #include <errno.h>
 #include <dlfcn.h>
 
+#include "mozilla/mozalloc_undef_macro_wrappers.h"
+
+// Must define before including jprof.h
+void *moz_xmalloc(size_t size)
+{
+    return malloc(size);
+}
+
+void moz_xfree(void *mem)
+{
+    free(mem);
+}
 
 #ifdef NTO
 #include <sys/link.h>
@@ -177,6 +154,7 @@ JPROF_STATIC void CrawlStack(malloc_log_entry* me,
 
 static int rtcHz;
 static int rtcFD = -1;
+static bool circular = false;
 
 #if defined(linux) || defined(NTO)
 static void DumpAddressMap()
@@ -215,11 +193,205 @@ static void DumpAddressMap()
 
 static bool was_paused = true;
 
+JPROF_STATIC void JprofBufferDump();
+JPROF_STATIC void JprofBufferClear();
+
+static void ClearProfilingHook(int signum)
+{
+    if (circular) {
+        JprofBufferClear();
+        puts("Jprof: cleared circular buffer.");
+    }
+}
+
 static void EndProfilingHook(int signum)
 {
+    if (circular)
+        JprofBufferDump();
+
     DumpAddressMap();
     was_paused = true;
     puts("Jprof: profiling paused.");
+}
+
+
+
+//----------------------------------------------------------------------
+// proper usage would be a template, including the function to find the
+// size of an entry, or include a size header explicitly to each entry.
+#if defined(linux)
+#define DUMB_LOCK()   pthread_mutex_lock(&mutex);
+#define DUMB_UNLOCK() pthread_mutex_unlock(&mutex);
+#else
+#define DUMB_LOCK()   FIXME()
+#define DUMB_UNLOCK() FIXME()
+#endif
+
+
+class DumbCircularBuffer
+{
+public:
+    DumbCircularBuffer(size_t init_buffer_size) {
+        used = 0;
+        buffer_size = init_buffer_size;
+        buffer = (unsigned char *) malloc(buffer_size);
+        head = tail = buffer;
+
+#if defined(linux)
+        pthread_mutexattr_t mAttr;
+        pthread_mutexattr_settype(&mAttr, PTHREAD_MUTEX_RECURSIVE_NP);
+        pthread_mutex_init(&mutex, &mAttr);
+        pthread_mutexattr_destroy(&mAttr);
+#endif
+    }
+    ~DumbCircularBuffer() {
+        free(buffer);
+#if defined(linux)
+        pthread_mutex_destroy (&mutex);
+#endif
+    }
+
+    void clear() {
+        DUMB_LOCK();
+        head = tail;
+        used = 0;
+        DUMB_UNLOCK();
+    }
+
+    bool empty() {
+        return head == tail;
+    }
+
+    size_t space_available() {
+        size_t result;
+        DUMB_LOCK();
+        if (tail > head)
+            result = buffer_size - (tail-head) - 1;
+        else
+            result = head-tail - 1;
+        DUMB_UNLOCK();
+        return result;
+    }
+
+    void drop(size_t size) {
+        // assumes correctness!
+        DUMB_LOCK();
+        head += size;
+        if (head >= &buffer[buffer_size])
+            head -= buffer_size;
+        used--;
+        DUMB_UNLOCK();
+    }
+
+    bool insert(void *data, size_t size) {
+        // can fail if not enough space in the entire buffer
+        DUMB_LOCK();
+        if (space_available() < size)
+            return false;
+
+        size_t max_without_wrap = &buffer[buffer_size] - tail;
+        size_t initial = size > max_without_wrap ? max_without_wrap : size;
+#if DEBUG_CIRCULAR
+        fprintf(stderr,"insert(%d): max_without_wrap %d, size %d, initial %d\n",used,max_without_wrap,size,initial);
+#endif
+        memcpy(tail,data,initial);
+        tail += initial;
+        data = ((char *)data)+initial;
+        size -= initial;
+        if (size != 0) {
+#if DEBUG_CIRCULAR
+            fprintf(stderr,"wrapping by %d bytes\n",size);
+#endif
+            memcpy(buffer,data,size);
+            tail = &(((unsigned char *)buffer)[size]);
+        }
+            
+        used++;
+        DUMB_UNLOCK();
+
+        return true;
+    }
+
+    // for external access to the buffer (saving)
+    void lock() {
+        DUMB_LOCK();
+    }
+
+    void unlock() {
+        DUMB_UNLOCK();
+    }
+
+    // XXX These really shouldn't be public...
+    unsigned char *head;
+    unsigned char *tail;
+    unsigned int used;
+    unsigned char *buffer;
+    size_t buffer_size;
+
+private:
+    pthread_mutex_t mutex;
+};
+
+class DumbCircularBuffer *JprofBuffer;
+
+JPROF_STATIC void
+JprofBufferInit(size_t size)
+{
+    JprofBuffer = new DumbCircularBuffer(size);
+}
+
+JPROF_STATIC void
+JprofBufferClear()
+{
+    fprintf(stderr,"Told to clear JPROF circular buffer\n");
+    JprofBuffer->clear();
+}
+
+JPROF_STATIC size_t
+JprofEntrySizeof(malloc_log_entry *me)
+{
+    return offsetof(malloc_log_entry, pcs) + me->numpcs*sizeof(char*);
+}
+
+JPROF_STATIC void
+JprofBufferAppend(malloc_log_entry *me)
+{
+    size_t size = JprofEntrySizeof(me);
+
+    do {
+        while (JprofBuffer->space_available() < size &&
+               JprofBuffer->used > 0) {
+#if DEBUG_CIRCULAR
+            fprintf(stderr,"dropping entry: %d in use, %d free, need %d, size_to_free = %d\n",
+                    JprofBuffer->used,JprofBuffer->space_available(),size,JprofEntrySizeof((malloc_log_entry *) JprofBuffer->head));
+#endif
+            JprofBuffer->drop(JprofEntrySizeof((malloc_log_entry *) JprofBuffer->head));
+        }
+        if (JprofBuffer->space_available() < size)
+            return;
+
+    } while (!JprofBuffer->insert(me,size));
+}
+
+JPROF_STATIC void
+JprofBufferDump()
+{
+    JprofBuffer->lock();
+#if DEBUG_CIRCULAR
+    fprintf(stderr,"dumping JP_CIRCULAR buffer, %d of %d bytes\n",
+            JprofBuffer->tail > JprofBuffer->head ? 
+              JprofBuffer->tail - JprofBuffer->head :
+              JprofBuffer->buffer_size + JprofBuffer->tail - JprofBuffer->head,
+            JprofBuffer->buffer_size);
+#endif
+    if (JprofBuffer->tail >= JprofBuffer->head) {
+        write(gLogFD, JprofBuffer->head, JprofBuffer->tail - JprofBuffer->head);
+    } else {
+        write(gLogFD, JprofBuffer->head, &(JprofBuffer->buffer[JprofBuffer->buffer_size]) - JprofBuffer->head);
+        write(gLogFD, JprofBuffer->buffer, JprofBuffer->tail - JprofBuffer->buffer);
+    }
+    JprofBuffer->clear();
+    JprofBuffer->unlock();
 }
 
 //----------------------------------------------------------------------
@@ -242,9 +414,13 @@ JprofLog(u_long aTime, void* stack_top, void* top_instr_ptr)
   CrawlStack(&me, stack_top, top_instr_ptr);
 
 #ifndef NTO
-  write(gLogFD, &me, offsetof(malloc_log_entry, pcs) + me.numpcs*sizeof(char*));
+  if (circular) {
+      JprofBufferAppend(&me);
+  } else {
+      write(gLogFD, &me, JprofEntrySizeof(&me));
+  }
 #else
-  printf("Neutrino is missing the pcs member of malloc_log_entry!! \n");
+      printf("Neutrino is missing the pcs member of malloc_log_entry!! \n");
 #endif
 }
 
@@ -424,9 +600,13 @@ NS_EXPORT_(void) setupProfilingStuff(void)
          *               address map staying constant across multiple runs.
          *   JP_FILENAME -> base filename to use when saving logs.  Note that
          *               this does not affect the mapfile.
+         *   JP_CIRCULAR -> use a circular buffer of size N, write/clear on SIGUSR1
          *
          * JPROF_SLAVE is set if this is not the first process.
 	*/
+
+        circular = false;
+
 	if(tst) {
 	    if(strstr(tst, "JP_DEFER"))
 	    {
@@ -448,6 +628,20 @@ NS_EXPORT_(void) setupProfilingStuff(void)
                             tmp);
                     timerMiliSec = 1;
                 }
+	    }
+
+	    char *circular_op = strstr(tst,"JP_CIRCULAR=");
+	    if(circular_op) {
+                size_t size = atol(circular_op+strlen("JP_CIRCULAR="));
+                if (size < 1000) {
+                    fprintf(stderr,
+                            "JP_CIRCULAR of %d less than 1000, using 10000\n",
+                            size);
+                    size = 10000;
+                }
+                JprofBufferInit(size);
+                fprintf(stderr,"JP_CIRCULAR buffer of %d bytes\n",size);
+                circular = true;
 	    }
 
 	    char *first = strstr(tst, "JP_FIRST=");
@@ -513,6 +707,8 @@ NS_EXPORT_(void) setupProfilingStuff(void)
                     //fprintf(stderr,"jprof: main_thread = %u\n",
                     //        (unsigned int)main_thread);
 
+                    // FIX!  probably should block these against each other
+                    // Very unlikely.
 		    sigemptyset(&mset);
 		    action.sa_handler = NULL;
 		    action.sa_sigaction = StackHook;
@@ -547,6 +743,13 @@ NS_EXPORT_(void) setupProfilingStuff(void)
 		    stop_action.sa_mask  = mset;
 		    stop_action.sa_flags = SA_RESTART;
 		    sigaction(SIGUSR1, &stop_action, NULL);
+
+		    // make it so a SIGUSR2 will clear the circular buffer
+
+		    stop_action.sa_handler = ClearProfilingHook;
+		    stop_action.sa_mask  = mset;
+		    stop_action.sa_flags = SA_RESTART;
+		    sigaction(SIGUSR2, &stop_action, NULL);
 
                     printf("Jprof: Initialized signal handler and set "
                            "timer for %lu %s, %d s "

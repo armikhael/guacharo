@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef _nsMsgFolderCompactor_h
 #define _nsMsgFolderCompactor_h
@@ -73,9 +41,9 @@ protected:
   void  CleanupTempFilesAfterError();
 
   nsresult Init(nsIMsgFolder *aFolder, const char* aBaseMsgUri, nsIMsgDatabase *aDb,
-                            nsILocalFile *aPath, nsIMsgWindow *aMsgWindow);
+                            nsIFile *aPath, nsIMsgWindow *aMsgWindow);
   nsresult GetMessage(nsIMsgDBHdr **message);
-  nsresult BuildMessageURI(const char *baseURI, PRUint32 key, nsCString& uri);
+  nsresult BuildMessageURI(const char *baseURI, uint32_t key, nsCString& uri);
   nsresult ShowStatusMsg(const nsString& aMsg);
   nsresult ReleaseFolderLock();
   void     ShowCompactingStatusMsg();
@@ -87,33 +55,33 @@ protected:
   nsCString m_messageUri; // current message uri being copy
   nsCOMPtr<nsIMsgFolder> m_folder; // current folder being compact
   nsCOMPtr<nsIMsgDatabase> m_db; // new database for the compact folder
-  nsCOMPtr <nsILocalFile> m_file; // new mailbox for the compact folder
+  nsCOMPtr <nsIFile> m_file; // new mailbox for the compact folder
   nsCOMPtr <nsIOutputStream> m_fileStream; // output file stream for writing
   // all message keys that need to be copied over
   nsRefPtr<nsMsgKeyArray> m_keyArray;
-  PRUint32 m_size;
+  uint32_t m_size;
 
    // sum of the sizes of the messages, accumulated as we visit each msg.
-  PRUint32 m_totalMsgSize;
+  uint32_t m_totalMsgSize;
 
-  PRInt32 m_curIndex; // index of the current copied message key in key array
-  PRUint64 m_startOfNewMsg; // offset in mailbox of new message
+  uint32_t m_curIndex; // index of the current copied message key in key array
+  uint64_t m_startOfNewMsg; // offset in mailbox of new message
   char m_dataBuffer[COMPACTOR_READ_BUFF_SIZE + 1]; // temp data buffer for copying message
   nsresult m_status; // the status of the copying operation
   nsCOMPtr <nsIMsgMessageService> m_messageService; // message service for copying 
   nsCOMPtr<nsIArray> m_folderArray; // folders we are compacting, if compacting multiple.
   nsCOMPtr <nsIMsgWindow> m_window;
   nsCOMPtr <nsIMsgDBHdr> m_curSrcHdr;
-  PRUint32 m_folderIndex; // tells which folder to compact in case of compact all
-  PRBool m_compactAll;  //flag for compact all
-  PRBool m_compactOfflineAlso; //whether to compact offline also
-  PRBool m_compactingOfflineFolders; // are we in the offline folder compact phase
-  PRBool m_parsingFolder; //flag for parsing local folders;
+  uint32_t m_folderIndex; // tells which folder to compact in case of compact all
+  bool m_compactAll;  //flag for compact all
+  bool m_compactOfflineAlso; //whether to compact offline also
+  bool m_compactingOfflineFolders; // are we in the offline folder compact phase
+  bool m_parsingFolder; //flag for parsing local folders;
   // these members are used to add missing status lines to compacted messages.
-  PRBool m_needStatusLine;
-  PRBool m_startOfMsg;
-  PRInt32 m_statusOffset;
-  PRUint32 m_addedHeaderSize;
+  bool m_needStatusLine;
+  bool m_startOfMsg;
+  int32_t m_statusOffset;
+  uint32_t m_addedHeaderSize;
   nsCOMPtr<nsIArray> m_offlineFolderArray;
   nsCOMPtr<nsIUrlListener> m_listener;
 };
@@ -128,15 +96,15 @@ public:
                                     nsresult status);
   NS_IMETHODIMP OnDataAvailable(nsIRequest *request, nsISupports *ctxt,
                                 nsIInputStream *inStr,
-                                PRUint32 sourceOffset, PRUint32 count);
+                                uint32_t sourceOffset, uint32_t count);
 
 protected:
-    nsresult         CopyNextMessage(PRBool &done);
+    nsresult         CopyNextMessage(bool &done);
     virtual nsresult InitDB(nsIMsgDatabase *db);
     virtual nsresult StartCompacting();
     virtual nsresult FinishCompact();
 
-    PRUint32 m_offlineMsgSize;
+    uint32_t m_offlineMsgSize;
 };
 
 #endif

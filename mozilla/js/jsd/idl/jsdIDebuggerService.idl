@@ -1,41 +1,7 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
- *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Robert Ginda, <rginda@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* -*- Mode: IDL; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
     
 #include "nsISupports.idl"
 
@@ -79,7 +45,7 @@ interface jsdIActivationCallback;
  * Debugger service. It is not a good idea to have more than one active client
  * of the debugger service.
  */
-[scriptable, uuid(aa232c7f-855f-4488-a92c-6f89adc668cc)]
+[scriptable, uuid(9be5b327-6818-464d-9695-f33885fd8377)]
 interface jsdIDebuggerService : nsISupports
 {
     /** Internal use only. */
@@ -274,7 +240,10 @@ interface jsdIDebuggerService : nsISupports
      */
     unsigned long pause();
     /**
-     * Undo a pause.
+     * Undo a pause.  Once this is called, the debugger won't start
+     * getting execution callbacks until the stack is fully unwound so
+     * that no JS scripts are live.  There is no way to query whether
+     * there are such scripts left to unwind at a given point in time.
      *
      * @return depth The number of remaining pending pause calls.
      */
@@ -372,13 +341,8 @@ interface jsdIDebuggerService : nsISupports
      * When called from another language this method returns an xpconnect
      * defined error code.
      */
-    jsdIValue wrapValue(/*in jsvalue value*/);
+    jsdIValue wrapValue(in jsval value);
 
-    /**
-     * The same as above but to be called from C++.
-     */
-    [noscript] jsdIValue wrapJSValue(in jsval value);
-    
     /* XXX these two routines are candidates for refactoring. The only problem
      * is that it is not clear where and how they should land.
      */
@@ -884,7 +848,7 @@ interface jsdIStackFrame : jsdIEphemeral
  * Script object. In JavaScript engine terms, there's a single script for each
  * function, and one for the top level script.
  */
-[scriptable, uuid(721724e0-7716-4bf4-b48f-92b78d056141)]
+[scriptable, uuid(8ce9b2a2-cc33-48a8-9f47-8696186ed9a5)]
 interface jsdIScript : jsdIEphemeral
 {
     /** Internal use only. */
@@ -920,6 +884,12 @@ interface jsdIScript : jsdIEphemeral
      * The context flag JSD_DEBUG_WHEN_SET decides the logic.
      */
     const unsigned long FLAG_DEBUG   = 0x02;
+    /**
+     * Determines whether to invoke the onScriptDestroy callback for this
+     * script. The default is for this to be true if the onScriptCreated
+     * callback was invoked for this script.
+     */
+    const unsigned long FLAG_CALL_DESTROY_HOOK = 0x04;
     
     /**
      * FLAG_* attributes from above, OR'd together.
@@ -1065,7 +1035,7 @@ interface jsdIScript : jsdIEphemeral
  * jsdIValue adds a root for the underlying JavaScript value, so don't keep it
  * if you don't need to.
  */
-[scriptable, uuid(861c4d37-e115-4a52-9f76-273cb6b21c3b)]
+[scriptable, uuid(1cd3535b-4ddb-4202-9053-e0ec88f5c82b)]
 interface jsdIValue : jsdIEphemeral
 {
     /** Internal use only. */
@@ -1193,7 +1163,7 @@ interface jsdIValue : jsdIEphemeral
      * When called from another language this method returns an xpconnect
      * defined error code.
      */
-    void getWrappedValue();
+    [implicit_jscontext] jsval getWrappedValue();
 
     /**
      * If this is a function value, return its associated jsdIScript.
@@ -1247,7 +1217,7 @@ interface jsdIObject : nsISupports
  * Representation of a property of an object. When an instance is invalid, all
  * method and property access will result in a NS_UNAVAILABLE error.
  */
-[scriptable, uuid(09332485-1419-42bc-ba1f-070815ed4b82)]
+[scriptable, uuid(acf1329e-aaf6-4d6a-a1eb-f75858566f09)]
 interface jsdIProperty : jsdIEphemeral
 {
     /** Internal use only. */
@@ -1286,6 +1256,4 @@ interface jsdIProperty : jsdIEphemeral
     readonly attribute jsdIValue     name;
     /** value of this property. */
     readonly attribute jsdIValue     value;
-    /** slot number if this property is a local variable or parameter. */
-    readonly attribute unsigned long varArgSlot;
 };

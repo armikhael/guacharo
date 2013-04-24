@@ -1,41 +1,8 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * 
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the mozilla.org LDAP XPCOM SDK.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Dan Mosedale <dmose@mozilla.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsLDAPInternal.h"
 #include "nsLDAPMessage.h"
@@ -43,11 +10,11 @@
 #include "nsDebug.h"
 #include "nsCRT.h"
 #include "nsLDAPConnection.h"
-#include "nsReadableUtils.h"
 #include "nsISupportsUtils.h"
 #include "nsLDAPBERValue.h"
 #include "nsILDAPErrors.h"
 #include "nsIClassInfoImpl.h"
+#include "nsLDAPUtils.h"
 
 NS_IMPL_CLASSINFO(nsLDAPMessage, NULL, nsIClassInfo::THREADSAFE,
                   NS_LDAPMESSAGE_CID)
@@ -242,7 +209,7 @@ nsLDAPMessage::Init(nsILDAPConnection *aConnection, LDAPMessage *aMsgHandle)
  * readonly attribute long errorCode;
  */
 NS_IMETHODIMP
-nsLDAPMessage::GetErrorCode(PRInt32 *aErrorCode)
+nsLDAPMessage::GetErrorCode(int32_t *aErrorCode)
 {
     if (!aErrorCode) {
         return NS_ERROR_ILLEGAL_VALUE;
@@ -253,7 +220,7 @@ nsLDAPMessage::GetErrorCode(PRInt32 *aErrorCode)
 }
 
 NS_IMETHODIMP
-nsLDAPMessage::GetType(PRInt32 *aType)
+nsLDAPMessage::GetType(int32_t *aType)
 {
     if (!aType) {
         return NS_ERROR_ILLEGAL_VALUE;
@@ -271,7 +238,7 @@ nsLDAPMessage::GetType(PRInt32 *aType)
 // handler for IterateAttributes().  
 //
 nsresult
-nsLDAPMessage::IterateAttrErrHandler(PRInt32 aLderrno, PRUint32 *aAttrCount, 
+nsLDAPMessage::IterateAttrErrHandler(int32_t aLderrno, uint32_t *aAttrCount, 
                                      char** *aAttributes, BerElement *position)
 {
 
@@ -320,20 +287,20 @@ nsLDAPMessage::IterateAttrErrHandler(PRInt32 aLderrno, PRUint32 *aAttrCount,
 // wrapper for ldap_first_attribute 
 //
 NS_IMETHODIMP
-nsLDAPMessage::GetAttributes(PRUint32 *aAttrCount, char** *aAttributes)
+nsLDAPMessage::GetAttributes(uint32_t *aAttrCount, char** *aAttributes)
 {
-    return IterateAttributes(aAttrCount, aAttributes, PR_TRUE);
+    return IterateAttributes(aAttrCount, aAttributes, true);
 }
 
-// if getP is PR_TRUE, we get the attributes by recursing once
+// if getP is true, we get the attributes by recursing once
 // (without getP set) in order to fill in *attrCount, then allocate
 // and fill in the *aAttributes.  
 // 
-// if getP is PR_FALSE, just fill in *attrCount and return
+// if getP is false, just fill in *attrCount and return
 // 
 nsresult
-nsLDAPMessage::IterateAttributes(PRUint32 *aAttrCount, char** *aAttributes, 
-                 PRBool getP)
+nsLDAPMessage::IterateAttributes(uint32_t *aAttrCount, char** *aAttributes, 
+                 bool getP)
 {
     BerElement *position;
     nsresult rv;
@@ -349,7 +316,7 @@ nsLDAPMessage::IterateAttributes(PRUint32 *aAttrCount, char** *aAttributes,
         *aAttributes = 0;
         *aAttrCount = 0;
 
-        rv = IterateAttributes(aAttrCount, aAttributes, PR_FALSE);
+        rv = IterateAttributes(aAttrCount, aAttributes, false);
         if (NS_FAILED(rv))
             return rv;
 
@@ -407,7 +374,7 @@ nsLDAPMessage::IterateAttributes(PRUint32 *aAttrCount, char** *aAttributes,
             
             // bail out if there's an error
             //
-            PRInt32 lderrno = ldap_get_lderrno(mConnectionHandle, 0, 0);
+            int32_t lderrno = ldap_get_lderrno(mConnectionHandle, 0, 0);
             if (lderrno != LDAP_SUCCESS) {
                 return IterateAttrErrHandler(lderrno, aAttrCount, aAttributes, 
                                              position);
@@ -454,7 +421,7 @@ NS_IMETHODIMP nsLDAPMessage::GetDn(nsACString& aDn)
     char *rawDn = ldap_get_dn(mConnectionHandle, mMsgHandle);
 
     if (!rawDn) {
-        PRInt32 lderrno = ldap_get_lderrno(mConnectionHandle, 0, 0);
+        int32_t lderrno = ldap_get_lderrno(mConnectionHandle, 0, 0);
 
         switch (lderrno) {
 
@@ -481,7 +448,7 @@ NS_IMETHODIMP nsLDAPMessage::GetDn(nsACString& aDn)
 // wrapper for ldap_get_values()
 //
 NS_IMETHODIMP
-nsLDAPMessage::GetValues(const char *aAttr, PRUint32 *aCount, 
+nsLDAPMessage::GetValues(const char *aAttr, uint32_t *aCount, 
                          PRUnichar ***aValues)
 {
     char **values;
@@ -497,7 +464,7 @@ nsLDAPMessage::GetValues(const char *aAttr, PRUint32 *aCount,
     // bail out if there was a problem
     //
     if (!values) {
-        PRInt32 lderrno = ldap_get_lderrno(mConnectionHandle, 0, 0);
+        int32_t lderrno = ldap_get_lderrno(mConnectionHandle, 0, 0);
 
         if ( lderrno == LDAP_DECODING_ERROR ) {
             // this may not be an error; it could just be that the 
@@ -520,7 +487,7 @@ nsLDAPMessage::GetValues(const char *aAttr, PRUint32 *aCount,
 
     // count the values
     //
-    PRUint32 numVals = ldap_count_values(values);
+    uint32_t numVals = ldap_count_values(values);
 
     // create an array of the appropriate size
     //
@@ -533,13 +500,13 @@ nsLDAPMessage::GetValues(const char *aAttr, PRUint32 *aCount,
     // clone the array (except for the trailing NULL entry) using the 
     // shared allocator for XPCOM correctness
     //
-    PRUint32 i;
+    uint32_t i;
     for ( i = 0 ; i < numVals ; i++ ) {
         nsDependentCString sValue(values[i]);
         if (IsUTF8(sValue))
-            (*aValues)[i] = UTF8ToNewUnicode(sValue);
+            (*aValues)[i] = ToNewUnicode(NS_ConvertUTF8toUTF16(sValue));
         else
-            (*aValues)[i] = ToNewUnicode(sValue);
+            (*aValues)[i] = ToNewUnicode(NS_ConvertASCIItoUTF16(sValue));
         if ( ! (*aValues)[i] ) {
             NS_FREE_XPCOM_ALLOCATED_POINTER_ARRAY(i, aValues);
             ldap_value_free(values);
@@ -558,7 +525,7 @@ nsLDAPMessage::GetValues(const char *aAttr, PRUint32 *aCount,
 // wrapper for get_values_len
 //
 NS_IMETHODIMP 
-nsLDAPMessage::GetBinaryValues(const char *aAttr, PRUint32 *aCount,
+nsLDAPMessage::GetBinaryValues(const char *aAttr, uint32_t *aCount,
                                nsILDAPBERValue ***aValues)
 {
     struct berval **values;
@@ -575,7 +542,7 @@ nsLDAPMessage::GetBinaryValues(const char *aAttr, PRUint32 *aCount,
     // bail out if there was a problem
     //
     if (!values) {
-        PRInt32 lderrno = ldap_get_lderrno(mConnectionHandle, 0, 0);
+        int32_t lderrno = ldap_get_lderrno(mConnectionHandle, 0, 0);
 
         if ( lderrno == LDAP_DECODING_ERROR ) {
             // this may not be an error; it could just be that the 
@@ -598,7 +565,7 @@ nsLDAPMessage::GetBinaryValues(const char *aAttr, PRUint32 *aCount,
 
     // count the values
     //
-    PRUint32 numVals = ldap_count_values_len(values);
+    uint32_t numVals = ldap_count_values_len(values);
 
     // create the out array
     //
@@ -612,7 +579,7 @@ nsLDAPMessage::GetBinaryValues(const char *aAttr, PRUint32 *aCount,
     // clone the array (except for the trailing NULL entry) using the 
     // shared allocator for XPCOM correctness
     //
-    PRUint32 i;
+    uint32_t i;
     nsresult rv;
     for ( i = 0 ; i < numVals ; i++ ) {
 
@@ -630,7 +597,7 @@ nsLDAPMessage::GetBinaryValues(const char *aAttr, PRUint32 *aCount,
         // copy the value from the struct into the nsBERValue
         //
         rv = berValue->Set(values[i]->bv_len, 
-                           reinterpret_cast<PRUint8 *>(values[i]->bv_val));
+                           reinterpret_cast<uint8_t *>(values[i]->bv_val));
         if (NS_FAILED(rv)) {
             NS_ERROR("nsLDAPMessage::GetBinaryValues(): error setting"
                      " nsBERValue");

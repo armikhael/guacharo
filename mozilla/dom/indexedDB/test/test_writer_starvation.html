@@ -12,27 +12,21 @@
   <script type="text/javascript;version=1.7">
     function testSteps()
     {
-      const READ_ONLY = Components.interfaces.nsIIDBTransaction.READ_ONLY;
-      const READ_WRITE = Components.interfaces.nsIIDBTransaction.READ_WRITE;
-      const VERSION_CHANGE =
-        Components.interfaces.nsIIDBTransaction.VERSION_CHANGE;
-
       const name = window.location.pathname;
-      const description = "My Test Database";
 
-      let request = mozIndexedDB.open(name, description);
+      // Needs to be enough to saturate the thread pool.
+      const SYNC_REQUEST_COUNT = 25;
+
+      let request = indexedDB.open(name, 1);
       request.onerror = errorHandler;
+      request.onupgradeneeded = grabEventAndContinueHandler;
       request.onsuccess = grabEventAndContinueHandler;
       let event = yield;
 
       let db = event.target.result;
+      db.onerror = errorHandler;
 
-      request = db.setVersion("1");
-      request.onerror = errorHandler;
-      request.onsuccess = grabEventAndContinueHandler;
-      let event = yield;
-
-      is(event.target.transaction.mode, VERSION_CHANGE, "Correct mode");
+      is(event.target.transaction.mode, "versionchange", "Correct mode");
 
       let objectStore = db.createObjectStore("foo", { autoIncrement: true });
 
@@ -44,64 +38,68 @@
       let key = event.target.result;
       ok(key, "Got a key");
 
-      SimpleTest.executeSoon(function() { testGenerator.next(); });
       yield;
 
       let continueReading = true;
       let readerCount = 0;
+      let writerCount = 0;
       let callbackCount = 0;
-      let finalCallbackCount = 0;
 
       // Generate a bunch of reads right away without returning to the event
       // loop.
-      for (let i = 0; i < 20; i++) {
+      info("Generating " + SYNC_REQUEST_COUNT + " readonly requests");
+
+      for (let i = 0; i < SYNC_REQUEST_COUNT; i++) {
         readerCount++;
-        request = db.transaction("foo").objectStore("foo").get(key);
-        request.onerror = errorHandler;
+        let request = db.transaction("foo").objectStore("foo").get(key);
         request.onsuccess = function(event) {
+          is(event.target.transaction.mode, "readonly", "Correct mode");
           callbackCount++;
         };
       }
 
       while (continueReading) {
         readerCount++;
-        request = db.transaction("foo").objectStore("foo").get(key);
-        request.onerror = errorHandler;
+        info("Generating additional readonly request (" + readerCount + ")");
+        let request = db.transaction("foo").objectStore("foo").get(key);
         request.onsuccess = function(event) {
-          is(event.target.transaction.mode, READ_ONLY, "Correct mode");
           callbackCount++;
-          if (callbackCount == 100) {
-            request = db.transaction("foo", READ_WRITE)
-                        .objectStore("foo")
-                        .add({}, readerCount);
-            request.onerror = errorHandler;
+          info("Received readonly request callback (" + callbackCount + ")");
+          is(event.target.transaction.mode, "readonly", "Correct mode");
+          if (callbackCount == SYNC_REQUEST_COUNT) {
+            writerCount++;
+            info("Generating 1 readwrite request with " + readerCount +
+                 " previous readonly requests");
+            let request = db.transaction("foo", "readwrite")
+                            .objectStore("foo")
+                            .add({}, readerCount);
             request.onsuccess = function(event) {
-              continueReading = false;
-              finalCallbackCount = callbackCount;
+              callbackCount++;
+              info("Received readwrite request callback (" + callbackCount + ")");
+              is(event.target.transaction.mode, "readwrite", "Correct mode");
               is(event.target.result, callbackCount,
                  "write callback came before later reads");
             }
           }
+          else if (callbackCount == SYNC_REQUEST_COUNT + 5) {
+            continueReading = false;
+          }
         };
 
-        SimpleTest.executeSoon(function() { testGenerator.next(); });
+        setTimeout(function() { testGenerator.next(); }, writerCount ? 1000 : 100);
         yield;
       }
 
-      while (callbackCount < readerCount) {
-        SimpleTest.executeSoon(function() { testGenerator.next(); });
+      while (callbackCount < (readerCount + writerCount)) {
+        executeSoon(function() { testGenerator.next(); });
         yield;
       }
 
-      is(callbackCount, readerCount, "All requests accounted for");
-      ok(callbackCount > finalCallbackCount, "More readers after writer");
+      is(callbackCount, readerCount + writerCount, "All requests accounted for");
 
       finishTest();
       yield;
     }
-
-    SimpleTest.requestLongerTimeout(5); // see bug 580875
-
   </script>
   <script type="text/javascript;version=1.7" src="helpers.js"></script>
 

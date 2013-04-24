@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Seth Spitzer <sspitzer@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
    Interface for representing News folders.
@@ -44,7 +11,7 @@
 #define nsMsgNewsFolder_h__
 
 #include "nsMsgDBFolder.h"
-#include "nsILocalFile.h"
+#include "nsIFile.h"
 #include "nsINntpIncomingServer.h" // need this for the IID
 #include "nsNewsUtils.h"
 #include "nsMsgKeySet.h"
@@ -79,34 +46,34 @@ public:
 
   NS_IMETHOD GetFolderURL(nsACString& url);
 
-  NS_IMETHOD GetExpungedBytesCount(PRUint32 *count);
-  NS_IMETHOD GetDeletable (PRBool *deletable);
-  NS_IMETHOD GetRequiresCleanup(PRBool *requiresCleanup);
+  NS_IMETHOD GetExpungedBytesCount(uint32_t *count);
+  NS_IMETHOD GetDeletable (bool *deletable);
+  NS_IMETHOD GetRequiresCleanup(bool *requiresCleanup);
 
-  NS_IMETHOD GetSizeOnDisk(PRUint32 *size);
+  NS_IMETHOD GetSizeOnDisk(uint32_t *size);
 
   NS_IMETHOD GetDBFolderInfoAndDB(nsIDBFolderInfo **folderInfo, nsIMsgDatabase **db);
 
   NS_IMETHOD DeleteMessages(nsIArray *messages,
-                      nsIMsgWindow *msgWindow, PRBool deleteStorage, PRBool isMove,
-                      nsIMsgCopyServiceListener* listener, PRBool allowUndo);
+                      nsIMsgWindow *msgWindow, bool deleteStorage, bool isMove,
+                      nsIMsgCopyServiceListener* listener, bool allowUndo);
   NS_IMETHOD GetNewMessages(nsIMsgWindow *aWindow, nsIUrlListener *aListener);
 
-  NS_IMETHOD GetCanSubscribe(PRBool *aResult);
-  NS_IMETHOD GetCanFileMessages(PRBool *aResult);
-  NS_IMETHOD GetCanCreateSubfolders(PRBool *aResult);
-  NS_IMETHOD GetCanRename(PRBool *aResult);
-  NS_IMETHOD GetCanCompact(PRBool *aResult);
-  NS_IMETHOD GetCanDeleteMessages(PRBool *aResult);
+  NS_IMETHOD GetCanSubscribe(bool *aResult);
+  NS_IMETHOD GetCanFileMessages(bool *aResult);
+  NS_IMETHOD GetCanCreateSubfolders(bool *aResult);
+  NS_IMETHOD GetCanRename(bool *aResult);
+  NS_IMETHOD GetCanCompact(bool *aResult);
+  NS_IMETHOD GetCanDeleteMessages(bool *aResult);
   NS_IMETHOD OnReadChanged(nsIDBChangeListener * aInstigator);
 
   NS_IMETHOD DownloadMessagesForOffline(nsIArray *messages, nsIMsgWindow *window);
   NS_IMETHOD Compact(nsIUrlListener *aListener, nsIMsgWindow *aMsgWindow);
   NS_IMETHOD DownloadAllForOffline(nsIUrlListener *listener, nsIMsgWindow *msgWindow);
-  NS_IMETHOD GetSortOrder(PRInt32 *order);
-  NS_IMETHOD SetSortOrder(PRInt32 order);
+  NS_IMETHOD GetSortOrder(int32_t *order);
+  NS_IMETHOD SetSortOrder(int32_t order);
 
-  NS_IMETHOD Shutdown(PRBool shutdownChildren);
+  NS_IMETHOD Shutdown(bool shutdownChildren);
 
   NS_IMETHOD GetFilterList(nsIMsgWindow *aMsgWindow, nsIMsgFilterList **aFilterList);
   NS_IMETHOD GetEditableFilterList(nsIMsgWindow *aMsgWindow, nsIMsgFilterList **aFilterList);
@@ -116,51 +83,52 @@ public:
 
 protected:
   // helper routine to parse the URI and update member variables
-  nsresult AbbreviatePrettyName(nsAString& prettyName, PRInt32 fullwords);
-  nsresult ParseFolder(nsILocalFile *path);
-  nsresult CreateSubFolders(nsILocalFile *path);
-  nsresult AddDirectorySeparator(nsILocalFile *path);
+  nsresult AbbreviatePrettyName(nsAString& prettyName, int32_t fullwords);
+  nsresult ParseFolder(nsIFile *path);
+  nsresult CreateSubFolders(nsIFile *path);
+  nsresult AddDirectorySeparator(nsIFile *path);
   nsresult GetDatabase();
   virtual nsresult CreateChildFromURI(const nsCString &uri, nsIMsgFolder **folder);
 
   nsresult LoadNewsrcFileAndCreateNewsgroups();
-  PRInt32 RememberLine(const nsACString& line);
+  int32_t RememberLine(const nsACString& line);
   nsresult RememberUnsubscribedGroup(const nsACString& newsgroup, const nsACString& setStr);
   nsresult ForgetLine(void);
-  nsresult GetNewsMessages(nsIMsgWindow *aMsgWindow, PRBool getOld, nsIUrlListener *aListener);
+  nsresult GetNewsMessages(nsIMsgWindow *aMsgWindow, bool getOld, nsIUrlListener *aListener);
 
-  PRInt32 HandleNewsrcLine(const char * line, PRUint32 line_size);
+  int32_t HandleNewsrcLine(const char * line, uint32_t line_size);
   virtual void GetIncomingServerType(nsCString& serverType) { serverType.AssignLiteral("nntp");}
   virtual nsresult CreateBaseMessageURI(const nsACString& aURI);
 
 protected:
-  PRUint32  mExpungedBytes;
-  PRPackedBool mGettingNews;
-  PRPackedBool mInitialized;
-  PRPackedBool m_downloadMessageForOfflineUse;
-  PRPackedBool m_downloadingMultipleMessages;
+  uint32_t  mExpungedBytes;
+  bool mGettingNews;
+  bool mInitialized;
+  bool m_downloadMessageForOfflineUse;
+  bool m_downloadingMultipleMessages;
 
   nsCString mOptionLines;
   nsCString mUnsubscribedNewsgroupLines;
   nsMsgKeySet *mReadSet;
 
-  nsCOMPtr<nsILocalFile> mNewsrcFilePath;
+  nsCOMPtr<nsIFile> mNewsrcFilePath;
 
   // used for auth news
   nsCString mGroupUsername;
   nsCString mGroupPassword;
 
-  nsCString mPrevUsername;
-  nsCString mPrevPassword;
-
   // the name of the newsgroup.
   nsCString mRawName;
-  PRInt32 mSortOrder;
+  int32_t mSortOrder;
 
 private:
-  nsresult CreateNewsgroupUsernameUrlForSignon(const nsACString& inUriStr, nsACString& result);
-  nsresult CreateNewsgroupPasswordUrlForSignon(const nsACString& inUriStr, nsACString& result);
-  nsresult CreateNewsgroupUrlForSignon(const nsACString& inUriStr, const char * ref, nsACString& result);
+  /**
+   * Constructs a signon url for use in login manager.
+   *
+   * @param ref    The URI ref (should be null unless working with legacy).
+   * @param result The result of the string
+   */
+  nsresult CreateNewsgroupUrlForSignon(const char *ref, nsAString &result);
   nsCOMPtr <nsIMsgFilterList> mFilterList;
 };
 

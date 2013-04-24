@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Sun Microsystems, Inc. code.
- *
- * The Initial Developers of the Original Code are
- *   Philipp Kewisch <mozilla@kewis.ch>
- *   Daniel Boelzle <daniel.boelzle@sun.com>
- * Portions created by the Initial Developer are Copyright (C) 2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://calendar/modules/calProviderUtils.jsm");
 
@@ -47,6 +14,37 @@ let gNoOpListener = {
     onOperationComplete: function(calendar, status, opType, id, detail) {
     }
 };
+
+/**
+ * Returns true if the exception passed is one that should cause the cache
+ * layer to retry the operation. This is usually a network error or other
+ * temporary error.
+ *
+ * @param result     The result code to check.
+ * @return           True, if the result code means server unavailability.
+ */
+function isUnavailableCode(result) {
+    // Stolen from nserror.h
+    const NS_ERROR_MODULE_NETWORK = 6;
+    function NS_ERROR_GET_MODULE(code) {
+        return (((code >> 16) - 0x45) & 0x1fff);
+    }
+
+    if (NS_ERROR_GET_MODULE(result) == NS_ERROR_MODULE_NETWORK &&
+        !Components.isSuccessCode(result)) {
+        // This is a network error, which most likely means we should
+        // retry it some time.
+        return true;
+    }
+
+    // Other potential errors we want to retry with
+    switch (result) {
+        case Components.results.NS_ERROR_NOT_AVAILABLE:
+            return true;
+        default:
+            return false;
+    }
+}
 
 function calCachedCalendarObserverHelper(home, isCachedObserver) {
     this.home = home;
@@ -192,7 +190,7 @@ calCachedCalendar.prototype = {
                     case "storage":
                         let file = getCalendarDirectory();
                         file.append("cache.sqlite");
-                        cachedCalendar.uri = getIOService().newFileURI(file);
+                        cachedCalendar.uri = Services.io.newFileURI(file);
                         cachedCalendar.id = this.id;
                         break;
                     default:
@@ -307,14 +305,13 @@ calCachedCalendar.prototype = {
         if (this.supportsChangeLog) {
             cal.LOG("[calCachedCalendar] Doing changelog based sync for calendar " + this.uri.spec);
             var opListener = {
-                thisCalendar : this,
                 onResult: function(op, result) {
                     if (!op || !op.isPending) {
                         var status = (op ? op.status : Components.results.NS_OK);
                         if (!Components.isSuccessCode(status)) {
                             cal.ERROR("[calCachedCalendar] replay action failed: " +
                                       (op ? op.id : "<unknown>")+", uri=" +
-                                      this.thisCalendar.uri.spec + ", result=" +
+                                      this_.uri.spec + ", result=" +
                                       result + ", op=" + op);
                         }
                         cal.LOG("[calCachedCalendar] replayChangesOn finished.");
@@ -330,6 +327,10 @@ calCachedCalendar.prototype = {
         let completeListener = {
             modifiedTimes: {},
             hasRenewedCalendar: false,
+            getsCompleted: 0,
+            getsReceived: 0,
+            opCompleted: false,
+
             onGetResult: function cCC_oOC_cL_onGetResult(aCalendar,
                                                          aStatus,
                                                          aItemType,
@@ -344,12 +345,21 @@ calCachedCalendar.prototype = {
                         this_.setupCachedCalendar();
                         this.hasRenewedCalendar = true;
                     }
-                    for each (var item in aItems) {
+
+                    this.getsReceived++;
+                    cal.forEach(aItems, function(item) {
                         // Adding items recd from the Memory Calendar
                         // These may be different than what the cache has
-                        this.modifiedTimes[item.id] = item.lastModifiedTime;
+                        completeListener.modifiedTimes[item.id] = item.lastModifiedTime;
                         this_.mCachedCalendar.addItem(item, null);
-                    }
+                    }, function completed() {
+                        completeListener.getsCompleted++;
+                        if (completeListener.opCompleted) {
+                            // onOperationComplete was called, but we were not ready yet. call it now.
+                            completeListener.onOperationComplete.apply(completeListener, completeListener.opCompleted);
+                            completeListener.opCompleted = false;
+                        }
+                    });
                 }
             },
 
@@ -358,8 +368,15 @@ calCachedCalendar.prototype = {
                                                                          aOpType,
                                                                          aId,
                                                                          aDetail) {
+                if (this.getsCompleted < this.getsReceived) {
+                    // If not all of our gets have been processed, then save the
+                    // arguments and finish processing later.
+                    this.opCompleted = Array.slice(arguments);
+                    return;
+                }
+
                 if (Components.isSuccessCode(aStatus)) {
-                    for each (let item in this_.offlineCachedItems) {
+                    cal.forEach(this_.offlineCachedItems, function(item) {
                         switch (this_.offlineCachedItemFlags[item.hashId]) {
                             case cICL.OFFLINE_FLAG_CREATED_RECORD:
                                 // Created items are not present on the server, so its safe to adopt them
@@ -367,9 +384,9 @@ calCachedCalendar.prototype = {
                                 break;
                             case cICL.OFFLINE_FLAG_MODIFIED_RECORD:
                                 // Two Cases Here:
-                                if (item.id in this.modifiedTimes) {
+                                if (item.id in completeListener.modifiedTimes) {
                                     // The item is still on the server, we just retrieved it in the listener above.
-                                    if (item.lastModifiedTime.compare(this.modifiedTimes[item.id]) < 0) {
+                                    if (item.lastModifiedTime.compare(completeListener.modifiedTimes[item.id]) < 0) {
                                         // The item on the server has been modified, ask to overwrite
                                         cal.WARN("[calCachedCalendar] Item '" + item.title + "' at the server seems to be modified recently.");
                                         this_.promptOverwrite("modify", item, null, null);
@@ -386,9 +403,9 @@ calCachedCalendar.prototype = {
                                 }
                                 break;
                             case cICL.OFFLINE_FLAG_DELETED_RECORD:
-                                if (item.id in this.modifiedTimes) {
+                                if (item.id in completeListener.modifiedTimes) {
                                     // The item seems to exist on the server...
-                                    if (item.lastModifiedTime.compare(this.modifiedTimes[item.id]) < 0) {
+                                    if (item.lastModifiedTime.compare(completeListener.modifiedTimes[item.id]) < 0) {
                                         // ...and has been modified on the server. Ask to overwrite
                                         cal.WARN("[calCachedCalendar] Item '" + item.title + "' at the server seems to be modified recently.");
                                         this_.promptOverwrite("delete", item, null, null);
@@ -401,12 +418,16 @@ calCachedCalendar.prototype = {
                                 }
                                 break;
                         }
-                    }
-                    this_.offlineCachedItems = {};
-                    this_.offlineCachedItemFlags = {};
+                    },
+                    function completed() {
+                        this_.offlineCachedItems = {};
+                        this_.offlineCachedItemFlags = {};
+                        this_.playbackAddedItems(function() emptyQueue(aStatus));
+                    });
+                } else {
+                    this_.playbackAddedItems(function() {this_.mCachedObserver.onLoad(this_.mCachedCalendar);});
+                    emptyQueue(aStatus);
                 }
-                this_.playbackAddedItems(function() {this_.mCachedObserver.onLoad(this_.mCachedCalendar);});
-                emptyQueue(aStatus);
             }
         };
 
@@ -453,8 +474,11 @@ calCachedCalendar.prototype = {
                 if (Components.isSuccessCode(status)) {
                     storage.resetItemOfflineFlag(detail, resetListener);
                 } else {
-                    cal.LOG("[calCachedCalendar.js] Unable to playback the items to the server. Will try again later. Aborting\n");
-                    // TODO does something need to be called back?
+                    // If the item could not be added to the server, then there
+                    // is no need for further action. The item still has the
+                    // offline flag, so it will be taken care of next time.
+                    cal.WARN("[calCachedCalendar] Unable to playback an item addition to " +
+                             "the server, will try again next time (" + id + "," + detail + ")");
                 }
 
                 this.itemCount--;
@@ -480,15 +504,10 @@ calCachedCalendar.prototype = {
                         addListener.itemCount = this.items.length;
                         for each (let item in this.items) {
                             try {
-                                if (this_.supportsChangeLog) {
-                                    this_.mUncachedCalendar.addItemOrUseCache(item, false, addListener);
-                                } else {
-                                    // default mechanism for providers not implementing calIChangeLog
-                                    this_.mUncachedCalendar.adoptItem(item.clone(), addListener);
-                                }
+                                this_.mUncachedCalendar.addItem(item, addListener);
                             } catch (e) {
                                 cal.ERROR("[calCachedCalendar] Could not playback added item " + item.title + ": " + e);
-                                addListener.onOperationComplete(thisCalendar,
+                                addListener.onOperationComplete(this_,
                                                                 e.result,
                                                                 Components.interfaces.calIOperationListener.ADD,
                                                                 item.id,
@@ -519,7 +538,11 @@ calCachedCalendar.prototype = {
                 if (Components.isSuccessCode(status)) {
                     storage.resetItemOfflineFlag(detail, resetListener);
                 } else {
-                    cal.ERROR("[calCachedCalendar] Could not modify item " + id + " - " + detail);
+                    // If the item could not be modified on the server, then there
+                    // is no need for further action. The item still has the
+                    // offline flag, so it will be taken care of next time.
+                    cal.WARN("[calCachedCalendar] Unable to playback an item modification to " +
+                             "the server, will try again next time (" + id + "," + detail + ")");
                 }
 
                 this.itemCount--;
@@ -547,17 +570,12 @@ calCachedCalendar.prototype = {
                         modifyListener.itemCount = this.items.length;
                         for each (let item in this.items) {
                             try {
-                                if (this_.supportsChangeLog) {
-                                    // The calendar supports the changelog functions, let it modify the item
-                                    // TODO is it ok to not have the old item here? Pass null or the new item?
-                                    this_.mUncachedCalendar.modifyItemOrUseCache(item, item, false, modifyListener);
-                                } else {
-                                    // Default strategy for providers not implementing calIChangeLog
-                                    this_.mUncachedCalendar.modifyItem(item, null, modifyListener);
-                                }
+                                // The calendar supports the changelog functions, let it modify the item
+                                // TODO is it ok to not have the old item here? Pass null or the new item?
+                                this_.mUncachedCalendar.modifyItem(item, item, modifyListener);
                             } catch (e) {
                                 cal.ERROR("[calCachedCalendar] Could not playback modified item " + item.title + ": " + e);
-                                modifyListener.onOperationComplete(thisCalendar,
+                                modifyListener.onOperationComplete(this_,
                                                                    e.result,
                                                                    Components.interfaces.calIOperationListener.MODIFY,
                                                                    item.id,
@@ -593,8 +611,11 @@ calCachedCalendar.prototype = {
                         callbackFunc();
                     }
                 } else {
-                    // TODO do something on error
-                    cal.WARN("[calCachedCalendar] failed to playback deleted item " + id + " - " + detail);
+                    // If the item could not be deleted on the server, then there
+                    // is no need for further action. The item still has the
+                    // offline flag, so it will be taken care of next time.
+                    cal.WARN("[calCachedCalendar] Unable to playback an item deletion to " +
+                             "the server, will try again next time (" + id + "," + detail + ")");
                 }
             }
         };
@@ -615,15 +636,10 @@ calCachedCalendar.prototype = {
                         deleteListener.itemCount = this.items.length;
                         for each (let item in this.items) {
                             try {
-                                if (this_.supportsChangeLog) {
-                                    this_.mUncachedCalendar.deleteItemOrUseCache(item, false, deleteListener);
-                                } else {
-                                    // Default strategy for providers not implementing calIChangeLog
-                                    this_.mUncachedCalendar.deleteItem(item, deleteListener);
-                                }
+                                this_.mUncachedCalendar.deleteItem(item, deleteListener);
                             } catch (e) {
                                 cal.ERROR("[calCachedCalendar] Could not playback deleted item " + item.title + ": " + e);
-                                deleteListener.onOperationComplete(thisCalendar,
+                                deleteListener.onOperationComplete(this_,
                                                                    e.result,
                                                                    Components.interfaces.calIOperationListener.MODIFY,
                                                                    item.id,
@@ -659,13 +675,23 @@ calCachedCalendar.prototype = {
     get canRefresh() { // enable triggering sync using the reload button
         return true;
     },
+
+    getProperty: function(aName) {
+        switch (aName) {
+            case "cache.enabled":
+                if (this.mUncachedCalendar.getProperty("cache.always")) {
+                    return true;
+                }
+                break;
+        }
+
+        return this.mUncachedCalendar.getProperty(aName);
+    },
     refresh: function() {
         if (this.offline) {
             this.downstreamRefresh();
-        }
-        else {
+        } else {
             /* we first ensure that any remaining offline items are reconciled with the calendar server */
-            let this_ = this;
             if (this.supportsChangeLog) {
                 this.playbackAddedItems(this.downstreamRefresh.bind(this));
             } else {
@@ -696,10 +722,6 @@ calCachedCalendar.prototype = {
         return this.adoptItem(item.clone(), listener);
     },
     adoptItem: function(item, listener) {
-        if (this.offline) {
-            this.adoptOfflineItem(item, listener);
-            return;
-        }
         // Forwarding add/modify/delete to the cached calendar using the calIObserver
         // callbacks would be advantageous, because the uncached provider could implement
         // a true push mechanism firing without being triggered from within the program.
@@ -710,23 +732,36 @@ calCachedCalendar.prototype = {
         // hasn't yet been performed on the cached calendar (which happens in onAddItem et al).
         // Result is that we currently stick to firing onOperationComplete if the cached calendar
         // has performed the modification, see below:
-        var this_ = this;
-        var opListener = {
+        let self = this;
+        let cacheListener = {
             onGetResult: function(calendar, status, itemType, detail, count, items) {
                 cal.ASSERT(false, "unexpected!");
             },
             onOperationComplete: function(calendar, status, opType, id, detail) {
-                if (Components.isSuccessCode(status) && !this_.supportsChangeLog) {
-                    this_.mCachedCalendar.addItem(detail, listener);
+                if (isUnavailableCode(status)) {
+                    // The item couldn't be added to the (remote) location,
+                    // this is like being offline. Add the item to the cached
+                    // calendar instead.
+                    cal.LOG("[calCachedCalendar] Calendar " + calendar.name + " is unavailable, adding item offline");
+                    self.adoptOfflineItem(item, listener);
+                } else if (Components.isSuccessCode(status)) {
+                    // On success, add the item to the cache.
+                    self.mCachedCalendar.addItem(detail, listener);
                 } else if (listener) {
-                    listener.onOperationComplete(this_, status, opType, id, detail);
+                    // Either an error occurred or this is a successful add
+                    // to a cached calendar. Forward the call to the listener
+                    listener.onOperationComplete(self, status, opType, id, detail);
                 }
             }
         }
-        if (this.supportsChangeLog) {
-            return this.mUncachedCalendar.addItemOrUseCache(item, true, opListener);
+
+        if (this.offline) {
+            // If we are offline, don't even try to add the item
+            this.adoptOfflineItem(item, listener);
+        } else {
+            // Otherwise ask the provider to add the item now.
+            this.mUncachedCalendar.adoptItem(item, cacheListener);
         }
-        return this.mUncachedCalendar.adoptItem(item, opListener);
     },
     adoptOfflineItem: function(item, listener) {
         var this_ = this;
@@ -747,40 +782,63 @@ calCachedCalendar.prototype = {
     },
 
     modifyItem: function(newItem, oldItem, listener) {
-        if (this.offline) {
-            this.modifyOfflineItem(newItem, oldItem, listener);
-            return;
-        }
+        let self = this;
 
-        // Forwarding add/modify/delete to the cached calendar using the calIObserver
-        // callbacks would be advantageous, because the uncached provider could implement
-        // a true push mechanism firing without being triggered from within the program.
-        // But this would mean the uncached provider fires on the passed
-        // calIOperationListener, e.g. *before* it fires on calIObservers
-        // (because that order is undefined). Firing onOperationComplete before onAddItem et al
-        // would result in this facade firing onOperationComplete even though the modification
-        // hasn't yet been performed on the cached calendar (which happens in onAddItem et al).
-        // Result is that we currently stick to firing onOperationComplete if the cached calendar
-        // has performed the modification, see below:
-        var this_ = this;
-        var opListener = {
-            onGetResult: function(calendar, status, itemType, detail, count, items) {
-                cal.ASSERT(false, "unexpected!");
-            },
-            onOperationComplete: function(calendar, status, opType, id, detail) {
-                if (Components.isSuccessCode(status)) {
-                    this_.mCachedCalendar.modifyItem(detail, oldItem, listener);
-                } else if (listener) {
-                    listener.onOperationComplete(this_, status, opType, id, detail);
+        // First of all, we should find out if the item to modify is
+        // already an offline item or not.
+        let flagListener = {
+            onGetResult: function() {},
+            onOperationComplete: function(c, s, o, i, offline_flag) {
+                if (offline_flag == cICL.OFFLINE_FLAG_CREATED_RECORD ||
+                    offline_flag == cICL.OFFLINE_FLAG_MODIFIED_RECORD) {
+                    // The item is already offline, just modify it in the cache
+                    self.modifyOfflineItem(newItem, oldItem, listener);
+                } else {
+                    // Not an offline item, attempt to modify using provider
+                    self.mUncachedCalendar.modifyItem(newItem, oldItem, cacheListener);
                 }
             }
-        }
-        if (this.supportsChangeLog) {
-            return this.mUncachedCalendar.modifyItemOrUseCache(newItem, oldItem, true, opListener);
+        };
+
+        /* Forwarding add/modify/delete to the cached calendar using the calIObserver
+         * callbacks would be advantageous, because the uncached provider could implement
+         * a true push mechanism firing without being triggered from within the program.
+         * But this would mean the uncached provider fires on the passed
+         * calIOperationListener, e.g. *before* it fires on calIObservers
+         * (because that order is undefined). Firing onOperationComplete before onAddItem et al
+         * would result in this facade firing onOperationComplete even though the modification
+         * hasn't yet been performed on the cached calendar (which happens in onAddItem et al).
+         * Result is that we currently stick to firing onOperationComplete if the cached calendar
+         * has performed the modification, see below: */
+        let cacheListener = {
+            onGetResult: function() {},
+            onOperationComplete: function(calendar, status, opType, id, detail) {
+                if (isUnavailableCode(status)) {
+                    // The item couldn't be modified at the (remote) location,
+                    // this is like being offline. Add the item to the cache
+                    // instead.
+                    cal.LOG("[calCachedCalendar] Calendar " + calendar.name + " is unavailable, modifying item offline");
+                    self.modifyOfflineItem(newItem, oldItem, listener);
+                } else if (Components.isSuccessCode(status)) {
+                    // On success, modify the item in the cache
+                    self.mCachedCalendar.modifyItem(detail, oldItem, listener);
+                } else if (listener) {
+                    // This happens on error, forward the error through the listener
+                    listener.onOperationComplete(self, status, opType, id, detail);
+                }
+            }
+        };
+
+        if (this.offline) {
+            // If we are offline, don't even try to modify the item
+            this.modifyOfflineItem(newItem, oldItem, listener);
         } else {
-            return this.mUncachedCalendar.modifyItem(newItem, oldItem, opListener);
+            // Otherwise, get the item flags, the listener will further
+            // process the item.
+            this.mCachedCalendar.getItemOfflineFlag(oldItem, flagListener);
         }
     },
+
     modifyOfflineItem: function(newItem, oldItem, listener) {
         var this_ = this;
         var opListener = {
@@ -789,9 +847,13 @@ calCachedCalendar.prototype = {
             },
             onOperationComplete: function(calendar, status, opType, id, detail) {
                 if (Components.isSuccessCode(status)) {
+                    // Modify the offline item in the storage, passing the
+                    // listener will make sure its notified
                     var storage = this_.mCachedCalendar.QueryInterface(Components.interfaces.calIOfflineStorage);
                     storage.modifyOfflineItem(detail, listener);
                 } else if (listener) {
+                    // If there was not a success, then we need to notify the
+                    // listener ourselves
                     listener.onOperationComplete(this_, status, opType, id, detail);
                 }
             }
@@ -801,10 +863,24 @@ calCachedCalendar.prototype = {
     },
 
     deleteItem: function(item, listener) {
-        if (this.offline) {
-            this.deleteOfflineItem(item, listener);
-            return;
-        }
+        let self = this;
+
+        // First of all, we should find out if the item to delete is
+        // already an offline item or not.
+        let flagListener = {
+            onGetResult: function() {},
+            onOperationComplete: function(c, s, o, i, offline_flag) {
+                if (offline_flag == cICL.OFFLINE_FLAG_CREATED_RECORD ||
+                    offline_flag == cICL.OFFLINE_FLAG_MODIFIED_RECORD) {
+                    // The item is already offline, just mark it deleted it in
+                    // the cache
+                    self.deleteOfflineItem(item, listener);
+                } else {
+                    // Not an offline item, attempt to delete using provider
+                    self.mUncachedCalendar.deleteItem(item, cacheListener);
+                }
+            }
+        };
         // Forwarding add/modify/delete to the cached calendar using the calIObserver
         // callbacks would be advantageous, because the uncached provider could implement
         // a true push mechanism firing without being triggered from within the program.
@@ -815,23 +891,41 @@ calCachedCalendar.prototype = {
         // hasn't yet been performed on the cached calendar (which happens in onAddItem et al).
         // Result is that we currently stick to firing onOperationComplete if the cached calendar
         // has performed the modification, see below:
-        var this_ = this;
-        var opListener = {
-            onGetResult: function(calendar, status, itemType, detail, count, items) {
-                cal.ASSERT(false, "unexpected!");
-            },
+        var cacheListener = {
+            onGetResult: function() {},
             onOperationComplete: function(calendar, status, opType, id, detail) {
-                if (Components.isSuccessCode(status)) {
-                    this_.mCachedCalendar.deleteItem(item, listener);
+                if (isUnavailableCode(status)) {
+                    // The item couldn't be deleted at the (remote) location,
+                    // this is like being offline. Mark the item deleted in the
+                    // cache instead.
+                    cal.LOG("[calCachedCalendar] Calendar " + calendar.name + " is unavailable, deleting item offline");
+                    self.deleteOfflineItem(item, listener);
+                } else if (Components.isSuccessCode(status)) {
+                    // On success, delete the item from the cache
+                    self.mCachedCalendar.deleteItem(item, listener);
+
+                    // Also, remove any meta data associated with the item
+                    try {
+                        let storage = self.mCachedCalendar.QueryInterface(Components.interfaces.calISyncWriteCalendar);
+                        storage.deleteMetaData(item.id);
+                    } catch (e) {
+                        cal.LOG("[calCachedCalendar] Offline storage doesn't support metadata");
+                    }
                 } else if (listener) {
-                    listener.onOperationComplete(this_, status, opType, id, detail);
+                    // This happens on error, forward the error through the listener
+                    listener.onOperationComplete(self, status, opType, id, detail);
                 }
             }
+        };
+
+        if (this.offline) {
+            // If we are offline, don't even try to delete the item
+            this.deleteOfflineItem(item, listener);
+        } else {
+            // Otherwise, get the item flags, the listener will further
+            // process the item.
+            this.mCachedCalendar.getItemOfflineFlag(item, flagListener);
         }
-        if (this.supportsChangeLog) {
-            return this.mUncachedCalendar.deleteItemOrUseCache(item, true, opListener);
-        }
-        return this.mUncachedCalendar.deleteItem(item, opListener);
     },
     deleteOfflineItem: function(item, listener) {
         /* We do not delete the item from the cache, as we will need it when reconciling the cache content and the server content. */
@@ -860,9 +954,9 @@ calCachedCalendar.prototype = {
     }
 
     defineForwards(calCachedCalendar.prototype, "mUncachedCalendar",
-                   ["getProperty", "setProperty", "deleteProperty",
+                   ["setProperty", "deleteProperty",
                     "isInvitation", "getInvitedAttendee", "canNotify"],
-                   ["type"],
+                   ["type", "aclManager", "aclEntry"],
                    ["id", "name", "uri", "readOnly"]);
     defineForwards(calCachedCalendar.prototype, "mCachedCalendar",
                    ["getItem", "getItems", "startBatch", "endBatch"], [], []);

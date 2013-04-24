@@ -1,46 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Shell Service.
- *
- * The Initial Developer of the Original Code is mozilla.org.
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Ben Goodger    <ben@mozilla.org>       (Clients, Mail, New Default Browser)
- *  Joe Hewitt     <hewitt@netscape.com>   (Set Background)
- *  Blake Ross     <blake@cs.stanford.edu> (Desktop Color, DDE support)
- *  Jungshik Shin  <jshin@mailaps.org>     (I18N)
- *  Robert Strong  <robert.bugzilla@gmail.com>  (Long paths, DDE)
- *  Asaf Romano    <mano@mozilla.com>
- *  Ryan Jones     <sciguyryan@gmail.com>
- *  Frank Wein     <mcsmurf@mcsmurf.de>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "imgIContainer.h"
 #include "imgIRequest.h"
@@ -51,7 +12,7 @@
 #include "nsWindowsShellService.h"
 #include "nsIProcess.h"
 #include "windows.h"
-#include "nsILocalFile.h"
+#include "nsIFile.h"
 #include "nsNetUtil.h"
 #include "nsNativeCharsetUtils.h"
 #include "nsUnicharUtils.h"
@@ -61,14 +22,11 @@
 #include "nsAppDirectoryServiceDefs.h"
 #include "nsDirectoryServiceDefs.h"
 #include "nsDirectoryServiceUtils.h"
+#include "nsIWindowsRegKey.h"
 #include "nsIWinTaskbar.h"
 #include "nsISupportsPrimitives.h"
 #include <mbstring.h>
-#include "mozilla/ModuleUtils.h"
-
-#ifdef MOZILLA_INTERNAL_API
-#define CaseInsensitiveCompare nsCaseInsensitiveStringComparator()
-#endif
+#include "mozilla/Services.h"
 
 #ifdef _WIN32_WINNT
 #undef _WIN32_WINNT
@@ -346,9 +304,9 @@ GetHelperPath(nsString& aPath)
     do_GetService(NS_DIRECTORY_SERVICE_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  nsCOMPtr<nsILocalFile> appHelper;
+  nsCOMPtr<nsIFile> appHelper;
   rv = directoryService->Get(NS_XPCOM_CURRENT_PROCESS_DIR,
-                             NS_GET_IID(nsILocalFile),
+                             NS_GET_IID(nsIFile),
                              getter_AddRefs(appHelper));
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -358,7 +316,12 @@ GetHelperPath(nsString& aPath)
   rv = appHelper->AppendNative(NS_LITERAL_CSTRING("helper.exe"));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  return appHelper->GetPath(aPath);
+  rv = appHelper->GetPath(aPath);
+
+  aPath.Insert('"', 0);
+  aPath.Append('"');
+
+  return rv;
 }
 
 nsresult
@@ -396,7 +359,7 @@ nsWindowsShellService::ShortcutMaintenance()
     return NS_OK;
 
   // Avoid if this isn't Win7+
-  PRBool isSupported = PR_FALSE;
+  bool isSupported = false;
   taskbarInfo->GetAvailable(&isSupported);
   if (!isSupported)
     return NS_OK;
@@ -412,7 +375,7 @@ nsWindowsShellService::ShortcutMaintenance()
     return NS_ERROR_UNEXPECTED;
 
   nsCOMPtr<nsIPrefBranch> prefBranch;
-  prefs->GetBranch(nsnull, getter_AddRefs(prefBranch));
+  prefs->GetBranch(nullptr, getter_AddRefs(prefBranch));
   if (!prefBranch)
     return NS_ERROR_UNEXPECTED;
 
@@ -454,8 +417,8 @@ nsWindowsShellService::ShortcutMaintenance()
 /* helper routine. Iterate over the passed in settings object,
    testing each key to see if we are handling it.
 */
-PRBool
-nsWindowsShellService::TestForDefault(SETTING aSettings[], PRInt32 aSize)
+bool
+nsWindowsShellService::TestForDefault(SETTING aSettings[], int32_t aSize)
 {
   PRUnichar currValue[MAX_BUF];
   SETTING* end = aSettings + aSize;
@@ -465,10 +428,10 @@ nsWindowsShellService::TestForDefault(SETTING aSettings[], PRInt32 aSize)
     NS_ConvertUTF8toUTF16 key(settings->keyName);
     NS_ConvertUTF8toUTF16 value(settings->valueName);
     if (settings->flags & APP_PATH_SUBSTITUTION) {
-      PRInt32 offset = dataLongPath.Find("%APPPATH%");
+      int32_t offset = dataLongPath.Find("%APPPATH%");
       dataLongPath.Replace(offset, 9, mAppLongPath);
       // Remove the quotes around %APPPATH% in VAL_OPEN for short paths
-      PRInt32 offsetQuoted = dataShortPath.Find("\"%APPPATH%\"");
+      int32_t offsetQuoted = dataShortPath.Find("\"%APPPATH%\"");
       if (offsetQuoted != -1)
         dataShortPath.Replace(offsetQuoted, 11, mAppShortPath);
       else
@@ -480,7 +443,7 @@ nsWindowsShellService::TestForDefault(SETTING aSettings[], PRInt32 aSize)
     nsresult rv = OpenKeyForReading(HKEY_CLASSES_ROOT, key.get(), &theKey);
     if (NS_FAILED(rv))
       // Key does not exist
-      return PR_FALSE;
+      return false;
 
     DWORD len = sizeof currValue;
     DWORD res = ::RegQueryValueExW(theKey, value.get(),
@@ -491,11 +454,11 @@ nsWindowsShellService::TestForDefault(SETTING aSettings[], PRInt32 aSize)
         !dataLongPath.Equals(currValue, CaseInsensitiveCompare) &&
         !dataShortPath.Equals(currValue, CaseInsensitiveCompare)) {
       // Key wasn't set, or was set to something else (something else became the default client)
-      return PR_FALSE;
+      return false;
     }
   }
 
-  return PR_TRUE;
+  return true;
 }
 
 nsresult nsWindowsShellService::Init()
@@ -516,10 +479,9 @@ nsresult nsWindowsShellService::Init()
   return NS_OK;
 }
 
-PRBool
-nsWindowsShellService::IsDefaultClientVista(PRUint16 aApps, PRBool* aIsDefaultClient)
+bool
+nsWindowsShellService::IsDefaultClientVista(uint16_t aApps, bool* aIsDefaultClient)
 {
-#if MOZ_WINSDK_TARGETVER >= MOZ_NTDDI_LONGHORN
   IApplicationAssociationRegistration* pAAR;
 
   HRESULT hr = CoCreateInstance(CLSID_ApplicationAssociationRegistration,
@@ -529,37 +491,34 @@ nsWindowsShellService::IsDefaultClientVista(PRUint16 aApps, PRBool* aIsDefaultCl
                                 (void**)&pAAR);
   
   if (SUCCEEDED(hr)) {
-    BOOL isDefaultBrowser = PR_TRUE;
-    BOOL isDefaultMail    = PR_TRUE;
-    BOOL isDefaultNews    = PR_TRUE;
+    BOOL isDefaultBrowser = true;
+    BOOL isDefaultMail    = true;
+    BOOL isDefaultNews    = true;
     if (aApps & nsIShellService::BROWSER)
       pAAR->QueryAppIsDefaultAll(AL_EFFECTIVE, APP_REG_NAME, &isDefaultBrowser);
-#ifdef MOZ_MAIL_NEWS
     if (aApps & nsIShellService::MAIL)
       pAAR->QueryAppIsDefaultAll(AL_EFFECTIVE, APP_REG_NAME_MAIL, &isDefaultMail);
     if (aApps & nsIShellService::NEWS)
       pAAR->QueryAppIsDefaultAll(AL_EFFECTIVE, APP_REG_NAME_NEWS, &isDefaultNews);
-#endif
 
     *aIsDefaultClient = isDefaultBrowser && isDefaultNews && isDefaultMail;
 
     pAAR->Release();
-    return PR_TRUE;
+    return true;
   }
-#endif  
-  return PR_FALSE;
+  return false;
 }
 
 NS_IMETHODIMP
-nsWindowsShellService::IsDefaultClient(PRBool aStartupCheck, PRUint16 aApps, PRBool *aIsDefaultClient)
+nsWindowsShellService::IsDefaultClient(bool aStartupCheck, uint16_t aApps, bool *aIsDefaultClient)
 {
   // If this is the first application window, maintain internal state that we've
   // checked this session (so that subsequent window opens don't show the
   // default client dialog).
   if (aStartupCheck)
-    mCheckedThisSessionClient = PR_TRUE;
+    mCheckedThisSessionClient = true;
 
-  *aIsDefaultClient = PR_TRUE;
+  *aIsDefaultClient = true;
 
   // for each type, check if it is the default app
   // browser check needs to be at the top
@@ -570,7 +529,6 @@ nsWindowsShellService::IsDefaultClient(PRBool aStartupCheck, PRUint16 aApps, PRB
     if (*aIsDefaultClient)
       IsDefaultClientVista(nsIShellService::BROWSER, aIsDefaultClient);
   }
-#ifdef MOZ_MAIL_NEWS
   if (aApps & nsIShellService::MAIL) {
     *aIsDefaultClient &= TestForDefault(gMailSettings, sizeof(gMailSettings)/sizeof(SETTING));
     // Only check if this app is default on Vista if the previous checks
@@ -585,35 +543,19 @@ nsWindowsShellService::IsDefaultClient(PRBool aStartupCheck, PRUint16 aApps, PRB
     if (*aIsDefaultClient)
       IsDefaultClientVista(nsIShellService::NEWS, aIsDefaultClient);
   }
-#endif
 
   return NS_OK;
 }
 
 
 NS_IMETHODIMP
-nsWindowsShellService::SetDefaultClient(PRBool aForAllUsers,
-                                        PRBool aClaimAllTypes, PRUint16 aApps)
+nsWindowsShellService::SetDefaultClient(bool aForAllUsers,
+                                        bool aClaimAllTypes, uint16_t aApps)
 {
-  nsresult rv;
-  nsCOMPtr<nsIProperties> directoryService = 
-    do_GetService(NS_DIRECTORY_SERVICE_CONTRACTID, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  nsCOMPtr<nsILocalFile> appHelper;
-  rv = directoryService->Get(NS_XPCOM_CURRENT_PROCESS_DIR, NS_GET_IID(nsILocalFile), getter_AddRefs(appHelper));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  rv = appHelper->AppendNative(NS_LITERAL_CSTRING("uninstall"));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  rv = appHelper->AppendNative(NS_LITERAL_CSTRING("helper.exe"));
-  NS_ENSURE_SUCCESS(rv, rv);
-
   nsAutoString appHelperPath;
-  rv = appHelper->GetPath(appHelperPath);
-  NS_ENSURE_SUCCESS(rv, rv);
-  
+  if (NS_FAILED(GetHelperPath(appHelperPath)))
+    return NS_ERROR_UNEXPECTED;
+
   if (aForAllUsers)
     appHelperPath.AppendLiteral(" /SetAsDefaultAppGlobal");
   else {
@@ -644,10 +586,10 @@ nsWindowsShellService::SetDefaultClient(PRBool aForAllUsers,
 }
 
 NS_IMETHODIMP
-nsWindowsShellService::GetShouldCheckDefaultClient(PRBool* aResult)
+nsWindowsShellService::GetShouldCheckDefaultClient(bool* aResult)
 {
   if (mCheckedThisSessionClient) {
-    *aResult = PR_FALSE;
+    *aResult = false;
     return NS_OK;
   }
 
@@ -660,7 +602,7 @@ nsWindowsShellService::GetShouldCheckDefaultClient(PRBool* aResult)
 
 
 NS_IMETHODIMP
-nsWindowsShellService::SetShouldCheckDefaultClient(PRBool aShouldCheck)
+nsWindowsShellService::SetShouldCheckDefaultClient(bool aShouldCheck)
 {
   nsCOMPtr<nsIPrefBranch> prefs(do_GetService(NS_PREFSERVICE_CONTRACTID));
   NS_ENSURE_TRUE(prefs, NS_ERROR_FAILURE);
@@ -668,24 +610,31 @@ nsWindowsShellService::SetShouldCheckDefaultClient(PRBool aShouldCheck)
 }
 
 NS_IMETHODIMP
-nsWindowsShellService::GetShouldBeDefaultClientFor(PRUint16* aApps)
+nsWindowsShellService::GetShouldBeDefaultClientFor(uint16_t* aApps)
 {
   nsresult rv;
   nsCOMPtr<nsIPrefBranch> prefs(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
   NS_ENSURE_SUCCESS(rv, rv);
-  PRInt32 result;
+  int32_t result;
   rv = prefs->GetIntPref("shell.checkDefaultApps", &result);
   *aApps = result;
   return rv;
 }
 
 NS_IMETHODIMP
-nsWindowsShellService::SetShouldBeDefaultClientFor(PRUint16 aApps)
+nsWindowsShellService::SetShouldBeDefaultClientFor(uint16_t aApps)
 {
   nsresult rv;
   nsCOMPtr<nsIPrefBranch> prefs(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
   NS_ENSURE_SUCCESS(rv, rv);
   return prefs->SetIntPref("shell.checkDefaultApps", aApps);
+}
+
+NS_IMETHODIMP
+nsWindowsShellService::GetCanSetDesktopBackground(bool* aResult)
+{
+  *aResult = true;
+  return NS_OK;
 }
 
 static nsresult
@@ -697,14 +646,14 @@ WriteBitmap(nsIFile* aFile, imgIContainer* aImage)
                                   getter_AddRefs(image));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRInt32 width = image->Width();
-  PRInt32 height = image->Height();
+  int32_t width = image->Width();
+  int32_t height = image->Height();
 
-  PRUint8* bits = image->Data();
-  PRUint32 length = image->GetDataSize();
-  PRUint32 bpr = PRUint32(image->Stride());
+  uint8_t* bits = image->Data();
+  uint32_t length = image->GetDataSize();
+  uint32_t bpr = uint32_t(image->Stride());
 
-  PRInt32 bitCount = bpr / width;
+  int32_t bitCount = bpr / width;
 
   // initialize these bitmap structs which we will later
   // serialize directly to the head of the bitmap file
@@ -736,14 +685,14 @@ WriteBitmap(nsIFile* aFile, imgIContainer* aImage)
   // write the bitmap headers and rgb pixel data to the file
   rv = NS_ERROR_FAILURE;
   if (stream) {
-    PRUint32 written;
+    uint32_t written;
     stream->Write((const char*)&bf, sizeof(BITMAPFILEHEADER), &written);
     if (written == sizeof(BITMAPFILEHEADER)) {
       stream->Write((const char*)&bmi, sizeof(BITMAPINFOHEADER), &written);
       if (written == sizeof(BITMAPINFOHEADER)) {
         // write out the image data backwards because the desktop won't
         // show bitmaps with negative heights for top-to-bottom
-        PRUint32 i = length;
+        uint32_t i = length;
         rv = NS_OK;
         do {
           i -= bpr;
@@ -765,7 +714,7 @@ WriteBitmap(nsIFile* aFile, imgIContainer* aImage)
 
 NS_IMETHODIMP
 nsWindowsShellService::SetDesktopBackground(nsIDOMElement* aElement,
-                                            PRInt32 aPosition)
+                                            int32_t aPosition)
 {
   nsresult rv;
 
@@ -794,9 +743,9 @@ nsWindowsShellService::SetDesktopBackground(nsIDOMElement* aElement,
     return NS_ERROR_FAILURE;
 
   // get the file name from localized strings
-  nsCOMPtr<nsIStringBundleService>
-    bundleService(do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv));
-  NS_ENSURE_SUCCESS(rv, rv);
+  nsCOMPtr<nsIStringBundleService> bundleService =
+    mozilla::services::GetStringBundleService();
+  NS_ENSURE_TRUE(bundleService, NS_ERROR_UNEXPECTED);
 
   nsCOMPtr<nsIStringBundle> shellBundle;
   rv = bundleService->CreateBundle(SHELLSERVICE_PROPERTIES,
@@ -829,60 +778,57 @@ nsWindowsShellService::SetDesktopBackground(nsIDOMElement* aElement,
 
   // if the file was written successfully, set it as the system wallpaper
   if (NS_SUCCEEDED(rv)) {
-     PRBool result = PR_FALSE;
-     DWORD  dwDisp = 0;
-     HKEY   key;
-     // Try to create/open a subkey under HKCU.
-     DWORD res = ::RegCreateKeyExW(HKEY_CURRENT_USER,
-                                   L"Control Panel\\Desktop",
-                                   0, NULL, REG_OPTION_NON_VOLATILE,
-                                   KEY_WRITE, NULL, &key, &dwDisp);
-     if (REG_SUCCEEDED(res)) {
-       PRUnichar tile[2], style[2];
-       switch (aPosition) {
-         case BACKGROUND_TILE:
-           tile[0] = '1';
-           style[0] = '1';
-           break;
-         case BACKGROUND_CENTER:
-           tile[0] = '0';
-           style[0] = '0';
-           break;
-         case BACKGROUND_STRETCH:
-           tile[0] = '0';
-           style[0] = '2';
-           break;
-       }
-       tile[1] = '\0';
-       style[1] = '\0';
+    nsCOMPtr<nsIWindowsRegKey> key(do_CreateInstance("@mozilla.org/windows-registry-key;1", &rv));
+    NS_ENSURE_SUCCESS(rv, rv);
 
-       // The size is always 2 unicode characters.
-       PRInt32 size = 2 * sizeof(PRUnichar);
-       ::RegSetValueExW(key, L"TileWallpaper",
-                        0, REG_SZ, (const BYTE *)tile, size);
-       ::RegSetValueExW(key, L"WallpaperStyle",
-                        0, REG_SZ, (const BYTE *)style, size);
-       ::SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, (PVOID)path.get(),
-                               SPIF_UPDATEINIFILE | SPIF_SENDWININICHANGE);
-      // Close the key we opened.
-      ::RegCloseKey(key);
+    rv = key->Create(nsIWindowsRegKey::ROOT_KEY_CURRENT_USER,
+                     NS_LITERAL_STRING("Control Panel\\Desktop"),
+                     nsIWindowsRegKey::ACCESS_SET_VALUE);
+    NS_ENSURE_SUCCESS(rv, rv);
+
+    int style = 0;
+    switch (aPosition) {
+      case BACKGROUND_STRETCH:
+        style = 2;
+        break;
+      case BACKGROUND_FILL:
+        style = 10;
+        break;
+      case BACKGROUND_FIT:
+        style = 6;
+        break;
     }
+
+    nsString value;
+    value.AppendInt(style);
+    rv = key->WriteStringValue(NS_LITERAL_STRING("WallpaperStyle"), value);
+    NS_ENSURE_SUCCESS(rv, rv);
+
+    value.Assign(aPosition == BACKGROUND_TILE ? '1' : '0');
+    rv = key->WriteStringValue(NS_LITERAL_STRING("TileWallpaper"), value);
+    NS_ENSURE_SUCCESS(rv, rv);
+
+    rv = key->Close();
+    NS_ENSURE_SUCCESS(rv, rv);
+
+   ::SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, (PVOID)path.get(),
+                           SPIF_UPDATEINIFILE | SPIF_SENDWININICHANGE);
   }
   return rv;
 }
 
 NS_IMETHODIMP
-nsWindowsShellService::GetDesktopBackgroundColor(PRUint32* aColor)
+nsWindowsShellService::GetDesktopBackgroundColor(uint32_t* aColor)
 {
-  PRUint32 color = ::GetSysColor(COLOR_DESKTOP);
+  uint32_t color = ::GetSysColor(COLOR_DESKTOP);
   *aColor = (GetRValue(color) << 16) | (GetGValue(color) << 8) | GetBValue(color);
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsWindowsShellService::SetDesktopBackgroundColor(PRUint32 aColor)
+nsWindowsShellService::SetDesktopBackgroundColor(uint32_t aColor)
 {
-  int parameter = COLOR_BACKGROUND;
+  int parameter = COLOR_DESKTOP;
   BYTE r = (aColor >> 16);
   BYTE g = (aColor << 16) >> 24;
   BYTE b = (aColor << 24) >> 24;
@@ -890,30 +836,26 @@ nsWindowsShellService::SetDesktopBackgroundColor(PRUint32 aColor)
 
   ::SetSysColors(1, &parameter, &color);
 
-  PRBool result = PR_FALSE;
-  DWORD  dwDisp = 0;
-  HKEY   key;
-  // Try to create/open a subkey under HKCU.
-  DWORD rv = ::RegCreateKeyExW(HKEY_CURRENT_USER,
-                               L"Control Panel\\Colors", 0, NULL,
-                               REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL,
-                               &key, &dwDisp);
-  if (REG_SUCCEEDED(rv)) {
-    char rgb[12];
-    sprintf((char*)rgb, "%u %u %u\0", r, g, b);
-    NS_ConvertUTF8toUTF16 backColor(rgb);
-    ::RegSetValueExW(key, L"Background",
-                     0, REG_SZ, (const BYTE *)backColor.get(),
-                     (backColor.Length() + 1) * sizeof(PRUnichar));
-  }
+  nsresult rv;
+  nsCOMPtr<nsIWindowsRegKey> key(do_CreateInstance("@mozilla.org/windows-registry-key;1", &rv));
+  NS_ENSURE_SUCCESS(rv, rv);
 
-  // Close the key we opened.
-  ::RegCloseKey(key);
-  return NS_OK;
+  rv = key->Create(nsIWindowsRegKey::ROOT_KEY_CURRENT_USER,
+                   NS_LITERAL_STRING("Control Panel\\Colors"),
+                   nsIWindowsRegKey::ACCESS_SET_VALUE);
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  PRUnichar rgb[12];
+  _snwprintf(rgb, 12, L"%u %u %u", r, g, b);
+  rv = key->WriteStringValue(NS_LITERAL_STRING("Background"),
+                             nsDependentString(rgb));
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  return key->Close();
 }
 
 NS_IMETHODIMP
-nsWindowsShellService::OpenApplicationWithURI(nsILocalFile* aApplication,
+nsWindowsShellService::OpenApplicationWithURI(nsIFile* aApplication,
                                               const nsACString& aURI)
 {
   nsresult rv;
@@ -928,35 +870,26 @@ nsWindowsShellService::OpenApplicationWithURI(nsILocalFile* aApplication,
   
   const nsCString& spec = PromiseFlatCString(aURI);
   const char* specStr = spec.get();
-  return process->Run(PR_FALSE, &specStr, 1);
+  return process->Run(false, &specStr, 1);
 }
 
 NS_IMETHODIMP
-nsWindowsShellService::GetDefaultFeedReader(nsILocalFile** _retval)
+nsWindowsShellService::GetDefaultFeedReader(nsIFile** _retval)
 {
-  *_retval = nsnull;
+  *_retval = nullptr;
 
-  HKEY theKey;
-  nsresult rv = OpenKeyForReading(HKEY_CLASSES_ROOT, 
-                                  L"feed\\shell\\open\\command",
-                                  &theKey);
+  nsresult rv;
+  nsCOMPtr<nsIWindowsRegKey> key(do_CreateInstance("@mozilla.org/windows-registry-key;1", &rv));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  DWORD buf;
-  LONG res = ::RegQueryValueExW(theKey, NULL, NULL, NULL, NULL, &buf);
+  rv = key->Open(nsIWindowsRegKey::ROOT_KEY_CLASSES_ROOT,
+                 NS_LITERAL_STRING("feed\\shell\\open\\command"),
+                 nsIWindowsRegKey::ACCESS_READ);
+  NS_ENSURE_SUCCESS(rv, rv);
 
-  if (REG_FAILED(res))
-    return NS_ERROR_FAILURE;
-
-  // Buffer size must be a multiple of 2
-  NS_ENSURE_STATE(buf % 2 == 0);
-  nsAutoString path;
-  path.SetLength(buf / 2 - 1);
-  res = ::RegQueryValueExW(theKey, NULL, NULL, NULL, (LPBYTE)path.BeginWriting(), &buf);
-  ::RegCloseKey(theKey);
-  if (REG_FAILED(res))
-    return NS_ERROR_FAILURE;
-
+  nsString path;
+  rv = key->ReadStringValue(EmptyString(), path);
+  NS_ENSURE_SUCCESS(rv, rv);
   if (path.IsEmpty())
     return NS_ERROR_FAILURE;
 
@@ -968,14 +901,14 @@ nsWindowsShellService::GetDefaultFeedReader(nsILocalFile** _retval)
     path = Substring(path, 0, path.FindChar(' '));
   }
 
-  nsCOMPtr<nsILocalFile> defaultReader =
+  nsCOMPtr<nsIFile> defaultReader =
     do_CreateInstance("@mozilla.org/file/local;1", &rv);
   NS_ENSURE_SUCCESS(rv, rv);
 
   rv = defaultReader->InitWithPath(path);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool exists;
+  bool exists;
   rv = defaultReader->Exists(&exists);
   NS_ENSURE_SUCCESS(rv, rv);
   if (!exists)
@@ -984,27 +917,3 @@ nsWindowsShellService::GetDefaultFeedReader(nsILocalFile** _retval)
   NS_ADDREF(*_retval = defaultReader);
   return NS_OK;
 }
-
-#ifdef BUILD_STATIC_SHELL
-NS_GENERIC_FACTORY_CONSTRUCTOR_INIT(nsWindowsShellService, Init)
-NS_DEFINE_NAMED_CID(NS_SUITEWININTEGRATION_CID);
-
-static const mozilla::Module::CIDEntry kSuiteShellCIDs[] = {
-  { &kNS_SUITEWININTEGRATION_CID, false, NULL, nsWindowsShellServiceConstructor },
-  { NULL }
-};
-
-static const mozilla::Module::ContractIDEntry kSuiteShellContracts[] = {
-  { NS_SUITESHELLSERVICE_CONTRACTID, &kNS_SUITEWININTEGRATION_CID },
-  { NS_SUITEFEEDSERVICE_CONTRACTID, &kNS_SUITEWININTEGRATION_CID },
-  { NULL }
-};
-
-static const mozilla::Module kSuiteShellModule = {
-  mozilla::Module::kVersion,
-  kSuiteShellCIDs,
-  kSuiteShellContracts
-};
-
-NSMODULE_DEFN(nsSuiteShellModule) = &kSuiteShellModule;
-#endif

@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h" // pre-compiled headers
 
@@ -91,7 +59,7 @@ nsNoIncomingServer::SetFlagsOnDefaultMailboxes()
 
   // None server may have an inbox if it's deferred to,
   // or if it's the smart mailboxes account.
-  PRUint32 mailboxFlags = nsMsgFolderFlags::SentMail |
+  uint32_t mailboxFlags = nsMsgFolderFlags::SentMail |
                           nsMsgFolderFlags::Archive |
                           nsMsgFolderFlags::Drafts |
                           nsMsgFolderFlags::Templates |
@@ -105,10 +73,10 @@ nsNoIncomingServer::SetFlagsOnDefaultMailboxes()
   return NS_OK;
 }
 
-NS_IMETHODIMP nsNoIncomingServer::CopyDefaultMessages(const char *folderNameOnDisk, nsILocalFile *parentDir)
+NS_IMETHODIMP nsNoIncomingServer::CopyDefaultMessages(const char *folderNameOnDisk, nsIFile *parentDir)
 {
   nsresult rv;
-  PRBool exists;
+  bool exists;
   if (!folderNameOnDisk || !parentDir) return NS_ERROR_NULL_POINTER;
 
   nsCOMPtr<nsIMsgMailSession> mailSession = do_GetService(NS_MSGMAILSESSION_CONTRACTID, &rv);
@@ -166,7 +134,7 @@ NS_IMETHODIMP nsNoIncomingServer::CreateDefaultMailboxes(nsIFile *aPath)
 {
   NS_ENSURE_ARG_POINTER(aPath);
   
-  PRBool isHidden = PR_FALSE;
+  bool isHidden = false;
   GetHidden(&isHidden);
   if (isHidden)
     return NS_OK;
@@ -178,21 +146,20 @@ NS_IMETHODIMP nsNoIncomingServer::CreateDefaultMailboxes(nsIFile *aPath)
   // notice, no Inbox, unless we're deferred to...
    // need to have a leaf to start with
   rv = path->AppendNative(NS_LITERAL_CSTRING("Trash"));
-  PRBool isDeferredTo;
+  bool isDeferredTo;
   if (NS_SUCCEEDED(GetIsDeferredTo(&isDeferredTo)) && isDeferredTo)
-    CreateLocalFolder(path, NS_LITERAL_CSTRING("Inbox"));
-  CreateLocalFolder(path, NS_LITERAL_CSTRING("Trash"));
+    CreateLocalFolder(NS_LITERAL_STRING("Inbox"));
+  CreateLocalFolder(NS_LITERAL_STRING("Trash"));
   NS_ENSURE_SUCCESS(rv, rv);
 
   // copy the default templates into the Templates folder
   nsCOMPtr<nsIFile> parentDir;
   rv = path->GetParent(getter_AddRefs(parentDir));
   NS_ENSURE_SUCCESS(rv, rv);
-  nsCOMPtr <nsILocalFile> parent = do_QueryInterface(parentDir);
-  rv = CopyDefaultMessages("Templates", parent);
+  rv = CopyDefaultMessages("Templates", parentDir);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  (void ) CreateLocalFolder(path, NS_LITERAL_CSTRING("Unsent Messages"));
+  (void ) CreateLocalFolder(NS_LITERAL_STRING("Unsent Messages"));
   return NS_OK;
 }
 
@@ -202,7 +169,7 @@ nsNoIncomingServer::GetNewMail(nsIMsgWindow *aMsgWindow, nsIUrlListener *aUrlLis
   nsCOMPtr <nsISupportsArray> deferredServers;
   nsresult rv = GetDeferredServers(this, getter_AddRefs(deferredServers));
   NS_ENSURE_SUCCESS(rv, rv);
-  PRUint32 count;
+  uint32_t count;
   deferredServers->Count(&count);
   if (count > 0)
   {
@@ -216,24 +183,24 @@ nsNoIncomingServer::GetNewMail(nsIMsgWindow *aMsgWindow, nsIUrlListener *aUrlLis
   }
   // listener might be counting on us to send a notification.
   else if (aUrlListener)
-    aUrlListener->OnStopRunningUrl(nsnull, NS_OK);
+    aUrlListener->OnStopRunningUrl(nullptr, NS_OK);
   return rv;
 }
 
 
 NS_IMETHODIMP
-nsNoIncomingServer::GetCanSearchMessages(PRBool *canSearchMessages)
+nsNoIncomingServer::GetCanSearchMessages(bool *canSearchMessages)
 {
   NS_ENSURE_ARG_POINTER(canSearchMessages);
-  *canSearchMessages = PR_TRUE;
+  *canSearchMessages = true;
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsNoIncomingServer::GetServerRequiresPasswordForBiff(PRBool *aServerRequiresPasswordForBiff)
+nsNoIncomingServer::GetServerRequiresPasswordForBiff(bool *aServerRequiresPasswordForBiff)
 {
   NS_ENSURE_ARG_POINTER(aServerRequiresPasswordForBiff);
-  *aServerRequiresPasswordForBiff = PR_FALSE;  // for local folders, we don't require a password
+  *aServerRequiresPasswordForBiff = false;  // for local folders, we don't require a password
   return NS_OK;
 }
 

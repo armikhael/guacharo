@@ -1,4 +1,9 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 @namespace url("http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul");
+@namespace html url("http://www.w3.org/1999/xhtml");
 
 .controlBar {
   height: 28px;
@@ -169,11 +174,72 @@ button {
   background: url(chrome://global/skin/media/throbber.png) no-repeat center;
 }
 
+.statusIcon[type="throbber"][stalled] {
+  background: url(chrome://global/skin/media/stalled.png) no-repeat center;
+}
+
 .statusIcon[type="error"] {
   background: url(chrome://global/skin/media/error.png) no-repeat center;
 }
 
+/* Overlay Play button */
+.clickToPlay {
+  width: 64px;
+  height: 64px;
+  -moz-box-pack: center;
+  -moz-box-align: center;
+  opacity: 0.7;
+  background-image: url(chrome://global/skin/media/clicktoplay-bgtexture.png),
+                    url(chrome://global/skin/media/videoClickToPlayButton.svg);
+  background-repeat: repeat, no-repeat;
+  background-position: center, center;
+  background-size: auto, 64px 64px;
+  background-color: hsla(0,0%,10%,.5);
+}
+
+.clickToPlay:hover {
+  opacity: 1;
+}
+
+/* Statistics formatting */
+html|*.statsDiv {
+  position: relative;
+}
+
+html|td {
+  height: 1em;
+  max-height: 1em;
+  padding: 0 2px;
+}
+
+html|table {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 11px;
+  color: #FFFFFF;
+  text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000;
+  min-width: 100%;
+  background: rgba(68,68,68,.7);
+  table-layout: fixed;
+  border-collapse: collapse;
+  position: absolute;
+}
+
 /* CSS Transitions */
+.clickToPlay {
+  -moz-transition-property: opacity, background-size;
+  -moz-transition-duration: 400ms, 400ms;
+}
+
+.clickToPlay[fadeout] {
+  background-size: auto, 192px 192px;
+  opacity: 0;
+}
+
+.clickToPlay[fadeout][immediate] {
+  -moz-transition-property: opacity, background-size;
+  -moz-transition-duration: 0s, 0s;
+}
+
 .controlBar:not([immediate]) {
   -moz-transition-property: opacity;
   -moz-transition-duration: 200ms;

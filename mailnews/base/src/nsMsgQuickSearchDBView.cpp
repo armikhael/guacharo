@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Navin Gupta <naving@netscape.com> (Original Author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"
 #include "nsMsgQuickSearchDBView.h"
@@ -52,8 +19,8 @@
 
 nsMsgQuickSearchDBView::nsMsgQuickSearchDBView()
 {
-  m_usingCachedHits = PR_FALSE;
-  m_cacheEmpty = PR_TRUE;
+  m_usingCachedHits = false;
+  m_cacheEmpty = true;
 }
 
 nsMsgQuickSearchDBView::~nsMsgQuickSearchDBView()
@@ -62,7 +29,7 @@ nsMsgQuickSearchDBView::~nsMsgQuickSearchDBView()
 
 NS_IMPL_ISUPPORTS_INHERITED2(nsMsgQuickSearchDBView, nsMsgDBView, nsIMsgDBView, nsIMsgSearchNotify)
 
-NS_IMETHODIMP nsMsgQuickSearchDBView::Open(nsIMsgFolder *folder, nsMsgViewSortTypeValue sortType, nsMsgViewSortOrderValue sortOrder, nsMsgViewFlagsTypeValue viewFlags, PRInt32 *pCount)
+NS_IMETHODIMP nsMsgQuickSearchDBView::Open(nsIMsgFolder *folder, nsMsgViewSortTypeValue sortType, nsMsgViewSortOrderValue sortOrder, nsMsgViewFlagsTypeValue viewFlags, int32_t *pCount)
 {
   nsresult rv = nsMsgDBView::Open(folder, sortType, sortOrder, viewFlags, pCount);
   NS_ENSURE_SUCCESS(rv, rv);
@@ -71,7 +38,7 @@ NS_IMETHODIMP nsMsgQuickSearchDBView::Open(nsIMsgFolder *folder, nsMsgViewSortTy
     return NS_ERROR_NULL_POINTER;
   if (pCount)
     *pCount = 0;
-  m_viewFolder = nsnull;
+  m_viewFolder = nullptr;
   return InitThreadedView(pCount);
 }
 
@@ -107,7 +74,7 @@ nsMsgQuickSearchDBView::CopyDBView(nsMsgDBView *aNewMsgDBView,
   return NS_OK;
 }
 
-nsresult nsMsgQuickSearchDBView::DeleteMessages(nsIMsgWindow *window, nsMsgViewIndex *indices, PRInt32 numIndices, PRBool deleteStorage)
+nsresult nsMsgQuickSearchDBView::DeleteMessages(nsIMsgWindow *window, nsMsgViewIndex *indices, int32_t numIndices, bool deleteStorage)
 {
   for (nsMsgViewIndex i = 0; i < (nsMsgViewIndex) numIndices; i++) 
   {
@@ -125,23 +92,23 @@ NS_IMETHODIMP nsMsgQuickSearchDBView::DoCommand(nsMsgViewCommandTypeValue aComma
   if (aCommand == nsMsgViewCommandType::markAllRead)
   {
     nsresult rv = NS_OK;
-    m_folder->EnableNotifications(nsIMsgFolder::allMessageCountNotifications, PR_FALSE, PR_TRUE /*dbBatching*/);
+    m_folder->EnableNotifications(nsIMsgFolder::allMessageCountNotifications, false, true /*dbBatching*/);
 
-    for (PRInt32 i=0;NS_SUCCEEDED(rv) && i < GetSize();i++)
+    for (uint32_t i = 0; NS_SUCCEEDED(rv) && i < GetSize(); i++)
     {
       nsCOMPtr<nsIMsgDBHdr> msgHdr;
       m_db->GetMsgHdrForKey(m_keys[i],getter_AddRefs(msgHdr)); 
-      rv = m_db->MarkHdrRead(msgHdr, PR_TRUE, nsnull);
+      rv = m_db->MarkHdrRead(msgHdr, true, nullptr);
     }
 
-    m_folder->EnableNotifications(nsIMsgFolder::allMessageCountNotifications, PR_TRUE, PR_TRUE /*dbBatching*/);
+    m_folder->EnableNotifications(nsIMsgFolder::allMessageCountNotifications, true, true /*dbBatching*/);
 
     nsCOMPtr<nsIMsgImapMailFolder> imapFolder = do_QueryInterface(m_folder);
     if (NS_SUCCEEDED(rv) && imapFolder)
-      rv = imapFolder->StoreImapFlags(kImapMsgSeenFlag, PR_TRUE, m_keys.Elements(), 
-                                      m_keys.Length(), nsnull);
+      rv = imapFolder->StoreImapFlags(kImapMsgSeenFlag, true, m_keys.Elements(), 
+                                      m_keys.Length(), nullptr);
 
-    m_db->SetSummaryValid(PR_TRUE);
+    m_db->SetSummaryValid(true);
     return rv;
   }
   else
@@ -160,9 +127,9 @@ nsresult nsMsgQuickSearchDBView::AddHdr(nsIMsgDBHdr *msgHdr, nsMsgViewIndex *res
   nsMsgKey msgKey;
   msgHdr->GetMessageKey(&msgKey);
   // protect against duplication.
-  if (m_origKeys.BinaryIndexOf(msgKey)== -1)
+  if (m_origKeys.BinaryIndexOf(msgKey) == m_origKeys.NoIndex)
   {
-    nsMsgViewIndex insertIndex = GetInsertIndexHelper(msgHdr, m_origKeys, nsnull,
+    nsMsgViewIndex insertIndex = GetInsertIndexHelper(msgHdr, m_origKeys, nullptr,
                     nsMsgViewSortOrder::ascending, nsMsgViewSortType::byId);
     m_origKeys.InsertElementAt(insertIndex, msgKey);
   }
@@ -171,17 +138,17 @@ nsresult nsMsgQuickSearchDBView::AddHdr(nsIMsgDBHdr *msgHdr, nsMsgViewIndex *res
   {
     nsMsgKey parentKey;
     msgHdr->GetThreadParent(&parentKey);
-    return nsMsgThreadedDBView::OnNewHeader(msgHdr, parentKey, PR_TRUE);
+    return nsMsgThreadedDBView::OnNewHeader(msgHdr, parentKey, true);
   }
   else
     return nsMsgDBView::AddHdr(msgHdr, resultIndex);
 }
 
-nsresult nsMsgQuickSearchDBView::OnNewHeader(nsIMsgDBHdr *newHdr, nsMsgKey aParentKey, PRBool ensureListed)
+nsresult nsMsgQuickSearchDBView::OnNewHeader(nsIMsgDBHdr *newHdr, nsMsgKey aParentKey, bool ensureListed)
 {
   if (newHdr)
   {
-    PRBool match=PR_FALSE;
+    bool match=false;
     nsCOMPtr <nsIMsgSearchSession> searchSession = do_QueryReferent(m_searchSession);
     if (searchSession)
       searchSession->MatchHdr(newHdr, m_db, &match);
@@ -191,7 +158,7 @@ nsresult nsMsgQuickSearchDBView::OnNewHeader(nsIMsgDBHdr *newHdr, nsMsgKey aPare
       // show the newly added header.
       nsMsgKey newKey;
       (void) newHdr->GetMessageKey(&newKey);
-      nsMsgViewIndex insertIndex = GetInsertIndexHelper(newHdr, m_origKeys, nsnull,
+      nsMsgViewIndex insertIndex = GetInsertIndexHelper(newHdr, m_origKeys, nullptr,
                       nsMsgViewSortOrder::ascending, nsMsgViewSortType::byId);
       m_origKeys.InsertElementAt(insertIndex, newKey);
       nsMsgThreadedDBView::OnNewHeader(newHdr, aParentKey, ensureListed); // do not add a new message if there isn't a match.
@@ -200,8 +167,8 @@ nsresult nsMsgQuickSearchDBView::OnNewHeader(nsIMsgDBHdr *newHdr, nsMsgKey aPare
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgQuickSearchDBView::OnHdrFlagsChanged(nsIMsgDBHdr *aHdrChanged, PRUint32 aOldFlags, 
-                                       PRUint32 aNewFlags, nsIDBChangeListener *aInstigator)
+NS_IMETHODIMP nsMsgQuickSearchDBView::OnHdrFlagsChanged(nsIMsgDBHdr *aHdrChanged, uint32_t aOldFlags, 
+                                       uint32_t aNewFlags, nsIDBChangeListener *aInstigator)
 {
   nsresult rv = nsMsgGroupView::OnHdrFlagsChanged(aHdrChanged, aOldFlags, aNewFlags, aInstigator);
 
@@ -225,7 +192,7 @@ NS_IMETHODIMP nsMsgQuickSearchDBView::OnHdrFlagsChanged(nsIMsgDBHdr *aHdrChanged
         nsCOMPtr <nsIMsgSearchSession> searchSession = do_QueryReferent(m_searchSession);
         if (searchSession)
         {
-          PRBool oldMatch, newMatch;
+          bool oldMatch, newMatch;
           rv = searchSession->MatchHdr(aHdrChanged, m_db, &newMatch);
           aHdrChanged->SetFlags(aOldFlags);
           rv = searchSession->MatchHdr(aHdrChanged, m_db, &oldMatch);
@@ -240,7 +207,7 @@ NS_IMETHODIMP nsMsgQuickSearchDBView::OnHdrFlagsChanged(nsIMsgDBHdr *aHdrChanged
             rv = m_viewFolder->GetDBFolderInfoAndDB(getter_AddRefs(dbFolderInfo), getter_AddRefs(virtDatabase));
             NS_ENSURE_SUCCESS(rv, rv);
             dbFolderInfo->ChangeNumUnreadMessages((aOldFlags & nsMsgMessageFlags::Read) ? 1 : -1);
-            m_viewFolder->UpdateSummaryTotals(PR_TRUE); // force update from db.
+            m_viewFolder->UpdateSummaryTotals(true); // force update from db.
             virtDatabase->Commit(nsMsgDBCommitType::kLargeCommit);
           }
         }
@@ -251,8 +218,8 @@ NS_IMETHODIMP nsMsgQuickSearchDBView::OnHdrFlagsChanged(nsIMsgDBHdr *aHdrChanged
 }
 
 NS_IMETHODIMP
-nsMsgQuickSearchDBView::OnHdrPropertyChanged(nsIMsgDBHdr *aHdrChanged, PRBool aPreChange,
-                                        PRUint32 *aStatus, nsIDBChangeListener *aInstigator)
+nsMsgQuickSearchDBView::OnHdrPropertyChanged(nsIMsgDBHdr *aHdrChanged, bool aPreChange,
+                                        uint32_t *aStatus, nsIDBChangeListener *aInstigator)
 {
   // If the junk mail plugin just activated on a message, then
   // we'll allow filters to remove from view.
@@ -271,7 +238,7 @@ nsMsgQuickSearchDBView::OnHdrPropertyChanged(nsIMsgDBHdr *aHdrChanged, PRBool aP
   nsCString originStr;
   (void) aHdrChanged->GetStringProperty("junkscoreorigin", getter_Copies(originStr));
   // check for "plugin" with only first character for performance
-  PRBool plugin = (originStr.get()[0] == 'p');
+  bool plugin = (originStr.get()[0] == 'p');
 
   if (aPreChange)
   {
@@ -281,9 +248,9 @@ nsMsgQuickSearchDBView::OnHdrPropertyChanged(nsIMsgDBHdr *aHdrChanged, PRBool aP
   }
 
   // second call, done after the change
-  PRBool wasPlugin = *aStatus;
+  bool wasPlugin = *aStatus;
 
-  PRBool match = PR_TRUE;
+  bool match = true;
   nsCOMPtr<nsIMsgSearchSession> searchSession(do_QueryReferent(m_searchSession));
   if (searchSession)
     searchSession->MatchHdr(aHdrChanged, m_db, &match);
@@ -299,7 +266,7 @@ nsMsgQuickSearchDBView::OnHdrPropertyChanged(nsIMsgDBHdr *aHdrChanged, PRBool aP
 NS_IMETHODIMP
 nsMsgQuickSearchDBView::GetSearchSession(nsIMsgSearchSession* *aSession)
 {
-  NS_ASSERTION(PR_FALSE, "GetSearchSession method is not implemented");
+  NS_ASSERTION(false, "GetSearchSession method is not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -324,7 +291,7 @@ nsMsgQuickSearchDBView::OnSearchHit(nsIMsgDBHdr* aMsgHdr, nsIMsgFolder *folder)
   aMsgHdr->GetMessageKey(&key);
   // Is FindKey going to be expensive here? A lot of hits could make
   // it a little bit slow to search through the view for every hit.
-  if (m_cacheEmpty || FindKey(key, PR_FALSE) == nsMsgViewIndex_None)
+  if (m_cacheEmpty || FindKey(key, false) == nsMsgViewIndex_None)
     return AddHdr(aMsgHdr); 
   else
     return NS_OK;
@@ -336,14 +303,14 @@ nsMsgQuickSearchDBView::OnSearchDone(nsresult status)
   // We're a single-folder virtual folder if viewFolder != folder, and that is
   // the only case in which we want to be messing about with a results cache
   // or unread counts.
-  if (m_viewFolder && m_viewFolder != m_folder)
+  if (m_db && m_viewFolder && m_viewFolder != m_folder)
   {
     nsTArray<nsMsgKey> keyArray;
     nsCString searchUri;
     m_viewFolder->GetURI(searchUri);
-    PRUint32 count = m_hdrHits.Count();
+    uint32_t count = m_hdrHits.Count();
     // build up message keys.
-    PRUint32 i;
+    uint32_t i;
     for (i = 0; i < count; i++)
     {
       nsMsgKey key;
@@ -351,7 +318,7 @@ nsMsgQuickSearchDBView::OnSearchDone(nsresult status)
       keyArray.AppendElement(key);
     }
     nsMsgKey *staleHits;
-    PRUint32 numBadHits;
+    uint32_t numBadHits;
     if (m_db)
     {
       nsresult rv = m_db->RefreshCache(searchUri.get(), m_hdrHits.Count(),
@@ -371,12 +338,12 @@ nsMsgQuickSearchDBView::OnSearchDone(nsresult status)
     nsCOMPtr<nsIDBFolderInfo> dbFolderInfo;
     nsresult rv = m_viewFolder->GetDBFolderInfoAndDB(getter_AddRefs(dbFolderInfo), getter_AddRefs(virtDatabase));
     NS_ENSURE_SUCCESS(rv, rv);
-    PRUint32 numUnread = 0;
-    PRUint32 numTotal = m_origKeys.Length();
+    uint32_t numUnread = 0;
+    uint32_t numTotal = m_origKeys.Length();
 
     for (i = 0; i < m_origKeys.Length(); i++)
     {
-      PRBool isRead;
+      bool isRead;
       m_db->IsRead(m_origKeys[i], &isRead);
       if (!isRead)
         numUnread++;
@@ -388,7 +355,7 @@ nsMsgQuickSearchDBView::OnSearchDone(nsresult status)
   }
   if (m_sortType != nsMsgViewSortType::byThread)//we do not find levels for the results.
   {
-    m_sortValid = PR_FALSE;       //sort the results 
+    m_sortValid = false;       //sort the results 
     Sort(m_sortType, m_sortOrder);
   }
   if (m_viewFolder && (m_viewFolder != m_folder))
@@ -401,7 +368,7 @@ nsMsgQuickSearchDBView::OnSearchDone(nsresult status)
 NS_IMETHODIMP
 nsMsgQuickSearchDBView::OnNewSearch()
 {
-  PRInt32 oldSize = GetSize();
+  int32_t oldSize = GetSize();
 
   m_keys.Clear();
   m_levels.Clear();
@@ -410,7 +377,7 @@ nsMsgQuickSearchDBView::OnNewSearch()
   // this needs to happen after we remove all the keys, since RowCountChanged() will call our GetRowCount()
   if (mTree)
     mTree->RowCountChanged(0, -oldSize);
-  PRUint32 folderFlags = 0;
+  uint32_t folderFlags = 0;
   if (m_viewFolder)
     m_viewFolder->GetFlags(&folderFlags);
   // check if it's a virtual folder - if so, we should get the cached hits 
@@ -423,9 +390,9 @@ nsMsgQuickSearchDBView::OnNewSearch()
     m_db->GetCachedHits(searchUri.get(), getter_AddRefs(cachedHits));
     if (cachedHits)
     {
-      PRBool hasMore;
+      bool hasMore;
 
-      m_usingCachedHits = PR_TRUE;
+      m_usingCachedHits = true;
       cachedHits->HasMoreElements(&hasMore);
       m_cacheEmpty = !hasMore;
       if (mTree)
@@ -450,26 +417,26 @@ nsMsgQuickSearchDBView::OnNewSearch()
 
 nsresult nsMsgQuickSearchDBView::GetFirstMessageHdrToDisplayInThread(nsIMsgThread *threadHdr, nsIMsgDBHdr **result)
 {
-  PRUint32 numChildren;
+  uint32_t numChildren;
   nsresult rv = NS_OK;
-  PRUint8 minLevel = 0xff;
+  uint8_t minLevel = 0xff;
   threadHdr->GetNumChildren(&numChildren);
   nsMsgKey threadRootKey;
   nsCOMPtr<nsIMsgDBHdr> rootParent;
-  PRInt32 rootIndex;
+  int32_t rootIndex;
   threadHdr->GetRootHdr(&rootIndex, getter_AddRefs(rootParent));
   if (rootParent)
     rootParent->GetMessageKey(&threadRootKey);
   else
     threadHdr->GetThreadKey(&threadRootKey);
 
-  if ((PRInt32) numChildren < 0)
+  if ((int32_t) numChildren < 0)
     numChildren = 0;
 
   nsCOMPtr <nsIMsgDBHdr> retHdr;
 
   // iterate over thread, finding mgsHdr in view with the lowest level.
-  for (PRUint32 childIndex = 0; childIndex < numChildren; childIndex++)
+  for (uint32_t childIndex = 0; childIndex < numChildren; childIndex++)
   {
     nsCOMPtr <nsIMsgDBHdr> child;
     rv = threadHdr->GetChildHdrAt(childIndex, getter_AddRefs(child));
@@ -480,7 +447,7 @@ nsresult nsMsgQuickSearchDBView::GetFirstMessageHdrToDisplayInThread(nsIMsgThrea
 
       // this works because we've already sorted m_keys by id.
       nsMsgViewIndex keyIndex = m_origKeys.BinaryIndexOf(msgKey);
-      if (keyIndex != kNotFound)
+      if (keyIndex != nsMsgViewIndex_None)
       {
         // this is the root, so it's the best we're going to do.
         if (msgKey == threadRootKey)
@@ -488,7 +455,7 @@ nsresult nsMsgQuickSearchDBView::GetFirstMessageHdrToDisplayInThread(nsIMsgThrea
           retHdr = child;
           break;
         }
-        PRUint8 level = 0;
+        uint8_t level = 0;
         nsMsgKey parentId;
         child->GetThreadParent(&parentId);
         nsCOMPtr <nsIMsgDBHdr> parent;
@@ -534,7 +501,7 @@ nsresult nsMsgQuickSearchDBView::SortThreads(nsMsgViewSortTypeValue sortType, ns
   nsCOMPtr <nsIMsgDBHdr> rootHdr;
   nsCOMPtr <nsIMsgDBHdr> msgHdr;
   nsCOMPtr <nsIMsgThread> threadHdr;
-  for (PRUint32 i = 0; i < m_keys.Length(); i++)
+  for (uint32_t i = 0; i < m_keys.Length(); i++)
   {
     GetMsgHdrForViewIndex(i, getter_AddRefs(msgHdr));
     m_db->GetThreadContainingMsgHdr(msgHdr, getter_AddRefs(threadHdr));
@@ -544,13 +511,13 @@ nsresult nsMsgQuickSearchDBView::SortThreads(nsMsgViewSortTypeValue sortType, ns
       threadHdr->GetChildKeyAt(0, &rootKey);
       nsMsgViewIndex threadRootIndex = threadRootIds.BinaryIndexOf(rootKey);
       // if we already have that id in top level threads, ignore this msg.
-      if (threadRootIndex != kNotFound)
+      if (threadRootIndex != nsMsgViewIndex_None)
         continue;
       // it would be nice if GetInsertIndexHelper always found the hdr, but it doesn't.
       threadHdr->GetChildHdrAt(0, getter_AddRefs(rootHdr));
       if (!rootHdr)
         continue;
-      threadRootIndex = GetInsertIndexHelper(rootHdr, threadRootIds, nsnull,
+      threadRootIndex = GetInsertIndexHelper(rootHdr, threadRootIds, nullptr,
                                              nsMsgViewSortOrder::ascending,
                                              nsMsgViewSortType::byId);
       threadRootIds.InsertElementAt(threadRootIndex, rootKey);
@@ -568,8 +535,8 @@ nsresult nsMsgQuickSearchDBView::SortThreads(nsMsgViewSortTypeValue sortType, ns
   m_flags.Clear();
   // now we've build up the list of thread ids - need to build the view
   // from that. So for each thread id, we need to list the messages in the thread.
-  PRUint32 numThreads = threadRootIds.Length();
-  for (PRUint32 threadIndex = 0; threadIndex < numThreads; threadIndex++)
+  uint32_t numThreads = threadRootIds.Length();
+  for (uint32_t threadIndex = 0; threadIndex < numThreads; threadIndex++)
   {
     m_db->GetMsgHdrForKey(threadRootIds[threadIndex], getter_AddRefs(rootHdr));
     if (rootHdr)
@@ -579,7 +546,7 @@ nsresult nsMsgQuickSearchDBView::SortThreads(nsMsgViewSortTypeValue sortType, ns
       if (threadHdr)
       {
         nsMsgKey rootKey;
-        PRUint32 rootFlags;
+        uint32_t rootFlags;
         GetFirstMessageHdrToDisplayInThread(threadHdr, getter_AddRefs(displayRootHdr));
         if (!displayRootHdr)
           continue;
@@ -592,7 +559,7 @@ nsresult nsMsgQuickSearchDBView::SortThreads(nsMsgViewSortTypeValue sortType, ns
 
         nsMsgViewIndex startOfThreadViewIndex = m_keys.Length();
         nsMsgViewIndex rootIndex = startOfThreadViewIndex - 1;
-        PRUint32 numListed = 0;
+        uint32_t numListed = 0;
         ListIdsInThreadOrder(threadHdr, rootKey, 1, &startOfThreadViewIndex, &numListed);
         if (numListed > 0)
           m_flags[rootIndex] = rootFlags | MSG_VIEW_FLAG_HASCHILDREN;
@@ -609,15 +576,15 @@ nsMsgQuickSearchDBView::ListCollapsedChildren(nsMsgViewIndex viewIndex,
   nsCOMPtr<nsIMsgThread> threadHdr; 
   nsresult rv = GetThreadContainingIndex(viewIndex, getter_AddRefs(threadHdr));
   NS_ENSURE_SUCCESS(rv, rv);
-  PRUint32 numChildren;
+  uint32_t numChildren;
   threadHdr->GetNumChildren(&numChildren);
   nsCOMPtr<nsIMsgDBHdr> rootHdr;
   nsMsgKey rootKey;
   GetMsgHdrForViewIndex(viewIndex, getter_AddRefs(rootHdr));
   rootHdr->GetMessageKey(&rootKey);
   // group threads can have the root key twice, one for the dummy row.
-  PRBool rootKeySkipped = PR_FALSE;
-  for (PRUint32 i = 0; i < numChildren; i++)
+  bool rootKeySkipped = false;
+  for (uint32_t i = 0; i < numChildren; i++)
   {
     nsCOMPtr<nsIMsgDBHdr> msgHdr;
     threadHdr->GetChildHdrAt(i, getter_AddRefs(msgHdr));
@@ -628,19 +595,19 @@ nsMsgQuickSearchDBView::ListCollapsedChildren(nsMsgViewIndex viewIndex,
       if (msgKey != rootKey || (GroupViewUsesDummyRow() && rootKeySkipped))
       {
         // if this hdr is in the original view, add it to new view.
-        if (m_origKeys.BinaryIndexOf(msgKey) != kNotFound)
-          messageArray->AppendElement(msgHdr, PR_FALSE);
+        if (m_origKeys.BinaryIndexOf(msgKey) != m_origKeys.NoIndex)
+          messageArray->AppendElement(msgHdr, false);
       }
       else
       {
-        rootKeySkipped = PR_TRUE;
+        rootKeySkipped = true;
       }
     }
   }
   return NS_OK;
 }
 
-nsresult nsMsgQuickSearchDBView::ListIdsInThread(nsIMsgThread *threadHdr, nsMsgViewIndex startOfThreadViewIndex, PRUint32 *pNumListed)
+nsresult nsMsgQuickSearchDBView::ListIdsInThread(nsIMsgThread *threadHdr, nsMsgViewIndex startOfThreadViewIndex, uint32_t *pNumListed)
 {
 
   if (m_viewFlags & nsMsgViewFlagsType::kThreadedDisplay && ! (m_viewFlags & nsMsgViewFlagsType::kGroupBySort))
@@ -649,23 +616,23 @@ nsresult nsMsgQuickSearchDBView::ListIdsInThread(nsIMsgThread *threadHdr, nsMsgV
     return ListIdsInThreadOrder(threadHdr, parentKey, 1, &startOfThreadViewIndex, pNumListed);
   }
 
-  PRUint32 numChildren;
+  uint32_t numChildren;
   threadHdr->GetNumChildren(&numChildren);
-  PRUint32 i;
-  PRUint32 viewIndex = startOfThreadViewIndex + 1;
+  uint32_t i;
+  uint32_t viewIndex = startOfThreadViewIndex + 1;
   nsCOMPtr<nsIMsgDBHdr> rootHdr;
   nsMsgKey rootKey;
-  PRUint32 rootFlags = m_flags[startOfThreadViewIndex];
+  uint32_t rootFlags = m_flags[startOfThreadViewIndex];
   *pNumListed = 0;
   GetMsgHdrForViewIndex(startOfThreadViewIndex, getter_AddRefs(rootHdr));
   rootHdr->GetMessageKey(&rootKey);
   // group threads can have the root key twice, one for the dummy row.
-  PRBool rootKeySkipped = PR_FALSE;
+  bool rootKeySkipped = false;
   for (i = 0; i < numChildren; i++)
   {
     nsCOMPtr<nsIMsgDBHdr> msgHdr;
     threadHdr->GetChildHdrAt(i, getter_AddRefs(msgHdr));
-    if (msgHdr != nsnull)
+    if (msgHdr != nullptr)
     {
       nsMsgKey msgKey;
       msgHdr->GetMessageKey(&msgKey);
@@ -673,9 +640,9 @@ nsresult nsMsgQuickSearchDBView::ListIdsInThread(nsIMsgThread *threadHdr, nsMsgV
       {
         nsMsgViewIndex threadRootIndex = m_origKeys.BinaryIndexOf(msgKey);
         // if this hdr is in the original view, add it to new view.
-        if (threadRootIndex != kNotFound)
+        if (threadRootIndex != nsMsgViewIndex_None)
         {
-          PRUint32 childFlags;
+          uint32_t childFlags;
           msgHdr->GetFlags(&childFlags);
           InsertMsgHdrAt(viewIndex, msgHdr, msgKey, childFlags, 
                         FindLevelInThread(msgHdr, startOfThreadViewIndex, viewIndex));
@@ -688,7 +655,7 @@ nsresult nsMsgQuickSearchDBView::ListIdsInThread(nsIMsgThread *threadHdr, nsMsgV
       }
       else
       {
-        rootKeySkipped = PR_TRUE;
+        rootKeySkipped = true;
       }
     }
   }
@@ -697,20 +664,20 @@ nsresult nsMsgQuickSearchDBView::ListIdsInThread(nsIMsgThread *threadHdr, nsMsgV
 
 nsresult
 nsMsgQuickSearchDBView::ListIdsInThreadOrder(nsIMsgThread *threadHdr,
-                                             nsMsgKey parentKey, PRInt32 level,
-                                             PRInt32 callLevel,
+                                             nsMsgKey parentKey, uint32_t level,
+                                             uint32_t callLevel,
                                              nsMsgKey keyToSkip,
                                              nsMsgViewIndex *viewIndex,
-                                             PRUint32 *pNumListed)
+                                             uint32_t *pNumListed)
 {
   nsCOMPtr <nsISimpleEnumerator> msgEnumerator;
   nsresult rv = threadHdr->EnumerateMessages(parentKey, getter_AddRefs(msgEnumerator));
   NS_ENSURE_SUCCESS(rv, rv);
   
   // We use the numChildren as a sanity check on the thread structure.
-  PRUint32 numChildren;
+  uint32_t numChildren;
   (void) threadHdr->GetNumChildren(&numChildren);
-  PRBool hasMore;
+  bool hasMore;
   nsCOMPtr <nsISupports> supports;
   nsCOMPtr <nsIMsgDBHdr> msgHdr;
   while (NS_SUCCEEDED(rv) && NS_SUCCEEDED(rv = msgEnumerator->HasMoreElements(&hasMore)) &&
@@ -736,10 +703,10 @@ nsMsgQuickSearchDBView::ListIdsInThreadOrder(nsIMsgThread *threadHdr,
         return NS_OK;
       }
 
-      PRInt32 childLevel = level;
-      if (m_origKeys.BinaryIndexOf(msgKey) != -1)
+      int32_t childLevel = level;
+      if (m_origKeys.BinaryIndexOf(msgKey) != m_origKeys.NoIndex)
       {
-        PRUint32 msgFlags;
+        uint32_t msgFlags;
         msgHdr->GetFlags(&msgFlags);
         InsertMsgHdrAt(*viewIndex, msgHdr, msgKey, msgFlags & ~MSG_VIEW_FLAGS, level);
         (*pNumListed)++;
@@ -755,9 +722,9 @@ nsMsgQuickSearchDBView::ListIdsInThreadOrder(nsIMsgThread *threadHdr,
 
 nsresult
 nsMsgQuickSearchDBView::ListIdsInThreadOrder(nsIMsgThread *threadHdr,
-                                             nsMsgKey parentKey, PRInt32 level,
+                                             nsMsgKey parentKey, uint32_t level,
                                              nsMsgViewIndex *viewIndex,
-                                             PRUint32 *pNumListed)
+                                             uint32_t *pNumListed)
 {
   nsresult rv = ListIdsInThreadOrder(threadHdr, parentKey, level, level,
                                      nsMsgKey_None, viewIndex, pNumListed);
@@ -772,7 +739,7 @@ nsMsgQuickSearchDBView::ListIdsInThreadOrder(nsIMsgThread *threadHdr,
     nsCOMPtr<nsIMsgDBHdr> root;
     nsCOMPtr<nsIMsgDBHdr> rootParent;
     nsMsgKey rootKey;
-    PRInt32 rootIndex;
+    int32_t rootIndex;
     threadHdr->GetRootHdr(&rootIndex, getter_AddRefs(rootParent));
     if (rootParent)
     {
@@ -785,7 +752,7 @@ nsMsgQuickSearchDBView::ListIdsInThreadOrder(nsIMsgThread *threadHdr,
   return rv;
 }
 
-nsresult nsMsgQuickSearchDBView::ExpansionDelta(nsMsgViewIndex index, PRInt32 *expansionDelta)
+nsresult nsMsgQuickSearchDBView::ExpansionDelta(nsMsgViewIndex index, int32_t *expansionDelta)
 {
   *expansionDelta = 0;
   if (index >= ((nsMsgViewIndex) m_keys.Length()))
@@ -799,15 +766,15 @@ nsresult nsMsgQuickSearchDBView::ExpansionDelta(nsMsgViewIndex index, PRInt32 *e
   nsCOMPtr<nsIMsgThread> threadHdr; 
   nsresult rv = GetThreadContainingIndex(index, getter_AddRefs(threadHdr));
   NS_ENSURE_SUCCESS(rv, rv);
-  PRUint32 numChildren;
+  uint32_t numChildren;
   threadHdr->GetNumChildren(&numChildren);
   nsCOMPtr<nsIMsgDBHdr> rootHdr;
   nsMsgKey rootKey;
   GetMsgHdrForViewIndex(index, getter_AddRefs(rootHdr));
   rootHdr->GetMessageKey(&rootKey);
   // group threads can have the root key twice, one for the dummy row.
-  PRBool rootKeySkipped = PR_FALSE;
-  for (PRUint32 i = 0; i < numChildren; i++)
+  bool rootKeySkipped = false;
+  for (uint32_t i = 0; i < numChildren; i++)
   {
     nsCOMPtr<nsIMsgDBHdr> msgHdr;
     threadHdr->GetChildHdrAt(i, getter_AddRefs(msgHdr));
@@ -818,12 +785,12 @@ nsresult nsMsgQuickSearchDBView::ExpansionDelta(nsMsgViewIndex index, PRInt32 *e
       if (msgKey != rootKey || (GroupViewUsesDummyRow() && rootKeySkipped))
       {
         // if this hdr is in the original view, add it to new view.
-        if (m_origKeys.BinaryIndexOf(msgKey) != kNotFound)
+        if (m_origKeys.BinaryIndexOf(msgKey) != m_origKeys.NoIndex)
           (*expansionDelta)++;
       }
       else
       {
-        rootKeySkipped = PR_TRUE;
+        rootKeySkipped = true;
       }
     }
   }
@@ -837,7 +804,7 @@ nsMsgQuickSearchDBView::OpenWithHdrs(nsISimpleEnumerator *aHeaders,
                                      nsMsgViewSortTypeValue aSortType,
                                      nsMsgViewSortOrderValue aSortOrder, 
                                      nsMsgViewFlagsTypeValue aViewFlags,
-                                     PRInt32 *aCount)
+                                     int32_t *aCount)
 {
   if (aViewFlags & nsMsgViewFlagsType::kGroupBySort)
     return nsMsgGroupView::OpenWithHdrs(aHeaders, aSortType, aSortOrder, 
@@ -847,7 +814,7 @@ nsMsgQuickSearchDBView::OpenWithHdrs(nsISimpleEnumerator *aHeaders,
   m_sortOrder = aSortOrder;
   m_viewFlags = aViewFlags;
 
-  PRBool hasMore;
+  bool hasMore;
   nsCOMPtr<nsISupports> supports;
   nsCOMPtr<nsIMsgDBHdr> msgHdr;
   nsresult rv = NS_OK;
@@ -887,20 +854,20 @@ nsMsgQuickSearchDBView::GetMessageEnumerator(nsISimpleEnumerator **enumerator)
 NS_IMETHODIMP
 nsMsgQuickSearchDBView::OnHdrDeleted(nsIMsgDBHdr *aHdrDeleted,
                                      nsMsgKey aParentKey,
-                                     PRInt32 aFlags,
+                                     int32_t aFlags,
                                      nsIDBChangeListener *aInstigator)
 {
   NS_ENSURE_ARG_POINTER(aHdrDeleted);
   nsMsgKey msgKey;
   aHdrDeleted->GetMessageKey(&msgKey);
-  PRInt32 keyIndex = m_origKeys.BinaryIndexOf(msgKey);
+  int32_t keyIndex = m_origKeys.BinaryIndexOf(msgKey);
   if (keyIndex != -1)
     m_origKeys.RemoveElementAt(keyIndex);
   return nsMsgThreadedDBView::OnHdrDeleted(aHdrDeleted, aParentKey, aFlags,
                                            aInstigator);
 }
 
-NS_IMETHODIMP nsMsgQuickSearchDBView::GetNumMsgsInView(PRInt32 *aNumMsgs)
+NS_IMETHODIMP nsMsgQuickSearchDBView::GetNumMsgsInView(int32_t *aNumMsgs)
 {
   NS_ENSURE_ARG_POINTER(aNumMsgs);
   *aNumMsgs = m_origKeys.Length();

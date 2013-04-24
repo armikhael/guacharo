@@ -1,39 +1,6 @@
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
-# The Original Code is the Mozilla Installer code.
-#
-# The Initial Developer of the Original Code is Mozilla Foundation
-# Portions created by the Initial Developer are Copyright (C) 2006
-# the Initial Developer. All Rights Reserved.
-#
-# Contributor(s):
-#  Robert Strong <robert.bugzilla@gmail.com>
-#  Scott MacGregor <mscott@mozilla.org>
-#
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 !macro PostUpdate
   ${CreateShortcutsLog}
@@ -47,6 +14,9 @@
   ${UpdateProtocolHandlers}
   ; Win7 taskbar and start menu link maintenance
   Call FixShortcutAppModelIDs
+
+  ; setup the application model id registration value
+  ${InitHashAppModelId} "$INSTDIR" "Software\Mozilla\${AppName}\TaskBarIDs"
 
   ; Upgrade the copies of the MAPI DLL's
   ${UpgradeMapiDLLs}
@@ -113,6 +83,45 @@
   ; VirtualStore directory.
   ${CleanVirtualStore}
 
+!ifdef MOZ_MAINTENANCE_SERVICE
+  Call IsUserAdmin
+  Pop $R0
+  ${If} $R0 == "true"
+  ; Only proceed if we have HKLM write access
+  ${AndIf} $TmpVal == "HKLM"
+  ; On Windows 2000 we do not install the maintenance service.
+  ${AndIf} ${AtLeastWinXP}
+    ; Add the registry keys for allowed certificates.
+    ${AddMaintCertKeys}
+
+    ; We check to see if the maintenance service install was already attempted.
+    ; Since the Maintenance service can be installed either x86 or x64,
+    ; always use the 64-bit registry for checking if an attempt was made.
+    SetRegView 64
+    ReadRegDWORD $5 HKLM "Software\Mozilla\MaintenanceService" "Attempted"
+    ClearErrors
+    SetRegView lastused
+
+    ; If the maintenance service is already installed, do nothing.
+    ; The maintenance service will launch:
+    ; maintenanceservice_installer.exe /Upgrade to upgrade the maintenance
+    ; service if necessary.   If the update was done from updater.exe without 
+    ; the service (i.e. service is failing), updater.exe will do the update of 
+    ; the service.  The reasons we do not do it here is because we don't want 
+    ; to have to prompt for limited user accounts when the service isn't used 
+    ; and we currently call the PostUpdate twice, once for the user and once
+    ; for the SYSTEM account.  Also, this would stop the maintenance service
+    ; and we need a return result back to the service when run that way.
+    ${If} $5 == ""
+      ; An install of maintenance service was never attempted.
+      ; We call ExecShell (which is ShellExecute) with the verb "runas"
+      ; to ask for elevation if the user isn't already elevated.  If the user 
+      ; is already elevated it will just launch the program.
+      ExecShell "runas" "$\"$INSTDIR\maintenanceservice_installer.exe$\""
+    ${EndIf}
+  ${EndIf}
+!endif
+
   ; Remove talkback if it is present (remove after bug 386760 is fixed)
   ${If} ${FileExists} "$INSTDIR\extensions\talkback@mozilla.org\"
     RmDir /r "$INSTDIR\extensions\talkback@mozilla.org\"
@@ -177,20 +186,29 @@
     CreateShortCut "$DESKTOP\${BrandFullName}.lnk" "$INSTDIR\${FileMainEXE}" \
                    "" "$INSTDIR\${FileMainEXE}" 0
     ShellLink::SetShortCutWorkingDirectory "$DESKTOP\${BrandFullName}.lnk" "$INSTDIR"
-    ApplicationID::Set "$DESKTOP\${BrandFullName}.lnk" "${AppUserModelID}"
+    ${If} ${AtLeastWin7}
+    ${AndIf} "$AppUserModelID" != ""
+      ApplicationID::Set "$DESKTOP\${BrandFullName}.lnk" "$AppUserModelID"
+    ${EndIf}
     ${Unless} ${FileExists} "$DESKTOP\${BrandFullName}.lnk"
       SetShellVarContext current  ; Set $DESKTOP to the current user's desktop
       ${Unless} ${FileExists} "$DESKTOP\${BrandFullName}.lnk"
         CreateShortCut "$DESKTOP\${BrandFullName}.lnk" "$INSTDIR\${FileMainEXE}" "" "$INSTDIR\${FileMainEXE}" 0
         ShellLink::SetShortCutWorkingDirectory "$DESKTOP\${BrandFullName}.lnk" "$INSTDIR"
-        ApplicationID::Set "$DESKTOP\${BrandFullName}.lnk" "${AppUserModelID}"
+        ${If} ${AtLeastWin7}
+        ${AndIf} "$AppUserModelID" != ""
+          ApplicationID::Set "$DESKTOP\${BrandFullName}.lnk" "$AppUserModelID"
+        ${EndIf}
       ${EndUnless}
     ${EndUnless}
   ${EndUnless}
   ${Unless} ${FileExists} "$QUICKLAUNCH\${BrandFullName}.lnk"
     CreateShortCut "$QUICKLAUNCH\${BrandFullName}.lnk" "$INSTDIR\${FileMainEXE}" "" "$INSTDIR\${FileMainEXE}" 0
     ShellLink::SetShortCutWorkingDirectory "$QUICKLAUNCH\${BrandFullName}.lnk" "$INSTDIR"
-    ApplicationID::Set "$QUICKLAUNCH\${BrandFullName}.lnk" "${AppUserModelID}"
+    ${If} ${AtLeastWin7}
+    ${AndIf} "$AppUserModelID" != ""
+      ApplicationID::Set "$QUICKLAUNCH\${BrandFullName}.lnk" "$AppUserModelID"
+    ${EndIf}
   ${EndUnless}
 !macroend
 !define ShowShortcuts "!insertmacro ShowShortcuts"
@@ -253,7 +271,7 @@
     ${LogHeader} "DLL Registration"
   !endif
   ClearErrors
-  RegDLL "$INSTDIR\MapiProxy_InUse.dll"
+  ${RegisterDLL} "$INSTDIR\MapiProxy_InUse.dll"
   !ifndef NO_LOG  
     ${If} ${Errors}
       ${LogMsg} "** ERROR Registering: $INSTDIR\MapiProxy_InUse.dll **"
@@ -345,7 +363,7 @@
     ${LogHeader} "DLL Registration"
   !endif
   ClearErrors
-  RegDLL "$INSTDIR\MapiProxy_InUse.dll"
+  ${RegisterDLL} "$INSTDIR\MapiProxy_InUse.dll"
   !ifndef NO_LOG  
     ${If} ${Errors}
       ${LogMsg} "** ERROR Registering: $INSTDIR\MapiProxy_InUse.dll **"
@@ -395,7 +413,7 @@
   ${WriteRegStr2} $TmpVal "$0" "PathToExe" "$8\${FileMainEXE}" 0
 
   StrCpy $0 "Software\Mozilla\${BrandFullNameInternal}\${AppVersion} (${AB_CD})\Uninstall"
-  ${WriteRegStr2} $TmpVal "$0" "Description" "${BrandFullNameInternal} (${AppVersion})" 0
+  ${WriteRegStr2} $TmpVal "$0" "Description" "${BrandFullNameInternal} ${AppVersion} (${ARCH} ${AB_CD})" 0
 
   StrCpy $0 "Software\Mozilla\${BrandFullNameInternal}\${AppVersion} (${AB_CD})"
   ${WriteRegStr2} $TmpVal  "$0" "" "${AppVersion} (${AB_CD})" 0
@@ -419,37 +437,54 @@
 ; Add uninstall registry entries. This macro tests for write access to determine
 ; if the uninstall keys should be added to HKLM or HKCU.
 !macro SetUninstallKeys
-  StrCpy $0 "Software\Microsoft\Windows\CurrentVersion\Uninstall\${BrandFullNameInternal} (${AppVersion})"
+  StrCpy $0 "Software\Microsoft\Windows\CurrentVersion\Uninstall\${BrandFullNameInternal} ${AppVersion} (${ARCH} ${AB_CD})"
 
+  StrCpy $2 ""
+  ClearErrors
   WriteRegStr HKLM "$0" "${BrandShortName}InstallerTest" "Write Test"
   ${If} ${Errors}
-    StrCpy $1 "HKCU"
-    SetShellVarContext current  ; Set SHCTX to the current user (e.g. HKCU)
+    ; If the uninstall keys already exist in HKLM don't create them in HKCU
+    ClearErrors
+    ReadRegStr $2 "HKLM" $0 "DisplayName"
+    ${If} $2 == ""
+      ; Otherwise we don't have any keys for this product in HKLM so proceeed
+      ; to create them in HKCU.  Better handling for this will be done in:
+      ; Bug 711044 - Better handling for 2 uninstall icons
+      StrCpy $1 "HKCU"
+      SetShellVarContext current  ; Set SHCTX to the current user (e.g. HKCU)
+    ${EndIf}
+    ClearErrors
   ${Else}
     StrCpy $1 "HKLM"
     SetShellVarContext all     ; Set SHCTX to all users (e.g. HKLM)
     DeleteRegValue HKLM "$0" "${BrandShortName}InstallerTest"
   ${EndIf}
 
-  ${GetLongPath} "$INSTDIR" $8
+  ${If} $2 == ""
+    ${GetLongPath} "$INSTDIR" $8
 
-  ; Write the uninstall registry keys
-  ${WriteRegStr2} $1 "$0" "Comments" "${BrandFullNameInternal}" 0
-  ${WriteRegStr2} $1 "$0" "DisplayIcon" "$8\${FileMainEXE},0" 0
-  ${WriteRegStr2} $1 "$0" "DisplayName" "${BrandFullNameInternal} (${AppVersion})" 0
-  ${WriteRegStr2} $1 "$0" "DisplayVersion" "${AppVersion} (${AB_CD})" 0
-  ${WriteRegStr2} $1 "$0" "InstallLocation" "$8" 0
-  ${WriteRegStr2} $1 "$0" "Publisher" "Mozilla" 0
-  ${WriteRegStr2} $1 "$0" "UninstallString" "$8\uninstall\helper.exe" 0
-  ${WriteRegStr2} $1 "$0" "URLInfoAbout" "${URLInfoAbout}" 0
-  ${WriteRegStr2} $1 "$0" "URLUpdateInfo" "${URLUpdateInfo}" 0
-  ${WriteRegDWORD2} $1 "$0" "NoModify" 1 0
-  ${WriteRegDWORD2} $1 "$0" "NoRepair" 1 0
 
-  ${If} "$TmpVal" == "HKLM"
-    SetShellVarContext all     ; Set SHCTX to all users (e.g. HKLM)
-  ${Else}
-    SetShellVarContext current  ; Set SHCTX to the current user (e.g. HKCU)
+    ; Write the uninstall registry keys
+    ${WriteRegStr2} $1 "$0" "Comments" "${BrandFullNameInternal} ${AppVersion} (${ARCH} ${AB_CD})" 0
+    ${WriteRegStr2} $1 "$0" "DisplayIcon" "$8\${FileMainEXE},0" 0
+    ${WriteRegStr2} $1 "$0" "DisplayName" "${BrandFullNameInternal} ${AppVersion} (${ARCH} ${AB_CD})" 0
+    ${WriteRegStr2} $1 "$0" "DisplayVersion" "${AppVersion}" 0
+    ${WriteRegStr2} $1 "$0" "InstallLocation" "$8" 0
+    ${WriteRegStr2} $1 "$0" "Publisher" "Mozilla" 0
+    ${WriteRegStr2} $1 "$0" "UninstallString" "$8\uninstall\helper.exe" 0
+    ${WriteRegStr2} $1 "$0" "URLInfoAbout" "${URLInfoAbout}" 0
+    ${WriteRegStr2} $1 "$0" "URLUpdateInfo" "${URLUpdateInfo}" 0
+    ${WriteRegDWORD2} $1 "$0" "NoModify" 1 0
+    ${WriteRegDWORD2} $1 "$0" "NoRepair" 1 0
+
+    ${GetSize} "$8" "/S=0K" $R2 $R3 $R4
+    ${WriteRegDWORD2} $1 "$0" "EstimatedSize" $R2 0
+
+    ${If} "$TmpVal" == "HKLM"
+      SetShellVarContext all     ; Set SHCTX to all users (e.g. HKLM)
+    ${Else}
+      SetShellVarContext current  ; Set SHCTX to the current user (e.g. HKCU)
+    ${EndIf}
   ${EndIf}
 !macroend
 !define SetUninstallKeys "!insertmacro SetUninstallKeys"
@@ -505,6 +540,35 @@
   ${EndIf}
 !macroend
 !define UpdateProtocolHandlers "!insertmacro UpdateProtocolHandlers"
+
+!ifdef MOZ_MAINTENANCE_SERVICE
+; Adds maintenance service certificate keys for the install dir.
+; For the cert to work, it must also be signed by a trusted cert for the user.
+!macro AddMaintCertKeys
+  Push $R0
+  ; Allow main Mozilla cert information for updates
+  ; This call will push the needed key on the stack
+  ServicesHelper::PathToUniqueRegistryPath "$INSTDIR"
+  Pop $R0
+  ${If} $R0 != ""
+    ; More than one certificate can be specified in a different subfolder
+    ; for example: $R0\1, but each individual binary can be signed
+    ; with at most one certificate.  A fallback certificate can only be used
+    ; if the binary is replaced with a different certificate.
+    ; We always use the 64bit registry for certs.
+    ; This call is ignored on 32-bit systems.
+    SetRegView 64
+    DeleteRegKey HKLM "$R0"
+    WriteRegStr HKLM "$R0\0" "name" "${CERTIFICATE_NAME}"
+    WriteRegStr HKLM "$R0\0" "issuer" "${CERTIFICATE_ISSUER}"
+    SetRegView lastused
+    ClearErrors
+  ${EndIf} 
+  ; Restore the previously used value back
+  Pop $R0
+!macroend
+!define AddMaintCertKeys "!insertmacro AddMaintCertKeys"
+!endif
 
 ; Removes various registry entries for reasons noted below (does not use SHCTX).
 !macro RemoveDeprecatedKeys
@@ -600,8 +664,11 @@
                                "$INSTDIR\${FileMainEXE}" 0
                 ShellLink::SetShortCutWorkingDirectory "$SMPROGRAMS\${BrandFullName}.lnk" \
                                                        "$INSTDIR"
-                ApplicationID::Set "$SMPROGRAMS\${BrandFullName}.lnk" \
-                                   "${AppUserModelID}"
+                ${If} ${AtLeastWin7}
+                ${AndIf} "$AppUserModelID" != ""
+                  ApplicationID::Set "$SMPROGRAMS\${BrandFullName}.lnk" \
+                                     "$AppUserModelID"
+                ${EndIf}
               ${EndIf}
             ${EndIf}
           ${EndUnless}
@@ -736,7 +803,10 @@
 
 ; Helper for updating the shortcut application model IDs.
 Function FixShortcutAppModelIDs
-  ${UpdateShortcutAppModelIDs} "$INSTDIR\${FileMainEXE}" "${AppUserModelID}" $0
+  ${If} ${AtLeastWin7}
+  ${AndIf} "$AppUserModelID" != ""
+    ${UpdateShortcutAppModelIDs} "$INSTDIR\${FileMainEXE}" "$AppUserModelID" $0
+  ${EndIf}
 FunctionEnd
 
 ; The !ifdef NO_LOG prevents warnings when compiling the installer.nsi due to

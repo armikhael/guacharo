@@ -1,43 +1,16 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Sun Microsystems code.
- *
- * The Initial Developer of the Original Code is
- *   Philipp Kewisch <mozilla@kewis.ch>
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+Components.utils.import("resource://gre/modules/iteratorUtils.jsm");
+Components.utils.import("resource://gre/modules/Services.jsm");
 
 /**
  * Common initialization steps for calendar chrome windows.
  */
 function commonInitCalendar() {
+    // Move around toolbarbuttons and whatever is needed in the UI.
+    migrateCalendarUI();
 
     // Load the Calendar Manager
     loadCalendarManager();
@@ -67,6 +40,19 @@ function commonInitCalendar() {
 
     // Set up the category colors
     categoryManagement.initCategories();
+
+    // Set up window pref observers
+    calendarWindowPrefs.init();
+
+    /* Ensure the new items commands state can be setup properly even when no
+     * calendar support refreshes (i.e. the "onLoad" notification) or when none
+     * are active. In specific cases such as for file-based ICS calendars can
+     * happen, the initial "onLoad" will already have been triggered at this
+     * point (see bug 714431 comment 29). We thus inconditionnally invoke
+     * calendarUpdateNewItemsCommand until somebody writes code that enables the
+     * checking of the calendar readiness (getProperty("ready") ?).
+     */
+    calendarUpdateNewItemsCommand();
 }
 
 /**
@@ -87,6 +73,9 @@ function commonFinishCalendar() {
 
     // Clean up the category colors
     categoryManagement.cleanupCategories();
+
+    // Clean up window pref observers
+    calendarWindowPrefs.cleanup();
 }
 
 /**
@@ -99,4 +88,83 @@ function onCalendarViewResize(aEvent) {
     let event = document.createEvent('Events');
     event.initEvent(currentView().type + "viewresized", true, false);
     document.getElementById("calendarviewBroadcaster").dispatchEvent(event);
+}
+
+/**
+ * TODO: The systemcolors pref observer really only needs to be set up once, so
+ * ideally this code should go into a component. This should be taken care of when
+ * there are more prefs that need to be observed on a global basis that don't fit
+ * into the calendar manager.
+ */
+var calendarWindowPrefs = {
+
+    /** nsISupports QueryInterface */
+    QueryInterface: XPCOMUtils.generateQI([Components.interfaces.nsIObserver]),
+
+    /** Initialize the preference observers */
+    init: function() {
+        Services.prefs.addObserver("calendar.view.useSystemColors", this, false);
+        Services.ww.registerNotification(this);
+
+        // Trigger setting pref on all open windows
+        this.observe(null, "nsPref:changed", "calendar.view.useSystemColors");
+    },
+
+    /**  Cleanup the preference observers */
+    cleanup: function() {
+        Services.prefs.removeObserver("calendar.view.useSystemColors", this);
+        Services.ww.unregisterNotification(this);
+    },
+
+    /**
+     * Observer function called when a pref has changed
+     *
+     * @see nsIObserver
+     */
+    observe: function (aSubject, aTopic, aData) {
+        if (aTopic == "nsPref:changed") {
+            switch (aData) {
+                case "calendar.view.useSystemColors": {
+                    let attributeValue = cal.getPrefSafe("calendar.view.useSystemColors", false) && "true";
+                    for each (let win in fixIterator(Services.ww.getWindowEnumerator())) {
+                        setElementValue(win.document.documentElement, attributeValue , "systemcolors");
+                    }
+                    break;
+                }
+            }
+        } else if (aTopic == "domwindowopened") {
+            let win = aSubject.QueryInterface(Components.interfaces.nsIDOMWindow);
+            win.addEventListener("load", function() {
+                let attributeValue = cal.getPrefSafe("calendar.view.useSystemColors", false) && "true";
+                setElementValue(win.document.documentElement, attributeValue , "systemcolors");
+            }, false);
+        }
+    }
+}
+
+/**
+ * Migrate calendar UI. This function is called at each startup and can be used
+ * to change UI items that require js code intervention
+ */
+function migrateCalendarUI() {
+    const UI_VERSION = 1;
+    let currentUIVersion = cal.getPrefSafe("calendar.ui.version");
+
+    if (currentUIVersion >= UI_VERSION) {
+        return;
+    }
+
+    try {
+        if (currentUIVersion < 1) {
+            let calbar = document.getElementById("calendar-toolbar2");
+            calbar.insertItem("calendar-appmenu-button");
+            let taskbar = document.getElementById("task-toolbar2");
+            taskbar.insertItem("task-appmenu-button");
+        }
+
+        cal.setPref("calendar.ui.version", UI_VERSION);
+    } catch (e) {
+        cal.ERROR("Error upgrading UI from " + currentUIVersion + " to " +
+                  UI_VERSION + ": " + e);
+    }
 }

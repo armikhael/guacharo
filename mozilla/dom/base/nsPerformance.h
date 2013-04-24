@@ -1,98 +1,183 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is implementation of Web Timing draft specification
- * http://dev.w3.org/2006/webapi/WebTiming/
- *
- * The Initial Developer of the Original Code is Google Inc.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Sergey Novikov <sergeyn@google.com> (original author)
- *   Igor Bazarny <igor.bazarny@gmail.com> (update to match bearly-final spec)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #ifndef nsPerformance_h___
 #define nsPerformance_h___
 
-#include "nsIDOMPerformance.h"
-#include "nsIDOMPerformanceTiming.h"
-#include "nsIDOMPerformanceNavigation.h"
 #include "nscore.h"
 #include "nsCOMPtr.h"
 #include "nsAutoPtr.h"
+#include "mozilla/Attributes.h"
+#include "nsWrapperCache.h"
+#include "nsDOMNavigationTiming.h"
 
-class nsIDocument;
 class nsIURI;
-class nsDOMNavigationTiming;
 class nsITimedChannel;
+class nsIDOMWindow;
+class nsPerformance;
+struct JSObject;
+struct JSContext;
 
 // Script "performance.timing" object
-class nsPerformanceTiming : public nsIDOMPerformanceTiming
+class nsPerformanceTiming MOZ_FINAL : public nsISupports,
+                                      public nsWrapperCache
 {
 public:
-  nsPerformanceTiming(nsDOMNavigationTiming* aDOMTiming, nsITimedChannel* aChannel);
-  NS_DECL_ISUPPORTS
-  NS_DECL_NSIDOMPERFORMANCETIMING
+  nsPerformanceTiming(nsPerformance* aPerformance,
+                      nsITimedChannel* aChannel);
+  NS_DECL_CYCLE_COLLECTING_ISUPPORTS
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_CLASS(nsPerformanceTiming)
+
+  nsDOMNavigationTiming* GetDOMTiming() const;
+
+  nsPerformance* GetParentObject() const
+  {
+    return mPerformance;
+  }
+
+  JSObject* WrapObject(JSContext *cx, JSObject *scope, bool *triedToWrap);
+
+  // PerformanceNavigation WebIDL methods
+  DOMTimeMilliSec GetNavigationStart() const {
+    return GetDOMTiming()->GetNavigationStart();
+  }
+  DOMTimeMilliSec GetUnloadEventStart() {
+    return GetDOMTiming()->GetUnloadEventStart();
+  }
+  DOMTimeMilliSec GetUnloadEventEnd() {
+    return GetDOMTiming()->GetUnloadEventEnd();
+  }
+  DOMTimeMilliSec GetRedirectStart() {
+    return GetDOMTiming()->GetRedirectStart();
+  }
+  DOMTimeMilliSec GetRedirectEnd() {
+    return GetDOMTiming()->GetRedirectEnd();
+  }
+  DOMTimeMilliSec GetFetchStart() const {
+    return GetDOMTiming()->GetFetchStart();
+  }
+  DOMTimeMilliSec GetDomainLookupStart() const;
+  DOMTimeMilliSec GetDomainLookupEnd() const;
+  DOMTimeMilliSec GetConnectStart() const;
+  DOMTimeMilliSec GetConnectEnd() const;
+  DOMTimeMilliSec GetRequestStart() const;
+  DOMTimeMilliSec GetResponseStart() const;
+  DOMTimeMilliSec GetResponseEnd() const;
+  DOMTimeMilliSec GetDomLoading() const {
+    return GetDOMTiming()->GetDomLoading();
+  }
+  DOMTimeMilliSec GetDomInteractive() const {
+    return GetDOMTiming()->GetDomInteractive();
+  }
+  DOMTimeMilliSec GetDomContentLoadedEventStart() const {
+    return GetDOMTiming()->GetDomContentLoadedEventStart();
+  }
+  DOMTimeMilliSec GetDomContentLoadedEventEnd() const {
+    return GetDOMTiming()->GetDomContentLoadedEventEnd();
+  }
+  DOMTimeMilliSec GetDomComplete() const {
+    return GetDOMTiming()->GetDomComplete();
+  }
+  DOMTimeMilliSec GetLoadEventStart() const {
+    return GetDOMTiming()->GetLoadEventStart();
+  }
+  DOMTimeMilliSec GetLoadEventEnd() const {
+    return GetDOMTiming()->GetLoadEventEnd();
+  }
+
 private:
   ~nsPerformanceTiming();
-  nsRefPtr<nsDOMNavigationTiming> mDOMTiming;
+  nsRefPtr<nsPerformance> mPerformance;
   nsCOMPtr<nsITimedChannel> mChannel;
 };
 
 // Script "performance.navigation" object
-class nsPerformanceNavigation : public nsIDOMPerformanceNavigation
+class nsPerformanceNavigation MOZ_FINAL : public nsISupports,
+                                          public nsWrapperCache
 {
 public:
-  nsPerformanceNavigation(nsDOMNavigationTiming* data);
-  NS_DECL_ISUPPORTS
-  NS_DECL_NSIDOMPERFORMANCENAVIGATION
+  explicit nsPerformanceNavigation(nsPerformance* aPerformance);
+  NS_DECL_CYCLE_COLLECTING_ISUPPORTS
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_CLASS(nsPerformanceNavigation)
+
+  nsDOMNavigationTiming* GetDOMTiming() const;
+
+  nsPerformance* GetParentObject() const
+  {
+    return mPerformance;
+  }
+
+  JSObject* WrapObject(JSContext *cx, JSObject *scope, bool *triedToWrap);
+
+  // PerformanceNavigation WebIDL methods
+  uint16_t GetType() const {
+    return GetDOMTiming()->GetType();
+  }
+  uint16_t GetRedirectCount() const {
+    return GetDOMTiming()->GetRedirectCount();
+  }
+
 private:
   ~nsPerformanceNavigation();
-  nsRefPtr<nsDOMNavigationTiming> mData;
+  nsRefPtr<nsPerformance> mPerformance;
 };
 
 // Script "performance" object
-class nsPerformance : public nsIDOMPerformance
+class nsPerformance MOZ_FINAL : public nsISupports,
+                                public nsWrapperCache
 {
 public:
-  nsPerformance(nsDOMNavigationTiming* aDOMTiming, nsITimedChannel* aChannel);
+  nsPerformance(nsIDOMWindow* aWindow,
+                nsDOMNavigationTiming* aDOMTiming,
+                nsITimedChannel* aChannel);
 
-  NS_DECL_ISUPPORTS
-  NS_DECL_NSIDOMPERFORMANCE
+  NS_DECL_CYCLE_COLLECTING_ISUPPORTS
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_CLASS(nsPerformance)
+
+  nsDOMNavigationTiming* GetDOMTiming() const
+  {
+    return mDOMTiming;
+  }
+
+  nsITimedChannel* GetChannel() const
+  {
+    return mChannel;
+  }
+
+  nsIDOMWindow* GetParentObject() const
+  {
+    return mWindow.get();
+  }
+
+  JSObject* WrapObject(JSContext *cx, JSObject *scope, bool *triedToWrap);
+
+  // Performance WebIDL methods
+  DOMHighResTimeStamp Now();
+  nsPerformanceTiming* GetTiming();
+  nsPerformanceNavigation* GetNavigation();
 
 private:
   ~nsPerformance();
 
+  nsCOMPtr<nsIDOMWindow> mWindow;
   nsRefPtr<nsDOMNavigationTiming> mDOMTiming;
   nsCOMPtr<nsITimedChannel> mChannel;
-  nsCOMPtr<nsIDOMPerformanceTiming> mTiming;
-  nsCOMPtr<nsIDOMPerformanceNavigation> mNavigation;
+  nsRefPtr<nsPerformanceTiming> mTiming;
+  nsRefPtr<nsPerformanceNavigation> mNavigation;
 };
+
+inline nsDOMNavigationTiming*
+nsPerformanceNavigation::GetDOMTiming() const
+{
+  return mPerformance->GetDOMTiming();
+}
+
+inline nsDOMNavigationTiming*
+nsPerformanceTiming::GetDOMTiming() const
+{
+  return mPerformance->GetDOMTiming();
+}
 
 #endif /* nsPerformance_h___ */
 

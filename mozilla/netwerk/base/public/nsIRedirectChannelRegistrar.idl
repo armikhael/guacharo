@@ -1,38 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is Mozilla Foundation
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Honza Bambas <honzab@firemni.cz>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsISupports.idl"
 
@@ -57,7 +25,7 @@ interface nsIRedirectChannelRegistrar : nsISupports
    * Primarily used in HttpChannelParentListener::AsyncOnChannelRedirect to get
    * a channel id sent to the HttpChannelChild being redirected.
    */
-  PRUint32 registerChannel(in nsIChannel channel);
+  uint32_t registerChannel(in nsIChannel channel);
 
   /**
    * First, search for the channel registered under the id.  If found return
@@ -70,7 +38,7 @@ interface nsIRedirectChannelRegistrar : nsISupports
    * in reaction to nsIChildChannel.connectParent(id) called from the child
    * process.
    */
-  nsIChannel linkChannels(in PRUint32 id, in nsIParentChannel channel);
+  nsIChannel linkChannels(in uint32_t id, in nsIParentChannel channel);
 
   /**
    * Returns back the channel previously registered under the ID with
@@ -79,7 +47,7 @@ interface nsIRedirectChannelRegistrar : nsISupports
    * Primarilly used in chrome IPC side of protocols when attaching a redirect
    * target channel to an existing 'real' channel implementation.
    */
-  nsIChannel getRegisteredChannel(in PRUint32 id);
+  nsIChannel getRegisteredChannel(in uint32_t id);
 
   /**
    * Returns the stream listener that shall be attached to the redirect target
@@ -90,7 +58,7 @@ interface nsIRedirectChannelRegistrar : nsISupports
    * to grab the created parent side of the channel and forward notifications
    * to it.
    */
-  nsIParentChannel getParentChannel(in PRUint32 id);
+  nsIParentChannel getParentChannel(in uint32_t id);
 
   /**
    * To not force all channel implementations to support weak reference
@@ -100,5 +68,5 @@ interface nsIRedirectChannelRegistrar : nsISupports
    *
    * Primarilly used in HttpChannelParentListener::OnRedirectResult callback.
    */
-  void deregisterChannels(in PRUint32 id);
+  void deregisterChannels(in uint32_t id);
 };

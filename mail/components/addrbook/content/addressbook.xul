@@ -1,42 +1,8 @@
 <?xml version="1.0"?> 
 
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
-# The Original Code is Mozilla Communicator client code, released
-# March 31, 1998.
-#
-# The Initial Developer of the Original Code is
-# Netscape Communications Corporation.
-# Portions created by the Initial Developer are Copyright (C) 1998-1999
-# the Initial Developer. All Rights Reserved.
-#
-# Contributor(s):
-#   Seth Spitzer <sspitzer@netscape.com>
-#
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 <?xml-stylesheet href="chrome://messenger/skin/addressbook/addressbook.css" type="text/css"?> 
 
@@ -60,10 +26,14 @@
     id="addressbookWindow"
     title="&addressbookWindow.title;"
     windowtype="mail:addressbook"
+    macanimationtype="document"
     persist="width height screenX screenY sizemode"
     toggletoolbar="true"
     onload="OnLoadAddressBook()"
-    onunload="OnUnloadAddressBook()">
+    onunload="OnUnloadAddressBook()"
+    lightweightthemes="true"
+    fullscreenbutton="true"
+    lightweightthemesfooter="status-bar">
 
   <stringbundleset id="stringbundleset">
     <stringbundle id="bundle_addressBook" src="chrome://messenger/locale/addressbook/addressBook.properties"/>
@@ -125,6 +95,8 @@
              valueItems="&deleteItemsCmd.label;"
              disabled="true"/>
     <command id="cmd_selectAll" oncommand="goDoCommand('cmd_selectAll')" disabled="true"/>
+    <command id="cmd_preferences"
+             oncommand="openOptionsDialog('paneCompose', 'addressingTab');"/>
 #ifdef XP_MACOSX
     <!-- Mac Window menu -->
     <command id="minimizeWindow" label="&minimizeWindow.label;" oncommand="window.minimize();"/>
@@ -133,6 +105,7 @@
 #endif
     <command id="cmd_CustomizeABToolbar"
              oncommand="CustomizeMailToolbar('ab-toolbox', 'CustomizeABToolbar')"/>
+    <command id="cmd_chatWithCard" oncommand="goDoCommand('cmd_chatWithCard')" disabled="true" />
 </commandset>
 
 <broadcasterset id="abBroadcasters">
@@ -233,7 +206,7 @@
   <menuitem id="abResultsTreeContext-newim"
             label="&newIM.label;"
             accesskey="&newIM.accesskey;"
-            oncommand="AbIMSelected()"/>
+            command="cmd_chatWithCard"/>
   <menuseparator/>
   <menuitem id="abResultsTreeContext-delete"
             label="&deleteButton2.label;"
@@ -266,6 +239,10 @@
            defaultset="menubar-items"
 #else
           defaultset="menubar-items,spring"
+#endif
+#ifdef XP_WIN
+          toolbarname="&menubarCmd.label;"
+          accesskey="&menubarCmd.accesskey;"
 #endif
            context="toolbar-context-menu" mode="icons">
 
@@ -406,7 +383,7 @@
 #ifndef XP_MACOSX
         <menuseparator id="prefSep"/>
         <menuitem id="menu_preferences" label="&preferencesCmdUnix.label;" accesskey="&preferencesCmdUnix.accesskey;"
-                  oncommand="openOptionsDialog()"/>
+                  command="cmd_preferences"/>
 #endif
 #endif
           </menupopup>
@@ -418,6 +395,10 @@
                       label="&viewToolbarsMenu.label;" accesskey="&viewToolbarsMenu.accesskey;"
                       onpopupshowing="onViewToolbarsPopupShowing(event, 'ab-toolbox');">
                   <menupopup id="view_toolbars_popup">
+                    <menuitem id="menu_showTaskbar"
+                              label="&showTaskbarCmd.label;" accesskey="&showTaskbarCmd.accesskey;"
+                              oncommand="goToggleToolbar('status-bar', 'menu_showTaskbar')"
+                              type="checkbox" checked="true"/>
                     <menuseparator id="viewMenuBeforeCustomizeABToolbarsSeparator"/>
                     <menuitem id="customizeABToolbars"
                               command="cmd_CustomizeABToolbar"
@@ -425,23 +406,30 @@
                               accesskey="&customizeToolbar.accesskey;"/>
                   </menupopup>
                 </menu>
-                <menuitem id="menu_showTaskbar"
-                          label="&showTaskbarCmd.label;" accesskey="&showTaskbarCmd.accesskey;"
-                          oncommand="goToggleToolbar('status-bar', 'menu_showTaskbar')"
-                          type="checkbox" checked="true"/>
-                <menuseparator id="viewMenuAfterTaskbarSeparator"/>
-                <menuitem id="menu_showCardPane"
-                          label="&showContactPane.label;"
-                          accesskey="&showContactPane.accesskey;"
-                          oncommand="goToggleSplitter('results-splitter', 'menu_showCardPane')"
-                          checked="true" type="checkbox"/>
-                <menuseparator/>
+                <menu id="menu_Layout"
+                      label="&layoutMenu.label;"
+                      accesskey="&layoutMenu.accesskey;">
+                  <menupopup id="view_layout_popup"
+                             onpopupshowing="InitViewLayoutMenuPopup(event);">
+                    <menuitem id="menu_showDirectoryPane"
+                              label="&showDirectoryPane.label;"
+                              accesskey="&showDirectoryPane.accesskey;"
+                              oncommand="togglePaneSplitter('dirTree-splitter');"
+                              checked="true" type="checkbox"/>
+                    <menuitem id="menu_showCardPane"
+                              label="&showContactPane2.label;"
+                              accesskey="&showContactPane2.accesskey;"
+                              oncommand="togglePaneSplitter('results-splitter');"
+                              checked="true" type="checkbox"/>
+                  </menupopup>
+                </menu>
+                <menuseparator id="viewMenuAfterLayoutSeparator"/>
                 <menu id="menu_ShowNameAs" label="&menu_ShowNameAs.label;" accesskey="&menu_ShowNameAs.accesskey;">
                     <menupopup id="menu_ShowNameAsPopup">
                         <menuitem type="radio" name="shownameas"
                                   id="firstLastCmd"
-                                  label="&firstLastCmd.label;"
-                                  accesskey="&firstLastCmd.accesskey;"
+                                  label="&firstLastCmd2.label;"
+                                  accesskey="&firstLastCmd2.accesskey;"
                                   oncommand="SetNameColumn('firstLastCmd')"/>
                         <menuitem type="radio" name="shownameas"
                                   id="lastFirstCmd"
@@ -465,10 +453,10 @@
                                   id="cmd_SortByPrimaryEmail"
                                   accesskey="&PrimaryEmail.accesskey;"
                                   oncommand="SortResultPane('PrimaryEmail');" name="sortas" type="radio" checked="true"/>
-                        <menuitem label="&ScreenName.label;"
-                                  id="cmd_SortBy_AimScreenName"
-                                  accesskey="&ScreenName.accesskey;"
-                                  oncommand="SortResultPane('_AimScreenName');" name="sortas" type="radio" checked="true"/>
+                        <menuitem label="&ChatName.label;"
+                                  id="cmd_SortByChatName"
+                                  accesskey="&ChatName.accesskey;"
+                                  oncommand="SortResultPane('ChatName');" name="sortas" type="radio" checked="true"/>
                         <menuitem label="&Company.label;"
                                   id="cmd_SortByCompany"
                                   accesskey="&Company.accesskey;"
@@ -543,11 +531,11 @@
 #ifndef XP_UNIX
         <menuseparator id="prefSep"/>
             <menuitem id="menu_preferences" label="&preferencesCmd.label;" accesskey="&preferencesCmd.accesskey;"
-                      oncommand="openOptionsDialog()"/>
+                      command="cmd_preferences"/>
 #else
 #ifdef XP_MACOSX
         <menuitem id="menu_preferences" label="&preferencesCmd.label;" accesskey="&preferencesCmd.accesskey;"
-                  oncommand="openOptionsDialog()"/>
+                  command="cmd_preferences"/>
 #endif
 #endif
           </menupopup>
@@ -574,7 +562,7 @@
                      tooltiptext="&editButton2.tooltip;"
                      oncommand="goDoCommand('button_edit');"/>
       <toolbarbutton class="toolbarbutton-1" id="button-newmessage" label="&newmsgButton.label;" tooltiptext="&newmsgButton.tooltip;" oncommand="AbNewMessage();"/>
-      <toolbarbutton class="toolbarbutton-1" id="button-newim" label="&newIM.label;" tooltiptext="&newIM.tooltip;" oncommand="AbIMSelected();"/>
+      <toolbarbutton class="toolbarbutton-1" id="button-newim" label="&newIM.label;" tooltiptext="&newIM.tooltip;" command="cmd_chatWithCard"/>
       <toolbarbutton class="toolbarbutton-1" id="button-abdelete"
                      observes="button_delete" label="&deleteButton2.label;"
                      tooltiptext="&deleteButton2.tooltip;"
@@ -645,18 +633,18 @@
             persist="height sortCol">
 
         <treecols id="abResultsTreeCols">
-          <!-- these column ids must match up to the mork column names, except for GeneratedName, see nsIAddrDatabase.idl -->
+          <!-- these column ids must match up to the mork column names, except for GeneratedName and ChatName, see nsIAddrDatabase.idl -->
           <treecol id="GeneratedName"
                    persist="hidden ordinal width sortDirection" flex="1" 
                    label="&GeneratedName.label;" primary="true"/>
           <splitter class="tree-splitter"/>
           <treecol id="PrimaryEmail"
-                   persist="hidden ordinal width sortDirection"  flex="1"
+                   persist="hidden ordinal width sortDirection" flex="1"
                    label="&PrimaryEmail.label;"/>
           <splitter class="tree-splitter"/>
-          <treecol id="_AimScreenName"
-                   persist="hidden ordinal width sortDirection"  flex="1"
-                   label="&ScreenName.label;"/>
+          <treecol id="ChatName"
+                   persist="hidden ordinal width sortDirection" flex="1"
+                   label="&ChatName.label;"/>
           <splitter class="tree-splitter"/>
           <treecol id="Company"
                    persist="hidden ordinal width sortDirection" flex="1"
@@ -718,11 +706,8 @@
           <vbox id="CardViewInnerBox" collapsed="true" flex="1">
             <description id="CardTitle"/>
             <hbox flex="1">
-              <vbox id="cvbPhoto" class="cardViewGroup">
-                <description style="min-width: 10ch; max-width: 10ch; text-align: center;">
-                  <html:img id="cvPhoto"
-                            style="max-width: 10ch; max-height: 10ch;"/>
-                </description>
+              <vbox id="cvbPhoto" class="cardViewGroup" align="center">
+                <image id="cvPhoto" style="max-width: 10ch; max-height: 10ch;"/>
               </vbox>
               <vbox flex="1">
                 <vbox id="cvbContact" class="cardViewGroup">
@@ -737,9 +722,6 @@
                   </description>
                   <description class="CardViewLink" id="cvEmail2Box">
                     <html:a href="" id="cvEmail2"/>
-                  </description>
-                  <description class="CardViewLink" id="cvScreennameBox">
-                    <html:a href="" id="cvScreenname"/>
                   </description>
                 </vbox>
                 <vbox id="cvbHome" class="cardViewGroup">
@@ -771,6 +753,18 @@
                     <image id="cvBuddyIcon"/> 
                   </hbox>
                 </vbox>
+                <vbox id="cvbChat" class="cardViewGroup">
+                  <description class="CardViewHeading" id="cvhChat">&chat.heading;</description>
+                  <description class="CardViewText" id="cvGtalk"/>
+                  <description class="CardViewText" id="cvAIM"/>
+                  <description class="CardViewText" id="cvYahoo"/>
+                  <description class="CardViewText" id="cvSkype"/>
+                  <description class="CardViewText" id="cvQQ"/>
+                  <description class="CardViewText" id="cvMSN"/>
+                  <description class="CardViewText" id="cvICQ"/>
+                  <description class="CardViewText" id="cvXMPP"/>
+                </vbox>
+                <!-- the description and addresses groups are only for mailing lists -->
                 <vbox id="cvbDescription" class="cardViewGroup">
                   <description class="CardViewHeading" id="cvhDescription">&description.heading;</description>
                   <description class="CardViewText" id="cvDescription"/>
@@ -820,7 +814,7 @@
   </hbox>
   <panel id="customizeToolbarSheetPopup" noautohide="true">
     <iframe id="customizeToolbarSheetIFrame"
-            style="&dialog.style;"
+            style="&dialog.dimensions;"
             hidden="true"/>
   </panel>
   

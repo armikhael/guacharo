@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef __MSGSEND_H__
 #define __MSGSEND_H__
@@ -161,6 +129,7 @@
 #include "nsIMsgComposeSecure.h"
 #include "nsAutoPtr.h"
 #include "nsISupportsArray.h"
+#include "nsMsgAttachmentData.h"
 
 //
 // Some necessary defines...
@@ -191,15 +160,6 @@ class nsMsgComposeAndSend : public nsIMsgSend
 {
 public:
   //
-  // The exit method used when downloading attachments only.
-  // This still may be useful because of the fact that it is an
-  // internal callback only. This way, no thread boundry issues and
-  // we can get away without all of the listener array code.
-  //
-  void (*m_attachments_done_callback) (nsresult  status,
-        const PRUnichar *error_msg, struct nsMsgAttachedFile *attachments);
-
-  //
   // Define QueryInterface, AddRef and Release for this class
   //
   NS_DECL_ISUPPORTS
@@ -212,8 +172,8 @@ public:
   NS_IMETHOD  DeliverMessage();
   NS_IMETHOD  DeliverFileAsMail();
   NS_IMETHOD  DeliverFileAsNews();
-  void        DoDeliveryExitProcessing(nsIURI * aUrl, nsresult aExitCode, PRBool aCheckForMail);
-  nsresult    FormatStringWithSMTPHostNameByID(PRInt32 aMsgId, PRUnichar **aString);
+  void        DoDeliveryExitProcessing(nsIURI * aUrl, nsresult aExitCode, bool aCheckForMail);
+  nsresult    FormatStringWithSMTPHostNameByID(int32_t aMsgId, PRUnichar **aString);
 
   nsresult    DoFcc();
   nsresult    StartMessageCopyOperation(nsIFile          *aFileSpec,
@@ -224,7 +184,7 @@ public:
   nsresult SendToMagicFolder(nsMsgDeliverMode flag);
 
   // Check to see if it's ok to save msgs to the configured folder.
-  PRBool CanSaveMessagesToFolder(const char *folderURL);
+  bool CanSaveMessagesToFolder(const char *folderURL);
 
   //
   // FCC operations...
@@ -243,15 +203,15 @@ public:
                    const char       *aAccountKey,
                    nsMsgCompFields  *fields,
                    nsIFile          *sendFile,
-                   PRBool           digest_p,
-                   PRBool           dont_deliver_p,
+                   bool             digest_p,
+                   bool             dont_deliver_p,
                    nsMsgDeliverMode mode,
                    nsIMsgDBHdr      *msgToReplace,
                    const char       *attachment1_type,
                    const char       *attachment1_body,
-                   PRUint32         attachment1_body_length,
-                   const nsMsgAttachmentData   *attachments,
-                   const nsMsgAttachedFile     *preloaded_attachments,
+                   uint32_t         attachment1_body_length,
+                   nsIArray   *attachments,
+                   nsIArray     *preloaded_attachments,
                    const char       *password,
                    const nsACString &aOriginalMsgURI,
                    MSG_ComposeType  aType);
@@ -270,24 +230,24 @@ public:
   //
   // Attachment processing...
   //
-  nsresult    HackAttachments(const struct nsMsgAttachmentData *attachments,
-                              const struct nsMsgAttachedFile *preloaded_attachments);
+  nsresult    HackAttachments(nsIArray *attachments,
+                              nsIArray *preloaded_attachments);
   nsresult    CountCompFieldAttachments();
   nsresult    AddCompFieldLocalAttachments();
-  nsresult    AddCompFieldRemoteAttachments(PRUint32  aStartLocation, PRInt32 *aMailboxCount, PRInt32 *aNewsCount);
+  nsresult    AddCompFieldRemoteAttachments(uint32_t  aStartLocation, int32_t *aMailboxCount, int32_t *aNewsCount);
 
   // Deal with multipart related data
-  nsresult    ProcessMultipartRelated(PRInt32 *aMailboxCount, PRInt32 *aNewsCount);
-  nsresult    GetEmbeddedObjectInfo(nsIDOMNode *node, nsMsgAttachmentData *attachment, PRBool *acceptObject);
-  PRUint32    GetMultipartRelatedCount(PRBool forceToBeCalculated = PR_FALSE);
+  nsresult    ProcessMultipartRelated(int32_t *aMailboxCount, int32_t *aNewsCount);
+  nsresult    GetEmbeddedObjectInfo(nsIDOMNode *node, nsMsgAttachmentData *attachment, bool *acceptObject);
+  uint32_t    GetMultipartRelatedCount(bool forceToBeCalculated = false);
   nsCOMPtr<nsISupportsArray> mEmbeddedObjectList; // it's initialized when calling GetMultipartRelatedCount
 
   // Body processing
   nsresult    SnarfAndCopyBody(const char  *attachment1_body,
-                               PRUint32    attachment1_body_length,
+                               uint32_t    attachment1_body_length,
                                const char  *attachment1_type);
 
-  PRInt32     PreProcessPart(nsMsgAttachmentHandler  *ma,
+  int32_t     PreProcessPart(nsMsgAttachmentHandler  *ma,
                              nsMsgSendPart           *toppart); // The very top most container of the message
                                                                 // For part processing
 
@@ -304,9 +264,9 @@ public:
   nsCOMPtr<nsIFile>         mTempFile;           // our temporary file
 
   nsCOMPtr<nsIOutputStream> mOutputFile;         // the actual output file stream
-  PRUint32                  mMessageWarningSize; // Warn if a message is over this size!
+  uint32_t                  mMessageWarningSize; // Warn if a message is over this size!
 
-  PRBool                    m_dont_deliver_p;    // If set, we just return the nsIFile of the file
+  bool                      m_dont_deliver_p;    // If set, we just return the nsIFile of the file
                                                  // created, instead of actually delivering message.
   nsMsgDeliverMode          m_deliver_mode;      // nsMsgDeliverNow, nsMsgQueueForLater, nsMsgSaveAsDraft,
                                                  // nsMsgSaveAsTemplate and nsMsgSendUnsent
@@ -320,7 +280,7 @@ public:
   nsCOMPtr<nsIMsgSendListener>    mListener;
   nsCOMPtr<nsIMsgStatusFeedback>  mStatusFeedback;
   nsCOMPtr<nsIRequest>      mRunningRequest;
-  PRBool                    mSendMailAlso;
+  bool                      mSendMailAlso;
   nsCOMPtr<nsIFile>         mReturnFile;     // a holder for file spec's to be returned to caller
 
   // File where we stored our HTML so that we could make the plaintext form.
@@ -328,13 +288,16 @@ public:
 
   // Variable for storing the draft name;
   nsCString                  m_folderName;
+
+  // mapping between editor dom node indexes and saved mime part numbers.
+  nsTArray<nsCString> m_partNumbers;
   //
   // These variables are needed for message Copy operations!
   //
   nsCOMPtr<nsIFile>         mCopyFile;
   nsCOMPtr<nsIFile>         mCopyFile2;
   nsRefPtr<nsMsgCopy>       mCopyObj;
-  PRBool                    mNeedToPerformSecondFCC;
+  bool                      mNeedToPerformSecondFCC;
 
   // For MHTML message creation
   nsCOMPtr<nsIEditor>       mEditor;
@@ -346,7 +309,7 @@ public:
   char                    *m_attachment1_encoding;
   MimeEncoderData         *m_attachment1_encoder_data;
   char                    *m_attachment1_body;
-  PRUint32                m_attachment1_body_length;
+  uint32_t                m_attachment1_body_length;
   char                    *mOriginalHTMLBody;
 
   // The plaintext form of the first attachment, if needed.
@@ -359,36 +322,30 @@ public:
   //
   // Subsequent attachments, if any.
   //
-  PRUint32                m_attachment_count;
-  PRUint32                m_attachment_pending_count;
+  uint32_t                m_attachment_count;
+  uint32_t                m_attachment_pending_count;
   nsMsgAttachmentHandler  *m_attachments;
   nsresult                m_status; // in case some attachments fail but not all
 
-  PRUint32                mPreloadedAttachmentCount;
-  PRUint32                mRemoteAttachmentCount;
-  PRInt32                 mMultipartRelatedAttachmentCount; // the number of mpart related attachments, -1 means it has not been yet initialized
+  uint32_t                mPreloadedAttachmentCount;
+  uint32_t                mRemoteAttachmentCount;
+  int32_t                 mMultipartRelatedAttachmentCount; // the number of mpart related attachments, -1 means it has not been yet initialized
 
-  PRUint32                mCompFieldLocalAttachments;     // the number of file:// attachments in the comp fields
-  PRUint32                mCompFieldRemoteAttachments;    // the number of remote attachments in the comp fields
+  uint32_t                mCompFieldLocalAttachments;     // the number of file:// attachments in the comp fields
+  uint32_t                mCompFieldRemoteAttachments;    // the number of remote attachments in the comp fields
 
   //
   // attachment states and other info...
   //
-  PRBool                  m_attachments_only_p;         // If set, then we don't construct a complete
-                                                        // MIME message; instead, we just retrieve the
-                                                        // attachments from the network, store them in
-                                                        // tmp files, and return a list of
-                                                        // nsMsgAttachedFile structs which describe them.
-
-  PRBool                  m_pre_snarfed_attachments_p;  // If true, then the attachments were
+  bool                    m_pre_snarfed_attachments_p;  // If true, then the attachments were
                                                         // loaded by in the background and therefore
                                                         // we shouldn't delete the tmp files (but should
                                                         // leave that to the caller.)
 
-  PRBool                  m_digest_p;                   // Whether to be multipart/digest instead of
+  bool                    m_digest_p;                   // Whether to be multipart/digest instead of
                                                         // multipart/mixed.
 
-  PRBool                  m_be_synchronous_p;            // If true, we will load one URL after another,
+  bool                    m_be_synchronous_p;            // If true, we will load one URL after another,
                                                         // rather than starting all URLs going at once
                                                         // and letting them load in parallel.  This is
                                                         // more efficient if (for example) all URLs are
@@ -397,9 +354,9 @@ public:
                                                         // cause multiple connections to the news
                                                         // server to be opened, or would cause much seek()ing.
 
-  PRBool                  mGUINotificationEnabled;      // Should we throw up the GUI alerts on errors?
-  PRBool                  mLastErrorReported;           // Last error reported to the user.
-  PRBool                  mAbortInProcess;              // Used by Abort to avoid reentrance.
+  bool                    mGUINotificationEnabled;      // Should we throw up the GUI alerts on errors?
+  bool                    mLastErrorReported;           // Last error reported to the user.
+  bool                    mAbortInProcess;              // Used by Abort to avoid reentrance.
 
   nsCOMPtr<nsIMsgComposeSecure> m_crypto_closure;
 
@@ -408,7 +365,7 @@ protected:
   nsresult GetNotificationCallbacks(nsIInterfaceRequestor** aCallbacks);
 private:
   // will set m_attachment1_body & m_attachment1_body_length;
-  nsresult EnsureLineBreaks(const char *body, PRUint32 body_len);
+  nsresult EnsureLineBreaks(const char *body, uint32_t body_len);
 
   // generates a message id for our message, if necessary
   void GenerateMessageId( );
@@ -428,9 +385,9 @@ private:
 //
 // These C routines should only be used by the nsMsgSendPart class.
 //
-extern nsresult mime_write_message_body(nsIMsgSend *state, const char *buf, PRInt32 size);
+extern nsresult mime_write_message_body(nsIMsgSend *state, const char *buf, int32_t size);
 extern char   *mime_get_stream_write_buffer(void);
-extern nsresult mime_encoder_output_fn (const char *buf, PRInt32 size, void *closure);
-extern PRBool UseQuotedPrintable(void);
+extern nsresult mime_encoder_output_fn (const char *buf, int32_t size, void *closure);
+extern bool UseQuotedPrintable(void);
 
 #endif /*  __MSGSEND_H__ */

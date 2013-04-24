@@ -1,57 +1,23 @@
 /* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Mail Code.
- *
- * The Initial Developer of the Original Code is
- * Scott MacGregor.
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Scott MacGregor <mscott@mozilla.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+Components.utils.import("resource://gre/modules/Services.jsm");
 
 var gIdentityListBox;                 // the root <listbox> node
 var gAddButton;
 var gEditButton;
 var gDeleteButton;
-var gMessengerBundle;
 
 var gAccount = null;  // the account we are showing the identities for
 
 function onLoad()
 {
-  gMessengerBundle = document.getElementById("bundle_messenger");
-
   gIdentityListBox = document.getElementById("identitiesList");
-  gAddButton        = document.getElementById("addButton");
-  gEditButton       = document.getElementById("editButton");
-  gDeleteButton     = document.getElementById("deleteButton");
+  gAddButton       = document.getElementById("addButton");
+  gEditButton      = document.getElementById("editButton");
+  gDeleteButton    = document.getElementById("deleteButton");
 
   // extract the account
   gAccount = window.arguments[0].account;
@@ -60,7 +26,7 @@ function onLoad()
   document.title = document.getElementById("bundle_prefs")
                            .getFormattedString("identity-list-title", [accountName]);
 
-  // extract the account from 
+  // extract the account from
   refreshIdentityList();
 
   // try selecting the first identity
@@ -78,7 +44,7 @@ function refreshIdentityList()
   for (var j = 0; j < identitiesCount; j++) 
   {
     var identity = identities.QueryElementAt(j, Components.interfaces.nsIMsgIdentity);
-    if (identity.valid) 
+    if (identity.valid)
     {
       var listitem = document.createElement("listitem");
       listitem.setAttribute("label", identity.identityName);
@@ -92,16 +58,17 @@ function refreshIdentityList()
 // identity: pass in the identity (if any) to load in the dialog
 function openIdentityEditor(identity)
 {
-  var result = false; 
+  var result = false;
   var args = { identity: identity, account: gAccount, result: result };
 
-  window.openDialog("am-identity-edit.xul", "", "chrome,modal,resizable=no,centerscreen", args);
+  window.openDialog("am-identity-edit.xul", "",
+                    "chrome,modal,resizable=no,centerscreen", args);
 
   var selectedItemIndex = gIdentityListBox.selectedIndex;
 
   if (args.result)
   {
-    refreshIdentityList();   
+    refreshIdentityList();
     gIdentityListBox.selectedIndex = selectedItemIndex;
   }
 }
@@ -111,10 +78,10 @@ function getSelectedIdentity()
   var identityKey = gIdentityListBox.selectedItems[0].getAttribute("key");
   var identities = gAccount.identities;
   var identitiesCount = identities.Count();
-	for (var j = 0; j < identitiesCount; j++) 
+  for (var j = 0; j < identitiesCount; j++)
   {
     var identity = identities.QueryElementAt(j, Components.interfaces.nsIMsgIdentity);
-    if (identity.valid && identity.key == identityKey) 
+    if (identity.valid && identity.key == identityKey)
       return identity;
   }
 
@@ -129,12 +96,12 @@ function onEdit(event)
 
 function updateButtons()
 {
-  if (gIdentityListBox.selectedItems.length <= 0) 
+  if (gIdentityListBox.selectedItems.length <= 0)
   {
     gEditButton.setAttribute("disabled", "true");
     gDeleteButton.setAttribute("disabled", "true");
-  } 
-  else 
+  }
+  else
   {
     gEditButton.removeAttribute("disabled");
     if (gIdentityListBox.getRowCount() > 1)
@@ -147,19 +114,30 @@ function onDelete(event)
   if (gIdentityListBox.getRowCount() <= 1)  // don't support deleting the last identity
     return;
 
-  gAccount.removeIdentity(getSelectedIdentity());
+  // get delete confirmation
+  let selectedIdentity = getSelectedIdentity();
+
+  let prefsBundle = document.getElementById("bundle_prefs");
+  let confirmTitle = prefsBundle.getFormattedString("identity-delete-confirm-title",
+                                                    [window.arguments[0].accountName]);
+  let confirmText = prefsBundle.getFormattedString("identity-delete-confirm",
+                                                   [selectedIdentity.identityName]);
+  let confirmButton = prefsBundle.getString("identity-delete-confirm-button");
+
+  if (Services.prompt.confirmEx(window, confirmTitle, confirmText,
+                                (Services.prompt.BUTTON_POS_0 * Services.prompt.BUTTON_TITLE_IS_STRING) +
+                                (Services.prompt.BUTTON_POS_1 * Services.prompt.BUTTON_TITLE_CANCEL),
+                                confirmButton, null, null, null, {}))
+    return;
+
+  gAccount.removeIdentity(selectedIdentity);
   // rebuild the list
-  refreshIdentityList(); 
+  refreshIdentityList();
 }
 
 function onOk()
 {
   window.arguments[0].result = true;
-  return true;
-}
-
-function onCancel()
-{
   return true;
 }
 

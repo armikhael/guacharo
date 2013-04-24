@@ -1,39 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "modmimee.h"
 #include "mimemsig.h"
@@ -46,6 +14,7 @@
 #include "msgCore.h"
 #include "nsMimeStringResources.h"
 #include "mimemoz2.h"
+#include "nsIMimeConverter.h" // for MimeConverterOutputCallback
 
 
 #define MIME_SUPERCLASS mimeMultipartClass
@@ -55,10 +24,10 @@ MimeDefClass(MimeMultipartSigned, MimeMultipartSignedClass,
 static int MimeMultipartSigned_initialize (MimeObject *);
 static int MimeMultipartSigned_create_child (MimeObject *);
 static int MimeMultipartSigned_close_child(MimeObject *);
-static int MimeMultipartSigned_parse_line (const char *, PRInt32, MimeObject *);
-static int MimeMultipartSigned_parse_child_line (MimeObject *, const char *, PRInt32,
-                         PRBool);
-static int MimeMultipartSigned_parse_eof (MimeObject *, PRBool);
+static int MimeMultipartSigned_parse_line (const char *, int32_t, MimeObject *);
+static int MimeMultipartSigned_parse_child_line (MimeObject *, const char *, int32_t,
+                         bool);
+static int MimeMultipartSigned_parse_eof (MimeObject *, bool);
 static void MimeMultipartSigned_finalize (MimeObject *);
 
 static int MimeMultipartSigned_emit_child (MimeObject *obj);
@@ -95,7 +64,7 @@ MimeMultipartSigned_initialize (MimeObject *object)
 }
 
 static void
-MimeMultipartSigned_cleanup (MimeObject *obj, PRBool finalizing_p)
+MimeMultipartSigned_cleanup (MimeObject *obj, bool finalizing_p)
 {
   MimeMultipart *mult = (MimeMultipart *) obj; /* #58075.  Fix suggested by jwz */
   MimeMultipartSigned *sig = (MimeMultipartSigned *) obj;
@@ -128,13 +97,13 @@ MimeMultipartSigned_cleanup (MimeObject *obj, PRBool finalizing_p)
 
   if (sig->sig_decoder_data)
   {
-    MimeDecoderDestroy(sig->sig_decoder_data, PR_TRUE);
+    MimeDecoderDestroy(sig->sig_decoder_data, true);
     sig->sig_decoder_data = 0;
   }
 }
 
 static int
-MimeMultipartSigned_parse_eof (MimeObject *obj, PRBool abort_p)
+MimeMultipartSigned_parse_eof (MimeObject *obj, bool abort_p)
 {
   MimeMultipartSigned *sig = (MimeMultipartSigned *) obj;
   int status = 0;
@@ -162,7 +131,7 @@ MimeMultipartSigned_parse_eof (MimeObject *obj, PRBool abort_p)
     if (status < 0) return status;
   }
 
-  MimeMultipartSigned_cleanup(obj, PR_FALSE);
+  MimeMultipartSigned_cleanup(obj, false);
   return ((MimeObjectClass*)&MIME_SUPERCLASS)->parse_eof(obj, abort_p);
 }
 
@@ -170,19 +139,19 @@ MimeMultipartSigned_parse_eof (MimeObject *obj, PRBool abort_p)
 static void
 MimeMultipartSigned_finalize (MimeObject *obj)
 {
-  MimeMultipartSigned_cleanup(obj, PR_TRUE);
+  MimeMultipartSigned_cleanup(obj, true);
   ((MimeObjectClass*)&MIME_SUPERCLASS)->finalize(obj);
 }
 
 
 static int
-MimeMultipartSigned_parse_line (const char *line, PRInt32 length, MimeObject *obj)
+MimeMultipartSigned_parse_line (const char *line, int32_t length, MimeObject *obj)
 {
   MimeMultipart *mult = (MimeMultipart *) obj;
   MimeMultipartSigned *sig = (MimeMultipartSigned *) obj;
   MimeMultipartParseState old_state = mult->state;
-  PRBool hash_line_p = PR_TRUE;
-  PRBool no_headers_p = PR_FALSE;
+  bool hash_line_p = true;
+  bool no_headers_p = false;
   int status = 0;
 
   /* First do the parsing for normal multipart/ objects by handing it off to
@@ -214,7 +183,7 @@ MimeMultipartSigned_parse_line (const char *line, PRInt32 length, MimeObject *ob
        that this line is the preceeding boundary string (and we
        should ignore it.)
        */
-      hash_line_p = PR_FALSE;
+      hash_line_p = false;
 
       if (sig->state == MimeMultipartSignedPreamble)
       sig->state = MimeMultipartSignedBodyFirstHeader;
@@ -230,7 +199,7 @@ MimeMultipartSigned_parse_line (const char *line, PRInt32 length, MimeObject *ob
       if (sig->state == MimeMultipartSignedBodyFirstHeader)
       {      
         sig->state = MimeMultipartSignedBodyFirstLine;
-        no_headers_p = PR_TRUE;
+        no_headers_p = true;
       }
       else if (sig->state == MimeMultipartSignedBodyHeaders)
       sig->state = MimeMultipartSignedBodyFirstLine;
@@ -312,7 +281,7 @@ MimeMultipartSigned_parse_line (const char *line, PRInt32 length, MimeObject *ob
        (that is, if it's the first line in the header state after
        a state change.)
        */
-      PRBool first_line_p
+      bool first_line_p
       = (no_headers_p ||
          sig->state == MimeMultipartSignedBodyFirstHeader);
 
@@ -367,7 +336,7 @@ MimeMultipartSigned_parse_line (const char *line, PRInt32 length, MimeObject *ob
        reached the end of the signed data.
        */
       status = (((MimeMultipartSignedClass *) obj->clazz)
-          ->crypto_data_eof) (sig->crypto_closure, PR_FALSE);
+          ->crypto_data_eof) (sig->crypto_closure, false);
       if (status < 0) return status;
     }
     break;
@@ -386,11 +355,11 @@ MimeMultipartSigned_parse_line (const char *line, PRInt32 length, MimeObject *ob
      (Similar logic is in MimeLeafClass->parse_begin.)
      */
     {
-    MimeDecoderData *(*fn) (nsresult (*) (const char*, PRInt32,void*), void*) = 0;
+    MimeDecoderData *(*fn) (MimeConverterOutputCallback, void*) = 0;
     nsCString encoding;
     encoding.Adopt(MimeHeaders_get (sig->sig_hdrs,
                    HEADER_CONTENT_TRANSFER_ENCODING,
-                   PR_TRUE, PR_FALSE));
+                   true, false));
     if (encoding.IsEmpty())
       ;
     else if (!PL_strcasecmp(encoding.get(), ENCODING_BASE64))
@@ -398,7 +367,7 @@ MimeMultipartSigned_parse_line (const char *line, PRInt32 length, MimeObject *ob
     else if (!PL_strcasecmp(encoding.get(), ENCODING_QUOTED_PRINTABLE))
     {
       sig->sig_decoder_data =
-  MimeQPDecoderInit (((nsresult (*) (const char *, PRInt32, void *))
+  MimeQPDecoderInit (((MimeConverterOutputCallback)
      (((MimeMultipartSignedClass *) obj->clazz)
           ->crypto_signature_hash)),
     sig->crypto_closure);
@@ -415,7 +384,7 @@ MimeMultipartSigned_parse_line (const char *line, PRInt32 length, MimeObject *ob
     if (fn)
       {
       sig->sig_decoder_data =
-        fn (((nsresult (*) (const char *, PRInt32, void *))
+        fn (((MimeConverterOutputCallback)
            (((MimeMultipartSignedClass *) obj->clazz)
           ->crypto_signature_hash)),
           sig->crypto_closure);
@@ -441,7 +410,7 @@ MimeMultipartSigned_parse_line (const char *line, PRInt32 length, MimeObject *ob
       /* Feed this line into the signature verification routines. */
 
       if (sig->sig_decoder_data)
-      status = MimeDecoderWrite (sig->sig_decoder_data, line, length, nsnull);
+      status = MimeDecoderWrite (sig->sig_decoder_data, line, length, nullptr);
       else
       status = (((MimeMultipartSignedClass *) obj->clazz)
             ->crypto_signature_hash (line, length,
@@ -507,8 +476,8 @@ MimeMultipartSigned_close_child (MimeObject *obj)
 
 static int
 MimeMultipartSigned_parse_child_line (MimeObject *obj,
-                    const char *line, PRInt32 length,
-                    PRBool first_line_p)
+                    const char *line, int32_t length,
+                    bool first_line_p)
 {
   MimeMultipartSigned *sig = (MimeMultipartSigned *) obj;
   MimeContainer *cont = (MimeContainer *) obj;
@@ -630,7 +599,7 @@ MimeMultipartSigned_emit_child (MimeObject *obj)
 #if 0 // XXX For the moment, no HTML output. Fix this XXX //
     if (!html) return -1; /* MIME_OUT_OF_MEMORY? */
 
-    status = MimeObject_write(obj, html, strlen(html), PR_FALSE);
+    status = MimeObject_write(obj, html, strlen(html), false);
     PR_Free(html);
     if (status < 0) return status;
 #endif
@@ -644,7 +613,7 @@ MimeMultipartSigned_emit_child (MimeObject *obj)
       obj->options->generate_post_header_html_fn &&
       !obj->options->state->post_header_html_run_p)
     {
-      MimeHeaders *outer_headers=nsnull;
+      MimeHeaders *outer_headers=nullptr;
       MimeObject *p;
       for (p = obj; p->parent; p = p->parent)
       outer_headers = p->headers;
@@ -653,10 +622,10 @@ MimeMultipartSigned_emit_child (MimeObject *obj)
       html = obj->options->generate_post_header_html_fn(NULL,
                           obj->options->html_closure,
                               outer_headers);
-      obj->options->state->post_header_html_run_p = PR_TRUE;
+      obj->options->state->post_header_html_run_p = true;
       if (html)
       {
-        status = MimeObject_write(obj, html, strlen(html), PR_FALSE);
+        status = MimeObject_write(obj, html, strlen(html), false);
         PR_Free(html);
         if (status < 0) return status;
       }
@@ -688,8 +657,8 @@ MimeMultipartSigned_emit_child (MimeObject *obj)
     MimeObject *firstChild = ((MimeContainer*) obj)->children[0];
     char *disposition = MimeHeaders_get (firstChild->headers,
                                          HEADER_CONTENT_DISPOSITION, 
-                                         PR_TRUE,
-                                         PR_FALSE);
+                                         true,
+                                         false);
     // check if need to show as inline
     if (!disposition)
     {
@@ -701,7 +670,7 @@ MimeMultipartSigned_emit_child (MimeObject *obj)
           !PL_strcasecmp (content_type, MULTIPART_RELATED) ||
           !PL_strcasecmp (content_type, MESSAGE_NEWS) ||
           !PL_strcasecmp (content_type, MESSAGE_RFC822)) {
-        char *ct = MimeHeaders_get(mult->hdrs, HEADER_CONTENT_TYPE, PR_FALSE, PR_FALSE);
+        char *ct = MimeHeaders_get(mult->hdrs, HEADER_CONTENT_TYPE, false, false);
         if (ct) {
           char *cset = MimeHeaders_get_parameter (ct, "charset", NULL, NULL);
           if (cset) {
@@ -725,8 +694,8 @@ MimeMultipartSigned_emit_child (MimeObject *obj)
     //  parsed thing, so get it from raw.  (We do not do it in the charset
     //  notification block that just happened because it already has complex
     //  if-checks that do not jive with us.
-    char *ct = MimeHeaders_get(mult->hdrs, HEADER_CONTENT_TYPE, PR_FALSE,
-                               PR_FALSE);
+    char *ct = MimeHeaders_get(mult->hdrs, HEADER_CONTENT_TYPE, false,
+                               false);
     mimeEmitterAddHeaderField(obj->options, HEADER_CONTENT_TYPE,
                               ct ? ct : "text/plain");
     PR_Free(ct);
@@ -752,7 +721,7 @@ MimeMultipartSigned_emit_child (MimeObject *obj)
 
 #ifdef MIME_DRAFTS
   if (body->options->decompose_file_p) {
-    body->options->signed_p = PR_TRUE;
+    body->options->signed_p = true;
     if (!mime_typep(body, (MimeObjectClass*)&mimeMultipartClass) &&
     body->options->decompose_file_init_fn)
     body->options->decompose_file_init_fn ( body->options->stream_closure, body->headers );
@@ -767,29 +736,28 @@ MimeMultipartSigned_emit_child (MimeObject *obj)
       !mime_typep(body, (MimeObjectClass*)&mimeMultipartClass)  &&
       body->options->decompose_file_output_fn)
       status = MimePartBufferRead (sig->part_buffer,
-                 /* The (nsresult (*) ...) cast is to turn the
+                 /* The (MimeConverterOutputCallback) cast is to turn the
                   `void' argument into `MimeObject'. */
-                 ((nsresult (*) (const char *, PRInt32, void *))
+                 ((MimeConverterOutputCallback)
                  body->options->decompose_file_output_fn),
                  body->options->stream_closure);
     else
 #endif /* MIME_DRAFTS */
 
     status = MimePartBufferRead (sig->part_buffer,
-                 /* The (nsresult (*) ...) cast is to turn the
+                 /* The (MimeConverterOutputCallback) cast is to turn the
                   `void' argument into `MimeObject'. */
-                 ((nsresult (*) (const char *, PRInt32, void *))
-                body->clazz->parse_buffer),
+                 ((MimeConverterOutputCallback) body->clazz->parse_buffer),
                 body);
     if (status < 0) return status;
   }
 
-  MimeMultipartSigned_cleanup(obj, PR_FALSE);
+  MimeMultipartSigned_cleanup(obj, false);
 
   /* Done parsing. */
-  status = body->clazz->parse_eof(body, PR_FALSE);
+  status = body->clazz->parse_eof(body, false);
   if (status < 0) return status;
-  status = body->clazz->parse_end(body, PR_FALSE);
+  status = body->clazz->parse_end(body, false);
   if (status < 0) return status;
 
 #ifdef MIME_DRAFTS

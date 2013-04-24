@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jerry.Kirk@Nexwarecorp.com
- *   Chris Seawood <cls@seawood.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * This module is supposed to abstract signal handling away from the other
@@ -60,7 +26,7 @@
 #include <sys/resource.h>
 #include <unistd.h>
 #include <stdlib.h> // atoi
-#ifndef __arm__ // no arm impl
+#ifndef ANDROID // no Android impl
 #  include <ucontext.h>
 #endif
 #endif
@@ -90,7 +56,7 @@ static const int kClientChannelFd = 3;
 
 extern "C" {
 
-static void PrintStackFrame(void *aPC, void *aClosure)
+static void PrintStackFrame(void *aPC, void *aSP, void *aClosure)
 {
   char buf[1024];
   nsCodeAddressDetails details;
@@ -111,7 +77,7 @@ ah_crap_handler(int signum)
          signum);
 
   printf("Stack:\n");
-  NS_StackWalk(PrintStackFrame, 2, nsnull);
+  NS_StackWalk(PrintStackFrame, 2, nullptr, 0);
 
   printf("Sleeping for %d seconds.\n",_gdb_sleep_duration);
   printf("Type 'gdb %s %d' to attach your debugger to this thread.\n",
@@ -135,12 +101,12 @@ child_ah_crap_handler(int signum)
 
 #endif // CRAWL_STACK_ON_SIGSEGV
 
-#ifdef MOZ_WIDGET_GTK2
+#ifdef MOZ_WIDGET_GTK
 // Need this include for version test below.
 #include <glib.h>
 #endif
 
-#if defined(MOZ_WIDGET_GTK2) && (GLIB_MAJOR_VERSION > 2 || (GLIB_MAJOR_VERSION == 2 && GLIB_MINOR_VERSION >= 6))
+#if defined(MOZ_WIDGET_GTK) && (GLIB_MAJOR_VERSION > 2 || (GLIB_MAJOR_VERSION == 2 && GLIB_MINOR_VERSION >= 6))
 
 static GLogFunc orig_log_func = NULL;
 
@@ -171,7 +137,7 @@ static void fpehandler(int signum, siginfo_t *si, void *context)
   /* Integer divide by zero or integer overflow. */
   /* Note: FPE_INTOVF is ignored on Intel, PowerPC and SPARC systems. */
   if (si->si_code == FPE_INTDIV || si->si_code == FPE_INTOVF) {
-    NS_DebugBreak(NS_DEBUG_ABORT, "Divide by zero", nsnull, __FILE__, __LINE__);
+    NS_DebugBreak(NS_DEBUG_ABORT, "Divide by zero", nullptr, __FILE__, __LINE__);
   }
 
 #ifdef XP_MACOSX
@@ -190,7 +156,7 @@ static void fpehandler(int signum, siginfo_t *si, void *context)
   *mxcsr &= ~SSE_STATUS_FLAGS; /* clear all pending SSE exceptions */
 #endif
 #endif
-#if defined(LINUX) && !defined(__arm__)
+#if defined(LINUX) && !defined(ANDROID)
   ucontext_t *uc = (ucontext_t *)context;
 
 #if defined(__i386__)
@@ -316,7 +282,7 @@ void InstallSignalHandlers(const char *ProgramName)
     }
 #endif //SOLARIS
 
-#if defined(MOZ_WIDGET_GTK2) && (GLIB_MAJOR_VERSION > 2 || (GLIB_MAJOR_VERSION == 2 && GLIB_MINOR_VERSION >= 6))
+#if defined(MOZ_WIDGET_GTK) && (GLIB_MAJOR_VERSION > 2 || (GLIB_MAJOR_VERSION == 2 && GLIB_MINOR_VERSION >= 6))
   const char *assertString = PR_GetEnv("XPCOM_DEBUG_BREAK");
   if (assertString &&
       (!strcmp(assertString, "suspend") ||

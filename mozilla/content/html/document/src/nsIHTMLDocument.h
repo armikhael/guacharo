@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsIHTMLDocument_h
 #define nsIHTMLDocument_h
@@ -49,9 +17,8 @@ class nsContentList;
 class nsWrapperCache;
 
 #define NS_IHTMLDOCUMENT_IID \
-{ 0x51a360fa, 0xd659, 0x4d85, \
-  { 0xa5, 0xc5, 0x4a, 0xbb, 0x0d, 0x97, 0x0f, 0x7a } }
-
+{ 0xcf814492, 0x303c, 0x4718, \
+  { 0x9a, 0x3e, 0x39, 0xbc, 0xd5, 0x2c, 0x10, 0xdb } }
 
 /**
  * HTML document extensions to nsIDocument.
@@ -72,18 +39,6 @@ public:
                                nsWrapperCache **aCache) = 0;
 
   /**
-   * Called from the script loader to notify this document that a new
-   * script is being loaded.
-   */
-  virtual void ScriptLoading(nsIScriptElement *aScript) = 0;
-
-  /**
-   * Called from the script loader to notify this document that a script
-   * just finished executing.
-   */
-  virtual void ScriptExecuted(nsIScriptElement *aScript) = 0;
-
-  /**
    * Called when form->BindToTree() is called so that document knows
    * immediately when a form is added
    */
@@ -99,12 +54,9 @@ public:
    */
   // XXXbz is this still needed now that we can flush just content,
   // not the rest?
-  virtual PRInt32 GetNumFormsSynchronous() = 0;
+  virtual int32_t GetNumFormsSynchronous() = 0;
   
-  virtual PRBool IsWriting() = 0;
-
-  virtual PRBool GetIsFrameset() = 0;
-  virtual void SetIsFrameset(PRBool aFrameset) = 0;
+  virtual bool IsWriting() = 0;
 
   /**
    * Get the list of form elements in the document.
@@ -127,7 +79,7 @@ public:
    *                true, -1 if it was changed to false
    */
   virtual nsresult ChangeContentEditableCount(nsIContent *aElement,
-                                              PRInt32 aChange) = 0;
+                                              int32_t aChange) = 0;
 
   enum EditingState {
     eTearingDown = -2,
@@ -140,7 +92,7 @@ public:
   /**
    * Returns whether the document is editable.
    */
-  PRBool IsEditingOn()
+  bool IsEditingOn()
   {
     return GetEditingState() == eDesignMode ||
            GetEditingState() == eContentEditable;
@@ -169,9 +121,9 @@ public:
    */
   virtual void TearingDownEditor(nsIEditor *aEditor) = 0;
 
-  virtual void SetIsXHTML(PRBool aXHTML) = 0;
+  virtual void SetIsXHTML(bool aXHTML) = 0;
 
-  virtual void SetDocWriteDisabled(PRBool aDisabled) = 0;
+  virtual void SetDocWriteDisabled(bool aDisabled) = 0;
 };
 
 NS_DEFINE_STATIC_IID_ACCESSOR(nsIHTMLDocument, NS_IHTMLDOCUMENT_IID)

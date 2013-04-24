@@ -1,38 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Emre Birol  <ebirol@gmail.com> (Original Author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsAutoSyncState.h"
 #include "nsImapMailFolder.h"
@@ -56,7 +24,7 @@ MsgStrategyComparatorAdaptor::MsgStrategyComparatorAdaptor(nsIAutoSyncMsgStrateg
 }
 
 /** @return True if the elements are equals; false otherwise. */
-PRBool MsgStrategyComparatorAdaptor::Equals(const nsMsgKey& a, const nsMsgKey& b) const
+bool MsgStrategyComparatorAdaptor::Equals(const nsMsgKey& a, const nsMsgKey& b) const
 {
   nsCOMPtr<nsIMsgDBHdr> hdrA;
   nsCOMPtr<nsIMsgDBHdr> hdrB;
@@ -77,11 +45,11 @@ PRBool MsgStrategyComparatorAdaptor::Equals(const nsMsgKey& a, const nsMsgKey& b
       return (decision == nsAutoSyncStrategyDecisions::Same);
   }
   
-  return PR_FALSE;
+  return false;
 }
 
 /** @return True if (a < b); false otherwise. */
-PRBool MsgStrategyComparatorAdaptor::LessThan(const nsMsgKey& a, const nsMsgKey& b) const
+bool MsgStrategyComparatorAdaptor::LessThan(const nsMsgKey& a, const nsMsgKey& b) const
 {
   nsCOMPtr<nsIMsgDBHdr> hdrA;
   nsCOMPtr<nsIMsgDBHdr> hdrB;
@@ -102,14 +70,14 @@ PRBool MsgStrategyComparatorAdaptor::LessThan(const nsMsgKey& a, const nsMsgKey&
       return (decision == nsAutoSyncStrategyDecisions::Lower);
   }
   
-  return PR_FALSE;
+  return false;
 }
 
 nsAutoSyncState::nsAutoSyncState(nsImapMailFolder *aOwnerFolder, PRTime aLastSyncTime)
   : mSyncState(stCompletedIdle), mOffset(0U), mLastOffset(0U), mLastServerTotal(0),
     mLastServerRecent(0), mLastServerUnseen(0), mLastNextUID(0),
     mLastSyncTime(aLastSyncTime), mLastUpdateTime(0UL), mProcessPointer(0U),
-    mIsDownloadQChanged(PR_FALSE), mRetryCounter(0U)
+    mIsDownloadQChanged(false), mRetryCounter(0U)
 {
   mOwnerFolder = do_GetWeakReference(static_cast<nsIMsgImapMailFolder*>(aOwnerFolder));
 }
@@ -148,11 +116,11 @@ nsresult nsAutoSyncState::PlaceIntoDownloadQ(const nsTArray<nsMsgKey> &aMsgKeyLi
     mDownloadQ.SetCapacity(mDownloadQ.Length() + aMsgKeyList.Length());
     
     // remove excluded messages
-    PRInt32 elemCount = aMsgKeyList.Length();
-    for (PRInt32 idx = 0; idx < elemCount; idx++)
+    int32_t elemCount = aMsgKeyList.Length();
+    for (int32_t idx = 0; idx < elemCount; idx++)
     {
       nsCOMPtr<nsIMsgDBHdr> hdr;
-      PRBool containsKey;
+      bool containsKey;
       database->ContainsKey(aMsgKeyList[idx], &containsKey);
       if (!containsKey)
         continue;
@@ -160,18 +128,18 @@ nsresult nsAutoSyncState::PlaceIntoDownloadQ(const nsTArray<nsMsgKey> &aMsgKeyLi
       if(!hdr)
         continue; // can't get message header, continue with the next one
       
-      PRBool doesFit = PR_TRUE;
+      bool doesFit = true;
       rv = autoSyncMgr->DoesMsgFitDownloadCriteria(hdr, &doesFit);
       if (NS_SUCCEEDED(rv) && !mDownloadQ.Contains(aMsgKeyList[idx]) && doesFit)
       {
-        PRBool excluded = PR_FALSE;
+        bool excluded = false;
         if (msgStrategy)
         {
           rv = msgStrategy->IsExcluded(folder, hdr, &excluded);
           
           if (NS_SUCCEEDED(rv) && !excluded)
           {
-            mIsDownloadQChanged = PR_TRUE;
+            mIsDownloadQChanged = true;
             mDownloadQ.AppendElement(aMsgKeyList[idx]);
           }
         }
@@ -217,7 +185,7 @@ nsresult nsAutoSyncState::SortQueueBasedOnStrategy(nsTArray<nsMsgKey> &aQueue)
 // without changing the size of the queue. It is required since 
 // we cannot sort ranges in nsTArray.
 nsresult nsAutoSyncState::SortSubQueueBasedOnStrategy(nsTArray<nsMsgKey> &aQueue,
-                                                      PRUint32 aStartingOffset)
+                                                      uint32_t aStartingOffset)
 {
   NS_ASSERTION(aStartingOffset < aQueue.Length(), "*** Starting offset is out of range");
 
@@ -237,8 +205,8 @@ nsresult nsAutoSyncState::SortSubQueueBasedOnStrategy(nsTArray<nsMsgKey> &aQueue
   return rv;
 }
 
-NS_IMETHODIMP nsAutoSyncState::GetNextGroupOfMessages(PRUint32 aSuggestedGroupSizeLimit, 
-                                                      PRUint32 *aActualGroupSize, 
+NS_IMETHODIMP nsAutoSyncState::GetNextGroupOfMessages(uint32_t aSuggestedGroupSizeLimit, 
+                                                      uint32_t *aActualGroupSize, 
                                                       nsIMutableArray **aMessagesList)
 {
   NS_ENSURE_ARG_POINTER(aMessagesList);
@@ -268,21 +236,21 @@ NS_IMETHODIMP nsAutoSyncState::GetNextGroupOfMessages(PRUint32 aSuggestedGroupSi
           : SortQueueBasedOnStrategy(mDownloadQ);
 
         if (NS_SUCCEEDED(rv))
-          mIsDownloadQChanged = PR_FALSE;
+          mIsDownloadQChanged = false;
       }
 
       nsCOMPtr<nsIAutoSyncManager> autoSyncMgr = do_GetService(NS_AUTOSYNCMANAGER_CONTRACTID, &rv);
       NS_ENSURE_SUCCESS(rv, rv);
 
-      PRUint32 msgCount = mDownloadQ.Length();
-      PRUint32 idx = mOffset;
+      uint32_t msgCount = mDownloadQ.Length();
+      uint32_t idx = mOffset;
 
       nsCOMPtr<nsIAutoSyncMsgStrategy> msgStrategy;
       autoSyncMgr->GetMsgStrategy(getter_AddRefs(msgStrategy));
 
       for (; idx < msgCount; idx++)
       {
-        PRBool containsKey = PR_FALSE;
+        bool containsKey = false;
         database->ContainsKey(mDownloadQ[idx], &containsKey);
         if (!containsKey)
         {
@@ -298,7 +266,7 @@ NS_IMETHODIMP nsAutoSyncState::GetNextGroupOfMessages(PRUint32 aSuggestedGroupSi
         // ensure that we don't have this message body offline already,
         // possible if the user explicitly selects this message prior
         // to auto-sync kicks in
-        PRUint32 msgFlags = 0;
+        uint32_t msgFlags = 0;
         qhdr->GetFlags(&msgFlags);
         if (msgFlags & nsMsgMessageFlags::Offline)
           continue;
@@ -308,12 +276,12 @@ NS_IMETHODIMP nsAutoSyncState::GetNextGroupOfMessages(PRUint32 aSuggestedGroupSi
         // state of TB such as the size of the message store etc.
         if (msgStrategy)
         {
-          PRBool excluded = PR_FALSE;
+          bool excluded = false;
           if (NS_SUCCEEDED(msgStrategy->IsExcluded(folder, qhdr, &excluded)) && excluded)
             continue;
         }
 
-        PRUint32 msgSize;
+        uint32_t msgSize;
         qhdr->GetMessageSize(&msgSize);
         // ignore 0 byte messages; the imap parser asserts when we try 
         // to download them, and there's no point anyway.
@@ -323,7 +291,7 @@ NS_IMETHODIMP nsAutoSyncState::GetNextGroupOfMessages(PRUint32 aSuggestedGroupSi
         if (!*aActualGroupSize && msgSize >= aSuggestedGroupSizeLimit) 
         {
           *aActualGroupSize = msgSize;
-          group->AppendElement(qhdr, PR_FALSE);
+          group->AppendElement(qhdr, false);
           idx++;
           break;
         }
@@ -331,7 +299,7 @@ NS_IMETHODIMP nsAutoSyncState::GetNextGroupOfMessages(PRUint32 aSuggestedGroupSi
           break;
         else
         {
-          group->AppendElement(qhdr, PR_FALSE);
+          group->AppendElement(qhdr, false);
           *aActualGroupSize += msgSize;
         }
       }// endfor
@@ -353,7 +321,7 @@ NS_IMETHODIMP nsAutoSyncState::GetNextGroupOfMessages(PRUint32 aSuggestedGroupSi
 /**
  * Usually called by nsAutoSyncManager when the last sync time is expired.
  */
-NS_IMETHODIMP nsAutoSyncState::ProcessExistingHeaders(PRUint32 aNumOfHdrsToProcess, PRUint32 *aLeftToProcess)
+NS_IMETHODIMP nsAutoSyncState::ProcessExistingHeaders(uint32_t aNumOfHdrsToProcess, uint32_t *aLeftToProcess)
 {
   NS_ENSURE_ARG_POINTER(aLeftToProcess);
 
@@ -377,16 +345,16 @@ NS_IMETHODIMP nsAutoSyncState::ProcessExistingHeaders(PRUint32 aNumOfHdrsToProce
   }
 
   // process the existing headers and find the messages not downloaded yet
-  PRUint32 lastIdx = mProcessPointer;
+  uint32_t lastIdx = mProcessPointer;
   nsTArray<nsMsgKey> msgKeys;
-  PRUint32 keyCount = mExistingHeadersQ.Length();
+  uint32_t keyCount = mExistingHeadersQ.Length();
   for (; mProcessPointer < (lastIdx + aNumOfHdrsToProcess) && mProcessPointer < keyCount; mProcessPointer++)
   {
     nsCOMPtr<nsIMsgDBHdr> hdr;
     rv = database->GetMsgHdrForKey(mExistingHeadersQ[mProcessPointer], getter_AddRefs(hdr));
     if (hdr)
     {
-      PRUint32 msgFlags = 0;
+      uint32_t msgFlags = 0;
       hdr->GetFlags(&msgFlags);
 
       if (!(msgFlags & nsMsgMessageFlags::Offline))
@@ -414,7 +382,7 @@ NS_IMETHODIMP nsAutoSyncState::ProcessExistingHeaders(PRUint32 aNumOfHdrsToProce
     mLastSyncTime = PR_Now();
     mExistingHeadersQ.Clear();
     mProcessPointer = 0;
-    folder->SetMsgDatabase(nsnull);
+    folder->SetMsgDatabase(nullptr);
   }
 
   return rv;
@@ -436,7 +404,7 @@ NS_IMETHODIMP nsAutoSyncState::UpdateFolder()
   NS_ENSURE_SUCCESS(rv, rv);
   nsCOMPtr <nsIMsgImapMailFolder> imapFolder = do_QueryReferent(mOwnerFolder, &rv);
   SetState(nsAutoSyncState::stUpdateIssued);
-  return imapFolder->UpdateFolderWithListener(nsnull, autoSyncMgrListener);
+  return imapFolder->UpdateFolderWithListener(nullptr, autoSyncMgrListener);
 }
 
 NS_IMETHODIMP nsAutoSyncState::OnStartRunningUrl(nsIURI* aUrl)
@@ -471,7 +439,7 @@ NS_IMETHODIMP nsAutoSyncState::OnStopRunningUrl(nsIURI* aUrl, nsresult aExitCode
   {
     nsCOMPtr <nsIMsgImapMailFolder> imapFolder = do_QueryReferent(mOwnerFolder, &rv);
     NS_ENSURE_SUCCESS(rv, rv);
-    PRInt32 serverTotal, serverUnseen, serverRecent, serverNextUID;
+    int32_t serverTotal, serverUnseen, serverRecent, serverNextUID;
     imapFolder->GetServerTotal(&serverTotal);
     imapFolder->GetServerUnseen(&serverUnseen);
     imapFolder->GetServerRecent(&serverRecent);
@@ -489,15 +457,15 @@ NS_IMETHODIMP nsAutoSyncState::OnStopRunningUrl(nsIURI* aUrl, nsresult aExitCode
               serverTotal, mLastServerTotal, serverRecent, mLastServerRecent));
       SetServerCounts(serverTotal, serverRecent, serverUnseen, serverNextUID);
       SetState(nsAutoSyncState::stUpdateIssued);
-      return imapFolder->UpdateFolderWithListener(nsnull, autoSyncMgrListener);
+      return imapFolder->UpdateFolderWithListener(nullptr, autoSyncMgrListener);
     }
     else
     {
-      ownerFolder->SetMsgDatabase(nsnull);
+      ownerFolder->SetMsgDatabase(nullptr);
       // nothing more to do.
       SetState(nsAutoSyncState::stCompletedIdle);
       // autoSyncMgr needs this notification, so manufacture it.
-      return autoSyncMgrListener->OnStopRunningUrl(nsnull, NS_OK);
+      return autoSyncMgrListener->OnStopRunningUrl(nullptr, NS_OK);
     }
   }
   //XXXemre how we recover from this error?
@@ -511,7 +479,7 @@ NS_IMETHODIMP nsAutoSyncState::OnStopRunningUrl(nsIURI* aUrl, nsresult aExitCode
   return autoSyncMgr->OnDownloadCompleted(this, aExitCode);
 }
 
-NS_IMETHODIMP nsAutoSyncState::GetState(PRInt32 *aState)
+NS_IMETHODIMP nsAutoSyncState::GetState(int32_t *aState)
 {
   NS_ENSURE_ARG_POINTER(aState);
   *aState = mSyncState;
@@ -522,7 +490,7 @@ const char *stateStrings[] = {"idle", "status issued", "update needed",
                               "update issued", "downloading",
                               "ready to download"};
 
-NS_IMETHODIMP nsAutoSyncState::SetState(PRInt32 aState)
+NS_IMETHODIMP nsAutoSyncState::SetState(int32_t aState)
 {
   mSyncState = aState;
   if (aState == stCompletedIdle)
@@ -537,12 +505,12 @@ NS_IMETHODIMP nsAutoSyncState::SetState(PRInt32 aState)
       nsCOMPtr <nsIMsgFolder> ownerFolder = do_QueryReferent(mOwnerFolder, &rv);
       NS_ENSURE_SUCCESS(rv, rv);
 
-      PRBool folderOpen;
-      PRUint32 folderFlags;
+      bool folderOpen;
+      uint32_t folderFlags;
       ownerFolder->GetFlags(&folderFlags);
       session->IsFolderOpenInWindow(ownerFolder, &folderOpen);
       if (!folderOpen && ! (folderFlags & nsMsgFolderFlags::Inbox))
-        ownerFolder->SetMsgDatabase(nsnull);
+        ownerFolder->SetMsgDatabase(nullptr);
     }
   }
   nsCString logStr("Sync State set to ");
@@ -552,7 +520,7 @@ NS_IMETHODIMP nsAutoSyncState::SetState(PRInt32 aState)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsAutoSyncState::TryCurrentGroupAgain(PRUint32 aRetryCount)
+NS_IMETHODIMP nsAutoSyncState::TryCurrentGroupAgain(uint32_t aRetryCount)
 {
   SetState(stReadyToDownload);
 
@@ -574,14 +542,14 @@ NS_IMETHODIMP nsAutoSyncState::ResetRetryCounter()
   return NS_OK;
 }
 
-NS_IMETHODIMP nsAutoSyncState::GetPendingMessageCount(PRInt32 *aMsgCount)
+NS_IMETHODIMP nsAutoSyncState::GetPendingMessageCount(int32_t *aMsgCount)
 {
   NS_ENSURE_ARG_POINTER(aMsgCount);
   *aMsgCount = mDownloadQ.Length() - mOffset;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsAutoSyncState::GetTotalMessageCount(PRInt32 *aMsgCount)
+NS_IMETHODIMP nsAutoSyncState::GetTotalMessageCount(int32_t *aMsgCount)
 {
   NS_ENSURE_ARG_POINTER(aMsgCount);
   *aMsgCount = mDownloadQ.Length();
@@ -619,10 +587,10 @@ NS_IMETHODIMP nsAutoSyncState::ResetDownloadQ()
  * Tests whether the given folder is owned by the same imap server
  * or not.
  */
-NS_IMETHODIMP nsAutoSyncState::IsSibling(nsIAutoSyncState *aAnotherStateObj, PRBool *aResult)
+NS_IMETHODIMP nsAutoSyncState::IsSibling(nsIAutoSyncState *aAnotherStateObj, bool *aResult)
 {
   NS_ENSURE_ARG_POINTER(aResult);
-  *aResult = PR_FALSE;
+  *aResult = false;
 
   nsresult rv;
   nsCOMPtr<nsIMsgFolder> folderA, folderB;
@@ -639,7 +607,7 @@ NS_IMETHODIMP nsAutoSyncState::IsSibling(nsIAutoSyncState *aAnotherStateObj, PRB
   rv = folderB->GetServer(getter_AddRefs(serverB));
   NS_ENSURE_SUCCESS(rv,rv);
   
-  PRBool isSibling;
+  bool isSibling;
   rv = serverA->Equals(serverB, &isSibling);
   
   if (NS_SUCCEEDED(rv))
@@ -653,7 +621,7 @@ NS_IMETHODIMP nsAutoSyncState::DownloadMessagesForOffline(nsIArray *aMessagesLis
 {
   NS_ENSURE_ARG_POINTER(aMessagesList);
   
-  PRUint32 count;
+  uint32_t count;
   nsresult rv = aMessagesList->GetLength(&count);
   NS_ENSURE_SUCCESS(rv,rv);
   
@@ -682,7 +650,7 @@ NS_IMETHODIMP nsAutoSyncState::DownloadMessagesForOffline(nsIArray *aMessagesLis
   rv = imapService->DownloadMessagesForOffline(messageIds, 
                                                folder, 
                                                this, 
-                                               nsnull);
+                                               nullptr);
   if (NS_SUCCEEDED(rv))
     SetState(stDownloadInProgress);                                              
 
@@ -696,7 +664,7 @@ NS_IMETHODIMP nsAutoSyncState::GetLastSyncTime(PRTime *aLastSyncTime)
   return NS_OK;
 }
 
-void nsAutoSyncState::SetLastSyncTimeInSec(PRInt32 aLastSyncTime)
+void nsAutoSyncState::SetLastSyncTimeInSec(int32_t aLastSyncTime)
 {
   mLastSyncTime = ((PRTime)aLastSyncTime * PR_USEC_PER_SEC);
 }
@@ -715,8 +683,8 @@ NS_IMETHODIMP nsAutoSyncState::SetLastUpdateTime(PRTime aLastUpdateTime)
   return NS_OK;
 }
 
-void nsAutoSyncState::SetServerCounts(PRInt32 total, PRInt32 recent,
-                                      PRInt32 unseen, PRInt32 nextUID)
+void nsAutoSyncState::SetServerCounts(int32_t total, int32_t recent,
+                                      int32_t unseen, int32_t nextUID)
 {
   mLastServerTotal = total;
   mLastServerRecent = recent;
@@ -727,7 +695,7 @@ void nsAutoSyncState::SetServerCounts(PRInt32 total, PRInt32 recent,
 NS_IMPL_ISUPPORTS2(nsAutoSyncState, nsIAutoSyncState, nsIUrlListener)
 
 
-void nsAutoSyncState::LogQWithSize(nsTArray<nsMsgKey>& q, PRUint32 toOffset)
+void nsAutoSyncState::LogQWithSize(nsTArray<nsMsgKey>& q, uint32_t toOffset)
 {
   nsCOMPtr <nsIMsgFolder> ownerFolder = do_QueryReferent(mOwnerFolder);
   if (ownerFolder)
@@ -735,13 +703,13 @@ void nsAutoSyncState::LogQWithSize(nsTArray<nsMsgKey>& q, PRUint32 toOffset)
     nsCOMPtr<nsIMsgDatabase> database;
     ownerFolder->GetMsgDatabase(getter_AddRefs(database));
     
-    PRUint32 x = q.Length();
+    uint32_t x = q.Length();
     while (x > toOffset && database) 
     {
       x--;
       nsCOMPtr<nsIMsgDBHdr> h;
       database->GetMsgHdrForKey(q[x], getter_AddRefs(h));
-      PRUint32 s;
+      uint32_t s;
       if (h)
       {
         h->GetMessageSize(&s);
@@ -754,7 +722,7 @@ void nsAutoSyncState::LogQWithSize(nsTArray<nsMsgKey>& q, PRUint32 toOffset)
   }
 }
 
-void nsAutoSyncState::LogQWithSize(nsIMutableArray *q, PRUint32 toOffset)
+void nsAutoSyncState::LogQWithSize(nsIMutableArray *q, uint32_t toOffset)
 {
   nsCOMPtr <nsIMsgFolder> ownerFolder = do_QueryReferent(mOwnerFolder);
   if (ownerFolder)
@@ -762,7 +730,7 @@ void nsAutoSyncState::LogQWithSize(nsIMutableArray *q, PRUint32 toOffset)
     nsCOMPtr<nsIMsgDatabase> database;
     ownerFolder->GetMsgDatabase(getter_AddRefs(database));
 
-    PRUint32 x;
+    uint32_t x;
     q->GetLength(&x);
     while (x > toOffset && database) 
     {
@@ -770,7 +738,7 @@ void nsAutoSyncState::LogQWithSize(nsIMutableArray *q, PRUint32 toOffset)
       nsCOMPtr<nsIMsgDBHdr> h;
       q->QueryElementAt(x, NS_GET_IID(nsIMsgDBHdr),
                         getter_AddRefs(h));
-      PRUint32 s;
+      uint32_t s;
       if (h)
       {
         h->GetMessageSize(&s);

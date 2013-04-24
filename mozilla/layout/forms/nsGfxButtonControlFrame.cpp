@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsGfxButtonControlFrame.h"
 #include "nsWidgetsCID.h"
@@ -51,6 +19,7 @@
 #include "nsContentUtils.h"
 // MouseEvent suppression in PP
 #include "nsGUIEvent.h"
+#include "nsContentList.h"
 #include "nsContentCreatorFunctions.h"
 
 #include "nsNodeInfoManager.h"
@@ -85,12 +54,12 @@ nsGfxButtonControlFrame::GetType() const
 
 // Special check for the browse button of a file input.
 //
-// We'll return PR_TRUE if type is NS_FORM_INPUT_BUTTON and our parent
+// We'll return true if type is NS_FORM_INPUT_BUTTON and our parent
 // is a file input.
-PRBool
-nsGfxButtonControlFrame::IsFileBrowseButton(PRInt32 type)
+bool
+nsGfxButtonControlFrame::IsFileBrowseButton(int32_t type)
 {
-  PRBool rv = PR_FALSE;
+  bool rv = false;
   if (NS_FORM_INPUT_BUTTON == type) {
     // Check to see if parent is a file input
     nsCOMPtr<nsIFormControl> formCtrl =
@@ -124,7 +93,7 @@ nsGfxButtonControlFrame::CreateAnonymousContent(nsTArray<ContentInfo>& aElements
     return NS_ERROR_OUT_OF_MEMORY;
 
   // set the value of the text node and add it to the child list
-  mTextContent->SetText(label, PR_FALSE);
+  mTextContent->SetText(label, false);
   if (!aElements.AppendElement(mTextContent))
     return NS_ERROR_OUT_OF_MEMORY;
   return NS_OK;
@@ -132,7 +101,7 @@ nsGfxButtonControlFrame::CreateAnonymousContent(nsTArray<ContentInfo>& aElements
 
 void
 nsGfxButtonControlFrame::AppendAnonymousContentTo(nsBaseContentList& aElements,
-                                                  PRUint32 aFilter)
+                                                  uint32_t aFilter)
 {
   aElements.MaybeAppendElement(mTextContent);
 }
@@ -142,7 +111,7 @@ nsGfxButtonControlFrame::AppendAnonymousContentTo(nsBaseContentList& aElements,
 nsIFrame*
 nsGfxButtonControlFrame::CreateFrameFor(nsIContent*      aContent)
 {
-  nsIFrame * newFrame = nsnull;
+  nsIFrame * newFrame = nullptr;
 
   if (aContent == mTextContent) {
     nsIFrame * parentFrame = mFrames.FirstChild();
@@ -156,7 +125,7 @@ nsGfxButtonControlFrame::CreateFrameFor(nsIContent*      aContent)
       newFrame = NS_NewTextFrame(presContext->PresShell(), textStyleContext);
       if (newFrame) {
         // initialize the text frame
-        newFrame->Init(mTextContent, parentFrame, nsnull);
+        newFrame->Init(mTextContent, parentFrame, nullptr);
         mTextContent->SetPrimaryFrame(newFrame);
       }
     }
@@ -197,7 +166,7 @@ nsGfxButtonControlFrame::GetDefaultLabel(nsXPIDLString& aString)
   nsCOMPtr<nsIFormControl> form = do_QueryInterface(mContent);
   NS_ENSURE_TRUE(form, NS_ERROR_UNEXPECTED);
 
-  PRInt32 type = form->GetType();
+  int32_t type = form->GetType();
   const char *prop;
   if (type == NS_FORM_INPUT_RESET) {
     prop = "Reset";
@@ -264,9 +233,9 @@ nsGfxButtonControlFrame::GetLabel(nsXPIDLString& aLabel)
 }
 
 NS_IMETHODIMP
-nsGfxButtonControlFrame::AttributeChanged(PRInt32         aNameSpaceID,
+nsGfxButtonControlFrame::AttributeChanged(int32_t         aNameSpaceID,
                                           nsIAtom*        aAttribute,
-                                          PRInt32         aModType)
+                                          int32_t         aModType)
 {
   nsresult rv = NS_OK;
 
@@ -277,7 +246,7 @@ nsGfxButtonControlFrame::AttributeChanged(PRInt32         aNameSpaceID,
       rv = GetLabel(label);
       NS_ENSURE_SUCCESS(rv, rv);
     
-      mTextContent->SetText(label, PR_TRUE);
+      mTextContent->SetText(label, true);
     } else {
       rv = NS_ERROR_UNEXPECTED;
     }
@@ -289,10 +258,10 @@ nsGfxButtonControlFrame::AttributeChanged(PRInt32         aNameSpaceID,
   return rv;
 }
 
-PRBool
+bool
 nsGfxButtonControlFrame::IsLeaf() const
 {
-  return PR_TRUE;
+  return true;
 }
 
 nsIFrame*

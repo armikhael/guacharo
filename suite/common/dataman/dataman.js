@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is KaiRo's data manager.
- *
- * The Initial Developer of the Original Code is
- * Robert Kaiser <kairo@kairo.at>.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Robert Kaiser <kairo@kairo.at> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://gre/modules/XPCOMUtils.jsm");
 Components.utils.import("resource://gre/modules/Services.jsm");
@@ -55,6 +22,9 @@ XPCOMUtils.defineLazyServiceGetter(gLocSvc, "clipboard",
 XPCOMUtils.defineLazyServiceGetter(gLocSvc, "idn",
                                    "@mozilla.org/network/idn-service;1",
                                    "nsIIDNService");
+
+// From nsContentBlocker.cpp
+const NOFOREIGN = 3;
 
 // :::::::::::::::::::: general functions ::::::::::::::::::::
 var gDataman = {
@@ -658,6 +628,11 @@ var gDomains = {
 
     // compare function for two domain items
     let compfunc = function domain_sort_compare(aOne, aTwo) {
+      // Make sure "*" is always first.
+      if (aOne.displayTitle == "*")
+        return -1;
+      if (aTwo.displayTitle == "*")
+        return 1;
       return aOne.displayTitle.localeCompare(aTwo.displayTitle);
     };
 
@@ -1252,7 +1227,8 @@ var gPerms = {
       this.addButton.disabled = true;
       this.addType.removeAllItems(); // Make sure list is clean.
       let permTypes = ["allowXULXBL", "cookie", "geo", "image", "install",
-                       "password", "popup"];
+                       "object", "offline-app", "password", "plugins",
+                       "popup", "script", "stylesheet"];
       for (let i = 0; i < permTypes.length; i++) {
         let typeDesc = permTypes[i];
         try {
@@ -1302,22 +1278,44 @@ var gPerms = {
         return Services.perms.ALLOW_ACTION;
       case "geo":
         return Services.perms.DENY_ACTION;
-      case "image":
-        if (Services.prefs.getIntPref("permissions.default.image") == 2)
-          return Services.perms.DENY_ACTION;
-        return Services.perms.ALLOW_ACTION;
       case "install":
         if (Services.prefs.getBoolPref("xpinstall.whitelist.required"))
           return Services.perms.DENY_ACTION;
         return Services.perms.ALLOW_ACTION;
+      case "offline-app":
+        try {
+          if (Services.prefs.getBoolPref("offline-apps.allow_by_default"))
+            return Services.perms.ALLOW_ACTION;
+        } catch(e) {
+          // this pref isn't set by default, ignore failures
+        }
+        if (Services.prefs.getBoolPref("browser.offline-apps.notify"))
+          return Services.perms.DENY_ACTION;
+        return Services.perms.UNKNOWN_ACTION;
       case "password":
+        return Services.perms.ALLOW_ACTION;
+      case "plugins":
+        if (Services.prefs.getBoolPref("plugins.click_to_play"))
+          return Services.perms.UNKNOWN_ACTION;
         return Services.perms.ALLOW_ACTION;
       case "popup":
         if (Services.prefs.getBoolPref("dom.disable_open_during_load"))
           return Services.perms.DENY_ACTION;
         return Services.perms.ALLOW_ACTION;
     }
-    return Services.perms.UNKNOWN_ACTION;
+    try {
+      // Look for an nsContentBlocker permission
+      switch (Services.prefs.getIntPref("permissions.default." + aType)) {
+        case 3:
+          return NOFOREIGN;
+        case 2:
+          return Services.perms.DENY_ACTION;
+        default:
+          return Services.perms.ALLOW_ACTION;
+      }
+    } catch (e) {
+      return Services.perms.UNKNOWN_ACTION;
+    }
   },
 
   reactToChange: function permissions_reactToChange(aSubject, aData) {
@@ -2012,11 +2010,29 @@ var gPasswords = {
       this.tree.view.selection.count >= this.tree.view.rowCount;
   },
 
-  copyPassword: function passwords_copyPassword() {
+  copySelPassword: function passwords_copySelPassword() {
     // Copy selected signon's password to clipboard.
     let row = this.tree.currentIndex;
     let password = gPasswords.displayedSignons[row].password;
-    gLocSvc.clipboard.copyString(password);
+    gLocSvc.clipboard.copyString(password, document);
+  },
+
+  copyPassword: function passwords_copyPassword() {
+    // Prompt for the master password upfront.
+    let token = Components.classes["@mozilla.org/security/pk11tokendb;1"]
+                          .getService(Components.interfaces.nsIPK11TokenDB)
+                          .getInternalKeyToken();
+
+    if (this.showPasswords || token.checkPassword(""))
+      this.copySelPassword();
+    else {
+      try {
+        token.login(true);
+        this.copySelPassword();
+      } catch (ex) {
+      // If user cancels an exception is expected.
+      }
+    }
   },
 
   reactToChange: function passwords_reactToChange(aSubject, aData) {

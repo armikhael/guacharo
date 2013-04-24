@@ -8,7 +8,7 @@ https://bugzilla.mozilla.org/show_bug.cgi?id=464848
   <script type="text/javascript" src="/tests/SimpleTest/SimpleTest.js"></script>        
   <link rel="stylesheet" type="text/css" href="/tests/SimpleTest/test.css" />
 </head>
-<body>
+<body onload="gen.next();">
 <a target="_blank"
    href="https://bugzilla.mozilla.org/show_bug.cgi?id=464848">Mozilla Bug 464848</a>
 <p id="display">
@@ -19,6 +19,12 @@ https://bugzilla.mozilla.org/show_bug.cgi?id=464848
 </div>
 <pre id="test">
 <script class="testbody" type="application/javascript;version=1.8">
+SimpleTest.waitForExplicitFinish();
+
+var gen = runTests();
+function continueTest() { gen.next(); }
+
+function runTests() {
 
 xhr = new XMLHttpRequest();
 xhr.open("GET", "file_XHRSendData_doc.xml", false);
@@ -39,6 +45,17 @@ var extensions = [".txt",".png",".jpg",".gif",".xml", "noext"];
 var fileTypes = ["text/plain", "image/png", "image/jpeg", "image/gif", "text/xml", null];
 var testFiles = new Array;
 var testDOMFiles = new Array;
+
+// arraybuffer test objects
+var shortArray = new ArrayBuffer(1);
+var shortInt8View = new Uint8Array(shortArray);
+shortInt8View[0] = 3;
+
+var longArray = new ArrayBuffer(512);
+var longInt8View = new Uint8Array(longArray);
+for (var i = 0; i < longInt8View.length; i++) {
+  longInt8View[i] = i % 255;
+}
 
 extensions.forEach(
     function (extension) {
@@ -144,6 +161,14 @@ tests = [{ body: null,
            body: ("TEST_REDIRECT_STR&url=" + window.location.host + window.location.pathname),
            redirect: true,
          },
+         { body: shortArray,
+           resBody: shortArray,
+           resType: "arraybuffer"
+         },
+         { body: longArray,
+           resBody: longArray,
+           resType: "arraybuffer"
+         },
          ];
 
 for (var i = 0; i < testDOMFiles.length; i++) {
@@ -157,10 +182,16 @@ for (var i = 0; i < testDOMFiles.length; i++) {
 try {
   for each(test in tests) {
     xhr = new XMLHttpRequest;
-    xhr.open("POST", "file_XHRSendData.sjs", false);
+    xhr.open("POST", "file_XHRSendData.sjs", !!test.resType);
     if (test.contentType)
       xhr.setRequestHeader("Content-Type", test.contentType);
+    if (test.resType) {
+      xhr.responseType = test.resType;
+      xhr.onloadend = continueTest;
+    }
     xhr.send(test.body);
+    if (test.resType)
+      yield;
 
     if (test.resContentType) {
       is(xhr.getResponseHeader("Result-Content-Type"), test.resContentType,
@@ -174,7 +205,10 @@ try {
       is(xhr.getResponseHeader("Result-Content-Length"), test.resContentLength, "Wrong Content-Length sent");
     }
 
-    if (test.body instanceof Document) {
+    if (test.resType == "arraybuffer") {
+      is_identical_arraybuffer(xhr.response, test.resBody);
+    }
+    else if (test.body instanceof Document) {
       is(xhr.responseText.replace("\r\n", "\n"), test.resBody, "Wrong body");
     }
     else if (!test.redirect) {
@@ -201,6 +235,18 @@ function cleanUpData() {
       }
   );
 }
+
+function is_identical_arraybuffer(ab1, ab2) {
+  is(ab1.byteLength, ab2.byteLength, "arraybuffer byteLengths not equal");
+  u8v1 = new Uint8Array(ab1);
+  u8v2 = new Uint8Array(ab2);
+  is(String.fromCharCode.apply(String, u8v1),
+     String.fromCharCode.apply(String, u8v2), "arraybuffer values not equal");
+}
+
+SimpleTest.finish();
+yield;
+} /* runTests */
 
 </script>
 </pre>

@@ -1,45 +1,14 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set ts=2 et sw=2 tw=80: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Indexed Database.
- *
- * The Initial Developer of the Original Code is
- * The Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Ben Turner <bent.mozilla@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "CheckPermissionsHelper.h"
 
 #include "nsIDOMWindow.h"
+#include "nsILoadContext.h"
+#include "nsIWebNavigation.h"
 #include "nsIObserverService.h"
 #include "nsIPermissionManager.h"
 #include "nsIPrincipal.h"
@@ -60,6 +29,14 @@
 #define TOPIC_PERMISSIONS_PROMPT "indexedDB-permissions-prompt"
 #define TOPIC_PERMISSIONS_RESPONSE "indexedDB-permissions-response"
 
+// This is a little confusing, but our default behavior (UNKNOWN_ACTION) is to
+// allow access without a prompt. If the "indexedDB" permission is set to
+// ALLOW_ACTION then we will issue a prompt before allowing access. Otherwise
+// (DENY_ACTION) we deny access.
+#define PERMISSION_ALLOWED nsIPermissionManager::UNKNOWN_ACTION
+#define PERMISSION_DENIED nsIPermissionManager::DENY_ACTION
+#define PERMISSION_PROMPT nsIPermissionManager::ALLOW_ACTION
+
 using namespace mozilla;
 USING_INDEXEDDB_NAMESPACE
 using namespace mozilla::services;
@@ -67,40 +44,45 @@ using namespace mozilla::services;
 namespace {
 
 inline
-PRUint32
-GetIndexedDBPermissions(const nsACString& aASCIIOrigin,
-                        nsIDOMWindow* aWindow)
+uint32_t
+GetIndexedDBPermissions(nsIDOMWindow* aWindow)
 {
   NS_ASSERTION(NS_IsMainThread(), "Wrong thread!");
 
   if (!Preferences::GetBool(PREF_INDEXEDDB_ENABLED)) {
-    return nsIPermissionManager::DENY_ACTION;
+    return PERMISSION_DENIED;
+  }
+
+  // No window here means chrome access.
+  if (!aWindow) {
+    return PERMISSION_ALLOWED;
   }
 
   nsCOMPtr<nsIScriptObjectPrincipal> sop(do_QueryInterface(aWindow));
   NS_ENSURE_TRUE(sop, nsIPermissionManager::DENY_ACTION);
 
   if (nsContentUtils::IsSystemPrincipal(sop->GetPrincipal())) {
-    return nsIPermissionManager::ALLOW_ACTION;
+    return PERMISSION_ALLOWED;
   }
 
-  if (nsDOMStorageManager::gStorageManager->InPrivateBrowsingMode()) {
+  nsCOMPtr<nsIWebNavigation> webNav = do_GetInterface(aWindow);
+  nsCOMPtr<nsILoadContext> loadContext = do_QueryInterface(webNav);
+  if (loadContext && loadContext->UsePrivateBrowsing()) {
     // TODO Support private browsing indexedDB?
-    return nsIPermissionManager::DENY_ACTION;
+    NS_WARNING("IndexedDB may not be used while in private browsing mode!");
+    return PERMISSION_DENIED;
   }
-
-  nsCOMPtr<nsIURI> uri;
-  nsresult rv = NS_NewURI(getter_AddRefs(uri), aASCIIOrigin);
-  NS_ENSURE_SUCCESS(rv, nsIPermissionManager::DENY_ACTION);
 
   nsCOMPtr<nsIPermissionManager> permissionManager =
     do_GetService(NS_PERMISSIONMANAGER_CONTRACTID);
-  NS_ENSURE_TRUE(permissionManager, nsIPermissionManager::DENY_ACTION);
+  NS_ENSURE_TRUE(permissionManager, PERMISSION_DENIED);
 
-  PRUint32 permission;
-  rv = permissionManager->TestPermission(uri, PERMISSION_INDEXEDDB,
-                                         &permission);
-  NS_ENSURE_SUCCESS(rv, nsIPermissionManager::DENY_ACTION);
+  uint32_t permission;
+  nsresult rv =
+    permissionManager->TestPermissionFromPrincipal(sop->GetPrincipal(),
+                                                   PERMISSION_INDEXEDDB,
+                                                   &permission);
+  NS_ENSURE_SUCCESS(rv, PERMISSION_DENIED);
 
   return permission;
 }
@@ -116,9 +98,9 @@ CheckPermissionsHelper::Run()
 {
   NS_ASSERTION(NS_IsMainThread(), "Wrong thread!");
 
-  PRUint32 permission = mHasPrompted ?
+  uint32_t permission = mHasPrompted ?
                         mPromptResult :
-                        GetIndexedDBPermissions(mASCIIOrigin, mWindow);
+                        GetIndexedDBPermissions(mWindow);
 
   nsresult rv;
   if (mHasPrompted) {
@@ -126,49 +108,51 @@ CheckPermissionsHelper::Run()
     // process (if we are in the child process, we have already
     // set the permission when the prompt was shown in the parent, as
     // we cannot set the permission from the child).
-    if (permission != nsIPermissionManager::UNKNOWN_ACTION &&
-        XRE_GetProcessType() == GeckoProcessType_Default) {
-      nsCOMPtr<nsIURI> uri;
-      rv = NS_NewURI(getter_AddRefs(uri), mASCIIOrigin);
-      NS_ENSURE_SUCCESS(rv, rv);
-  
+    if (permission != PERMISSION_PROMPT &&
+        IndexedDatabaseManager::IsMainProcess()) {
       nsCOMPtr<nsIPermissionManager> permissionManager =
         do_GetService(NS_PERMISSIONMANAGER_CONTRACTID);
       NS_ENSURE_STATE(permissionManager);
-  
-      rv = permissionManager->Add(uri, PERMISSION_INDEXEDDB, permission,
-                                  nsIPermissionManager::EXPIRE_NEVER, 0);
+
+      nsCOMPtr<nsIScriptObjectPrincipal> sop = do_QueryInterface(mWindow);
+      NS_ENSURE_TRUE(sop, NS_ERROR_FAILURE);
+
+      rv = permissionManager->AddFromPrincipal(sop->GetPrincipal(),
+                                               PERMISSION_INDEXEDDB, permission,
+                                               nsIPermissionManager::EXPIRE_NEVER,
+                                               0);
       NS_ENSURE_SUCCESS(rv, rv);
     }
   }
-  else if (permission == nsIPermissionManager::UNKNOWN_ACTION) {
+  else if (permission == PERMISSION_PROMPT && mPromptAllowed) {
     nsCOMPtr<nsIObserverService> obs = GetObserverService();
     rv = obs->NotifyObservers(static_cast<nsIRunnable*>(this),
-                              TOPIC_PERMISSIONS_PROMPT, nsnull);
+                              TOPIC_PERMISSIONS_PROMPT, nullptr);
     NS_ENSURE_SUCCESS(rv, rv);
 
     return NS_OK;
   }
 
-  nsRefPtr<AsyncConnectionHelper> helper;
+  nsRefPtr<OpenDatabaseHelper> helper;
   helper.swap(mHelper);
 
   nsCOMPtr<nsIDOMWindow> window;
   window.swap(mWindow);
 
-  if (permission == nsIPermissionManager::ALLOW_ACTION) {
+  if (permission == PERMISSION_ALLOWED) {
     IndexedDatabaseManager* mgr = IndexedDatabaseManager::Get();
     NS_ASSERTION(mgr, "This should never be null!");
 
     return helper->Dispatch(mgr->IOThread());
   }
 
-  NS_ASSERTION(permission == nsIPermissionManager::UNKNOWN_ACTION ||
-               permission == nsIPermissionManager::DENY_ACTION,
+  NS_ASSERTION(permission == PERMISSION_PROMPT ||
+               permission == PERMISSION_DENIED,
                "Unknown permission!");
 
   helper->SetError(NS_ERROR_DOM_INDEXEDDB_NOT_ALLOWED_ERR);
-  return helper->Run();
+
+  return helper->RunImmediately();
 }
 
 NS_IMETHODIMP
@@ -184,7 +168,7 @@ CheckPermissionsHelper::GetInterface(const nsIID& aIID,
     return mWindow->QueryInterface(aIID, aResult);
   }
 
-  *aResult = nsnull;
+  *aResult = nullptr;
   return NS_ERROR_NOT_AVAILABLE;
 }
 
@@ -195,17 +179,33 @@ CheckPermissionsHelper::Observe(nsISupports* aSubject,
 {
   NS_ASSERTION(NS_IsMainThread(), "Wrong thread!");
   NS_ASSERTION(!strcmp(aTopic, TOPIC_PERMISSIONS_RESPONSE), "Bad topic!");
+  NS_ASSERTION(mPromptAllowed, "How did we get here?");
 
-  mHasPrompted = PR_TRUE;
+  mHasPrompted = true;
 
   nsresult rv;
-  mPromptResult = nsDependentString(aData).ToInteger(&rv);
+  uint32_t promptResult = nsDependentString(aData).ToInteger(&rv);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  IndexedDatabaseManager* mgr = IndexedDatabaseManager::Get();
-  NS_ASSERTION(mgr, "This should never be null!");
+  // Have to convert the permission we got from the user to our weird reversed
+  // permission type.
+  switch (promptResult) {
+    case nsIPermissionManager::ALLOW_ACTION:
+      mPromptResult = PERMISSION_ALLOWED;
+      break;
+    case nsIPermissionManager::DENY_ACTION:
+      mPromptResult = PERMISSION_DENIED;
+      break;
+    case nsIPermissionManager::UNKNOWN_ACTION:
+      mPromptResult = PERMISSION_PROMPT;
+      break;
 
-  rv = mgr->WaitForOpenAllowed(mName, mASCIIOrigin, this);
+    default:
+      NS_NOTREACHED("Unknown permission type!");
+      mPromptResult = PERMISSION_DENIED;
+  }
+
+  rv = NS_DispatchToCurrentThread(this);
   NS_ENSURE_SUCCESS(rv, rv);
 
   return NS_OK;

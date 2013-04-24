@@ -1,42 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla MathML Project.
- *
- * The Initial Developer of the Original Code is
- * The University Of Queensland.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Roger B. Sidje <rbs@maths.uq.edu.au>
- *   David J. Fiddes <D.J.Fiddes@hw.ac.uk>
- *   Karl Tomlinson <karlt+@karlt.net>, Mozilla Corporation
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 
 #include "nsCOMPtr.h"
@@ -106,42 +71,45 @@ nsMathMLmpaddedFrame::ProcessAttributes()
   There is one exceptional element, <mpadded>, whose attributes cannot be 
   set with <mstyle>. When the attributes width, height and depth are specified
   on an <mstyle> element, they apply only to the <mspace/> element. Similarly, 
-  when lspace is set with <mstyle>, it applies only to the <mo> element. 
+  when lspace is set with <mstyle>, it applies only to the <mo> element. To be
+  consistent, the voffset attribute of the mpadded element can not be set on
+  mstyle. 
   */
 
   // See if attributes are local, don't access mstyle !
 
   // width
   mWidthSign = NS_MATHML_SIGN_INVALID;
-  GetAttribute(mContent, nsnull, nsGkAtoms::width, value);
+  GetAttribute(mContent, nullptr, nsGkAtoms::width, value);
   if (!value.IsEmpty()) {
     ParseAttribute(value, mWidthSign, mWidth, mWidthPseudoUnit);
   }
 
   // height
   mHeightSign = NS_MATHML_SIGN_INVALID;
-  GetAttribute(mContent, nsnull, nsGkAtoms::height, value);
+  GetAttribute(mContent, nullptr, nsGkAtoms::height, value);
   if (!value.IsEmpty()) {
     ParseAttribute(value, mHeightSign, mHeight, mHeightPseudoUnit);
   }
 
   // depth
   mDepthSign = NS_MATHML_SIGN_INVALID;
-  GetAttribute(mContent, nsnull, nsGkAtoms::depth_, value);
+  GetAttribute(mContent, nullptr, nsGkAtoms::depth_, value);
   if (!value.IsEmpty()) {
     ParseAttribute(value, mDepthSign, mDepth, mDepthPseudoUnit);
   }
 
   // lspace
-  mLeftSpaceSign = NS_MATHML_SIGN_INVALID;
-  GetAttribute(mContent, nsnull, nsGkAtoms::lspace_, value);
+  mLeadingSpaceSign = NS_MATHML_SIGN_INVALID;
+  GetAttribute(mContent, nullptr, nsGkAtoms::lspace_, value);
   if (!value.IsEmpty()) {
-    ParseAttribute(value, mLeftSpaceSign, mLeftSpace, mLeftSpacePseudoUnit);
+    ParseAttribute(value, mLeadingSpaceSign, mLeadingSpace,
+                   mLeadingSpacePseudoUnit);
   }
 
   // voffset
   mVerticalOffsetSign = NS_MATHML_SIGN_INVALID;
-  GetAttribute(mContent, nsnull, nsGkAtoms::voffset_, value);
+  GetAttribute(mContent, nullptr, nsGkAtoms::voffset_, value);
   if (!value.IsEmpty()) {
     ParseAttribute(value, mVerticalOffsetSign, mVerticalOffset, 
                    mVerticalOffsetPseudoUnit);
@@ -151,27 +119,27 @@ nsMathMLmpaddedFrame::ProcessAttributes()
 
 // parse an input string in the following format (see bug 148326 for testcases):
 // [+|-] unsigned-number (% [pseudo-unit] | pseudo-unit | css-unit | namedspace)
-PRBool
+bool
 nsMathMLmpaddedFrame::ParseAttribute(nsString&   aString,
-                                     PRInt32&    aSign,
+                                     int32_t&    aSign,
                                      nsCSSValue& aCSSValue,
-                                     PRInt32&    aPseudoUnit)
+                                     int32_t&    aPseudoUnit)
 {
   aCSSValue.Reset();
   aSign = NS_MATHML_SIGN_INVALID;
   aPseudoUnit = NS_MATHML_PSEUDO_UNIT_UNSPECIFIED;
   aString.CompressWhitespace(); // aString is not a const in this code
 
-  PRInt32 stringLength = aString.Length();
+  int32_t stringLength = aString.Length();
   if (!stringLength)
-    return PR_FALSE;
+    return false;
 
   nsAutoString number, unit;
 
   //////////////////////
   // see if the sign is there
 
-  PRInt32 i = 0;
+  int32_t i = 0;
 
   if (aString[0] == '+') {
     aSign = NS_MATHML_SIGN_PLUS;
@@ -184,22 +152,18 @@ nsMathMLmpaddedFrame::ParseAttribute(nsString&   aString,
   else
     aSign = NS_MATHML_SIGN_UNSPECIFIED;
 
-  // skip any space after the sign
-  if (i < stringLength && nsCRT::IsAsciiSpace(aString[i]))
-    i++;
-
   // get the number
-  PRBool gotDot = PR_FALSE, gotPercent = PR_FALSE;
+  bool gotDot = false, gotPercent = false;
   for (; i < stringLength; i++) {
     PRUnichar c = aString[i];
     if (gotDot && c == '.') {
       // error - two dots encountered
       aSign = NS_MATHML_SIGN_INVALID;
-      return PR_FALSE;
+      return false;
     }
 
     if (c == '.')
-      gotDot = PR_TRUE;
+      gotDot = true;
     else if (!nsCRT::IsAsciiDigit(c)) {
       break;
     }
@@ -210,55 +174,45 @@ nsMathMLmpaddedFrame::ParseAttribute(nsString&   aString,
   // floatValue = 1, to cater for cases such as width="height", but that wouldn't
   // be in line with the spec which requires an explicit number
   if (number.IsEmpty()) {
-#ifdef NS_DEBUG
+#ifdef DEBUG
     printf("mpadded: attribute with bad numeric value: %s\n",
             NS_LossyConvertUTF16toASCII(aString).get());
 #endif
     aSign = NS_MATHML_SIGN_INVALID;
-    return PR_FALSE;
+    return false;
   }
 
-  PRInt32 errorCode;
+  nsresult errorCode;
   float floatValue = number.ToFloat(&errorCode);
-  if (errorCode) {
+  if (NS_FAILED(errorCode)) {
     aSign = NS_MATHML_SIGN_INVALID;
-    return PR_FALSE;
+    return false;
   }
-
-  // skip any space after the number
-  if (i < stringLength && nsCRT::IsAsciiSpace(aString[i]))
-    i++;
 
   // see if this is a percentage-based value
   if (i < stringLength && aString[i] == '%') {
     i++;
-    gotPercent = PR_TRUE;
-
-    // skip any space after the '%' sign
-    if (i < stringLength && nsCRT::IsAsciiSpace(aString[i]))
-      i++;
+    gotPercent = true;
   }
 
   // the remainder now should be a css-unit, or a pseudo-unit, or a named-space
   aString.Right(unit, stringLength - i);
 
   if (unit.IsEmpty()) {
-    // also cater for the edge case of "0" for which the unit is optional
-    if (gotPercent || !floatValue) {
+    if (gotPercent) {
+      // case ["+"|"-"] unsigned-number "%" 
       aCSSValue.SetPercentValue(floatValue / 100.0f);
       aPseudoUnit = NS_MATHML_PSEUDO_UNIT_ITSELF;
-      return PR_TRUE;
+      return true;
+    } else {
+      // case ["+"|"-"] unsigned-number
+      // XXXfredw: should we allow non-zero unitless values? See bug 757703.
+      if (!floatValue) {
+        aCSSValue.SetFloatValue(floatValue, eCSSUnit_Number);
+        aPseudoUnit = NS_MATHML_PSEUDO_UNIT_ITSELF;
+        return true;
+      }
     }
-    /*
-    else {
-      // no explicit CSS unit and no explicit pseudo-unit...
-      // In this case, the MathML REC suggests taking ems for
-      // h-unit (width, lspace) or exs for v-unit (height, depth).
-      // Here, however, we explicitly request authors to specify
-      // the unit. This is more in line with the CSS REC (and
-      // it allows keeping the code simpler...)
-    }
-    */
   }
   else if (unit.EqualsLiteral("width"))  aPseudoUnit = NS_MATHML_PSEUDO_UNIT_WIDTH;
   else if (unit.EqualsLiteral("height")) aPseudoUnit = NS_MATHML_PSEUDO_UNIT_HEIGHT;
@@ -266,19 +220,22 @@ nsMathMLmpaddedFrame::ParseAttribute(nsString&   aString,
   else if (!gotPercent) { // percentage can only apply to a pseudo-unit
 
     // see if the unit is a named-space
-    // XXX nsnull in ParseNamedSpacedValue()? don't access mstyle?
-    if (ParseNamedSpaceValue(nsnull, unit, aCSSValue)) {
+    if (nsMathMLElement::ParseNamedSpaceValue(unit, aCSSValue,
+                                              nsMathMLElement::
+                                              PARSE_ALLOW_NEGATIVE)) {
       // re-scale properly, and we know that the unit of the named-space is 'em'
       floatValue *= aCSSValue.GetFloatValue();
       aCSSValue.SetFloatValue(floatValue, eCSSUnit_EM);
       aPseudoUnit = NS_MATHML_PSEUDO_UNIT_NAMEDSPACE;
-      return PR_TRUE;
+      return true;
     }
 
     // see if the input was just a CSS value
+    // We are not supposed to have a unitless, percent, negative or namedspace
+    // value here.
     number.Append(unit); // leave the sign out if it was there
-    if (ParseNumericValue(number, aCSSValue))
-      return PR_TRUE;
+    if (nsMathMLElement::ParseNumericValue(number, aCSSValue, 0))
+      return true;
   }
 
   // if we enter here, we have a number that will act as a multiplier on a pseudo-unit
@@ -288,22 +245,22 @@ nsMathMLmpaddedFrame::ParseAttribute(nsString&   aString,
     else
       aCSSValue.SetFloatValue(floatValue, eCSSUnit_Number);
 
-    return PR_TRUE;
+    return true;
   }
 
 
-#ifdef NS_DEBUG
+#ifdef DEBUG
   printf("mpadded: attribute with bad numeric value: %s\n",
           NS_LossyConvertUTF16toASCII(aString).get());
 #endif
   // if we reach here, it means we encounter an unexpected input
   aSign = NS_MATHML_SIGN_INVALID;
-  return PR_FALSE;
+  return false;
 }
 
 void
-nsMathMLmpaddedFrame::UpdateValue(PRInt32                  aSign,
-                                  PRInt32                  aPseudoUnit,
+nsMathMLmpaddedFrame::UpdateValue(int32_t                  aSign,
+                                  int32_t                  aPseudoUnit,
                                   const nsCSSValue&        aCSSValue,
                                   const nsBoundingMetrics& aBoundingMetrics,
                                   nscoord&                 aValueToUpdate) const
@@ -368,42 +325,48 @@ nsMathMLmpaddedFrame::Reflow(nsPresContext*          aPresContext,
 
 /* virtual */ nsresult
 nsMathMLmpaddedFrame::Place(nsRenderingContext& aRenderingContext,
-                            PRBool               aPlaceOrigin,
+                            bool                 aPlaceOrigin,
                             nsHTMLReflowMetrics& aDesiredSize)
 {
   nsresult rv =
-    nsMathMLContainerFrame::Place(aRenderingContext, PR_FALSE, aDesiredSize);
+    nsMathMLContainerFrame::Place(aRenderingContext, false, aDesiredSize);
   if (NS_MATHML_HAS_ERROR(mPresentationData.flags) || NS_FAILED(rv)) {
-    DidReflowChildren(GetFirstChild(nsnull));
+    DidReflowChildren(GetFirstPrincipalChild());
     return rv;
   }
 
   nscoord height = mBoundingMetrics.ascent;
   nscoord depth  = mBoundingMetrics.descent;
-  // In MathML2 (http://www.w3.org/TR/MathML2/chapter3.html#presm.mpadded),
-  // lspace is "the amount of space between the left edge of a bounding box
-  // and the start of the rendering of its contents' bounding box" and the
-  // default is zero.
+  // The REC says:
   //
-  // In MathML3 draft
-  // http://www.w3.org/TR/2007/WD-MathML3-20070427/chapter3.html#id.3.3.6.2,
-  // lspace is "the amount of space between the left edge of the bounding box
-  // and the positioning poin [sic] of the mpadded element" and the default is
-  // "same as content".
+  // "The lspace attribute ('leading' space) specifies the horizontal location
+  // of the positioning point of the child content with respect to the
+  // positioning point of the mpadded element. By default they coincide, and
+  // therefore absolute values for lspace have the same effect as relative
+  // values."
   //
-  // In both cases, "MathML renderers should ensure that, except for the
-  // effects of the attributes, relative spacing between the contents of
-  // mpadded and surrounding MathML elements is not modified by replacing an
-  // mpadded element with an mrow element with the same content."
+  // "MathML renderers should ensure that, except for the effects of the
+  // attributes, the relative spacing between the contents of the mpadded
+  // element and surrounding MathML elements would not be modified by replacing
+  // an mpadded element with an mrow element with the same content, even if
+  // linebreaking occurs within the mpadded element."
+  //
+  // (http://www.w3.org/TR/MathML/chapter3.html#presm.mpadded)
+  // 
+  // "In those discussions, the terms leading and trailing are used to specify
+  // a side of an object when which side to use depends on the directionality;
+  // ie. leading means left in LTR but right in RTL."
+  // (http://www.w3.org/TR/MathML/chapter3.html#presm.bidi.math)
   nscoord lspace = 0;
-  // In MATHML3, "width" will be the bounding box width and "advancewidth" will
+  // In MathML3, "width" will be the bounding box width and "advancewidth" will
   // refer "to the horizontal distance between the positioning point of the
   // mpadded and the positioning point for the following content".  MathML2
   // doesn't make the distinction.
   nscoord width  = mBoundingMetrics.width;
   nscoord voffset = 0;
 
-  PRInt32 pseudoUnit;
+  int32_t pseudoUnit;
+  nscoord initialWidth = width;
 
   // update width
   pseudoUnit = (mWidthPseudoUnit == NS_MATHML_PSEUDO_UNIT_ITSELF)
@@ -427,9 +390,9 @@ nsMathMLmpaddedFrame::Place(nsRenderingContext& aRenderingContext,
   depth = NS_MAX(0, depth);
 
   // update lspace
-  if (mLeftSpacePseudoUnit != NS_MATHML_PSEUDO_UNIT_ITSELF) {
-    pseudoUnit = mLeftSpacePseudoUnit;
-    UpdateValue(mLeftSpaceSign, pseudoUnit, mLeftSpace,
+  if (mLeadingSpacePseudoUnit != NS_MATHML_PSEUDO_UNIT_ITSELF) {
+    pseudoUnit = mLeadingSpacePseudoUnit;
+    UpdateValue(mLeadingSpaceSign, pseudoUnit, mLeadingSpace,
                 mBoundingMetrics, lspace);
   }
 
@@ -445,20 +408,25 @@ nsMathMLmpaddedFrame::Place(nsRenderingContext& aRenderingContext,
   // attributes, tweak our metrics and move children to achieve the desired visual
   // effects.
 
-  if (mLeftSpaceSign != NS_MATHML_SIGN_INVALID) { // there was padding on the left
-    // dismiss the left italic correction now (so that our parent won't correct us)
+  if ((NS_MATHML_IS_RTL(mPresentationData.flags) ?
+       mWidthSign : mLeadingSpaceSign) != NS_MATHML_SIGN_INVALID) {
+    // there was padding on the left. dismiss the left italic correction now
+    // (so that our parent won't correct us)
     mBoundingMetrics.leftBearing = 0;
   }
 
-  if (mWidthSign != NS_MATHML_SIGN_INVALID) { // there was padding on the right
-    // dismiss the right italic correction now (so that our parent won't correct us)
+  if ((NS_MATHML_IS_RTL(mPresentationData.flags) ?
+       mLeadingSpaceSign : mWidthSign) != NS_MATHML_SIGN_INVALID) {
+    // there was padding on the right. dismiss the right italic correction now
+    // (so that our parent won't correct us)
     mBoundingMetrics.width = width;
     mBoundingMetrics.rightBearing = mBoundingMetrics.width;
   }
 
   nscoord dy = height - mBoundingMetrics.ascent;
-  nscoord dx = lspace;
-
+  nscoord dx = NS_MATHML_IS_RTL(mPresentationData.flags) ?
+    width - initialWidth - lspace : lspace;
+    
   aDesiredSize.ascent += dy;
   aDesiredSize.width = mBoundingMetrics.width;
   aDesiredSize.height += dy + depth - mBoundingMetrics.descent;

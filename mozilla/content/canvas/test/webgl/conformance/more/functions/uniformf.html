@@ -1,6 +1,6 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<!DOCTYPE html>
 <html><head>
-<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<meta charset="utf-8">
 <link rel="stylesheet" type="text/css" href="../unit.css" />
 <script type="application/x-javascript" src="../unit.js"></script>
 <script type="application/x-javascript" src="../util.js"></script>
@@ -52,15 +52,14 @@ void main()
 }
 </script>
 <script id="foobar-frag" type="x-shader/x-fragment">
-#ifdef GL_ES
-precision highp float;
-#endif
+precision mediump float;
+
 uniform vec4 foo;
 
 varying vec4 texCoord0;
 void main()
 {
-    gl_FragColor = vec4(foo.r/256.0, foo.g/256.0, foo.b/256.0, foo.a*texCoord0.z/256.0);
+    gl_FragColor = vec4(foo.r/255.0, foo.g/255.0, foo.b/255.0, foo.a*texCoord0.z/255.0);
 }
 </script>
 <style>canvas{ position:absolute; }</style>

@@ -1,45 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Oracle Corporation code.
- *
- * The Initial Developer of the Original Code is
- *  Oracle Corporation
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Vladimir Vukicevic <vladimir.vukicevic@oracle.com>
- *   Mike Shaver <shaver@off.net>
- *   Joey Minta <jminta@gmail.com>
- *   Matthew Willis <lilmatt@mozilla.com>
- *   Daniel Boelzle <daniel.boelzle@sun.com>
- *   Philipp Kewisch <mozilla@kewis.ch>
- *   Martin Schroeder <mschroder@mozilla.x-home.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://calendar/modules/calUtils.jsm");
 Components.utils.import("resource://calendar/modules/calIteratorUtils.jsm");
@@ -75,6 +36,8 @@ calItemBase.prototype = {
     mRelations: null,
     mCategories: null,
 
+    mACLEntry: null,
+
     /**
      * Initialize the base item's attributes. Can be called from inheriting
      * objects in their constructor.
@@ -83,7 +46,7 @@ calItemBase.prototype = {
         this.wrappedJSObject = this;
         this.mProperties = new calPropertyBag();
         this.mPropertyParams = {};
-        this.mProperties.setProperty("CREATED", jsDateToDateTime(new Date()));
+        this.mProperties.setProperty("CREATED", cal.jsDateToDateTime(new Date()));
     },
 
     /**
@@ -97,6 +60,22 @@ calItemBase.prototype = {
     /**
      * @see calIItemBase
      */
+    get aclEntry() {
+        let aclEntry = this.mACLEntry;
+        let aclManager = (this.calendar && this.calendar.superCalendar.aclManager);
+
+        if (!aclEntry && aclManager) {
+            this.mACLEntry = aclManager.getItemEntry(this);
+            aclEntry = this.mACLEntry;
+        }
+
+        if (!aclEntry && this.parentItem != this) {
+            // No ACL entry on this item, check the parent
+            aclEntry = this.parentItem.aclEntry;
+        }
+
+        return aclEntry;
+    },
 
     // readonly attribute AUTF8String hashId;
     get hashId() {
@@ -171,6 +150,9 @@ calItemBase.prototype = {
         this.mCalendar = aParentItem.mCalendar;
         this.recurrenceId = aRecurrenceId;
 
+        // Make sure organizer is unset, as the getter checks for this.
+        this.mOrganizer = undefined;
+
         this.mImmutable = aParentItem.mImmutable;
     },
 
@@ -194,7 +176,7 @@ calItemBase.prototype = {
      */
     ensureNotDirty: function cIB_ensureNotDirty() {
         if (this.mDirty) {
-            let now = jsDateToDateTime(new Date());
+            let now = cal.jsDateToDateTime(new Date());
             this.setProperty("LAST-MODIFIED", now);
             this.setProperty("DTSTAMP", now);
             this.mDirty = false;
@@ -265,6 +247,7 @@ calItemBase.prototype = {
      */
     cloneItemBaseInto: function cIB_cloneItemBaseInto(m, aNewParent) {
         m.mImmutable = false;
+        m.mACLEntry = this.mACLEntry;
         m.mIsProxy = this.mIsProxy;
         m.mParentItem = (calTryWrappedJSObject(aNewParent) || this.mParentItem);
         m.mHashId = this.mHashId;
@@ -526,8 +509,7 @@ calItemBase.prototype = {
         if (this.mAttendees) {
             countObj.value = this.mAttendees.length;
             return this.mAttendees.concat([]); // clone
-        }
-        else {
+        } else {
             countObj.value = 0;
             return [];
         }
@@ -1093,17 +1075,19 @@ makeMemberAttr(calItemBase, "mProperties", null, "properties");
 function makeMemberAttr(ctor, varname, dflt, attr, asProperty) {
     // XXX handle defaults!
     var getter = function () {
-        if (asProperty)
+        if (asProperty) {
             return this.getProperty(varname);
-        else
+        } else {
             return (varname in this ? this[varname] : undefined);
+        }
     };
     var setter = function (v) {
         this.modify();
-        if (asProperty)
+        if (asProperty) {
             return this.setProperty(varname, v);
-        else
+        } else {
             return (this[varname] = v);
+        }
     };
     ctor.prototype.__defineGetter__(attr, getter);
     ctor.prototype.__defineSetter__(attr, setter);

@@ -1,14 +1,19 @@
-Cu.import("resource://services-sync/ext/Observers.js");
+/* Any copyright is dedicated to the Public Domain.
+ * http://creativecommons.org/publicdomain/zero/1.0/ */
+
+Cu.import("resource://services-common/observers.js");
 Cu.import("resource://services-sync/identity.js");
-Cu.import("resource://services-sync/log4moz.js");
+Cu.import("resource://services-common/log4moz.js");
 Cu.import("resource://services-sync/resource.js");
 Cu.import("resource://services-sync/util.js");
 
 let logger;
 
+let fetched = false;
 function server_open(metadata, response) {
   let body;
   if (metadata.method == "GET") {
+    fetched = true;
     body = "This path exists";
     response.setStatusLine(metadata.httpVersion, 200, "OK");
   } else {
@@ -37,6 +42,15 @@ function server_protected(metadata, response) {
 function server_404(metadata, response) {
   let body = "File not found";
   response.setStatusLine(metadata.httpVersion, 404, "Not Found");
+  response.bodyOutputStream.write(body, body.length);
+}
+
+let pacFetched = false;
+function server_pac(metadata, response) {
+  pacFetched = true;
+  let body = 'function FindProxyForURL(url, host) { return "DIRECT"; }';
+  response.setStatusLine(metadata.httpVersion, 200, "OK");
+  response.setHeader("Content-Type", "application/x-ns-proxy-autoconfig", false);
   response.bodyOutputStream.write(body, body.length);
 }
 
@@ -135,6 +149,8 @@ function server_headers(metadata, response) {
 }
 
 function run_test() {
+  initTestLogging("Trace");
+
   do_test_pending();
 
   logger = Log4Moz.repository.getLogger('Test');
@@ -150,11 +166,25 @@ function run_test() {
     "/timestamp": server_timestamp,
     "/headers": server_headers,
     "/backoff": server_backoff,
+    "/pac1": server_pac,
     "/quota-notice": server_quota_notice,
     "/quota-error": server_quota_error
   });
 
   Svc.Prefs.set("network.numRetries", 1); // speed up test
+
+  // This apparently has to come first in order for our PAC URL to be hit.
+  // Don't put any other HTTP requests earlier in the file!
+  _("Testing handling of proxy auth redirection.");
+  PACSystemSettings.PACURI = "http://localhost:8080/pac1";
+  installFakePAC();
+  let proxiedRes = new Resource("http://localhost:8080/open");
+  let content = proxiedRes.get();
+  do_check_true(pacFetched);
+  do_check_true(fetched);
+  do_check_eq(content, "This path exists");
+  pacFetched = fetched = false;
+  uninstallFakePAC();
 
   _("Resource object members");
   let res = new Resource("http://localhost:8080/open");
@@ -168,15 +198,25 @@ function run_test() {
   do_check_eq(res.data, null);
 
   _("GET a non-password-protected resource");
-  let content = res.get();
+  content = res.get();
   do_check_eq(content, "This path exists");
   do_check_eq(content.status, 200);
   do_check_true(content.success);
   // res.data has been updated with the result from the request
   do_check_eq(res.data, content);
 
+  // Observe logging messages.
+  let logger = res._log;
+  let dbg    = logger.debug;
+  let debugMessages = [];
+  logger.debug = function (msg) {
+    debugMessages.push(msg);
+    dbg.call(this, msg);
+  }
+
   // Since we didn't receive proper JSON data, accessing content.obj
-  // will result in a SyntaxError from JSON.parse
+  // will result in a SyntaxError from JSON.parse.
+  // Furthermore, we'll have logged.
   let didThrow = false;
   try {
     content.obj;
@@ -184,23 +224,15 @@ function run_test() {
     didThrow = true;
   }
   do_check_true(didThrow);
+  do_check_eq(debugMessages.length, 1);
+  do_check_eq(debugMessages[0],
+              "Parse fail: Response body starts: \"\"This path exists\"\".");
+  logger.debug = dbg;
 
   _("Test that the BasicAuthenticator doesn't screw up header case.");
   let res1 = new Resource("http://localhost:8080/foo");
   res1.setHeader("Authorization", "Basic foobar");
-  res1.authenticator = new NoOpAuthenticator();
-  do_check_eq(res1._headers["authorization"], "Basic foobar");
   do_check_eq(res1.headers["authorization"], "Basic foobar");
-  let id = new Identity("secret", "guest", "guest");
-  res1.authenticator = new BasicAuthenticator(id);
-
-  // In other words... it correctly overwrites our downcased version
-  // when accessed through .headers.
-  do_check_eq(res1._headers["authorization"], "Basic foobar");
-  do_check_eq(res1.headers["authorization"], "Basic Z3Vlc3Q6Z3Vlc3Q=");
-  do_check_eq(res1._headers["authorization"], "Basic Z3Vlc3Q6Z3Vlc3Q=");
-  do_check_true(!res1._headers["Authorization"]);
-  do_check_true(!res1.headers["Authorization"]);
 
   _("GET a password protected resource (test that it'll fail w/o pass, no throw)");
   let res2 = new Resource("http://localhost:8080/protected");
@@ -210,8 +242,8 @@ function run_test() {
   do_check_false(content.success);
 
   _("GET a password protected resource");
-  let auth = new BasicAuthenticator(new Identity("secret", "guest", "guest"));
   let res3 = new Resource("http://localhost:8080/protected");
+  let auth = Identity.getBasicResourceAuthenticator("guest", "guest");
   res3.authenticator = auth;
   do_check_eq(res3.authenticator, auth);
   content = res3.get();
@@ -456,10 +488,11 @@ function run_test() {
 
   let query = "?" + args.join("&");
 
-  let uri1 = Utils.makeURL("http://foo/" + query);
-  let uri2 = Utils.makeURL("http://foo/");
+  let uri1 = Utils.makeURI("http://foo/" + query)
+                  .QueryInterface(Ci.nsIURL);
+  let uri2 = Utils.makeURI("http://foo/")
+                  .QueryInterface(Ci.nsIURL);
   uri2.query = query;
   do_check_eq(uri1.query, uri2.query);
-
   server.stop(do_test_finished);
 }

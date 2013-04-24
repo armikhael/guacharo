@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2002-2010 The ANGLE Project Authors. All rights reserved.
+// Copyright (c) 2002-2012 The ANGLE Project Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -16,12 +16,21 @@
 
 #include "GLSLANG/ShaderLang.h"
 
+#include "compiler/BuiltInFunctionEmulator.h"
 #include "compiler/ExtensionBehavior.h"
 #include "compiler/InfoSink.h"
 #include "compiler/SymbolTable.h"
 #include "compiler/VariableInfo.h"
 
+class LongNameMap;
 class TCompiler;
+class TDependencyGraph;
+
+//
+// Helper function to identify specs that are based on the WebGL spec,
+// like the CSS Shaders spec.
+//
+bool isWebGLBasedSpec(ShShaderSpec spec);
 
 //
 // The base class used to back handles returned to the driver.
@@ -68,6 +77,8 @@ protected:
     void clearResults();
     // Return true if function recursion is detected.
     bool detectRecursion(TIntermNode* root);
+    // Rewrites a shader's intermediate tree according to the CSS Shaders spec.
+    void rewriteCSSShader(TIntermNode* root);
     // Returns true if the given shader does not exceed the minimum
     // functionality mandated in GLSL 1.0 spec Appendix A.
     bool validateLimitations(TIntermNode* root);
@@ -77,10 +88,26 @@ protected:
     void mapLongVariableNames(TIntermNode* root);
     // Translate to object code.
     virtual void translate(TIntermNode* root) = 0;
+    // Returns true if, after applying the packing rules in the GLSL 1.017 spec
+    // Appendix A, section 7, the shader does not use too many uniforms.
+    bool enforcePackingRestrictions();
+    // Returns true if the shader passes the restrictions that aim to prevent timing attacks.
+    bool enforceTimingRestrictions(TIntermNode* root, bool outputGraph);
+    // Returns true if the shader does not use samplers.
+    bool enforceVertexShaderTimingRestrictions(TIntermNode* root);
+    // Returns true if the shader does not use sampler dependent values to affect control 
+    // flow or in operations whose time can depend on the input values.
+    bool enforceFragmentShaderTimingRestrictions(const TDependencyGraph& graph);
+    // Get built-in extensions with default behavior.
+    const TExtensionBehavior& getExtensionBehavior() const;
+
+    const BuiltInFunctionEmulator& getBuiltInFunctionEmulator() const;
 
 private:
     ShShaderType shaderType;
     ShShaderSpec shaderSpec;
+
+    int maxUniformVectors;
 
     // Built-in symbol table for the given language, spec, and resources.
     // It is preserved from compile-to-compile.
@@ -88,13 +115,15 @@ private:
     // Built-in extensions with default behavior.
     TExtensionBehavior extensionBehavior;
 
+    BuiltInFunctionEmulator builtInFunctionEmulator;
+
     // Results of compilation.
     TInfoSink infoSink;  // Output sink.
     TVariableInfoList attribs;  // Active attributes in the compiled shader.
     TVariableInfoList uniforms;  // Active uniforms in the compiled shader.
 
-    // Pair of long varying varibale name <originalName, mappedName>.
-    TMap<TString, TString> varyingLongNameMap;
+    // Cached copy of the ref-counted singleton.
+    LongNameMap* longNameMap;
 };
 
 //
@@ -106,7 +135,8 @@ private:
 // destroy the machine dependent objects, which contain the
 // above machine independent information.
 //
-TCompiler* ConstructCompiler(ShShaderType type, ShShaderSpec spec);
+TCompiler* ConstructCompiler(
+    ShShaderType type, ShShaderSpec spec, ShShaderOutput output);
 void DeleteCompiler(TCompiler*);
 
 #endif // _SHHANDLE_INCLUDED_

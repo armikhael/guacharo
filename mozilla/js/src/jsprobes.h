@@ -1,41 +1,9 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * vim: set ts=8 sw=4 et tw=80:
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla SpiderMonkey JavaScript 1.9 code, released
- * June 12, 2009.
- *
- * The Initial Developer of the Original Code is
- *   the Mozilla Corporation.
- *
- * Contributor(s):
- *      Steve Fink <sfink@mozilla.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef _JSPROBES_H
 #define _JSPROBES_H
@@ -45,8 +13,21 @@
 #endif
 #include "jspubtd.h"
 #include "jsprvtd.h"
+#include "jsscript.h"
+#include "jsobj.h"
+
+#ifdef JS_METHODJIT
+#include "methodjit/MethodJIT.h"
+#endif
+
+#include "vm/ObjectImpl-inl.h"
 
 namespace js {
+
+namespace mjit {
+struct NativeAddressInfo;
+struct JSActiveFrame;
+}
 
 namespace Probes {
 
@@ -85,6 +66,9 @@ extern bool ProfilingActive;
 extern const char nullName[];
 extern const char anonymousName[];
 
+/* Called when first runtime is created for this process */
+JSBool startEngine();
+
 /* JSRuntime created, with currently valid fields */
 bool createRuntime(JSRuntime *rt);
 
@@ -101,11 +85,17 @@ bool shutdown();
  */
 bool callTrackingActive(JSContext *);
 
+/*
+ * Test whether anything is looking for JIT native code registration events.
+ * This information will not be collected otherwise.
+ */
+bool wantNativeAddressInfo(JSContext *);
+
 /* Entering a JS function */
-bool enterJSFun(JSContext *, JSFunction *, JSScript *, int counter = 1);
+bool enterScript(JSContext *, JSScript *, JSFunction *, StackFrame *);
 
 /* About to leave a JS function */
-bool exitJSFun(JSContext *, JSFunction *, JSScript *, int counter = 0);
+bool exitScript(JSContext *, JSScript *, JSFunction *, StackFrame *);
 
 /* Executing a script */
 bool startExecution(JSContext *cx, JSScript *script);
@@ -120,6 +110,9 @@ bool resizeHeap(JSCompartment *compartment, size_t oldSize, size_t newSize);
  * Object has been created. |obj| must exist (its class and size are read)
  */
 bool createObject(JSContext *cx, JSObject *obj);
+
+/* Resize events are being tracked. */
+bool objectResizeActive();
 
 /* Object has been resized */
 bool resizeObject(JSContext *cx, JSObject *obj, size_t oldSize, size_t newSize);
@@ -148,10 +141,10 @@ bool createString(JSContext *cx, JSString *string, size_t length);
 bool finalizeString(JSString *string);
 
 /* Script is about to be compiled */
-bool compileScriptBegin(JSContext *cx, const char *filename, int lineno);
+bool compileScriptBegin(const char *filename, int lineno);
 
 /* Script has just finished compilation */
-bool compileScriptEnd(JSContext *cx, JSScript *script, const char *filename, int lineno);
+bool compileScriptEnd(const char *filename, int lineno);
 
 /* About to make a call from JS into native code */
 bool calloutBegin(JSContext *cx, JSFunction *fun);
@@ -167,21 +160,21 @@ bool releaseMemory(JSContext *cx, void *address, size_t nbytes);
  * Garbage collection probes
  *
  * GC timing is tricky and at the time of this writing is changing frequently.
- * GCStart(NULL)/GCEnd(NULL) are intended to bracket the entire garbage
- * collection (either global or single-compartment), but a separate thread may
- * continue doing work after GCEnd.
+ * GCStart/GCEnd are intended to bracket the entire garbage collection (either
+ * global or single-compartment), but a separate thread may continue doing work
+ * after GCEnd.
  *
  * Multiple compartments' GC will be interleaved during a global collection
  * (eg, compartment 1 starts, compartment 2 starts, compartment 1 ends, ...)
  */
-bool GCStart(JSCompartment *compartment);
-bool GCEnd(JSCompartment *compartment);
+bool GCStart();
+bool GCEnd();
 
-bool GCStartMarkPhase(JSCompartment *compartment);
-bool GCEndMarkPhase(JSCompartment *compartment);
+bool GCStartMarkPhase();
+bool GCEndMarkPhase();
 
-bool GCStartSweepPhase(JSCompartment *compartment);
-bool GCEndSweepPhase(JSCompartment *compartment);
+bool GCStartSweepPhase();
+bool GCEndSweepPhase();
 
 /*
  * Various APIs for inserting custom probe points. These might be used to mark
@@ -195,9 +188,55 @@ bool CustomMark(JSString *string);
 bool CustomMark(const char *string);
 bool CustomMark(int marker);
 
+/* JIT code observation */
+
+enum JITReportGranularity {
+    JITREPORT_GRANULARITY_NONE = 0,
+    JITREPORT_GRANULARITY_FUNCTION = 1,
+    JITREPORT_GRANULARITY_LINE = 2,
+    JITREPORT_GRANULARITY_OP = 3
+};
+
 /*
- * Internal: DTrace-specific functions to be called during Probes::enterJSFun
- * and Probes::exitJSFun. These will not be inlined, but the argument
+ * Finest granularity of JIT information desired by all watchers.
+ */
+JITReportGranularity
+JITGranularityRequested(JSContext *cx);
+
+#ifdef JS_METHODJIT
+/*
+ * New method JIT code has been created
+ */
+bool
+registerMJITCode(JSContext *cx, js::mjit::JITChunk *chunk,
+                 mjit::JSActiveFrame *outerFrame,
+                 mjit::JSActiveFrame **inlineFrames);
+
+/*
+ * Method JIT code is about to be discarded
+ */
+void
+discardMJITCode(FreeOp *fop, mjit::JITScript *jscr, mjit::JITChunk *chunk, void* address);
+
+/*
+ * IC code has been allocated within the given JITChunk
+ */
+bool
+registerICCode(JSContext *cx,
+               mjit::JITChunk *chunk, JSScript *script, jsbytecode* pc,
+               void *start, size_t size);
+#endif /* JS_METHODJIT */
+
+/*
+ * A whole region of code has been deallocated, containing any number of ICs.
+ * (ICs are unregistered in a batch, so individual ICs are not registered.)
+ */
+void
+discardExecutableRegion(void *start, size_t size);
+
+/*
+ * Internal: DTrace-specific functions to be called during Probes::enterScript
+ * and Probes::exitScript. These will not be inlined, but the argument
  * marshalling required for these probe points is expensive enough that it
  * shouldn't really matter.
  */
@@ -226,12 +265,12 @@ bool ETWCalloutBegin(JSContext *cx, JSFunction *fun);
 bool ETWCalloutEnd(JSContext *cx, JSFunction *fun);
 bool ETWAcquireMemory(JSContext *cx, void *address, size_t nbytes);
 bool ETWReleaseMemory(JSContext *cx, void *address, size_t nbytes);
-bool ETWGCStart(JSCompartment *compartment);
-bool ETWGCEnd(JSCompartment *compartment);
-bool ETWGCStartMarkPhase(JSCompartment *compartment);
-bool ETWGCEndMarkPhase(JSCompartment *compartment);
-bool ETWGCStartSweepPhase(JSCompartment *compartment);
-bool ETWGCEndSweepPhase(JSCompartment *compartment);
+bool ETWGCStart();
+bool ETWGCEnd();
+bool ETWGCStartMarkPhase();
+bool ETWGCEndMarkPhase();
+bool ETWGCStartSweepPhase();
+bool ETWGCEndSweepPhase();
 bool ETWCustomMark(JSString *string);
 bool ETWCustomMark(const char *string);
 bool ETWCustomMark(int marker);
@@ -243,42 +282,9 @@ bool ETWResizeHeap(JSCompartment *compartment, size_t oldSize, size_t newSize);
 } /* namespace Probes */
 
 /*
- * Probe handlers are implemented inline for minimal performance impact,
+ * Many probe handlers are implemented inline for minimal performance impact,
  * especially important when no backends are enabled.
  */
-
-inline bool
-Probes::createRuntime(JSRuntime *rt)
-{
-    bool ok = true;
-#ifdef MOZ_ETW
-    if (!ETWCreateRuntime(rt))
-        ok = false;
-#endif
-    return ok;
-}
-
-inline bool
-Probes::destroyRuntime(JSRuntime *rt)
-{
-    bool ok = true;
-#ifdef MOZ_ETW
-    if (!ETWDestroyRuntime(rt))
-        ok = false;
-#endif
-    return ok;
-}
-
-inline bool
-Probes::shutdown()
-{
-    bool ok = true;
-#ifdef MOZ_ETW
-    if (!ETWShutdown())
-        ok = false;
-#endif
-    return ok;
-}
 
 inline bool
 Probes::callTrackingActive(JSContext *cx)
@@ -299,43 +305,60 @@ Probes::callTrackingActive(JSContext *cx)
 }
 
 inline bool
-Probes::enterJSFun(JSContext *cx, JSFunction *fun, JSScript *script, int counter)
+Probes::wantNativeAddressInfo(JSContext *cx)
+{
+    return (cx->reportGranularity >= JITREPORT_GRANULARITY_FUNCTION &&
+            JITGranularityRequested(cx) >= JITREPORT_GRANULARITY_FUNCTION);
+}
+
+inline bool
+Probes::enterScript(JSContext *cx, JSScript *script, JSFunction *maybeFun,
+                    StackFrame *fp)
 {
     bool ok = true;
 #ifdef INCLUDE_MOZILLA_DTRACE
     if (JAVASCRIPT_FUNCTION_ENTRY_ENABLED())
-        DTraceEnterJSFun(cx, fun, script);
+        DTraceEnterJSFun(cx, maybeFun, script);
 #endif
 #ifdef MOZ_TRACE_JSCALLS
-    cx->doFunctionCallback(fun, script, counter);
+    cx->doFunctionCallback(maybeFun, script, 1);
 #endif
 #ifdef MOZ_ETW
-    if (ProfilingActive && !ETWEnterJSFun(cx, fun, script, counter))
+    if (ProfilingActive && !ETWEnterJSFun(cx, maybeFun, script, 1))
         ok = false;
 #endif
+
+    JSRuntime *rt = cx->runtime;
+    if (rt->spsProfiler.enabled()) {
+        rt->spsProfiler.enter(cx, script, maybeFun);
+        JS_ASSERT_IF(!fp->isGeneratorFrame(), !fp->hasPushedSPSFrame());
+        fp->setPushedSPSFrame();
+    }
 
     return ok;
 }
 
 inline bool
-Probes::exitJSFun(JSContext *cx, JSFunction *fun, JSScript *script, int counter)
+Probes::exitScript(JSContext *cx, JSScript *script, JSFunction *maybeFun,
+                   StackFrame *fp)
 {
     bool ok = true;
 
 #ifdef INCLUDE_MOZILLA_DTRACE
     if (JAVASCRIPT_FUNCTION_RETURN_ENABLED())
-        DTraceExitJSFun(cx, fun, script);
+        DTraceExitJSFun(cx, maybeFun, script);
 #endif
 #ifdef MOZ_TRACE_JSCALLS
-    if (counter > 0)
-        counter = -counter;
-    cx->doFunctionCallback(fun, script, counter);
+    cx->doFunctionCallback(maybeFun, script, 0);
 #endif
 #ifdef MOZ_ETW
-    if (ProfilingActive && !ETWExitJSFun(cx, fun, script, counter))
+    if (ProfilingActive && !ETWExitJSFun(cx, maybeFun, script, 0))
         ok = false;
 #endif
 
+    JSRuntime *rt = cx->runtime;
+    if (fp->hasPushedSPSFrame())
+        rt->spsProfiler.exit(cx, script, maybeFun);
     return ok;
 }
 
@@ -354,13 +377,13 @@ Probes::resizeHeap(JSCompartment *compartment, size_t oldSize, size_t newSize)
 
 #ifdef INCLUDE_MOZILLA_DTRACE
 static const char *ObjectClassname(JSObject *obj) {
-    if (! obj)
+    if (!obj)
         return "(null object)";
     Class *clasp = obj->getClass();
-    if (! clasp)
+    if (!clasp)
         return "(null)";
     const char *class_name = clasp->name;
-    if (! class_name)
+    if (!class_name)
         return "(null class name)";
     return class_name;
 }
@@ -405,6 +428,17 @@ Probes::finalizeObject(JSObject *obj)
 }
 
 inline bool
+Probes::objectResizeActive()
+{
+#ifdef MOZ_ETW
+    if (ProfilingActive)
+        return true;
+#endif
+
+    return false;
+}
+
+inline bool
 Probes::resizeObject(JSContext *cx, JSObject *obj, size_t oldSize, size_t newSize)
 {
     bool ok = true;
@@ -444,7 +478,7 @@ Probes::finalizeString(JSString *string)
 }
 
 inline bool
-Probes::compileScriptBegin(JSContext *cx, const char *filename, int lineno)
+Probes::compileScriptBegin(const char *filename, int lineno)
 {
     bool ok = true;
 
@@ -457,7 +491,7 @@ Probes::compileScriptBegin(JSContext *cx, const char *filename, int lineno)
 }
 
 inline bool
-Probes::compileScriptEnd(JSContext *cx, JSScript *script, const char *filename, int lineno)
+Probes::compileScriptEnd(const char *filename, int lineno)
 {
     bool ok = true;
 
@@ -522,12 +556,12 @@ Probes::releaseMemory(JSContext *cx, void *address, size_t nbytes)
 }
 
 inline bool
-Probes::GCStart(JSCompartment *compartment)
+Probes::GCStart()
 {
     bool ok = true;
 
 #ifdef MOZ_ETW
-    if (ProfilingActive && !ETWGCStart(compartment))
+    if (ProfilingActive && !ETWGCStart())
         ok = false;
 #endif
 
@@ -535,12 +569,12 @@ Probes::GCStart(JSCompartment *compartment)
 }
 
 inline bool
-Probes::GCEnd(JSCompartment *compartment)
+Probes::GCEnd()
 {
     bool ok = true;
 
 #ifdef MOZ_ETW
-    if (ProfilingActive && !ETWGCEnd(compartment))
+    if (ProfilingActive && !ETWGCEnd())
         ok = false;
 #endif
 
@@ -548,12 +582,12 @@ Probes::GCEnd(JSCompartment *compartment)
 }
 
 inline bool
-Probes::GCStartMarkPhase(JSCompartment *compartment)
+Probes::GCStartMarkPhase()
 {
     bool ok = true;
 
 #ifdef MOZ_ETW
-    if (ProfilingActive && !ETWGCStartMarkPhase(compartment))
+    if (ProfilingActive && !ETWGCStartMarkPhase())
         ok = false;
 #endif
 
@@ -561,12 +595,12 @@ Probes::GCStartMarkPhase(JSCompartment *compartment)
 }
 
 inline bool
-Probes::GCEndMarkPhase(JSCompartment *compartment)
+Probes::GCEndMarkPhase()
 {
     bool ok = true;
 
 #ifdef MOZ_ETW
-    if (ProfilingActive && !ETWGCEndMarkPhase(compartment))
+    if (ProfilingActive && !ETWGCEndMarkPhase())
         ok = false;
 #endif
 
@@ -574,12 +608,12 @@ Probes::GCEndMarkPhase(JSCompartment *compartment)
 }
 
 inline bool
-Probes::GCStartSweepPhase(JSCompartment *compartment)
+Probes::GCStartSweepPhase()
 {
     bool ok = true;
 
 #ifdef MOZ_ETW
-    if (ProfilingActive && !ETWGCStartSweepPhase(compartment))
+    if (ProfilingActive && !ETWGCStartSweepPhase())
         ok = false;
 #endif
 
@@ -587,12 +621,12 @@ Probes::GCStartSweepPhase(JSCompartment *compartment)
 }
 
 inline bool
-Probes::GCEndSweepPhase(JSCompartment *compartment)
+Probes::GCEndSweepPhase()
 {
     bool ok = true;
 
 #ifdef MOZ_ETW
-    if (ProfilingActive && !ETWGCEndSweepPhase(compartment))
+    if (ProfilingActive && !ETWGCEndSweepPhase())
         ok = false;
 #endif
 
@@ -673,25 +707,6 @@ Probes::stopExecution(JSContext *cx, JSScript *script)
 
     return ok;
 }
-
-struct AutoFunctionCallProbe {
-    JSContext * const cx;
-    JSFunction *fun;
-    JSScript *script;
-    JS_DECL_USE_GUARD_OBJECT_NOTIFIER
-
-    AutoFunctionCallProbe(JSContext *cx, JSFunction *fun, JSScript *script
-                          JS_GUARD_OBJECT_NOTIFIER_PARAM)
-      : cx(cx), fun(fun), script(script)
-    {
-        JS_GUARD_OBJECT_NOTIFIER_INIT;
-        Probes::enterJSFun(cx, fun, script);
-    }
-
-    ~AutoFunctionCallProbe() {
-        Probes::exitJSFun(cx, fun, script);
-    }
-};
 
 } /* namespace js */
 

@@ -1,40 +1,9 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Mozilla SVG project.
- *
- * The Initial Developer of the Original Code is
- * Crocodile Clips Ltd..
- * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "mozilla/Util.h"
 
 #include "nsSVGGraphicElement.h"
 #include "nsGkAtoms.h"
@@ -42,8 +11,7 @@
 #include "nsCOMPtr.h"
 #include "nsSVGSVGElement.h"
 #include "nsSVGTextPositioningElement.h"
-#include "nsIFrame.h"
-#include "nsDOMError.h"
+#include "nsError.h"
 #include "SVGAnimatedLengthList.h"
 #include "DOMSVGAnimatedLengthList.h"
 #include "SVGLengthList.h"
@@ -51,6 +19,7 @@
 #include "SVGAnimatedNumberList.h"
 #include "DOMSVGAnimatedNumberList.h"
 #include "DOMSVGPoint.h"
+#include "DOMSVGTests.h"
 
 using namespace mozilla;
 
@@ -69,7 +38,8 @@ typedef nsSVGGraphicElement nsSVGTextElementBase;
  * nsSVGTextPositioningElement in sync (and vice versa).
  */
 class nsSVGTextElement : public nsSVGTextElementBase,
-                         public nsIDOMSVGTextElement // nsIDOMSVGTextPositioningElement
+                         public nsIDOMSVGTextElement, // nsIDOMSVGTextPositioningElement
+                         public DOMSVGTests
 {
 protected:
   friend nsresult NS_NewSVGTextElement(nsIContent **aResult,
@@ -91,11 +61,13 @@ public:
   NS_FORWARD_NSIDOMSVGELEMENT(nsSVGTextElementBase::)
 
   // nsIContent interface
-  NS_IMETHOD_(PRBool) IsAttributeMapped(const nsIAtom* aAttribute) const;
+  NS_IMETHOD_(bool) IsAttributeMapped(const nsIAtom* aAttribute) const;
 
   virtual nsresult Clone(nsINodeInfo *aNodeInfo, nsINode **aResult) const;
 
   virtual nsXPCClassInfo* GetClassInfo();
+
+  virtual nsIDOMNode* AsDOMNode() { return this; }
 protected:
   nsSVGTextContainerFrame* GetTextContainerFrame() {
     return do_QueryFrame(GetPrimaryFrame(Flush_Layout));
@@ -128,10 +100,11 @@ NS_IMPL_RELEASE_INHERITED(nsSVGTextElement,nsSVGTextElementBase)
 DOMCI_NODE_DATA(SVGTextElement, nsSVGTextElement)
 
 NS_INTERFACE_TABLE_HEAD(nsSVGTextElement)
-  NS_NODE_INTERFACE_TABLE6(nsSVGTextElement, nsIDOMNode, nsIDOMElement,
+  NS_NODE_INTERFACE_TABLE7(nsSVGTextElement, nsIDOMNode, nsIDOMElement,
                            nsIDOMSVGElement, nsIDOMSVGTextElement,
                            nsIDOMSVGTextPositioningElement,
-                           nsIDOMSVGTextContentElement)
+                           nsIDOMSVGTextContentElement,
+                           nsIDOMSVGTests)
   NS_DOM_INTERFACE_MAP_ENTRY_CLASSINFO(SVGTextElement)
 NS_INTERFACE_MAP_END_INHERITING(nsSVGTextElementBase)
 
@@ -227,7 +200,7 @@ nsSVGTextElement::GetLengthAdjust(nsIDOMSVGAnimatedEnumeration * *aLengthAdjust)
 
 /* long getNumberOfChars (); */
 NS_IMETHODIMP
-nsSVGTextElement::GetNumberOfChars(PRInt32 *_retval)
+nsSVGTextElement::GetNumberOfChars(int32_t *_retval)
 {
   *_retval = 0;
 
@@ -253,14 +226,14 @@ nsSVGTextElement::GetComputedTextLength(float *_retval)
 
 /* float getSubStringLength (in unsigned long charnum, in unsigned long nchars); */
 NS_IMETHODIMP
-nsSVGTextElement::GetSubStringLength(PRUint32 charnum, PRUint32 nchars, float *_retval)
+nsSVGTextElement::GetSubStringLength(uint32_t charnum, uint32_t nchars, float *_retval)
 {
   *_retval = 0.0f;
   nsSVGTextContainerFrame* metrics = GetTextContainerFrame();
   if (!metrics)
     return NS_OK;
 
-  PRUint32 charcount = metrics->GetNumberOfChars();
+  uint32_t charcount = metrics->GetNumberOfChars();
   if (charcount <= charnum || nchars > charcount - charnum)
     return NS_ERROR_DOM_INDEX_SIZE_ERR;
 
@@ -273,9 +246,9 @@ nsSVGTextElement::GetSubStringLength(PRUint32 charnum, PRUint32 nchars, float *_
 
 /* nsIDOMSVGPoint getStartPositionOfChar (in unsigned long charnum); */
 NS_IMETHODIMP
-nsSVGTextElement::GetStartPositionOfChar(PRUint32 charnum, nsIDOMSVGPoint **_retval)
+nsSVGTextElement::GetStartPositionOfChar(uint32_t charnum, nsIDOMSVGPoint **_retval)
 {
-  *_retval = nsnull;
+  *_retval = nullptr;
   nsSVGTextContainerFrame* metrics = GetTextContainerFrame();
 
   if (!metrics) return NS_ERROR_FAILURE;
@@ -285,9 +258,9 @@ nsSVGTextElement::GetStartPositionOfChar(PRUint32 charnum, nsIDOMSVGPoint **_ret
 
 /* nsIDOMSVGPoint getEndPositionOfChar (in unsigned long charnum); */
 NS_IMETHODIMP
-nsSVGTextElement::GetEndPositionOfChar(PRUint32 charnum, nsIDOMSVGPoint **_retval)
+nsSVGTextElement::GetEndPositionOfChar(uint32_t charnum, nsIDOMSVGPoint **_retval)
 {
-  *_retval = nsnull;
+  *_retval = nullptr;
   nsSVGTextContainerFrame* metrics = GetTextContainerFrame();
 
   if (!metrics) return NS_ERROR_FAILURE;
@@ -297,9 +270,9 @@ nsSVGTextElement::GetEndPositionOfChar(PRUint32 charnum, nsIDOMSVGPoint **_retva
 
 /* nsIDOMSVGRect getExtentOfChar (in unsigned long charnum); */
 NS_IMETHODIMP
-nsSVGTextElement::GetExtentOfChar(PRUint32 charnum, nsIDOMSVGRect **_retval)
+nsSVGTextElement::GetExtentOfChar(uint32_t charnum, nsIDOMSVGRect **_retval)
 {
-  *_retval = nsnull;
+  *_retval = nullptr;
   nsSVGTextContainerFrame* metrics = GetTextContainerFrame();
 
   if (!metrics) return NS_ERROR_FAILURE;
@@ -309,7 +282,7 @@ nsSVGTextElement::GetExtentOfChar(PRUint32 charnum, nsIDOMSVGRect **_retval)
 
 /* float getRotationOfChar (in unsigned long charnum); */
 NS_IMETHODIMP
-nsSVGTextElement::GetRotationOfChar(PRUint32 charnum, float *_retval)
+nsSVGTextElement::GetRotationOfChar(uint32_t charnum, float *_retval)
 {
   *_retval = 0.0;
 
@@ -322,7 +295,7 @@ nsSVGTextElement::GetRotationOfChar(PRUint32 charnum, float *_retval)
 
 /* long getCharNumAtPosition (in nsIDOMSVGPoint point); */
 NS_IMETHODIMP
-nsSVGTextElement::GetCharNumAtPosition(nsIDOMSVGPoint *point, PRInt32 *_retval)
+nsSVGTextElement::GetCharNumAtPosition(nsIDOMSVGPoint *point, int32_t *_retval)
 {
   nsCOMPtr<DOMSVGPoint> p = do_QueryInterface(point);
   if (!p)
@@ -339,7 +312,7 @@ nsSVGTextElement::GetCharNumAtPosition(nsIDOMSVGPoint *point, PRInt32 *_retval)
 
 /* void selectSubString (in unsigned long charnum, in unsigned long nchars); */
 NS_IMETHODIMP
-nsSVGTextElement::SelectSubString(PRUint32 charnum, PRUint32 nchars)
+nsSVGTextElement::SelectSubString(uint32_t charnum, uint32_t nchars)
 {
   NS_NOTYETIMPLEMENTED("nsSVGTextElement::SelectSubString");
   return NS_ERROR_NOT_IMPLEMENTED;
@@ -349,7 +322,7 @@ nsSVGTextElement::SelectSubString(PRUint32 charnum, PRUint32 nchars)
 //----------------------------------------------------------------------
 // nsIContent methods
 
-NS_IMETHODIMP_(PRBool)
+NS_IMETHODIMP_(bool)
 nsSVGTextElement::IsAttributeMapped(const nsIAtom* name) const
 {
   static const MappedAttributeEntry* const map[] = {
@@ -357,7 +330,7 @@ nsSVGTextElement::IsAttributeMapped(const nsIAtom* name) const
     sFontSpecificationMap
   };
 
-  return FindAttributeDependence(name, map, NS_ARRAY_LENGTH(map)) ||
+  return FindAttributeDependence(name, map) ||
     nsSVGTextElementBase::IsAttributeMapped(name);
 }
 
@@ -366,17 +339,17 @@ nsSVGTextElement::IsAttributeMapped(const nsIAtom* name) const
 
 nsSVGElement::LengthListInfo nsSVGTextElement::sLengthListInfo[4] =
 {
-  { &nsGkAtoms::x,  nsSVGUtils::X, PR_FALSE },
-  { &nsGkAtoms::y,  nsSVGUtils::Y, PR_FALSE },
-  { &nsGkAtoms::dx, nsSVGUtils::X, PR_TRUE },
-  { &nsGkAtoms::dy, nsSVGUtils::Y, PR_TRUE }
+  { &nsGkAtoms::x,  nsSVGUtils::X, false },
+  { &nsGkAtoms::y,  nsSVGUtils::Y, false },
+  { &nsGkAtoms::dx, nsSVGUtils::X, true },
+  { &nsGkAtoms::dy, nsSVGUtils::Y, true }
 };
 
 nsSVGElement::LengthListAttributesInfo
 nsSVGTextElement::GetLengthListInfo()
 {
   return LengthListAttributesInfo(mLengthListAttributes, sLengthListInfo,
-                                  NS_ARRAY_LENGTH(sLengthListInfo));
+                                  ArrayLength(sLengthListInfo));
 }
 
 nsSVGElement::NumberListInfo nsSVGTextElement::sNumberListInfo[1] =
@@ -388,6 +361,6 @@ nsSVGElement::NumberListAttributesInfo
 nsSVGTextElement::GetNumberListInfo()
 {
   return NumberListAttributesInfo(mNumberListAttributes, sNumberListInfo,
-                                  NS_ARRAY_LENGTH(sNumberListInfo));
+                                  ArrayLength(sNumberListInfo));
 }
 

@@ -1,4 +1,8 @@
 #filter substitution
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 
 @AB_CD@.jar:
 % locale editor @AB_CD@ %locale/@AB_CD@/editor/
@@ -36,6 +40,7 @@
 @AB_CD@.jar:
 % locale editor-region @AB_CD@ %locale/@AB_CD@/editor-region/
   locale/@AB_CD@/editor/editor.dtd                           (%chrome/composer/editor.dtd)
+  locale/@AB_CD@/editor/editingOverlay.dtd                   (%chrome/composer/editingOverlay.dtd)
   locale/@AB_CD@/editor/editorPrefsOverlay.dtd               (%chrome/composer/editorPrefsOverlay.dtd)
   locale/@AB_CD@/editor/pref-toolbars.dtd                    (%chrome/composer/pref-toolbars.dtd)
   locale/@AB_CD@/editor/pref-editing.dtd                     (%chrome/composer/pref-editing.dtd)
@@ -43,8 +48,6 @@
   locale/@AB_CD@/editor/EdLinkChecker.dtd                    (%chrome/dialogs/EdLinkChecker.dtd)
   locale/@AB_CD@/editor/EditorPageProperties.dtd             (%chrome/dialogs/EditorPageProperties.dtd)
   locale/@AB_CD@/editor/EditorSnapToGrid.dtd                 (%chrome/dialogs/EditorSnapToGrid.dtd)
-  locale/@AB_CD@/editor/EditorImageMap.dtd                   (%chrome/dialogs/EditorImageMap.dtd)
-  locale/@AB_CD@/editor/EditorImageMapHotSpot.dtd            (%chrome/dialogs/EditorImageMapHotSpot.dtd)
   locale/@AB_CD@/editor/EditConflict.dtd                     (%chrome/dialogs/EditConflict.dtd)
   locale/@AB_CD@/editor/EditorSaveAsCharset.dtd              (%chrome/dialogs/EditorSaveAsCharset.dtd)
   locale/@AB_CD@/editor/EditorPublish.dtd                    (%chrome/dialogs/EditorPublish.dtd)

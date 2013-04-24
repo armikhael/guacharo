@@ -1,39 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #include "nsCOMPtr.h"
 #include "msgCore.h"
 #include "mimei.h"
@@ -59,11 +27,11 @@
 #include "nsMsgUtils.h"
 
 // Forward declares...
-PRInt32 MimeHeaders_build_heads_list(MimeHeaders *hdrs);
+int32_t MimeHeaders_build_heads_list(MimeHeaders *hdrs);
 
 void
 MimeHeaders_convert_header_value(MimeDisplayOptions *opt, nsCString &value,
-                                 PRBool convert_charset_only)
+                                 bool convert_charset_only)
 {
   char        *converted;
 
@@ -81,7 +49,7 @@ MimeHeaders_convert_header_value(MimeDisplayOptions *opt, nsCString &value,
   if (opt && opt->rfc1522_conversion_p)
   {
     converted = MIME_DecodeMimeHeader(value.get(), opt->default_charset,
-                                      opt->override_charset, PR_TRUE);
+                                      opt->override_charset, true);
 
     if (converted)
     {
@@ -105,7 +73,7 @@ MimeHeaders_new (void)
   if (!hdrs) return 0;
 
   memset(hdrs, 0, sizeof(*hdrs));
-  hdrs->done_p = PR_FALSE;
+  hdrs->done_p = false;
 
   return hdrs;
 }
@@ -124,9 +92,9 @@ MimeHeaders_free (MimeHeaders *hdrs)
 # ifdef DEBUG__
   {
   int i, size = sizeof(*hdrs);
-  PRUint32 *array = (PRUint32*) hdrs;
+  uint32_t *array = (uint32_t*) hdrs;
   for (i = 0; i < (size / sizeof(*array)); i++)
-    array[i] = (PRUint32) 0xDEADBEEF;
+    array[i] = (uint32_t) 0xDEADBEEF;
   }
 # endif /* DEBUG */
 
@@ -134,7 +102,7 @@ MimeHeaders_free (MimeHeaders *hdrs)
 }
 
 int
-MimeHeaders_parse_line (const char *buffer, PRInt32 size, MimeHeaders *hdrs)
+MimeHeaders_parse_line (const char *buffer, int32_t size, MimeHeaders *hdrs)
 {
   int status = 0;
   int desired_size;
@@ -150,7 +118,7 @@ MimeHeaders_parse_line (const char *buffer, PRInt32 size, MimeHeaders *hdrs)
   {
     /* If this is a blank line, we're done.
      */
-    hdrs->done_p = PR_TRUE;
+    hdrs->done_p = true;
     return MimeHeaders_build_heads_list(hdrs);
   }
 
@@ -310,9 +278,13 @@ MimeHeaders_build_heads_list(MimeHeaders *hdrs)
     /* At this point, `s' points before a header-terminating newline.
      Move past that newline, and store that new position in `heads'.
      */
-    if (*s == '\r') 
+    if (*s == '\r')
       s++;
-    if (*s == '\n') 
+
+    if (s >= end)
+      break;
+
+    if (*s == '\n')
       s++;
 
     if (s < end)
@@ -329,7 +301,7 @@ MimeHeaders_build_heads_list(MimeHeaders *hdrs)
 
 char *
 MimeHeaders_get (MimeHeaders *hdrs, const char *header_name,
-         PRBool strip_p, PRBool all_p)
+         bool strip_p, bool all_p)
 {
   int i;
   int name_length;
@@ -352,7 +324,7 @@ MimeHeaders_get (MimeHeaders *hdrs, const char *header_name,
   if (!hdrs->done_p)
   {
     int status;
-    hdrs->done_p = PR_TRUE;
+    hdrs->done_p = true;
     status = MimeHeaders_build_heads_list(hdrs);
     if (status < 0) return 0;
   }
@@ -455,7 +427,7 @@ MimeHeaders_get (MimeHeaders *hdrs, const char *header_name,
       }
     else
       {
-      PRInt32 L = strlen(result);
+      int32_t L = strlen(result);
       s = (char *) PR_Realloc(result, (L + (end - contents + 10)));
       if (!s)
         {
@@ -513,23 +485,23 @@ MimeHeaders_get_parameter (const char *header_value, const char *parm_name,
                            char **charset, char **language)
 {
   if (!header_value || !parm_name || !*header_value || !*parm_name)
-    return nsnull;
+    return nullptr;
 
   nsresult rv;
   nsCOMPtr <nsIMIMEHeaderParam> mimehdrpar =
     do_GetService(NS_MIMEHEADERPARAM_CONTRACTID, &rv);
 
   if (NS_FAILED(rv))
-    return nsnull;
+    return nullptr;
 
   nsCString result;
   rv = mimehdrpar->GetParameterInternal(header_value, parm_name, charset,
                                         language, getter_Copies(result));
-  return NS_SUCCEEDED(rv) ? PL_strdup(result.get()) : nsnull;
+  return NS_SUCCEEDED(rv) ? PL_strdup(result.get()) : nullptr;
 }
 
 #define MimeHeaders_write(OPT,NAME,DATA,LENGTH) \
-    MimeOptions_write((OPT), (NAME), (DATA), (LENGTH), PR_TRUE);
+    MimeOptions_write((OPT), (NAME), (DATA), (LENGTH), true);
 
 
 #define MimeHeaders_grow_obuffer(hdrs, desired_size) \
@@ -539,11 +511,11 @@ MimeHeaders_get_parameter (const char *header_value, const char *parm_name,
    : 0)
 
 int
-MimeHeaders_write_all_headers (MimeHeaders *hdrs, MimeDisplayOptions *opt, PRBool attachment)
+MimeHeaders_write_all_headers (MimeHeaders *hdrs, MimeDisplayOptions *opt, bool attachment)
 {
   int status = 0;
   int i;
-  PRBool wrote_any_p = PR_FALSE;
+  bool wrote_any_p = false;
 
   NS_ASSERTION(hdrs, "1.1 <rhp@netscape.com> 19 Mar 1999 12:00");
   if (!hdrs)
@@ -558,21 +530,21 @@ MimeHeaders_write_all_headers (MimeHeaders *hdrs, MimeDisplayOptions *opt, PRBoo
    */
   if (!hdrs->done_p)
   {
-    hdrs->done_p = PR_TRUE;
+    hdrs->done_p = true;
     status = MimeHeaders_build_heads_list(hdrs);
     if (status < 0) return 0;
   }
 
-  char *charset = nsnull;
+  char *charset = nullptr;
   if (opt->format_out == nsMimeOutput::nsMimeMessageSaveAs)
   {
     if (opt->override_charset)
       charset = PL_strdup(opt->default_charset);
     else
     {
-      char *contentType = MimeHeaders_get(hdrs, HEADER_CONTENT_TYPE, PR_FALSE, PR_FALSE);
+      char *contentType = MimeHeaders_get(hdrs, HEADER_CONTENT_TYPE, false, false);
       if (contentType)
-        charset = MimeHeaders_get_parameter(contentType, HEADER_PARM_CHARSET, nsnull, nsnull);
+        charset = MimeHeaders_get_parameter(contentType, HEADER_PARM_CHARSET, nullptr, nullptr);
       PR_FREEIF(contentType);
     }
   }
@@ -625,7 +597,7 @@ MimeHeaders_write_all_headers (MimeHeaders *hdrs, MimeDisplayOptions *opt, PRBoo
     }
 
     // MW Fixme: more?
-    PRBool convert_charset_only =
+    bool convert_charset_only =
           MsgLowerCaseEqualsLiteral(name, "to") || MsgLowerCaseEqualsLiteral(name, "from") ||
           MsgLowerCaseEqualsLiteral(name, "cc") || MsgLowerCaseEqualsLiteral(name, "bcc") ||
           MsgLowerCaseEqualsLiteral(name, "reply-to") || MsgLowerCaseEqualsLiteral(name, "sender");
@@ -687,12 +659,12 @@ MIME_StripContinuations(char *original)
   return original;
 }
 
-extern PRInt16 INTL_DefaultMailToWinCharSetID(PRInt16 csid);
+extern int16_t INTL_DefaultMailToWinCharSetID(int16_t csid);
 
 /* Given text purporting to be a qtext header value, strip backslashes that
   may be escaping other chars in the string. */
 char *
-mime_decode_filename(char *name, const char *charset,
+mime_decode_filename(const char *name, const char *charset,
                      MimeDisplayOptions *opt)
 {
   nsresult rv;
@@ -700,13 +672,13 @@ mime_decode_filename(char *name, const char *charset,
     do_GetService(NS_MIMEHEADERPARAM_CONTRACTID, &rv);
 
   if (NS_FAILED(rv))
-    return nsnull;
+    return nullptr;
   nsCAutoString result;
   rv = mimehdrpar->DecodeParameter(nsDependentCString(name), charset,
-                                   opt ? opt->default_charset : nsnull,
-                                   opt ? opt->override_charset : PR_FALSE,
+                                   opt ? opt->default_charset : nullptr,
+                                   opt ? opt->override_charset : false,
                                    result);
-  return NS_SUCCEEDED(rv) ? PL_strdup(result.get()) : nsnull;
+  return NS_SUCCEEDED(rv) ? PL_strdup(result.get()) : nullptr;
 }
 
 /* Pull the name out of some header or another.  Order is:
@@ -719,9 +691,9 @@ char *
 MimeHeaders_get_name(MimeHeaders *hdrs, MimeDisplayOptions *opt)
 {
   char *s = 0, *name = 0, *cvt = 0;
-  char *charset = nsnull; // for RFC2231 support
+  char *charset = nullptr; // for RFC2231 support
 
-  s = MimeHeaders_get(hdrs, HEADER_CONTENT_DISPOSITION, PR_FALSE, PR_FALSE);
+  s = MimeHeaders_get(hdrs, HEADER_CONTENT_DISPOSITION, false, false);
   if (s)
   {
     name = MimeHeaders_get_parameter(s, HEADER_PARM_FILENAME, &charset, NULL);
@@ -730,7 +702,7 @@ MimeHeaders_get_name(MimeHeaders *hdrs, MimeDisplayOptions *opt)
 
   if (! name)
   {
-    s = MimeHeaders_get(hdrs, HEADER_CONTENT_TYPE, PR_FALSE, PR_FALSE);
+    s = MimeHeaders_get(hdrs, HEADER_CONTENT_TYPE, false, false);
     if (s)
     {
       nsMemory::Free(charset);
@@ -741,10 +713,10 @@ MimeHeaders_get_name(MimeHeaders *hdrs, MimeDisplayOptions *opt)
   }
 
   if (! name)
-    name = MimeHeaders_get (hdrs, HEADER_CONTENT_NAME, PR_FALSE, PR_FALSE);
+    name = MimeHeaders_get (hdrs, HEADER_CONTENT_NAME, false, false);
 
   if (! name)
-    name = MimeHeaders_get (hdrs, HEADER_X_SUN_DATA_NAME, PR_FALSE, PR_FALSE);
+    name = MimeHeaders_get (hdrs, HEADER_X_SUN_DATA_NAME, false, false);
 
   if (name)
   {
@@ -830,13 +802,13 @@ MimeHeaders_compact (MimeHeaders *hdrs)
  */
 int
 MimeHeaders_write_raw_headers (MimeHeaders *hdrs, MimeDisplayOptions *opt,
-                 PRBool dont_write_content_type)
+                 bool dont_write_content_type)
 {
   int status;
 
   if (hdrs && !hdrs->done_p)
   {
-    hdrs->done_p = PR_TRUE;
+    hdrs->done_p = true;
     status = MimeHeaders_build_heads_list(hdrs);
     if (status < 0) return 0;
   }
@@ -859,7 +831,7 @@ MimeHeaders_write_raw_headers (MimeHeaders *hdrs, MimeDisplayOptions *opt,
   }
   else if (hdrs)
   {
-    PRInt32 i;
+    int32_t i;
     for (i = 0; i < hdrs->heads_size; i++)
     {
       char *head = hdrs->heads[i];
@@ -890,28 +862,28 @@ MimeHeaders_write_raw_headers (MimeHeaders *hdrs, MimeDisplayOptions *opt,
 char *
 MimeHeaders_open_crypto_stamp(void)
 {
-  return nsnull;
+  return nullptr;
 }
 
 char *
 MimeHeaders_finish_open_crypto_stamp(void)
 {
-  return nsnull;
+  return nullptr;
 }
 
 char *
 MimeHeaders_close_crypto_stamp(void)
 {
-  return nsnull;
+  return nullptr;
 }
 
 char *
-MimeHeaders_make_crypto_stamp(PRBool encrypted_p,
-                              PRBool signed_p,
-                              PRBool good_p,
-                              PRBool unverified_p,
-                              PRBool close_parent_stamp_p,
+MimeHeaders_make_crypto_stamp(bool encrypted_p,
+                              bool signed_p,
+                              bool good_p,
+                              bool unverified_p,
+                              bool close_parent_stamp_p,
                               const char *stamp_url)
 {
-  return nsnull;
+  return nullptr;
 }

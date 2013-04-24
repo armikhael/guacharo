@@ -17,30 +17,6 @@ const kUserName = "user";
 const kInvalidPassword = "imaptest";
 const kValidPassword = "password";
 
-var dummyDocShell =
-{
-  getInterface: function (iid) {
-    if (iid.equals(Ci.nsIAuthPrompt)) {
-      return Cc["@mozilla.org/login-manager/prompter;1"]
-               .getService(Ci.nsIAuthPrompt);
-    }
-
-    throw Components.results.NS_ERROR_FAILURE;
-  },
-
-  QueryInterface: XPCOMUtils.generateQI([Ci.nsIDocShell,
-                                         Ci.nsIInterfaceRequestor])
-}
-
-// Dummy message window that ensures we get prompted for logins.
-var dummyMsgWindow =
-{
-  rootDocShell: dummyDocShell,
-
-  QueryInterface: XPCOMUtils.generateQI([Ci.nsIMsgWindow,
-                                         Ci.nsISupportsWeakReference])
-};
-
 var incomingServer, server;
 var attempt = 0;
 
@@ -92,12 +68,13 @@ function run_test() {
 
   let daemon = new imapDaemon();
   daemon.createMailbox("Subscribed", {subscribed : true});
-  server = makeServer(daemon, "");
+  server = makeServer(daemon, "", {
+    // Make username of server match the singons.txt file
+    // (pw there is intentionally invalid)
+    kUsername: kUserName,
+    kPassword: kValidPassword});
   server.setDebugLevel(fsDebugAll);
 
-  // Make username of server match the singons.txt file (pw there is intentionally invalid)
-  server._handler.kUsername = kUserName;
-  server._handler.kPassword = kValidPassword;
 
   incomingServer = createLocalIMAPServer();
 
@@ -117,7 +94,7 @@ function run_test() {
   // This covers attempts 1 and 2 in confirmEx.
   dump("\nperformExpand 1\n\n");
 
-  incomingServer.performExpand(dummyMsgWindow);
+  incomingServer.performExpand(gDummyMsgWindow);
   server.performTest("SUBSCRIBE");
 
   dump("\nfinished subscribe 1\n\n");
@@ -144,7 +121,7 @@ function run_test() {
 
   dump("\nperformExpand 2\n\n");
 
-  incomingServer.performExpand(dummyMsgWindow);
+  incomingServer.performExpand(gDummyMsgWindow);
   server.performTest("SUBSCRIBE");
 
   dump("\nfinished subscribe 2\n");

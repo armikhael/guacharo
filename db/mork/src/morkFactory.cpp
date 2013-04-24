@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-  */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef _MDB_
 #include "mdb.h"
@@ -211,9 +179,9 @@ morkFactory::OpenOldFile(nsIMdbEnv* mev, nsIMdbHeap* ioHeap,
   // files must be opened is considered a subclass specific detail, and
   // other portions or Mork source code don't want to know how it's done.
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
-  morkFile* file = nsnull;
+  morkFile* file = nullptr;
   if ( ev )
   {
     if ( !ioHeap )
@@ -240,9 +208,9 @@ morkFactory::CreateNewFile(nsIMdbEnv* mev, nsIMdbHeap* ioHeap,
   // files must be opened is considered a subclass specific detail, and
   // other portions or Mork source code don't want to know how it's done.
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
-  morkFile* file = nsnull;
+  morkFile* file = nullptr;
   if ( ev )
   {
     if ( !ioHeap )
@@ -266,7 +234,7 @@ NS_IMETHODIMP
 morkFactory::MakeEnv(nsIMdbHeap* ioHeap, nsIMdbEnv** acqEnv)
 // ioHeap can be nil, causing a MakeHeap() style heap instance to be used
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbEnv* outEnv = 0;
   mork_bool ownsHeap = (ioHeap == 0);
   if ( !ioHeap )
@@ -305,7 +273,7 @@ morkFactory::MakeEnv(nsIMdbHeap* ioHeap, nsIMdbEnv** acqEnv)
 NS_IMETHODIMP
 morkFactory::MakeHeap(nsIMdbEnv* mev, nsIMdbHeap** acqHeap)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbHeap* outHeap = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -325,7 +293,7 @@ morkFactory::MakeHeap(nsIMdbEnv* mev, nsIMdbHeap** acqHeap)
 NS_IMETHODIMP
 morkFactory::MakeCompare(nsIMdbEnv* mev, nsIMdbCompare** acqCompare)
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 // } ----- end compare methods -----
@@ -335,7 +303,7 @@ NS_IMETHODIMP
 morkFactory::MakeRow(nsIMdbEnv* mev, nsIMdbHeap* ioHeap,
   nsIMdbRow** acqRow)
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 // ioHeap can be nil, causing the heap associated with ev to be used
@@ -351,7 +319,7 @@ morkFactory::CanOpenFilePort(
   mdb_bool* outCanOpen, // whether OpenFilePort() might succeed
   mdbYarn* outFormatVersion)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   if ( outFormatVersion )
   {
     outFormatVersion->mYarn_Fill = 0;
@@ -385,9 +353,9 @@ morkFactory::OpenFilePort(
   const mdbOpenPolicy* inOpenPolicy, // runtime policies for using db
   nsIMdbThumb** acqThumb)
 {
-  NS_ASSERTION(PR_FALSE, "this doesn't look implemented");
+  NS_ASSERTION(false, "this doesn't look implemented");
   MORK_USED_1(ioHeap);
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbThumb* outThumb = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
    if ( ev )
@@ -413,7 +381,7 @@ morkFactory::ThumbToOpenPort( // redeeming a completed thumb from OpenFilePort()
   nsIMdbThumb* ioThumb, // thumb from OpenFilePort() with done status
   nsIMdbPort** acqPort)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbPort* outPort = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -498,7 +466,7 @@ morkFactory::CanOpenFileStore(
   {
     outFormatVersion->mYarn_Fill = 0;
   }
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -531,7 +499,7 @@ morkFactory::OpenFileStore( // open an existing database
   const mdbOpenPolicy* inOpenPolicy, // runtime policies for using db
   nsIMdbThumb** acqThumb)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbThumb* outThumb = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -577,7 +545,7 @@ morkFactory::ThumbToOpenStore( // redeem completed thumb from OpenFileStore()
   nsIMdbThumb* ioThumb, // thumb from OpenFileStore() with done status
   nsIMdbStore** acqStore)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbStore* outStore = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -615,7 +583,7 @@ morkFactory::CreateNewFileStore( // create a new db with minimal content
   const mdbOpenPolicy* inOpenPolicy, // runtime policies for using db
   nsIMdbStore** acqStore)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbStore* outStore = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )

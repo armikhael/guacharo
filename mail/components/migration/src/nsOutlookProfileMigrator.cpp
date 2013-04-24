@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is The Mail Profile Migrator.
- *
- * The Initial Developer of the Original Code is Scott MacGregor.
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Scott MacGregor <mscott@mozilla.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsMailProfileMigratorUtils.h"
 #include "nsIServiceManager.h"
@@ -47,7 +15,7 @@ NS_IMPL_ISUPPORTS2(nsOutlookProfileMigrator, nsIMailProfileMigrator, nsITimerCal
 
 nsOutlookProfileMigrator::nsOutlookProfileMigrator()
 {
-  mProcessingMailFolders = PR_FALSE;
+  mProcessingMailFolders = false;
   // get the import service
   mImportModule = do_CreateInstance("@mozilla.org/import/import-outlook;1");
 }
@@ -58,7 +26,7 @@ nsOutlookProfileMigrator::~nsOutlookProfileMigrator()
 
 nsresult nsOutlookProfileMigrator::ContinueImport()
 {
-  return Notify(nsnull);
+  return Notify(nullptr);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -67,7 +35,7 @@ nsresult nsOutlookProfileMigrator::ContinueImport()
 NS_IMETHODIMP
 nsOutlookProfileMigrator::Notify(nsITimer *timer)
 {
-  PRInt32 progress;
+  int32_t progress;
   mGenericImporter->GetProgress(&progress);
 
   nsAutoString index;
@@ -95,20 +63,17 @@ nsOutlookProfileMigrator::Notify(nsITimer *timer)
 // nsIMailProfileMigrator
 
 NS_IMETHODIMP
-nsOutlookProfileMigrator::Migrate(PRUint16 aItems, nsIProfileStartup* aStartup, const PRUnichar* aProfile)
+nsOutlookProfileMigrator::Migrate(uint16_t aItems, nsIProfileStartup* aStartup, const PRUnichar* aProfile)
 {
   nsresult rv = NS_OK;
 
-  PRBool aReplace = PR_FALSE;
-
   if (aStartup)
   {
-    aReplace = PR_TRUE;
     rv = aStartup->DoStartup();
     NS_ENSURE_SUCCESS(rv, rv);
   }
 
-  NOTIFY_OBSERVERS(MIGRATION_STARTED, nsnull);
+  NOTIFY_OBSERVERS(MIGRATION_STARTED, nullptr);
 
   rv = ImportSettings(mImportModule);
 
@@ -122,7 +87,7 @@ nsOutlookProfileMigrator::Migrate(PRUint16 aItems, nsIProfileStartup* aStartup, 
 }
 
 NS_IMETHODIMP
-nsOutlookProfileMigrator::GetMigrateData(const PRUnichar* aProfile, PRBool aReplace, PRUint16* aResult)
+nsOutlookProfileMigrator::GetMigrateData(const PRUnichar* aProfile, bool aReplace, uint16_t* aResult)
 {
   // There's no harm in assuming everything is available.
   *aResult = nsIMailProfileMigrator::ACCOUNT_SETTINGS | nsIMailProfileMigrator::ADDRESSBOOK_DATA |
@@ -131,9 +96,9 @@ nsOutlookProfileMigrator::GetMigrateData(const PRUnichar* aProfile, PRBool aRepl
 }
 
 NS_IMETHODIMP
-nsOutlookProfileMigrator::GetSourceExists(PRBool* aResult)
+nsOutlookProfileMigrator::GetSourceExists(bool* aResult)
 {
-  *aResult = PR_FALSE;
+  *aResult = false;
 
   nsCOMPtr<nsIImportSettings> importSettings;
   mImportModule->GetImportInterface(NS_IMPORT_SETTINGS_STR, getter_AddRefs(importSettings));
@@ -149,15 +114,15 @@ nsOutlookProfileMigrator::GetSourceExists(PRBool* aResult)
 }
 
 NS_IMETHODIMP
-nsOutlookProfileMigrator::GetSourceHasMultipleProfiles(PRBool* aResult)
+nsOutlookProfileMigrator::GetSourceHasMultipleProfiles(bool* aResult)
 {
-  *aResult = PR_FALSE;
+  *aResult = false;
   return NS_OK;
 }
 
 NS_IMETHODIMP
 nsOutlookProfileMigrator::GetSourceProfiles(nsIArray** aResult)
 {
-  *aResult = nsnull;
+  *aResult = nullptr;
   return NS_OK;
 }

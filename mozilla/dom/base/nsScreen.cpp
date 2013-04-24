@@ -1,86 +1,119 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Travis Bogard <travis@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include "nscore.h"
+#include "mozilla/Hal.h"
 #include "nsScreen.h"
 #include "nsIDocShell.h"
 #include "nsPresContext.h"
 #include "nsCOMPtr.h"
-#include "nsDOMClassInfo.h"
-#include "nsIInterfaceRequestorUtils.h"
+#include "nsDOMClassInfoID.h"
+#include "nsIDocShellTreeItem.h"
 #include "nsLayoutUtils.h"
+#include "nsDOMEvent.h"
+#include "nsGlobalWindow.h"
 
-//
-//  Screen class implementation
-//
-nsScreen::nsScreen(nsIDocShell* aDocShell)
-  : mDocShell(aDocShell)
+using namespace mozilla;
+using namespace mozilla::dom;
+
+namespace {
+
+bool
+IsChromeType(nsIDocShell *aDocShell)
 {
+  nsCOMPtr<nsIDocShellTreeItem> ds = do_QueryInterface(aDocShell);
+  if (!ds) {
+    return false;
+  }
+
+  int32_t itemType;
+  ds->GetItemType(&itemType);
+  return itemType == nsIDocShellTreeItem::typeChrome;
+}
+
+} // anonymous namespace
+
+/* static */ already_AddRefed<nsScreen>
+nsScreen::Create(nsPIDOMWindow* aWindow)
+{
+  MOZ_ASSERT(aWindow);
+
+  if (!aWindow->GetDocShell()) {
+    return nullptr;
+  }
+
+  nsCOMPtr<nsIScriptGlobalObject> sgo =
+    do_QueryInterface(static_cast<nsPIDOMWindow*>(aWindow));
+  NS_ENSURE_TRUE(sgo, nullptr);
+
+  nsRefPtr<nsScreen> screen = new nsScreen();
+  screen->BindToOwner(aWindow);
+
+  hal::RegisterScreenConfigurationObserver(screen);
+  hal::ScreenConfiguration config;
+  hal::GetCurrentScreenConfiguration(&config);
+  screen->mOrientation = config.orientation();
+
+  return screen.forget();
+}
+
+nsScreen::nsScreen()
+  : mEventListener(nullptr)
+{
+}
+
+void
+nsScreen::Reset()
+{
+  hal::UnlockScreenOrientation();
+
+  if (mEventListener) {
+    nsCOMPtr<nsIDOMEventTarget> target = do_QueryInterface(GetOwner());
+    if (target) {
+      target->RemoveSystemEventListener(NS_LITERAL_STRING("mozfullscreenchange"),
+                                        mEventListener, true);
+    }
+
+    mEventListener = nullptr;
+  }
 }
 
 nsScreen::~nsScreen()
 {
+  Reset();
+  hal::UnregisterScreenConfigurationObserver(this);
 }
 
 
 DOMCI_DATA(Screen, nsScreen)
 
+NS_IMPL_CYCLE_COLLECTION_CLASS(nsScreen)
+
+NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN_INHERITED(nsScreen,
+                                                  nsDOMEventTargetHelper)
+  NS_CYCLE_COLLECTION_TRAVERSE_EVENT_HANDLER(mozorientationchange)
+NS_IMPL_CYCLE_COLLECTION_TRAVERSE_END
+
+NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN_INHERITED(nsScreen,
+                                                nsDOMEventTargetHelper)
+  NS_CYCLE_COLLECTION_UNLINK_EVENT_HANDLER(mozorientationchange)
+NS_IMPL_CYCLE_COLLECTION_UNLINK_END
+
 // QueryInterface implementation for nsScreen
-NS_INTERFACE_MAP_BEGIN(nsScreen)
-  NS_INTERFACE_MAP_ENTRY(nsISupports)
+NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION_INHERITED(nsScreen)
   NS_INTERFACE_MAP_ENTRY(nsIDOMScreen)
+  NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports, nsIDOMScreen)
   NS_DOM_INTERFACE_MAP_ENTRY_CLASSINFO(Screen)
-NS_INTERFACE_MAP_END
+NS_INTERFACE_MAP_END_INHERITING(nsDOMEventTargetHelper)
 
+NS_IMPL_ADDREF_INHERITED(nsScreen, nsDOMEventTargetHelper)
+NS_IMPL_RELEASE_INHERITED(nsScreen, nsDOMEventTargetHelper)
 
-NS_IMPL_ADDREF(nsScreen)
-NS_IMPL_RELEASE(nsScreen)
-
-
-NS_IMETHODIMP
-nsScreen::SetDocShell(nsIDocShell* aDocShell)
-{
-   mDocShell = aDocShell; // Weak Reference
-   return NS_OK;
-}
+NS_IMPL_EVENT_HANDLER(nsScreen, mozorientationchange)
 
 NS_IMETHODIMP
-nsScreen::GetTop(PRInt32* aTop)
+nsScreen::GetTop(int32_t* aTop)
 {
   nsRect rect;
   nsresult rv = GetRect(rect);
@@ -92,7 +125,7 @@ nsScreen::GetTop(PRInt32* aTop)
 
 
 NS_IMETHODIMP
-nsScreen::GetLeft(PRInt32* aLeft)
+nsScreen::GetLeft(int32_t* aLeft)
 {
   nsRect rect;
   nsresult rv = GetRect(rect);
@@ -104,7 +137,7 @@ nsScreen::GetLeft(PRInt32* aLeft)
 
 
 NS_IMETHODIMP
-nsScreen::GetWidth(PRInt32* aWidth)
+nsScreen::GetWidth(int32_t* aWidth)
 {
   nsRect rect;
   nsresult rv = GetRect(rect);
@@ -115,7 +148,7 @@ nsScreen::GetWidth(PRInt32* aWidth)
 }
 
 NS_IMETHODIMP
-nsScreen::GetHeight(PRInt32* aHeight)
+nsScreen::GetHeight(int32_t* aHeight)
 {
   nsRect rect;
   nsresult rv = GetRect(rect);
@@ -126,7 +159,7 @@ nsScreen::GetHeight(PRInt32* aHeight)
 }
 
 NS_IMETHODIMP
-nsScreen::GetPixelDepth(PRInt32* aPixelDepth)
+nsScreen::GetPixelDepth(int32_t* aPixelDepth)
 {
   nsDeviceContext* context = GetDeviceContext();
 
@@ -136,7 +169,7 @@ nsScreen::GetPixelDepth(PRInt32* aPixelDepth)
     return NS_ERROR_FAILURE;
   }
 
-  PRUint32 depth;
+  uint32_t depth;
   context->GetDepth(depth);
 
   *aPixelDepth = depth;
@@ -145,13 +178,13 @@ nsScreen::GetPixelDepth(PRInt32* aPixelDepth)
 }
 
 NS_IMETHODIMP
-nsScreen::GetColorDepth(PRInt32* aColorDepth)
+nsScreen::GetColorDepth(int32_t* aColorDepth)
 {
   return GetPixelDepth(aColorDepth);
 }
 
 NS_IMETHODIMP
-nsScreen::GetAvailWidth(PRInt32* aAvailWidth)
+nsScreen::GetAvailWidth(int32_t* aAvailWidth)
 {
   nsRect rect;
   nsresult rv = GetAvailRect(rect);
@@ -162,7 +195,7 @@ nsScreen::GetAvailWidth(PRInt32* aAvailWidth)
 }
 
 NS_IMETHODIMP
-nsScreen::GetAvailHeight(PRInt32* aAvailHeight)
+nsScreen::GetAvailHeight(int32_t* aAvailHeight)
 {
   nsRect rect;
   nsresult rv = GetAvailRect(rect);
@@ -173,7 +206,7 @@ nsScreen::GetAvailHeight(PRInt32* aAvailHeight)
 }
 
 NS_IMETHODIMP
-nsScreen::GetAvailLeft(PRInt32* aAvailLeft)
+nsScreen::GetAvailLeft(int32_t* aAvailLeft)
 {
   nsRect rect;
   nsresult rv = GetAvailRect(rect);
@@ -184,7 +217,7 @@ nsScreen::GetAvailLeft(PRInt32* aAvailLeft)
 }
 
 NS_IMETHODIMP
-nsScreen::GetAvailTop(PRInt32* aAvailTop)
+nsScreen::GetAvailTop(int32_t* aAvailTop)
 {
   nsRect rect;
   nsresult rv = GetAvailRect(rect);
@@ -197,7 +230,7 @@ nsScreen::GetAvailTop(PRInt32* aAvailTop)
 nsDeviceContext*
 nsScreen::GetDeviceContext()
 {
-  return nsLayoutUtils::GetDeviceContextForScreenInfo(mDocShell);
+  return nsLayoutUtils::GetDeviceContextForScreenInfo(GetOwner());
 }
 
 nsresult
@@ -234,6 +267,194 @@ nsScreen::GetAvailRect(nsRect& aRect)
   aRect.y = nsPresContext::AppUnitsToIntCSSPixels(aRect.y);
   aRect.height = nsPresContext::AppUnitsToIntCSSPixels(aRect.height);
   aRect.width = nsPresContext::AppUnitsToIntCSSPixels(aRect.width);
+
+  return NS_OK;
+}
+
+void
+nsScreen::Notify(const hal::ScreenConfiguration& aConfiguration)
+{
+  ScreenOrientation previousOrientation = mOrientation;
+  mOrientation = aConfiguration.orientation();
+
+  NS_ASSERTION(mOrientation != eScreenOrientation_None &&
+               mOrientation != eScreenOrientation_EndGuard &&
+               mOrientation != eScreenOrientation_Portrait &&
+               mOrientation != eScreenOrientation_Landscape,
+               "Invalid orientation value passed to notify method!");
+
+  if (mOrientation != previousOrientation) {
+    // TODO: use an helper method, see bug 720768.
+    nsRefPtr<nsDOMEvent> event = new nsDOMEvent(nullptr, nullptr);
+    nsresult rv = event->InitEvent(NS_LITERAL_STRING("mozorientationchange"), false, false);
+    if (NS_FAILED(rv)) {
+      return;
+    }
+
+    rv = event->SetTrusted(true);
+    if (NS_FAILED(rv)) {
+      return;
+    }
+
+    bool dummy;
+    rv = DispatchEvent(event, &dummy);
+    if (NS_FAILED(rv)) {
+      return;
+    }
+  }
+}
+
+NS_IMETHODIMP
+nsScreen::GetMozOrientation(nsAString& aOrientation)
+{
+  switch (mOrientation) {
+    case eScreenOrientation_None:
+    case eScreenOrientation_EndGuard:
+    case eScreenOrientation_Portrait:
+    case eScreenOrientation_Landscape:
+      NS_ASSERTION(false, "Shouldn't be used when getting value!");
+      return NS_ERROR_FAILURE;
+    case eScreenOrientation_PortraitPrimary:
+      aOrientation.AssignLiteral("portrait-primary");
+      break;
+    case eScreenOrientation_PortraitSecondary:
+      aOrientation.AssignLiteral("portrait-secondary");
+      break;
+    case eScreenOrientation_LandscapePrimary:
+      aOrientation.AssignLiteral("landscape-primary");
+      break;
+    case eScreenOrientation_LandscapeSecondary:
+      aOrientation.AssignLiteral("landscape-secondary");
+      break;
+  }
+
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsScreen::MozLockOrientation(const nsAString& aOrientation, bool* aReturn)
+{
+  ScreenOrientation orientation;
+  *aReturn = false;
+
+  if (aOrientation.EqualsLiteral("portrait")) {
+    orientation = eScreenOrientation_Portrait;
+  } else if (aOrientation.EqualsLiteral("portrait-primary")) {
+    orientation = eScreenOrientation_PortraitPrimary;
+  } else if (aOrientation.EqualsLiteral("portrait-secondary")) {
+    orientation = eScreenOrientation_PortraitSecondary;
+  } else if (aOrientation.EqualsLiteral("landscape")) {
+    orientation = eScreenOrientation_Landscape;
+  } else if (aOrientation.EqualsLiteral("landscape-primary")) {
+    orientation = eScreenOrientation_LandscapePrimary;
+  } else if (aOrientation.EqualsLiteral("landscape-secondary")) {
+    orientation = eScreenOrientation_LandscapeSecondary;
+  } else {
+    return NS_OK;
+  }
+
+  // Determine whether we can lock the screen orientation.
+  bool canLockOrientation = false;
+  do {
+    nsCOMPtr<nsPIDOMWindow> owner = GetOwner();
+    if (!owner) {
+      break;
+    }
+
+    // Chrome can always lock the screen orientation.
+    if (IsChromeType(owner->GetDocShell())) {
+      canLockOrientation = true;
+      break;
+    }
+
+    nsCOMPtr<nsIDOMDocument> domDoc;
+    owner->GetDocument(getter_AddRefs(domDoc));
+    nsCOMPtr<nsIDocument> doc = do_QueryInterface(domDoc);
+    if (!doc) {
+      break;
+    }
+
+    // Apps can always lock the screen orientation.
+    if (doc->NodePrincipal()->GetAppStatus() >=
+          nsIPrincipal::APP_STATUS_INSTALLED) {
+      canLockOrientation = true;
+      break;
+    }
+
+    // Other content must be full-screen in order to lock orientation.
+    bool fullscreen;
+    domDoc->GetMozFullScreen(&fullscreen);
+    if (!fullscreen) {
+      break;
+    }
+
+    // If we're full-screen, register a listener so we learn when we leave
+    // full-screen.
+    nsCOMPtr<nsIDOMEventTarget> target = do_QueryInterface(owner);
+    if (!target) {
+      break;
+    }
+
+    if (!mEventListener) {
+      mEventListener = new FullScreenEventListener();
+    }
+
+    target->AddSystemEventListener(NS_LITERAL_STRING("mozfullscreenchange"),
+                                   mEventListener, /* useCapture = */ true);
+    canLockOrientation = true;
+  } while(0);
+
+  if (canLockOrientation) {
+    *aReturn = hal::LockScreenOrientation(orientation);
+  }
+
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsScreen::MozUnlockOrientation()
+{
+  hal::UnlockScreenOrientation();
+  return NS_OK;
+}
+
+NS_IMPL_ISUPPORTS1(nsScreen::FullScreenEventListener, nsIDOMEventListener)
+
+NS_IMETHODIMP
+nsScreen::FullScreenEventListener::HandleEvent(nsIDOMEvent* aEvent)
+{
+#ifdef DEBUG
+  nsAutoString eventType;
+  aEvent->GetType(eventType);
+
+  MOZ_ASSERT(eventType.EqualsLiteral("mozfullscreenchange"));
+#endif
+
+  nsCOMPtr<nsIDOMEventTarget> target;
+  aEvent->GetCurrentTarget(getter_AddRefs(target));
+
+  // We have to make sure that the event we got is the event sent when
+  // fullscreen is disabled because we could get one when fullscreen
+  // got enabled if the lock call is done at the same moment.
+  nsCOMPtr<nsIDOMWindow> window = do_QueryInterface(target);
+  MOZ_ASSERT(window);
+
+  nsCOMPtr<nsIDOMDocument> doc;
+  window->GetDocument(getter_AddRefs(doc));
+  // If we have no doc, we will just continue, remove the event and unlock.
+  // This is an edge case were orientation lock and fullscreen is meaningless.
+  if (doc) {
+    bool fullscreen;
+    doc->GetMozFullScreen(&fullscreen);
+    if (fullscreen) {
+      return NS_OK;
+    }
+  }
+
+  target->RemoveSystemEventListener(NS_LITERAL_STRING("mozfullscreenchange"),
+                                    this, true);
+
+  hal::UnlockScreenOrientation();
 
   return NS_OK;
 }

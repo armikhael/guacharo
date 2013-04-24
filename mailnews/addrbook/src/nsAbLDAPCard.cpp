@@ -1,42 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Sun Microsystems, Inc.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Created by: Paul Sandoz   <paul.sandoz@sun.com>
- *   Mark Banner <bugzilla@standard8.plus.com>
- *   Jeremy Laine <jeremy.laine@m4x.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsAbLDAPCard.h"
 #include "nsIMutableArray.h"
@@ -86,9 +51,9 @@ NS_IMPL_ISUPPORTS_INHERITED1(nsAbLDAPCard, nsAbCardProperty, nsIAbLDAPCard)
 */
 NS_IMETHODIMP nsAbLDAPCard::GetLDAPMessageInfo(
   nsIAbLDAPAttributeMap *aAttributeMap,
-  const PRUint32 aClassCount,
+  const uint32_t aClassCount,
   const char **aClasses,
-  PRInt32 aType,
+  int32_t aType,
   nsIArray **aLDAPAddMessageInfo)
 {
   NS_ENSURE_ARG_POINTER(aAttributeMap);
@@ -104,7 +69,7 @@ NS_IMETHODIMP nsAbLDAPCard::GetLDAPMessageInfo(
   // classes: if an entry has additional object classes, it's probably
   // for a good reason.
   nsCAutoString oclass;
-  for (PRUint32 i = 0; i < aClassCount; ++i)
+  for (uint32_t i = 0; i < aClassCount; ++i)
   {
     oclass.Assign(nsDependentCString(aClasses[i]));
     ToLowerCase(oclass);
@@ -124,7 +89,7 @@ NS_IMETHODIMP nsAbLDAPCard::GetLDAPMessageInfo(
     do_CreateInstance(NS_ARRAY_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
   
-  for (PRUint32 i = 0; i < m_objectClass.Length(); ++i)
+  for (uint32_t i = 0; i < m_objectClass.Length(); ++i)
   {
     nsCOMPtr<nsILDAPBERValue> value =
       do_CreateInstance("@mozilla.org/network/ldap-ber-value;1", &rv);
@@ -133,14 +98,14 @@ NS_IMETHODIMP nsAbLDAPCard::GetLDAPMessageInfo(
     rv = value->SetFromUTF8(m_objectClass.ElementAt(i));
     NS_ENSURE_SUCCESS(rv, rv);
 
-    rv = values->AppendElement(value, PR_FALSE);
+    rv = values->AppendElement(value, false);
     NS_ENSURE_SUCCESS(rv, rv);
   }
   
   rv = mod->SetUpModification(aType, NS_LITERAL_CSTRING("objectClass"), values);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  modArray->AppendElement(mod, PR_FALSE);
+  modArray->AppendElement(mod, false);
 
   // Add card properties
   CharPtrArrayGuard props;
@@ -150,7 +115,7 @@ NS_IMETHODIMP nsAbLDAPCard::GetLDAPMessageInfo(
 
   nsCAutoString attr;
   nsCString propvalue;
-  for (PRUint32 i = 0; i < props.GetSize(); ++i)
+  for (uint32_t i = 0; i < props.GetSize(); ++i)
   {
     // Skip some attributes that don't map to LDAP.
     //
@@ -180,7 +145,7 @@ NS_IMETHODIMP nsAbLDAPCard::GetLDAPMessageInfo(
       do_CreateInstance("@mozilla.org/network/ldap-modification;1", &rv);
     NS_ENSURE_SUCCESS(rv, rv);
    
-    PRUint32 index = m_attributes.IndexOf(attr);
+    uint32_t index = m_attributes.IndexOf(attr);
 
     rv = GetPropertyAsAUTF8String(props[i], propvalue);
 
@@ -199,7 +164,7 @@ NS_IMETHODIMP nsAbLDAPCard::GetLDAPMessageInfo(
     
       printf("LDAP : setting attribute %s (%s) to '%s'\n", attr.get(),
         props[i], propvalue.get());
-      modArray->AppendElement(mod, PR_FALSE);
+      modArray->AppendElement(mod, false);
       if (index != nsTArray<nsCString>::NoIndex)
         m_attributes.AppendElement(attr);
 
@@ -217,7 +182,7 @@ NS_IMETHODIMP nsAbLDAPCard::GetLDAPMessageInfo(
       NS_ENSURE_SUCCESS(rv, rv);
       
       printf("LDAP : removing attribute %s (%s)\n", attr.get(), props[i]);
-      modArray->AppendElement(mod, PR_FALSE);
+      modArray->AppendElement(mod, false);
       m_attributes.RemoveElementAt(index);
     }
   }
@@ -228,7 +193,7 @@ NS_IMETHODIMP nsAbLDAPCard::GetLDAPMessageInfo(
 }
 
 NS_IMETHODIMP nsAbLDAPCard::BuildRdn(nsIAbLDAPAttributeMap *aAttributeMap,
-                                     const PRUint32 aAttrCount,
+                                     const uint32_t aAttrCount,
                                      const char **aAttributes,
                                      nsACString &aRdn)
 {
@@ -241,7 +206,7 @@ NS_IMETHODIMP nsAbLDAPCard::BuildRdn(nsIAbLDAPAttributeMap *aAttributeMap,
   nsCString propvalue;
 
   aRdn.Truncate();
-  for (PRUint32 i = 0; i < aAttrCount; ++i)
+  for (uint32_t i = 0; i < aAttrCount; ++i)
   {
     attr.Assign(nsDependentCString(aAttributes[i]));
    
@@ -299,7 +264,7 @@ NS_IMETHODIMP nsAbLDAPCard::SetMetaProperties(nsILDAPMessage *aMessage)
  
   nsCAutoString attr;
   m_attributes.Clear();
-  for (PRUint32 i = 0; i < attrs.GetSize(); ++i)
+  for (uint32_t i = 0; i < attrs.GetSize(); ++i)
   {
     attr.Assign(nsDependentCString(attrs[i]));
     ToLowerCase(attr);
@@ -321,7 +286,7 @@ NS_IMETHODIMP nsAbLDAPCard::SetMetaProperties(nsILDAPMessage *aMessage)
   NS_ENSURE_SUCCESS(rv, rv);
   
   nsCAutoString oclass;
-  for (PRUint32 i = 0; i < vals.GetSize(); ++i)
+  for (uint32_t i = 0; i < vals.GetSize(); ++i)
   {
     oclass.Assign(NS_LossyConvertUTF16toASCII(nsDependentString(vals[i])));
     ToLowerCase(oclass);

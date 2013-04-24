@@ -1,43 +1,12 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "nsAppShellWindowEnumerator.h"
 
 #include "nsIContentViewer.h"
 #include "nsIDocShell.h"
-#include "nsIDocumentViewer.h"
 #include "nsIDocument.h"
 #include "nsIDOMDocument.h"
 #include "nsIDOMElement.h"
@@ -47,7 +16,6 @@
 #include "nsIInterfaceRequestorUtils.h"
 #include "nsIXULWindow.h"
 
-#include "nsAppShellWindowEnumerator.h"
 #include "nsWindowMediator.h"
 
 //
@@ -83,7 +51,7 @@ nsCOMPtr<nsIDOMNode> GetDOMNodeFromDocShell(nsIDocShell *aShell)
       nsCOMPtr<nsIDOMElement> element;
       domdoc->GetDocumentElement(getter_AddRefs(element));
       if (element)
-        node = do_QueryInterface(element);
+        node = element;
     }
   }
 
@@ -116,10 +84,10 @@ void GetWindowType(nsIXULWindow* aWindow, nsString &outType)
 // nsWindowInfo
 //
 
-nsWindowInfo::nsWindowInfo(nsIXULWindow* inWindow, PRInt32 inTimeStamp) :
+nsWindowInfo::nsWindowInfo(nsIXULWindow* inWindow, int32_t inTimeStamp) :
   mWindow(inWindow),mTimeStamp(inTimeStamp),mZLevel(nsIXULWindow::normalZ)
 {
-  ReferenceSelf(PR_TRUE, PR_TRUE);
+  ReferenceSelf(true, true);
 }
 
 nsWindowInfo::~nsWindowInfo()
@@ -128,7 +96,7 @@ nsWindowInfo::~nsWindowInfo()
 
 // return true if the window described by this WindowInfo has a type
 // equal to the given type
-PRBool nsWindowInfo::TypeEquals(const nsAString &aType)
+bool nsWindowInfo::TypeEquals(const nsAString &aType)
 { 
   nsAutoString rtnString;
   GetWindowType(mWindow, rtnString);
@@ -162,7 +130,7 @@ void nsWindowInfo::InsertAfter(nsWindowInfo *inOlder , nsWindowInfo *inHigher)
 }
 
 // remove the struct from its linked lists
-void nsWindowInfo::Unlink(PRBool inAge, PRBool inZ)
+void nsWindowInfo::Unlink(bool inAge, bool inZ)
 {
   if (inAge) {
     mOlder->mYounger = mYounger;
@@ -176,7 +144,7 @@ void nsWindowInfo::Unlink(PRBool inAge, PRBool inZ)
 }
 
 // initialize the struct to be a valid linked list of one element
-void nsWindowInfo::ReferenceSelf(PRBool inAge, PRBool inZ)
+void nsWindowInfo::ReferenceSelf(bool inAge, bool inZ)
 {
   if (inAge) {
     mYounger = this;
@@ -197,7 +165,7 @@ NS_IMPL_ISUPPORTS1(nsAppShellWindowEnumerator, nsISimpleEnumerator)
 nsAppShellWindowEnumerator::nsAppShellWindowEnumerator(
     const PRUnichar* aTypeString,
     nsWindowMediator& aMediator) :
-      mWindowMediator(&aMediator), mType(aTypeString), mCurrentPosition(nsnull)
+      mWindowMediator(&aMediator), mType(aTypeString), mCurrentPosition(nullptr)
 {
   mWindowMediator->AddEnumerator(this);
   NS_ADDREF(mWindowMediator);
@@ -217,12 +185,12 @@ void nsAppShellWindowEnumerator::AdjustInitialPosition()
     mCurrentPosition = FindNext();
 }
 
-NS_IMETHODIMP nsAppShellWindowEnumerator::HasMoreElements(PRBool *retval)
+NS_IMETHODIMP nsAppShellWindowEnumerator::HasMoreElements(bool *retval)
 {
   if (!retval)
     return NS_ERROR_INVALID_ARG;
 
-  *retval = mCurrentPosition ? PR_TRUE : PR_FALSE;
+  *retval = mCurrentPosition ? true : false;
   return NS_OK;
 }
 
@@ -253,12 +221,13 @@ NS_IMETHODIMP nsASDOMWindowEnumerator::GetNext(nsISupports **retval)
   if (!retval)
     return NS_ERROR_INVALID_ARG;
 
-  *retval = nsnull;
-  if (mCurrentPosition) {
+  *retval = nullptr;
+  while (mCurrentPosition) {
     nsCOMPtr<nsIDOMWindow> domWindow;
     GetDOMWindow(mCurrentPosition->mWindow, domWindow);
-    CallQueryInterface(domWindow, retval);
     mCurrentPosition = FindNext();
+    if (domWindow)
+      return CallQueryInterface(domWindow, retval);
   }
   return NS_OK;
 }
@@ -283,7 +252,7 @@ NS_IMETHODIMP nsASXULWindowEnumerator::GetNext(nsISupports **retval)
   if (!retval)
     return NS_ERROR_INVALID_ARG;
 
-  *retval = nsnull;
+  *retval = nullptr;
   if (mCurrentPosition) {
     CallQueryInterface(mCurrentPosition->mWindow, retval);
     mCurrentPosition = FindNext();
@@ -312,11 +281,11 @@ nsWindowInfo *nsASDOMWindowEarlyToLateEnumerator::FindNext()
 {
   nsWindowInfo *info,
                *listEnd;
-  PRBool        allWindows = mType.IsEmpty();
+  bool          allWindows = mType.IsEmpty();
 
   // see nsXULWindowEarlyToLateEnumerator::FindNext
   if (!mCurrentPosition)
-    return nsnull;
+    return nullptr;
 
   info = mCurrentPosition->mYounger;
   listEnd = mWindowMediator->mOldestWindow;
@@ -327,7 +296,7 @@ nsWindowInfo *nsASDOMWindowEarlyToLateEnumerator::FindNext()
     info = info->mYounger;
   }
 
-  return nsnull;
+  return nullptr;
 }
 
 //
@@ -351,7 +320,7 @@ nsWindowInfo *nsASXULWindowEarlyToLateEnumerator::FindNext()
 {
   nsWindowInfo *info,
                *listEnd;
-  PRBool        allWindows = mType.IsEmpty();
+  bool          allWindows = mType.IsEmpty();
 
   /* mCurrentPosition null is assumed to mean that the enumerator has run
      its course and is now basically useless. It could also be interpreted
@@ -361,7 +330,7 @@ nsWindowInfo *nsASXULWindowEarlyToLateEnumerator::FindNext()
      pick up newly added windows anyway (if they occurred previous to our
      current position) so we just don't worry about that. */
   if (!mCurrentPosition)
-    return nsnull;
+    return nullptr;
 
   info = mCurrentPosition->mYounger;
   listEnd = mWindowMediator->mOldestWindow;
@@ -372,7 +341,7 @@ nsWindowInfo *nsASXULWindowEarlyToLateEnumerator::FindNext()
     info = info->mYounger;
   }
 
-  return nsnull;
+  return nullptr;
 }
 
 //
@@ -396,11 +365,11 @@ nsWindowInfo *nsASDOMWindowFrontToBackEnumerator::FindNext()
 {
   nsWindowInfo *info,
                *listEnd;
-  PRBool        allWindows = mType.IsEmpty();
+  bool          allWindows = mType.IsEmpty();
 
   // see nsXULWindowEarlyToLateEnumerator::FindNext
   if (!mCurrentPosition)
-    return nsnull;
+    return nullptr;
 
   info = mCurrentPosition->mLower;
   listEnd = mWindowMediator->mTopmostWindow;
@@ -411,7 +380,7 @@ nsWindowInfo *nsASDOMWindowFrontToBackEnumerator::FindNext()
     info = info->mLower;
   }
 
-  return nsnull;
+  return nullptr;
 }
 
 //
@@ -435,11 +404,11 @@ nsWindowInfo *nsASXULWindowFrontToBackEnumerator::FindNext()
 {
   nsWindowInfo *info,
                *listEnd;
-  PRBool        allWindows = mType.IsEmpty();
+  bool          allWindows = mType.IsEmpty();
 
   // see nsXULWindowEarlyToLateEnumerator::FindNext
   if (!mCurrentPosition)
-    return nsnull;
+    return nullptr;
 
   info = mCurrentPosition->mLower;
   listEnd = mWindowMediator->mTopmostWindow;
@@ -450,7 +419,7 @@ nsWindowInfo *nsASXULWindowFrontToBackEnumerator::FindNext()
     info = info->mLower;
   }
 
-  return nsnull;
+  return nullptr;
 }
 
 //
@@ -463,7 +432,7 @@ nsASDOMWindowBackToFrontEnumerator::nsASDOMWindowBackToFrontEnumerator(
   nsASDOMWindowEnumerator(aTypeString, aMediator)
 {
   mCurrentPosition = aMediator.mTopmostWindow ?
-                     aMediator.mTopmostWindow->mHigher : nsnull;
+                     aMediator.mTopmostWindow->mHigher : nullptr;
   AdjustInitialPosition();
 }
 
@@ -475,11 +444,11 @@ nsWindowInfo *nsASDOMWindowBackToFrontEnumerator::FindNext()
 {
   nsWindowInfo *info,
                *listEnd;
-  PRBool        allWindows = mType.IsEmpty();
+  bool          allWindows = mType.IsEmpty();
 
   // see nsXULWindowEarlyToLateEnumerator::FindNext
   if (!mCurrentPosition)
-    return nsnull;
+    return nullptr;
 
   info = mCurrentPosition->mHigher;
   listEnd = mWindowMediator->mTopmostWindow;
@@ -492,7 +461,7 @@ nsWindowInfo *nsASDOMWindowBackToFrontEnumerator::FindNext()
     info = info->mHigher;
   }
 
-  return nsnull;
+  return nullptr;
 }
 
 //
@@ -505,7 +474,7 @@ nsASXULWindowBackToFrontEnumerator::nsASXULWindowBackToFrontEnumerator(
       nsASXULWindowEnumerator(aTypeString, aMediator)
 {
   mCurrentPosition = aMediator.mTopmostWindow ?
-                     aMediator.mTopmostWindow->mHigher : nsnull;
+                     aMediator.mTopmostWindow->mHigher : nullptr;
   AdjustInitialPosition();
 }
 
@@ -517,11 +486,11 @@ nsWindowInfo *nsASXULWindowBackToFrontEnumerator::FindNext()
 {
   nsWindowInfo *info,
                *listEnd;
-  PRBool        allWindows = mType.IsEmpty();
+  bool          allWindows = mType.IsEmpty();
 
   // see nsXULWindowEarlyToLateEnumerator::FindNext
   if (!mCurrentPosition)
-    return nsnull;
+    return nullptr;
 
   info = mCurrentPosition->mHigher;
   listEnd = mWindowMediator->mTopmostWindow;
@@ -534,5 +503,5 @@ nsWindowInfo *nsASXULWindowBackToFrontEnumerator::FindNext()
     info = info->mHigher;
   }
 
-  return nsnull;
+  return nullptr;
 }

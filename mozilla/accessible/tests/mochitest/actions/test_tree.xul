@@ -15,6 +15,8 @@
   <script type="application/javascript"
           src="../common.js" />
   <script type="application/javascript"
+          src="../role.js" />
+  <script type="application/javascript"
           src="../states.js" />
   <script type="application/javascript"
           src="../events.js" />
@@ -26,14 +28,10 @@
     ////////////////////////////////////////////////////////////////////////////
     // Accessible tree testers
 
-    function focusChecker(aAcc, aStates)
+    function stateFocusChecker(aAcc, aStates)
     {
-      this.type = EVENT_FOCUS;
-      this.target = aAcc;
-      this.getID = function focusChecker_getID()
-      {
-        return "focus handling";
-      }
+      this.__proto__ = new focusChecker(aAcc);
+
       this.check = function focusChecker_check(aEvent)
       {
         var states = aStates ? aStates : 0;
@@ -45,8 +43,9 @@
     // Test
 
     // gA11yEventDumpID = "debug";
+    //gA11yEventDumpToConsole = true; // debug
 
-    function doTestActions()
+    function doTest()
     {
       var treeNode = getNode("tree");
 
@@ -64,7 +63,7 @@
           events: CLICK_EVENTS,
           targetID: treeBodyNode,
           eventSeq: [
-            new focusChecker(expandedTreeItem, STATE_EXPANDED)
+            new stateFocusChecker(expandedTreeItem, STATE_EXPANDED)
           ]
         },
         {
@@ -94,15 +93,8 @@
       testActions(actions); // Will call SimpleTest.finish();
     }
 
-    function doTest()
-    {
-      var treeNode = getNode("tree");
-      waitForEvent(EVENT_REORDER, treeNode, doTestActions);
-      treeNode.view = new nsTreeTreeView();
-    }
-
     SimpleTest.waitForExplicitFinish();
-    addA11yLoadEvent(doTest);
+    addA11yXULTreeLoadEvent(doTest, "tree", new nsTreeTreeView());
   ]]>
   </script>
 

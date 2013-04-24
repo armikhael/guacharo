@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License
- * Version 1.1 (the "License"); you may not use this file except in
- * compliance with the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is 
- * Mozilla Corporation
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Olli Pettay <Olli.Pettay@helsinki.fi>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsDOMEventTargetHelper_h_
 #define nsDOMEventTargetHelper_h_
@@ -48,8 +15,11 @@
 #include "nsIScriptGlobalObject.h"
 #include "nsEventListenerManager.h"
 #include "nsIScriptContext.h"
+#include "nsWrapperCache.h"
+#include "mozilla/ErrorResult.h"
+#include "mozilla/Attributes.h"
 
-class nsDOMEventListenerWrapper : public nsIDOMEventListener
+class nsDOMEventListenerWrapper MOZ_FINAL : public nsIDOMEventListener
 {
 public:
   nsDOMEventListenerWrapper(nsIDOMEventListener* aListener)
@@ -61,21 +31,75 @@ public:
   NS_DECL_NSIDOMEVENTLISTENER
 
   nsIDOMEventListener* GetInner() { return mListener; }
+  void Disconnect() { mListener = nullptr; }
 protected:
   nsCOMPtr<nsIDOMEventListener> mListener;
 };
 
-class nsDOMEventTargetHelper : public nsIDOMEventTarget
+class nsDOMEventTargetHelper : public nsIDOMEventTarget,
+                               public nsWrapperCache
 {
 public:
-  nsDOMEventTargetHelper() {}
-  virtual ~nsDOMEventTargetHelper() {}
+  nsDOMEventTargetHelper() : mOwner(nullptr), mHasOrHasHadOwner(false) {}
+  virtual ~nsDOMEventTargetHelper();
   NS_DECL_CYCLE_COLLECTING_ISUPPORTS
-  NS_DECL_CYCLE_COLLECTION_CLASS(nsDOMEventTargetHelper)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_CLASS(nsDOMEventTargetHelper)
 
   NS_DECL_NSIDOMEVENTTARGET
+  void AddEventListener(const nsAString& aType,
+                        nsIDOMEventListener* aCallback, // XXX nullable
+                        bool aCapture, Nullable<bool>& aWantsUntrusted,
+                        mozilla::ErrorResult& aRv)
+  {
+    aRv = AddEventListener(aType, aCallback, aCapture,
+                           !aWantsUntrusted.IsNull() && aWantsUntrusted.Value(),
+                           aWantsUntrusted.IsNull() ? 1 : 2);
+  }
+  void RemoveEventListener(const nsAString& aType,
+                           nsIDOMEventListener* aCallback,
+                           bool aCapture, mozilla::ErrorResult& aRv)
+  {
+    aRv = RemoveEventListener(aType, aCallback, aCapture);
+  }
+  bool DispatchEvent(nsIDOMEvent* aEvent, mozilla::ErrorResult& aRv)
+  {
+    bool result = false;
+    aRv = DispatchEvent(aEvent, &result);
+    return result;
+  }
 
-  PRBool HasListenersFor(const nsAString& aType)
+  void GetParentObject(nsIScriptGlobalObject **aParentObject)
+  {
+    if (mOwner) {
+      CallQueryInterface(mOwner, aParentObject);
+    }
+    else {
+      *aParentObject = nullptr;
+    }
+  }
+
+  static nsDOMEventTargetHelper* FromSupports(nsISupports* aSupports)
+  {
+    nsIDOMEventTarget* target =
+      static_cast<nsIDOMEventTarget*>(aSupports);
+#ifdef DEBUG
+    {
+      nsCOMPtr<nsIDOMEventTarget> target_qi =
+        do_QueryInterface(aSupports);
+
+      // If this assertion fires the QI implementation for the object in
+      // question doesn't use the nsIDOMEventTarget pointer as the
+      // nsISupports pointer. That must be fixed, or we'll crash...
+      NS_ASSERTION(target_qi == target, "Uh, fix QI!");
+    }
+#endif
+
+    return static_cast<nsDOMEventTargetHelper*>(target);
+  }
+
+  void Init(JSContext* aCx = nullptr);
+
+  bool HasListenersFor(const nsAString& aType)
   {
     return mListenerManager && mListenerManager->HasListenersFor(aType);
   }
@@ -88,6 +112,7 @@ public:
 
   nsresult CheckInnerWindowCorrectness()
   {
+    NS_ENSURE_STATE(!mHasOrHasHadOwner || mOwner);
     if (mOwner) {
       NS_ASSERTION(mOwner->IsInnerWindow(), "Should have inner window here!\n");
       nsPIDOMWindow* outer = mOwner->GetOuterWindow();
@@ -97,11 +122,122 @@ public:
     }
     return NS_OK;
   }
+
+  void BindToOwner(nsPIDOMWindow* aOwner);
+  void BindToOwner(nsDOMEventTargetHelper* aOther);
+  virtual void DisconnectFromOwner();                   
+  nsPIDOMWindow* GetOwner() { return mOwner; }
+  bool HasOrHasHadOwner() { return mHasOrHasHadOwner; }
 protected:
   nsRefPtr<nsEventListenerManager> mListenerManager;
+private:
   // These may be null (native callers or xpcshell).
-  nsCOMPtr<nsIScriptContext> mScriptContext;
-  nsCOMPtr<nsPIDOMWindow>    mOwner; // Inner window.
+  nsPIDOMWindow*             mOwner; // Inner window.
+  bool                       mHasOrHasHadOwner;
 };
+
+#define NS_DECL_EVENT_HANDLER(_event)                                         \
+  protected:                                                                  \
+    nsRefPtr<nsDOMEventListenerWrapper> mOn##_event##Listener;                \
+  public:
+
+#define NS_DECL_AND_IMPL_EVENT_HANDLER(_event)                                \
+  protected:                                                                  \
+    nsRefPtr<nsDOMEventListenerWrapper> mOn##_event##Listener;                \
+  public:                                                                     \
+    NS_IMETHOD GetOn##_event(nsIDOMEventListener** a##_event)                 \
+    {                                                                         \
+      return GetInnerEventListener(mOn##_event##Listener, a##_event);         \
+    }                                                                         \
+    NS_IMETHOD SetOn##_event(nsIDOMEventListener* a##_event)                  \
+    {                                                                         \
+      return RemoveAddEventListener(NS_LITERAL_STRING(#_event),               \
+                                    mOn##_event##Listener, a##_event);        \
+    }
+
+#define NS_IMPL_EVENT_HANDLER(_class, _event)                                 \
+  NS_IMETHODIMP                                                               \
+  _class::GetOn##_event(nsIDOMEventListener** a##_event)                      \
+  {                                                                           \
+    return GetInnerEventListener(mOn##_event##Listener, a##_event);           \
+  }                                                                           \
+  NS_IMETHODIMP                                                               \
+  _class::SetOn##_event(nsIDOMEventListener* a##_event)                       \
+  {                                                                           \
+    return RemoveAddEventListener(NS_LITERAL_STRING(#_event),                 \
+                                  mOn##_event##Listener, a##_event);          \
+  }
+
+#define NS_IMPL_FORWARD_EVENT_HANDLER(_class, _event, _baseclass)             \
+    NS_IMETHODIMP                                                             \
+    _class::GetOn##_event(nsIDOMEventListener** a##_event)                    \
+    {                                                                         \
+      return _baseclass::GetOn##_event(a##_event);                           \
+    }                                                                         \
+    NS_IMETHODIMP                                                             \
+    _class::SetOn##_event(nsIDOMEventListener* a##_event)                     \
+    {                                                                         \
+      return _baseclass::SetOn##_event(a##_event);                            \
+    }
+
+#define NS_CYCLE_COLLECTION_TRAVERSE_EVENT_HANDLER(_event)                    \
+  NS_IMPL_CYCLE_COLLECTION_TRAVERSE_NSCOMPTR(mOn##_event##Listener)
+
+#define NS_CYCLE_COLLECTION_UNLINK_EVENT_HANDLER(_event)                      \
+  NS_IMPL_CYCLE_COLLECTION_UNLINK_NSCOMPTR(mOn##_event##Listener)
+
+#define NS_DISCONNECT_EVENT_HANDLER(_event)                                   \
+  if (mOn##_event##Listener) { mOn##_event##Listener->Disconnect(); }
+
+#define NS_UNMARK_LISTENER_WRAPPER(_event)                                    \
+  if (tmp->mOn##_event##Listener) {                                           \
+    xpc_TryUnmarkWrappedGrayObject(tmp->mOn##_event##Listener->GetInner());   \
+  }
+
+/* Use this macro to declare functions that forward the behavior of this
+ * interface to another object.
+ * This macro doesn't forward PreHandleEvent because sometimes subclasses
+ * want to override it.
+ */
+#define NS_FORWARD_NSIDOMEVENTTARGET_NOPREHANDLEEVENT(_to) \
+  NS_IMETHOD AddEventListener(const nsAString & type, nsIDOMEventListener *listener, bool useCapture, bool wantsUntrusted, uint8_t _argc) { \
+    return _to AddEventListener(type, listener, useCapture, wantsUntrusted, _argc); \
+  } \
+  NS_IMETHOD AddSystemEventListener(const nsAString & type, nsIDOMEventListener *listener, bool aUseCapture, bool aWantsUntrusted, uint8_t _argc) { \
+    return _to AddSystemEventListener(type, listener, aUseCapture, aWantsUntrusted, _argc); \
+  } \
+  NS_IMETHOD RemoveEventListener(const nsAString & type, nsIDOMEventListener *listener, bool useCapture) { \
+    return _to RemoveEventListener(type, listener, useCapture); \
+  } \
+  NS_IMETHOD RemoveSystemEventListener(const nsAString & type, nsIDOMEventListener *listener, bool aUseCapture) { \
+    return _to RemoveSystemEventListener(type, listener, aUseCapture); \
+  } \
+  NS_IMETHOD DispatchEvent(nsIDOMEvent *evt, bool *_retval) { \
+    return _to DispatchEvent(evt, _retval); \
+  } \
+  virtual nsIDOMEventTarget * GetTargetForDOMEvent(void) { \
+    return _to GetTargetForDOMEvent(); \
+  } \
+  virtual nsIDOMEventTarget * GetTargetForEventTargetChain(void) { \
+    return _to GetTargetForEventTargetChain(); \
+  } \
+  virtual nsresult WillHandleEvent(nsEventChainPostVisitor & aVisitor) { \
+    return _to WillHandleEvent(aVisitor); \
+  } \
+  virtual nsresult PostHandleEvent(nsEventChainPostVisitor & aVisitor) { \
+    return _to PostHandleEvent(aVisitor); \
+  } \
+  virtual nsresult DispatchDOMEvent(nsEvent *aEvent, nsIDOMEvent *aDOMEvent, nsPresContext *aPresContext, nsEventStatus *aEventStatus) { \
+    return _to DispatchDOMEvent(aEvent, aDOMEvent, aPresContext, aEventStatus); \
+  } \
+  virtual nsEventListenerManager * GetListenerManager(bool aMayCreate) { \
+    return _to GetListenerManager(aMayCreate); \
+  } \
+  virtual nsIScriptContext * GetContextForEventHandlers(nsresult *aRv) { \
+    return _to GetContextForEventHandlers(aRv); \
+  } \
+  virtual JSContext * GetJSContextForEventHandlers(void) { \
+    return _to GetJSContextForEventHandlers(); \
+  } 
 
 #endif // nsDOMEventTargetHelper_h_

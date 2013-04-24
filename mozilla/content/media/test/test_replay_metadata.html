@@ -47,7 +47,6 @@ function loadedMetaData(evt) {
   ok(v._loadedMetaDataCount <= 1, "No more than 1 onloadedmetadata event for " + v._name);
   checkMetadata(v._name, v, v._test);
   v.play();
-  return false;
 }
 
 function playing(evt) {
@@ -65,7 +64,6 @@ function playbackEnded(evt) {
     ok(v.seeking, "seeking should be true for " + v._name);
     ok(!v.ended, "ended shouldn't be true once seeking has begun for " + v._name);
     v._playedOnce = true;
-    v.play();
   } else {
     ok(v._gotSeekEnded, "Should have received seekended for " + v._name);
     ok(v._gotSeekStarted, "Should have received seekstarted for " + v._name);
@@ -77,7 +75,6 @@ function playbackEnded(evt) {
     v.parentNode.removeChild(v);
     manager.finished(v.token);
   }  
-  return false;
 }
 
 function startTest(test, token) {

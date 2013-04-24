@@ -1,39 +1,7 @@
 /* -*- Mode: IDL; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Mozilla.org
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsISupports.idl"
 
@@ -65,8 +33,13 @@ interface nsIDOMEvent;
 interface nsITransferable;
 interface nsIQueryContentEventResult;
 interface nsIDOMWindow;
+interface nsIDOMBlob;
+interface nsIDOMFile;
+interface nsIFile;
+interface nsIDOMTouch;
+interface nsIDOMClientRect;
 
-[scriptable, uuid(d95fac68-4f0d-430f-9580-6dd8041f177e)]
+[scriptable, uuid(9f599acb-75e5-4f5f-97aa-f93165da2259)]
 interface nsIDOMWindowUtils : nsISupports {
 
   /**
@@ -148,12 +121,17 @@ interface nsIDOMWindowUtils : nsISupports {
    *
    * It's legal to set a displayport that extends beyond the overflow
    * area in any direction (left/right/top/bottom).
-   * 
+   *
    * It's also legal to set a displayport that extends beyond the
    * area's bounds.  No pixels are rendered outside the area bounds.
    *
    * The caller of this method must have UniversalXPConnect
    * privileges.
+   *
+   * Calling this will always force a recomposite, so it should be
+   * avoided if at all possible. Client code should do checks before
+   * calling this so that duplicate sets are not made with the same
+   * displayport.
    */
   void setDisplayPortForElement(in float aXPx, in float aYPx,
                                 in float aWidthPx, in float aHeightPx,
@@ -185,6 +163,33 @@ interface nsIDOMWindowUtils : nsISupports {
    */
   void setResolution(in float aXResolution, in float aYResolution);
 
+  /**
+   * Whether the next paint should be flagged as the first paint for a document.
+   * This gives a way to track the next paint that occurs after the flag is
+   * set. The flag gets cleared after the next paint.
+   *
+   * Can only be accessed with UniversalXPConnect privileges.
+   */
+  attribute boolean isFirstPaint;
+
+  /**
+   * Following modifiers are for sent*Event() except sendNative*Event().
+   * NOTE: MODIFIER_ALT, MODIFIER_CONTROL, MODIFIER_SHIFT and MODIFIER_META
+   *       are must be same values as nsIDOMNSEvent::*_MASK for backward
+   *       compatibility.
+   */
+  const long MODIFIER_ALT        = 0x0001;
+  const long MODIFIER_CONTROL    = 0x0002;
+  const long MODIFIER_SHIFT      = 0x0004;
+  const long MODIFIER_META       = 0x0008;
+  const long MODIFIER_ALTGRAPH   = 0x0010;
+  const long MODIFIER_CAPSLOCK   = 0x0020;
+  const long MODIFIER_FN         = 0x0040;
+  const long MODIFIER_NUMLOCK    = 0x0080;
+  const long MODIFIER_SCROLLLOCK = 0x0100;
+  const long MODIFIER_SYMBOLLOCK = 0x0200;
+  const long MODIFIER_OS         = 0x0400;
+
   /** Synthesize a mouse event. The event types supported are:
    *    mousedown, mouseup, mousemove, mouseover, mouseout, contextmenu
    *
@@ -212,9 +217,12 @@ interface nsIDOMWindowUtils : nsISupports {
    * @param aY y offset in CSS pixels
    * @param aButton button to synthesize
    * @param aClickCount number of clicks that have been performed
-   * @param aModifiers modifiers pressed, using constants defined in nsIDOMNSEvent
+   * @param aModifiers modifiers pressed, using constants defined as MODIFIER_*
    * @param aIgnoreRootScrollFrame whether the event should ignore viewport bounds
    *                           during dispatch
+   * @param aPressure touch input pressure: 0.0 -> 1.0
+   * @param aInputSourceArg input source, see nsIDOMMouseEvent for values,
+   *        defaults to mouse input.
    */
   void sendMouseEvent(in AString aType,
                       in float aX,
@@ -222,7 +230,48 @@ interface nsIDOMWindowUtils : nsISupports {
                       in long aButton,
                       in long aClickCount,
                       in long aModifiers,
-                      [optional] in boolean aIgnoreRootScrollFrame);
+                      [optional] in boolean aIgnoreRootScrollFrame,
+                      [optional] in float aPressure,
+                      [optional] in unsigned short aInputSourceArg);
+
+  /** Synthesize a touch event. The event types supported are:
+   *    touchstart, touchend, touchmove, and touchcancel
+   *
+   * Events are sent in coordinates offset by aX and aY from the window.
+   *
+   * Cannot be accessed from unprivileged context (not content-accessible)
+   * Will throw a DOM security error if called without UniversalXPConnect
+   * privileges.
+   *
+   * The event is dispatched via the toplevel window, so it could go to any
+   * window under the toplevel window, in some cases it could never reach this
+   * window at all.
+   *
+   * @param aType event type
+   * @param xs array of offsets in CSS pixels for each touch to be sent
+   * @param ys array of offsets in CSS pixels for each touch to be sent
+   * @param rxs array of radii in CSS pixels for each touch to be sent
+   * @param rys array of radii in CSS pixels for each touch to be sent
+   * @param rotationAngles array of angles in degrees for each touch to be sent
+   * @param forces array of forces (floats from 0 to 1) for each touch to be sent
+   * @param count number of touches in this set
+   * @param aModifiers modifiers pressed, using constants defined as MODIFIER_*
+   * @param aIgnoreRootScrollFrame whether the event should ignore viewport bounds
+   *                           during dispatch
+   *
+   * returns true if the page called prevent default on this touch event
+   */
+  boolean sendTouchEvent(in AString aType,
+                         [array, size_is(count)] in uint32_t aIdentifiers,
+                         [array, size_is(count)] in int32_t aXs,
+                         [array, size_is(count)] in int32_t aYs,
+                         [array, size_is(count)] in uint32_t aRxs,
+                         [array, size_is(count)] in uint32_t aRys,
+                         [array, size_is(count)] in float aRotationAngles,
+                         [array, size_is(count)] in float aForces,
+                         in uint32_t count,
+                         in long aModifiers,
+                         [optional] in boolean aIgnoreRootScrollFrame);
 
   /** The same as sendMouseEvent but ensures that the event is dispatched to
    *  this DOM window or one of its children.
@@ -233,12 +282,12 @@ interface nsIDOMWindowUtils : nsISupports {
                               in long aButton,
                               in long aClickCount,
                               in long aModifiers,
-                              [optional] in boolean aIgnoreRootScrollFrame);
+                              [optional] in boolean aIgnoreRootScrollFrame,
+                              [optional] in float aPressure,
+                              [optional] in unsigned short aInputSourceArg);
 
-  /** Synthesize a mouse scroll event for a window. The event types supported
-   *  are: 
-   *    DOMMouseScroll
-   *    MozMousePixelScroll
+  /** Synthesize a wheel event for a window. The event types supported is only
+   *  wheel.
    *
    * Events are sent in coordinates offset by aX and aY from the window.
    *
@@ -246,22 +295,38 @@ interface nsIDOMWindowUtils : nsISupports {
    * Will throw a DOM security error if called without UniversalXPConnect
    * privileges.
    *
-   * @param aType event type
-   * @param aX x offset in CSS pixels
-   * @param aY y offset in CSS pixels
-   * @param aButton button to synthesize
-   * @param aScrollFlags flag bits --- see nsMouseScrollFlags in nsGUIEvent.h
-   * @param aDelta the direction and amount to scroll (in lines or pixels,
-   * depending on the event type)
-   * @param aModifiers modifiers pressed, using constants defined in nsIDOMNSEvent
+   * @param aX                 x offset in CSS pixels
+   * @param aY                 y offset in CSS pixels
+   * @param aDeltaX            deltaX value.
+   * @param aDeltaY            deltaY value.
+   * @param aDeltaZ            deltaZ value.
+   * @param aDeltaMode         deltaMode value which must be one of
+   *                           nsIDOMWheelEvent::DOM_DELTA_*.
+   * @param aModifiers         modifiers pressed, using constants defined as
+   *                           MODIFIER_*
+   * @param aLineOrPageDeltaX  If you set this value non-zero for
+   *                           DOM_DELTA_PIXEL event, nsEventStateManager will
+   *                           dispatch NS_MOUSE_SCROLL event for horizontal
+   *                           scroll.
+   * @param aLineOrPageDeltaY  If you set this value non-zero for
+   *                           DOM_DELTA_PIXEL event, nsEventStateManager will
+   *                           dispatch NS_MOUSE_SCROLL event for vertical
+   *                           scroll.
+   * @param aOptions           Set following flags.
    */
-  void sendMouseScrollEvent(in AString aType,
-                            in float aX,
-                            in float aY,
-                            in long aButton,
-                            in long aScrollFlags,
-                            in long aDelta,
-                            in long aModifiers);
+   const unsigned long WHEEL_EVENT_CAUSED_BY_PIXEL_ONLY_DEVICE = 0x0001;
+   const unsigned long WHEEL_EVENT_CAUSED_BY_MOMENTUM          = 0x0002;
+   const unsigned long WHEEL_EVENT_CUSTOMIZED_BY_USER_PREFS    = 0x0004;
+   void sendWheelEvent(in float aX,
+                       in float aY,
+                       in double aDeltaX,
+                       in double aDeltaY,
+                       in double aDeltaZ,
+                       in unsigned long aDeltaMode,
+                       in long aModifiers,
+                       in long aLineOrPageDeltaX,
+                       in long aLineOrPageDeltaY,
+                       in unsigned long aOptions);
 
   /**
    * Synthesize a key event to the window. The event types supported are:
@@ -276,18 +341,31 @@ interface nsIDOMWindowUtils : nsISupports {
    * @param aType event type
    * @param aKeyCode key code
    * @param aCharCode character code
-   * @param aModifiers modifiers pressed, using constants defined in nsIDOMNSEvent
-   * @param aPreventDefault if true, preventDefault() the event before dispatch
+   * @param aModifiers modifiers pressed, using constants defined as MODIFIER_*
+   * @param aAdditionalFlags special flags for the key event, see KEY_FLAG_*.
    *
    * @return false if the event had preventDefault() called on it,
    *               true otherwise.  In other words, true if and only if the
    *               default action was taken.
    */
+
+  // If this is set, preventDefault() the event before dispatch.
+  const unsigned long KEY_FLAG_PREVENT_DEFAULT   = 0x0001;
+
+  // if one of these flags is set, the KeyboardEvent.location will be the value.
+  // Otherwise, it will be computed from aKeyCode.
+  const unsigned long KEY_FLAG_LOCATION_STANDARD = 0x0010;
+  const unsigned long KEY_FLAG_LOCATION_LEFT     = 0x0020;
+  const unsigned long KEY_FLAG_LOCATION_RIGHT    = 0x0040;
+  const unsigned long KEY_FLAG_LOCATION_NUMPAD   = 0x0080;
+  const unsigned long KEY_FLAG_LOCATION_MOBILE   = 0x0100;
+  const unsigned long KEY_FLAG_LOCATION_JOYSTICK = 0x0200;
+
   boolean sendKeyEvent(in AString aType,
                        in long aKeyCode,
                        in long aCharCode,
                        in long aModifiers,
-                       [optional] in boolean aPreventDefault);
+                       [optional] in unsigned long aAdditionalFlags);
 
   /**
    * See nsIWidget::SynthesizeNativeKeyEvent
@@ -295,6 +373,8 @@ interface nsIDOMWindowUtils : nsISupports {
    * Cannot be accessed from unprivileged context (not content-accessible)
    * Will throw a DOM security error if called without UniversalXPConnect
    * privileges.
+   *
+   * When you use this for tests, use the constants defined in NativeKeyCodes.js
    */
   void sendNativeKeyEvent(in long aNativeKeyboardLayout,
                           in long aNativeKeyCode,
@@ -315,6 +395,52 @@ interface nsIDOMWindowUtils : nsISupports {
                             in long aNativeMessage,
                             in long aModifierFlags,
                             in nsIDOMElement aElement);
+
+  /**
+   * See nsIWidget::SynthesizeNativeMouseScrollEvent
+   *
+   * Will be called on the widget that contains aElement.
+   * Cannot be accessed from unprivileged context (not content-accessible)
+   * Will throw a DOM security error if called without UniversalXPConnect
+   * privileges.
+   *
+   * NOTE: The synthesized native event may be fired asynchronously.
+   *
+   * @param aNativeMessage
+   *   On Windows:  WM_MOUSEWHEEL (0x020A), WM_MOUSEHWHEEL(0x020E),
+   *                WM_VSCROLL (0x0115) or WM_HSCROLL (0x114).
+   */
+  void sendNativeMouseScrollEvent(in long aScreenX,
+                                  in long aScreenY,
+                                  in unsigned long aNativeMessage,
+                                  in double aDeltaX,
+                                  in double aDeltaY,
+                                  in double aDeltaZ,
+                                  in unsigned long aModifierFlags,
+                                  in unsigned long aAdditionalFlags,
+                                  in nsIDOMElement aElement);
+
+  /**
+   * The values of aAdditionalFlags.
+   */
+
+  /**
+   * If MOUSESCROLL_PREFER_WIDGET_AT_POINT is set, widget will dispatch
+   * the event to a widget which is under the cursor.  Otherwise, dispatch to
+   * a default target on the platform.  E.g., on Windows, it's focused window.
+   */
+  const unsigned long MOUSESCROLL_PREFER_WIDGET_AT_POINT = 0x00000001;
+
+  /**
+   * The platform specific values of aAdditionalFlags.  Must be over 0x00010000.
+   */
+
+  /**
+   * If MOUSESCROLL_WIN_SCROLL_LPARAM_NOT_NULL is set and aNativeMessage is
+   * WM_VSCROLL or WM_HSCROLL, widget will set the window handle to the lParam
+   * instead of NULL.
+   */
+  const unsigned long MOUSESCROLL_WIN_SCROLL_LPARAM_NOT_NULL = 0x00010000;
 
   /**
    * See nsIWidget::ActivateNativeMenuItemAt
@@ -360,8 +486,15 @@ interface nsIDOMWindowUtils : nsISupports {
    * @param aListener listener that receives information about the CC graph
    *                  (see @mozilla.org/cycle-collector-logger;1 for a logger
    *                   component)
+   * @param aExtraForgetSkippableCalls indicates how many times
+   *                                   nsCycleCollector_forgetSkippable will
+   *                                   be called before running cycle collection.
+   *                                   -1 prevents the default
+   *                                   nsCycleCollector_forgetSkippable call
+   *                                   which happens after garbage collection.
    */
-  void garbageCollect([optional] in nsICycleCollectorListener aListener);
+  void garbageCollect([optional] in nsICycleCollectorListener aListener,
+                      [optional] in long aExtraForgetSkippableCalls);
 
   /**
    * Force a cycle collection without garbage collection.
@@ -372,20 +505,21 @@ interface nsIDOMWindowUtils : nsISupports {
    * @param aListener listener that receives information about the CC graph
    *                  (see @mozilla.org/cycle-collector-logger;1 for a logger
    *                   component)
+   * @param aExtraForgetSkippableCalls indicates how many times
+   *                                   nsCycleCollector_forgetSkippable will
+   *                                   be called before running cycle collection.
+   *                                   -1 prevents the default
+   *                                   nsCycleCollector_forgetSkippable call
+   *                                   which happens after garbage collection.
    */
-  void cycleCollect([optional] in nsICycleCollectorListener aListener);
-
-  /**
-   * Force processing of any queued paints
-   */
-
-  void processUpdates();
+  void cycleCollect([optional] in nsICycleCollectorListener aListener,
+                    [optional] in long aExtraForgetSkippableCalls);
 
   /** Synthesize a simple gesture event for a window. The event types
    *  supported are: MozSwipeGesture, MozMagnifyGestureStart,
    *  MozMagnifyGestureUpdate, MozMagnifyGesture, MozRotateGestureStart,
-   *  MozRotateGestureUpdate, MozRotateGesture, MozPressTapGesture, and
-   *  MozTapGesture.
+   *  MozRotateGestureUpdate, MozRotateGesture, MozPressTapGesture,
+   *  MozTapGesture, and MozEdgeUIGesture.
    *
    * Cannot be accessed from unprivileged context (not
    * content-accessible) Will throw a DOM security error if called
@@ -397,13 +531,15 @@ interface nsIDOMWindowUtils : nsISupports {
    * @param aDirection direction, using constants defined in nsIDOMSimpleGestureEvent
    * @param aDelta  amount of magnification or rotation for magnify and rotation events
    * @param aModifiers modifiers pressed, using constants defined in nsIDOMNSEvent
+   * @param aClickCount For tap gestures, the number of taps.
    */
   void sendSimpleGestureEvent(in AString aType,
                               in float aX,
                               in float aY,
                               in unsigned long aDirection,
                               in double aDelta,
-                              in long aModifiers);
+                              in long aModifiers,
+                              [optional] in unsigned long aClickCount);
 
   /**
    * Retrieve the element at point aX, aY in the window's document.
@@ -448,7 +584,7 @@ interface nsIDOMWindowUtils : nsISupports {
    *
    * This method requires UniversalXPConnect privileges.
    */
-  PRUint32 compareCanvases(in nsIDOMHTMLCanvasElement aCanvas1,
+  uint32_t compareCanvases(in nsIDOMHTMLCanvasElement aCanvas1,
                            in nsIDOMHTMLCanvasElement aCanvas2,
                            out unsigned long aMaxDifference);
 
@@ -488,6 +624,13 @@ interface nsIDOMWindowUtils : nsISupports {
    * @see nsIDOMWindow::scrollX/Y
    */
   void getScrollXY(in boolean aFlushLayout, out long aScrollX, out long aScrollY);
+
+  /**
+   * Returns the bounds of the window's currently loaded document. This will
+   * generally be (0, 0, pageWidth, pageHeight) but in some cases (e.g. RTL
+   * documents) may have a negative left value.
+   */
+  nsIDOMClientRect getRootBounds();
 
   /**
    * Get IME open state. TRUE means 'Open', otherwise, 'Close'.
@@ -555,7 +698,7 @@ interface nsIDOMWindowUtils : nsISupports {
    * Returns the real classname (possibly of the mostly-transparent security
    * wrapper) of aObj.
    */
-  string getClassName(/*in JSObjectPtr aObj*/);
+  [implicit_jscontext] string getClassName(in jsval aObject);
 
   /**
    * Generate a content command event.
@@ -579,9 +722,16 @@ interface nsIDOMWindowUtils : nsISupports {
    * Will throw a DOM security error if called without UniversalXPConnect
    * privileges.
    *
-   * @param aType The event type: "compositionstart" or "compositionend".
+   * @param aType     The event type: "compositionstart", "compositionend" or
+   *                  "compositionupdate".
+   * @param aData     The data property value.  Note that this isn't applied
+   *                  for compositionstart event because its value is the
+   *                  selected text which is automatically computed.
+   * @param aLocale   The locale property value.
    */
-  void sendCompositionEvent(in AString aType);
+  void sendCompositionEvent(in AString aType,
+                            in AString aData,
+                            in AString aLocale);
 
   /**
    * Synthesize a text event to the window.
@@ -627,7 +777,7 @@ interface nsIDOMWindowUtils : nsISupports {
   /**
    * Synthesize a query content event.
    *
-   * @param aType  On of the following const values.  And see also each comment
+   * @param aType  One of the following const values.  And see also each comment
    *               for the other parameters and the result.
    */
   nsIQueryContentEventResult sendQueryContentEvent(in unsigned long aType,
@@ -725,6 +875,28 @@ interface nsIDOMWindowUtils : nsISupports {
   const unsigned long QUERY_CHARACTER_AT_POINT                  = 3208;
 
   /**
+   * Called when the remote child frame has changed its fullscreen state,
+   * when entering fullscreen, and when the origin which is fullscreen changes.
+   * aFrameElement is the iframe element which contains the child-process
+   * fullscreen document, and aNewOrigin is the origin of the new fullscreen
+   * document.
+   */
+  void remoteFrameFullscreenChanged(in nsIDOMElement aFrameElement,
+                                    in AString aNewOrigin);
+
+  /**
+   * Called when the remote frame has popped all fullscreen elements off its
+   * stack, so that the operation can complete on the parent side.
+   */
+  void remoteFrameFullscreenReverted();
+
+  /**
+   * Called when the child frame has fully exit fullscreen, so that the parent
+   * process can also fully exit.
+   */
+  void exitFullscreen();
+
+  /**
    * Synthesize a selection set event to the window.
    *
    * This sets the selection as the specified information.
@@ -765,7 +937,7 @@ interface nsIDOMWindowUtils : nsISupports {
    * @param obj The JavaScript object whose parent is to be gotten.
    * @return the parent.
    */
-  void getParent(/* obj */);
+  [implicit_jscontext] jsval getParent(in jsval obj);
 
   /**
    * Get the id of the outer window of this window.  This will never throw.
@@ -828,6 +1000,9 @@ interface nsIDOMWindowUtils : nsISupports {
    */
   readonly attribute AString layerManagerType;
 
+  void startFrameTimeRecording();
+  void stopFrameTimeRecording([optional] out unsigned long frameCount,
+                              [retval, array, size_is(frameCount)] out float frameTime);
   /**
    * The DPI of the display
    */
@@ -839,7 +1014,7 @@ interface nsIDOMWindowUtils : nsISupports {
   nsIDOMWindow getOuterWindowWithId(in unsigned long long aOuterWindowID);
 
   [noscript] void RenderDocument(in nsConstRect aRect,
-                                 in PRUint32 aFlags,
+                                 in uint32_t aFlags,
                                  in nscolor aBackgroundColor,
                                  in gfxContext aThebesContext);
 
@@ -882,6 +1057,11 @@ interface nsIDOMWindowUtils : nsISupports {
                                   in AString value2);
 
   /**
+   * Wrap an nsIFile in an nsIDOMFile
+   */
+  nsIDOMFile wrapDOMFile(in nsIFile aFile);
+
+  /**
    * Get the type of the currently focused html input, if any.
    */
   readonly attribute string focusedInputType;
@@ -905,4 +1085,126 @@ interface nsIDOMWindowUtils : nsISupports {
    * true if the (current inner) window may have event listeners for touch events.
    */
   readonly attribute boolean mayHaveTouchEventListeners;
+ 
+  /**
+   * Check if any ThebesLayer painting has been done for this element,
+   * clears the painted flags if they have.
+   */
+  boolean checkAndClearPaintedState(in nsIDOMElement aElement);
+
+  /**
+   * Internal file constructor intended for testing of File objects.
+   * Example of constructor usage:
+   *   getFile("myfile.txt", [b1, "foo"], { type: "text/plain" })
+   */
+  [optional_argc, implicit_jscontext]
+  nsIDOMFile getFile(in DOMString aName, [optional] in jsval aBlobParts,
+                     [optional] in jsval aParameters);
+
+  /**
+   * Internal blob constructor intended for testing of Blob objects.
+   * Example of constructor usage:
+   *   getBlob([b1, "foo"], { type: "text/plain" })
+   */
+  [optional_argc, implicit_jscontext]
+  nsIDOMBlob getBlob([optional] in jsval aBlobParts,
+                     [optional] in jsval aParameters);
+
+  /**
+   * Get internal id of the stored blob, file or file handle.
+   */
+  [implicit_jscontext] long long getFileId(in jsval aFile);
+
+  /**
+   * Get file ref count info for given database and file id.
+   *
+   */
+  boolean getFileReferences(in AString aDatabaseName, in long long aId,
+                            [optional] out long aRefCnt,
+                            [optional] out long aDBRefCnt,
+                            [optional] out long aSliceRefCnt);
+
+  /**
+   * Return whether incremental GC has been disabled due to a binary add-on.
+   */
+  [implicit_jscontext]
+  boolean isIncrementalGCEnabled();
+
+  /**
+   * Begin opcode-level profiling of all JavaScript execution in the window's
+   * runtime.
+   */
+  [implicit_jscontext]
+  void startPCCountProfiling();
+
+  /**
+   * Stop opcode-level profiling of JavaScript execution in the runtime, and
+   * collect all counts for use by getPCCount methods.
+   */
+  [implicit_jscontext]
+  void stopPCCountProfiling();
+
+  /**
+   * Purge collected PC counters.
+   */
+  [implicit_jscontext]
+  void purgePCCounts();
+
+  /**
+   * Get the number of scripts with opcode-level profiling information.
+   */
+  [implicit_jscontext]
+  long getPCCountScriptCount();
+
+  /**
+   * Get a JSON string for a short summary of a script and the PC counts
+   * accumulated for it.
+   */
+  [implicit_jscontext]
+  AString getPCCountScriptSummary(in long script);
+
+  /**
+   * Get a JSON string with full information about a profiled script,
+   * including the decompilation of the script and placement of decompiled
+   * operations within it, and PC counts for each operation.
+   */
+  [implicit_jscontext]
+  AString getPCCountScriptContents(in long script);
+
+  /**
+   * Returns true if painting is suppressed for this window and false
+   * otherwise.
+   */
+  readonly attribute boolean paintingSuppressed;
+
+  /**
+   * Returns an array of plugins on the page for opt-in activation.
+   *
+   * Cannot be accessed from unprivileged context (not content-accessible).
+   * Will throw a DOM security error if called without UniversalXPConnect
+   * privileges.
+   *
+   */
+  [implicit_jscontext]
+  readonly attribute jsval plugins;
+
+  /**
+   * Set the scrollport size for the purposes of clamping scroll positions for
+   * the root scroll frame of this document to be (aWidth,aHeight) in CSS pixels.
+   *
+   * The caller of this method must have UniversalXPConnect privileges.
+   */
+  void setScrollPositionClampingScrollPortSize(in float aWidth, in float aHeight);
+
+  /**
+   * Prevent this window (and any child windows) from displaying any further
+   * dialogs (e.g. window.alert()).
+   */
+  void preventFurtherDialogs();
+
+  /**
+   * After calling the method, the window for which this DOMWindowUtils
+   * was created can be closed using scripts.
+   */
+   void allowScriptsToClose();
 };

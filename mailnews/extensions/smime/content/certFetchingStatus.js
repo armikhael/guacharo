@@ -1,38 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* We expect the following arguments:
    - pref name of LDAP directory to fetch from
@@ -44,6 +12,8 @@
   On finding certificates, import into permanent cert database.
   When all searches are finished, close the dialog.
 */
+
+Components.utils.import("resource://gre/modules/Services.jsm");
 
 const nsIX509CertDB = Components.interfaces.nsIX509CertDB;
 const nsX509CertDB = "@mozilla.org/security/x509certdb;1";
@@ -73,31 +43,23 @@ function onLoad()
 
 function search()
 {
-  var prefService =
-    Components.classes["@mozilla.org/preferences-service;1"]
-      .getService(Components.interfaces.nsIPrefService);
-  var prefs = prefService.getBranch(null);
-
   // get the login to authenticate as, if there is one
   try {
-    gLogin = prefs.getComplexValue(gDirectoryPref + ".auth.dn", Components.interfaces.nsISupportsString).data;
+    gLogin = Services.prefs.getComplexValue(gDirectoryPref + ".auth.dn", Components.interfaces.nsISupportsString).data;
   } catch (ex) {
     // if we don't have this pref, no big deal
   }
 
   try {
-    let url = prefs.getCharPref(gDirectoryPref + ".uri");
+    let url = Services.prefs.getCharPref(gDirectoryPref + ".uri");
 
-    gLdapServerURL = Components.classes["@mozilla.org/network/io-service;1"]
-      .getService(Components.interfaces.nsIIOService)
+    gLdapServerURL = Services.io
       .newURI(url, null, null).QueryInterface(Components.interfaces.nsILDAPURL);
 
     gLdapConnection = Components.classes["@mozilla.org/network/ldap-connection;1"]
       .createInstance().QueryInterface(Components.interfaces.nsILDAPConnection);
 
-    gLdapConnection.init(gLdapServerURL, gLogin,
-      getProxyOnUIThread(new boundListener(),
-                         Components.interfaces.nsILDAPMessageListener),
+    gLdapConnection.init(gLdapServerURL, gLogin, new boundListener(),
       null, Components.interfaces.nsILDAPConnection.VERSION3);
 
   } catch (ex) {
@@ -139,8 +101,7 @@ function getLDAPOperation()
       .createInstance().QueryInterface(Components.interfaces.nsILDAPOperation);
 
     gLdapOperation.init(gLdapConnection,
-                        getProxyOnUIThread(new ldapMessageListener(),
-                            Components.interfaces.nsILDAPMessageListener),
+                        new ldapMessageListener(),
                         null);
 }
 
@@ -149,22 +110,20 @@ function getPassword()
   // we only need a password if we are using credentials
   if (gLogin)
   {
-    var windowWatcherSvc = Components.classes["@mozilla.org/embedcomp/window-watcher;1"]
-                            .getService(Components.interfaces.nsIWindowWatcher);
-    var authPrompter = windowWatcherSvc.getNewAuthPrompter(window.QueryInterface(Components.interfaces.nsIDOMWindow));    
-    var strBundle = document.getElementById('bundle_ldap');
-    var password = { value: "" };
-    
+    let authPrompter = Services.ww.getNewAuthPrompter(window.QueryInterface(Components.interfaces.nsIDOMWindow));
+    let strBundle = document.getElementById('bundle_ldap');
+    let password = { value: "" };
+
     // nsLDAPAutocompleteSession uses asciiHost instead of host for the prompt text, I think we should be
-    // consistent. 
-    if (authPrompter.promptPassword(strBundle.getString("authPromptTitle"),  
+    // consistent.
+    if (authPrompter.promptPassword(strBundle.getString("authPromptTitle"),
                                      strBundle.getFormattedString("authPromptText", [gLdapServerURL.asciiHost]),
                                      gLdapServerURL.spec,
                                      authPrompter.SAVE_PASSWORD_PERMANENTLY,
                                      password))
-      return password.value;       
+      return password.value;
   }
-  
+
   return null;
 }
 
@@ -304,18 +263,3 @@ ldapMessageListener.prototype.onLDAPMessage =
 ldapMessageListener.prototype.onLDAPInit =
   function(aConn, aStatus) {
   }
-
-
-function getProxyOnUIThread(aObject, aInterface) {
-    var mainThread = Components.
-            classes["@mozilla.org/thread-manager;1"].
-            getService().mainThread;
-
-    var proxyMgr = Components.
-            classes["@mozilla.org/xpcomproxy;1"].
-            getService(Components.interfaces.nsIProxyObjectManager);
-
-    return proxyMgr.getProxyForObject(mainThread,
-            aInterface, aObject, 5);
-    // 5 == NS_PROXY_ALWAYS | NS_PROXY_SYNC
-}

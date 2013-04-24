@@ -7,6 +7,9 @@ var gIoService = Components.classes["@mozilla.org/network/io-service;1"]
                            .getService(Components.interfaces.nsIIOService);
 
 
+// Run by: cd objdir;  make -C netwerk/test/ xpcshell-tests    
+// or: cd objdir; make SOLO_FILE="test_URIs.js" -C netwerk/test/ check-one
+
 // Relevant RFCs: 1738, 1808, 2396, 3986 (newer than the code)
 // http://greenbytes.de/tech/webdav/rfc3986.html#rfc.section.5.4
 // http://greenbytes.de/tech/tc/uris/
@@ -116,6 +119,24 @@ var gTests = [
     path:    "/pub/mozilla.org/README",
     ref:     "",
     nsIURL:  true, nsINestedURI: false },
+  { spec:    "ftp://foo:@ftp.mozilla.org:100/pub/mozilla.org/README",
+    scheme:  "ftp",
+    prePath: "ftp://foo:@ftp.mozilla.org:100",
+    port:    100,
+    username: "foo",
+    password: "",
+    path:    "/pub/mozilla.org/README",
+    ref:     "",
+    nsIURL:  true, nsINestedURI: false },
+  //Bug 706249
+  { spec:    "http:x:@",
+    scheme:  "http",
+    prePath: "http://x:@",
+    username: "x",
+    password: "",
+    path:    "",
+    ref:     "",
+    nsIURL:  true, nsINestedURI: false },
   { spec:    "gopher://mozilla.org/",
     scheme:  "gopher",
     prePath: "gopher:",
@@ -202,16 +223,16 @@ var gTests = [
     path:    "new%20Date()",
     ref:     "",
     nsIURL:  false, nsINestedURI: false },
-  { spec:    "moz-filedata:123456",
-    scheme:  "moz-filedata",
-    prePath: "moz-filedata:",
+  { spec:    "blob:123456",
+    scheme:  "blob",
+    prePath: "blob:",
     path:    "123456",
     ref:     "",
     nsIURL:  false, nsINestedURI: false, immutable: true },
-  { spec:    "place:redirectsMode=2&sort=8&maxResults=10",
+  { spec:    "place:sort=8&maxResults=10",
     scheme:  "place",
     prePath: "place:",
-    path:    "redirectsMode=2&sort=8&maxResults=10",
+    path:    "sort=8&maxResults=10",
     ref:     "",
     nsIURL:  false, nsINestedURI: false },
   { spec:    "resource://gre/",

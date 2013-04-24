@@ -1,44 +1,7 @@
 <?xml version="1.0"?> 
-<!-- ***** BEGIN LICENSE BLOCK *****
-   - Version: MPL 1.1/GPL 2.0/LGPL 2.1
-   -
-   - The contents of this file are subject to the Mozilla Public License Version
-   - 1.1 (the "License"); you may not use this file except in compliance with
-   - the License. You may obtain a copy of the License at
-   - http://www.mozilla.org/MPL/
-   -
-   - Software distributed under the License is distributed on an "AS IS" basis,
-   - WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-   - for the specific language governing rights and limitations under the
-   - License.
-   -
-   - The Original Code is Mozilla Communicator client code, released
-   - March 31, 1998.
-   -
-   - The Initial Developer of the Original Code is
-   - Netscape Communications Corporation.
-   - Portions created by the Initial Developer are Copyright (C) 1999
-   - the Initial Developer. All Rights Reserved.
-   -
-   - Contributor(s):
-   -   Ryan Cassin (rcassin@supernova.org)
-   -   Daniel Glazman (glazman@netscape.com)
-   -   Aaron Kaluszka (ask@swva.net)
-   -   Stephen Donner (technutz@netscape.net)
-   -
-   - Alternatively, the contents of this file may be used under the terms of
-   - either of the GNU General Public License Version 2 or later (the "GPL"),
-   - or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-   - in which case the provisions of the GPL or the LGPL are applicable instead
-   - of those above. If you wish to allow use of your version of this file only
-   - under the terms of either the GPL or the LGPL, and not to allow others to
-   - use your version of this file under the terms of the MPL, indicate your
-   - decision by deleting the provisions above and replace them with the notice
-   - and other provisions required by the GPL or the LGPL. If you do not delete
-   - the provisions above, a recipient may use your version of this file under
-   - the terms of any one of the MPL, the GPL or the LGPL.
-   -
-   - ***** END LICENSE BLOCK ***** -->
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
 
 <!DOCTYPE overlay [
 <!ENTITY % editorOverlayDTD SYSTEM "chrome://editor/locale/editorOverlay.dtd">
@@ -58,32 +21,19 @@
     <!-- defined in globalOverlay -->
     <key id="key_newNavigator"/>
     <key id="key_newBlankPage"/>
-    <key id="openeditorkb"
-         key="&openFileCmd.key;"
-         command="cmd_open"  modifiers="accel"/>
-    <key id="openremoteeditorkb"
-         key="&openRemoteCmd.key;"
-         command="cmd_openRemote"  modifiers="accel,shift"/>
-    <key id="savekb"
+    <key id="key_save"
          key="&saveCmd.key;"
          command="cmd_save"
          modifiers="accel"/>
-    <key id="publishkb"
-         key="&publishCmd.key;"
-         command="cmd_publish"
-         modifiers="accel,shift"/>
-    <key id="printkb"
-         key="&printCmd.key;"
-         command="cmd_print"
-         modifiers="accel"/>
+    <key id="key_print"/>
     <key id="key_close"/>
-    <key id="key_quit"/>
     <key id="key_undo"/>
     <key id="key_redo"/>
     <key id="key_cut"/>
     <key id="key_copy"/>
     <key id="key_paste"/>
     <key id="key_delete"/>
+    <key id="key_delete2"/>
     <key id="key_selectAll"/>
     <key id="pastequotationkb"
          key="&pasteAsQuotationCmd.key;"
@@ -94,11 +44,10 @@
          command="cmd_pasteNoFormatting"
          modifiers="accel, shift"/>
     <keyset id="findKeys"/>
-    <key id="checkspellingkb"
+    <key id="key_checkspelling"
          key="&checkSpellingCmd2.key;"
          command="cmd_spelling"
-         modifiers="accel,shift"
-         disabled="true"/>
+         modifiers="accel,shift"/>
 
     <key id="boldkb"
          key="&styleBoldCmd.key;"
@@ -139,7 +88,7 @@
          command="cmd_removeLinks"
          modifiers="accel, shift"/>
     <key id="removenamedanchorskb"
-         key="&formatRemoveNamedAnchors.key;"
+         key="&formatRemoveNamedAnchors2.key;"
          command="cmd_removeNamedAnchors"
          modifiers="accel, shift"/>
     <key id="decreasefontsizekb"
@@ -168,12 +117,9 @@
           commandupdater="true"
           events="create"
           oncommandupdate="goUpdateComposerMenuItems(this)">
-    <command id="cmd_open"                                          oncommand="goDoCommand('cmd_open')"/>
-    <command id="cmd_openRemote"   label="&openRemoteCmd.label;"    oncommand="goDoCommand('cmd_openRemote')"/>
     <command id="cmd_printSetup"   oncommand="goDoCommand('cmd_printSetup')"/>
     <command id="cmd_print"        oncommand="goDoCommand('cmd_print')"/>
     <command id="cmd_close"        oncommand="goDoCommand('cmd_close');"/>
-    <command id="cmd_quit"         oncommand="goDoCommand('cmd_quit')"/>
   </commandset>
 
   <commandset id="composerMenuItems"
@@ -211,18 +157,6 @@
     <command id="cmd_renderedHTMLEnabler"/>
   </commandset>
   
-  <commandset id="composerSaveMenuItems"
-          commandupdater="true"
-          events="create, save"
-          oncommandupdate="goUpdateComposerMenuItems(this)">
-    <command id="cmd_save"           label="&saveCmd.label;"           oncommand="goDoCommand('cmd_save')"/>
-    <command id="cmd_saveAs"         label="&saveAsCmd.label;"         oncommand="goDoCommand('cmd_saveAs')"/>
-    <command id="cmd_saveAndChangeEncoding"  label="&saveAsChangeEncodingCmd.label;"  oncommand="goDoCommand('cmd_saveAndChangeEncoding')"/>
-    <command id="cmd_publish"        label="&publishCmd.label;"        oncommand="goDoCommand('cmd_publish')"/>
-    <command id="cmd_publishAs"      label="&publishAsCmd.label;"      oncommand="goDoCommand('cmd_publishAs')"/>
-    <command id="cmd_revert"         label="&fileRevert.label;"        oncommand="goDoCommand('cmd_revert')"/>
-  </commandset>
-
   <!-- edit menu commands. These get updated by code in globalOverlay.js -->
   <commandset id="composerEditMenuItems"
           commandupdater="true"
@@ -243,9 +177,10 @@
     <command id="cmd_findPrev"      oncommand="goDoCommand('cmd_findPrev');"/>
     <command id="cmd_spelling"      oncommand="goDoCommand('cmd_spelling')"/>
     <command id="cmd_checkLinks"    oncommand="goDoCommand('cmd_checkLinks')"/>
-    <command id="cmd_pasteQuote"    oncommand="goDoCommand('cmd_pasteQuote')" label="&pasteAsQuotationCmd.label;"/>
-    <command id="cmd_publishSettings"
-             oncommand="goDoCommand('cmd_publishSettings');"/>
+    <command id="cmd_pasteQuote"
+             label="&pasteAsQuotationCmd.label;"
+             accesskey="&pasteAsQuotationCmd.accesskey;"
+             oncommand="goDoCommand('cmd_pasteQuote');"/>
   </commandset>
 
   <!-- style related commands that update on creation, and on selection change -->
@@ -354,79 +289,12 @@
     <command id="cmd_viewFormatToolbar"   oncommand="goToggleToolbar('FormatToolbar','cmd_viewFormatToolbar');"     checked="true"/>
   </commandset>
 
-  <!-- File  menu items -->
-  <menu id="fileMenu" label="&fileMenu.label;" accesskey="&fileMenu.accesskey;">
-    <menupopup id="menu_FilePopup" onpopupshowing="EditorInitFileMenu();">
-      <menu id="menu_New">
-        <menupopup id="menu_NewPopup">
-          <menuitem id="menu_newEditor"/>
-          <menuseparator id="composerBeginGlobalNewItems"/>
-          <menuitem id="menu_newNavigator"/>
-        </menupopup>
-      </menu>
-      <menuitem id="menu_openRemote"
-                accesskey="&openRemoteCmd.accesskey;"
-                key="openremoteeditorkb"
-                command="cmd_openRemote"/>
-      <menuitem id="menu_openFile"
-                label="&openFileCmd.label;"
-                accesskey="&openFileCmd.accesskey;"
-                key="openeditorkb"
-                command="cmd_open"/>
-      <menu id="menu_RecentFiles"
-            label="&fileRecentMenu.label;"
-            accesskey="&fileRecentMenu.accesskey;"
-            onpopupshowing="BuildRecentPagesMenu();">
-        <menupopup id="menupopup_RecentFiles"
-                   oncommand="editPage(event.target.getAttribute('value'),
-                                       event.target.getAttribute('fileType'));"/>
-          <!-- menuitems appended at runtime -->
-      </menu>
-      <menuitem id="menu_close"/>
-      <menuseparator id="fileMenuAfterCloseSeparator"/>
-      <menuitem id="saveMenuitem"
-                accesskey="&saveCmd.accesskey;"
-                key="savekb"
-                command="cmd_save"/>
-      <menuitem id="menu_saveAs"
-                accesskey="&saveAsCmd.accesskey;"
-                command="cmd_saveAs"/>
-      <menuitem id="menu_saveAsChangeEncoding"
-                accesskey="&saveAsChangeEncodingCmd.accesskey;"
-                command="cmd_saveAndChangeEncoding"/>
-      <menuseparator id="fileMenuAfterSaveAsChangeEncodingSeparator"/>
-      <menuitem id="publishMenuitem"
-                accesskey="&publishCmd.accesskey;"
-                key="publishkb"
-                command="cmd_publish"/>
-      <menuitem id="menu_publishAs"
-                accesskey="&publishAsCmd.accesskey;"
-                command="cmd_publishAs"/>
-      <menuseparator id="fileMenuAfterPublishAsSeparator"/>
-      <menuitem id="menu_fileRevert"
-                accesskey="&fileRevert.accesskey;"
-                command="cmd_revert"/>
-      <menuseparator id="fileMenuAfterFileRevertSeparator"/>
-      <!-- menuitems are merged in here from composerOverlay.xul -->
-      <menuitem id="printSetupMenuItem"
-                label="&printSetupCmd.label;"
-                accesskey="&printSetupCmd.accesskey;"
-                command="cmd_printSetup"/>
-      <menuitem id="printMenuItem"
-                label="&printCmd.label;"
-                accesskey="&printCmd.accesskey;"
-                key="printkb"
-                command="cmd_print"/>
-      <!-- The Exit/Quit item is merged from platformGlobalOverlay.xul -->
-    </menupopup>
-  </menu>
-
-  <menu id="editMenu" label="&editMenu.label;" accesskey="&editMenu.accesskey;">
-    <menupopup id="edEditMenuPopup">
+  <menu id="menu_Edit">
+    <menupopup id="menu_EditPopup">
       <!-- from utilityOverlay.xul -->
       <menuitem id="menu_undo"/>
       <menuitem id="menu_redo"/>
-      <menuseparator id="edEditMenuSep1" />
+      <menuseparator id="sep_cut"/>
       <menuitem id="menu_cut"/>
       <menuitem id="menu_copy"/>
       <menuitem id="menu_paste"/>
@@ -434,7 +302,7 @@
                 key="pastenoformattingkb"
                 command="cmd_pasteNoFormatting"/>
       <menuitem id="menu_delete"/>
-      <menuseparator id="edEditMenuSep2" />
+      <menuseparator id="sep_selectAll"/>
       <menuitem id="menu_selectAll"/>
       <menuseparator id="sep_find"/>
       <menuitem id="menu_find" label="&findCmd.label;"/>
@@ -444,25 +312,17 @@
       <menuitem id="menu_checkspelling"
                 label="&checkSpellingCmd2.label;"
                 accesskey="&checkSpellingCmd2.accesskey;"
-                key="checkspellingkb"
-                command="cmd_spelling"
-                disabled="true"/>
-      <menuitem id="menu_inlinespellcheck"
+                key="key_checkspelling"
+                command="cmd_spelling"/>
+      <menuitem id="menu_inlineSpellCheck"
                 type="checkbox"
                 label="&enableInlineSpellChecker.label;"
-                accesskey="&enableInlineSpellChecker.accesskey;"
-                oncommand="InlineSpellCheckerUI.enabled = !InlineSpellCheckerUI.enabled"/>
-      <menuseparator id="menu_prefsSep"/>
-      <menuitem id="menu_publishSettings"
-                label="&publishSettings.label;"
-                accesskey="&publishSettings.accesskey;"
-                command="cmd_publishSettings"/>
+                accesskey="&enableInlineSpellChecker.accesskey;"/>
+      <menuseparator id="sep_preferences"/>
       <menuitem id="menu_preferences"
                 command="cmd_preferences"/>
     </menupopup>
   </menu>
-
-  <menupopup id = "composerCharsetMenuPopup"  onpopupshowing="updateCharsetPopupMenu(this)" />
 
   <!-- Insert menu -->
   <menu id="insertMenu"
@@ -1114,24 +974,6 @@
 
   <!-- Editor toolbar items -->
   <!-- note that we override the submenu item label "Blank Window" with "New" used for the menu -->
-  <toolbarbutton id="newButton"
-                 class="toolbarbutton-1"
-                 label="&newToolbarCmd.label;"
-                 command="cmd_newEditor"
-                 tooltiptext="&newToolbarCmd.tooltip;"/>
-  <toolbarbutton id="openButton"
-                 class="toolbarbutton-1"
-                 label="&openToolbarCmd.label;"
-                 command="cmd_open"
-                 tooltiptext="&openToolbarCmd.tooltip;"/>
-  <toolbarbutton id="saveButton"
-                 class="toolbarbutton-1"
-                 command="cmd_save"
-                 tooltiptext="&saveToolbarCmd.tooltip;"/>
-  <toolbarbutton id="publishButton"
-                 class="toolbarbutton-1"
-                 command="cmd_publish"
-                 tooltiptext="&publishToolbarCmd.tooltip;"/>
   <toolbarbutton id="cutButton" class="toolbarbutton-1"
                  command="cmd_cut"
                  tooltiptext="&cutToolbarCmd.tooltip;"/>
@@ -1142,17 +984,11 @@
                  command="cmd_paste"
                  tooltiptext="&pasteToolbarCmd.tooltip;"/>
 
-  <toolbarbutton id="printButton" type="menu-button" class="toolbarbutton-1"
+  <toolbarbutton id="print-button"
                  label="&printToolbarCmd.label;"
-                 tooltiptext="&printToolbarCmd.tooltip;"
-                 oncommand="if (event.target==this) goDoCommand('cmd_print');">
-    <menupopup id="printMenu">
-      <menuitem id="printMenuItemToolbar" accesskey="&printCmd.accesskey;" label="&printCmd.label;" default="true"
-                oncommand="goDoCommand('cmd_print');"/>
+                 tooltiptext="&printToolbarCmd.tooltip;"/>
       <!-- 'printSetupToolbar' is merged in here from platformGlobalOverlay.xul -->
-    </menupopup>
-  </toolbarbutton>
-    
+
   <toolbarbutton id="findButton"
                  class="toolbarbutton-1"
                  label="&findToolbarCmd.label;"
@@ -1160,7 +996,6 @@
                  tooltiptext="&findToolbarCmd.tooltip;"/>
   <toolbarbutton id="spellingButton"
                  class="toolbarbutton-1"
-                 disabled="true"
                  label="&spellToolbarCmd.label;"
                  command="cmd_spelling"
                  tooltiptext="&spellToolbarCmd.tooltip;"/>
@@ -1401,11 +1236,4 @@
                  class="formatting-button"
                  tooltiptext="&layerBringToFront.tooltip;"
                  command="cmd_increaseZIndex"/>
-
-  <!-- Paste as quotation is used by mail compose,
-       but in composer it has to go in the debug menu
-   -->
-  <menuitem id="menu_pasteQuote" accesskey="&pasteAsQuotationCmd.accesskey;"
-            command="cmd_pasteQuote" key="pastequotationkb"/>
-
 </overlay>

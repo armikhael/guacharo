@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"
 #include "nsLocalUtils.h"
@@ -78,7 +46,7 @@ nsGetMailboxServer(const char *uriStr, nsIMsgIncomingServer** aResult)
   aUrl->SetScheme(NS_LITERAL_CSTRING("none"));
   // No unescaping of username or hostname done here.
   // The unescaping is done inside of FindServerByURI
-  rv = accountManager->FindServerByURI(aUrl, PR_FALSE,
+  rv = accountManager->FindServerByURI(aUrl, false,
                                   getter_AddRefs(none_server));
   if (NS_SUCCEEDED(rv)) {
     NS_ADDREF(*aResult = none_server);
@@ -88,7 +56,7 @@ nsGetMailboxServer(const char *uriStr, nsIMsgIncomingServer** aResult)
   // if that fails, look for the rss hosts matching the given hostname
   nsCOMPtr<nsIMsgIncomingServer> rss_server;
   aUrl->SetScheme(NS_LITERAL_CSTRING("rss"));
-  rv = accountManager->FindServerByURI(aUrl, PR_FALSE,
+  rv = accountManager->FindServerByURI(aUrl, false,
                                   getter_AddRefs(rss_server));
   if (NS_SUCCEEDED(rv))
   {
@@ -99,7 +67,7 @@ nsGetMailboxServer(const char *uriStr, nsIMsgIncomingServer** aResult)
   // find all movemail "servers" matching the given hostname
   nsCOMPtr<nsIMsgIncomingServer> movemail_server;
   aUrl->SetScheme(NS_LITERAL_CSTRING("movemail"));
-  rv = accountManager->FindServerByURI(aUrl, PR_FALSE,
+  rv = accountManager->FindServerByURI(aUrl, false,
                                   getter_AddRefs(movemail_server));
   if (NS_SUCCEEDED(rv)) {
     NS_ADDREF(*aResult = movemail_server);
@@ -112,7 +80,7 @@ nsGetMailboxServer(const char *uriStr, nsIMsgIncomingServer** aResult)
   if (NS_FAILED(rv)) 
   {
     aUrl->SetScheme(NS_LITERAL_CSTRING("pop3"));
-    rv = accountManager->FindServerByURI(aUrl, PR_FALSE,
+    rv = accountManager->FindServerByURI(aUrl, false,
                                     getter_AddRefs(server));
 
     // if we can't find a pop server, maybe it's a local message 
@@ -120,7 +88,7 @@ nsGetMailboxServer(const char *uriStr, nsIMsgIncomingServer** aResult)
     if (NS_FAILED(rv)) 
     {
       aUrl->SetScheme(NS_LITERAL_CSTRING("imap"));
-      rv = accountManager->FindServerByURI(aUrl, PR_FALSE,
+      rv = accountManager->FindServerByURI(aUrl, false,
                                     getter_AddRefs(server));
     }
   }
@@ -176,7 +144,7 @@ nsLocalURI2Path(const char* rootURI, const char* uriStr,
 
   // now ask the server what it's root is
   // and begin pathResult with the mailbox root
-  nsCOMPtr<nsILocalFile> localPath;
+  nsCOMPtr<nsIFile> localPath;
   rv = server->GetLocalPath(getter_AddRefs(localPath));
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -217,16 +185,16 @@ nsLocalURI2Path(const char* rootURI, const char* uriStr,
  */
 nsresult nsParseLocalMessageURI(const char* uri,
                                 nsCString& folderURI,
-                                PRUint32 *key)
+                                uint32_t *key)
 {
   if(!key)
     return NS_ERROR_NULL_POINTER;
 
   nsCAutoString uriStr(uri);
-  PRInt32 keySeparator = uriStr.FindChar('#');
+  int32_t keySeparator = uriStr.FindChar('#');
   if(keySeparator != -1)
   {
-    PRInt32 keyEndSeparator = MsgFindCharInSet(uriStr, "?&", keySeparator);
+    int32_t keyEndSeparator = MsgFindCharInSet(uriStr, "?&", keySeparator);
     folderURI = StringHead(uriStr, keySeparator);
     folderURI.Cut(7, 8);    // cut out the -message part of mailbox-message:
 
@@ -237,14 +205,14 @@ nsresult nsParseLocalMessageURI(const char* uri,
     else
       keyStr = StringTail(uriStr, uriStr.Length() - (keySeparator + 1));
 
-    *key = (PRUint32) ParseUint64Str(keyStr.get());
+    *key = (uint32_t) ParseUint64Str(keyStr.get());
     return NS_OK;
   }
   return NS_ERROR_FAILURE;
 
 }
 
-nsresult nsBuildLocalMessageURI(const char *baseURI, PRUint32 key, nsCString& uri)
+nsresult nsBuildLocalMessageURI(const char *baseURI, uint32_t key, nsCString& uri)
 {
   
   // need to convert mailbox://hostname/.. to mailbox-message://hostname/..
@@ -274,7 +242,5 @@ void nsEscapeNativePath(nsCString& nativePath)
 #if defined(XP_WIN) || defined(XP_OS2)
   nativePath.Insert('/', 0);
   MsgReplaceChar(nativePath, '\\', '/');
-  if (nativePath.CharAt(2) == ':')
-    nativePath.SetCharAt('|', 2);
 #endif
 }

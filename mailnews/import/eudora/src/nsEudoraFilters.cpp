@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Mozilla Penelope project.
- *
- * The Initial Developer of the Original Code is
- * QUALCOMM Incorporated.
- * Portions created by QUALCOMM Incorporated are
- * Copyright (C) 2007 QUALCOMM Incorporated. All Rights Reserved.
- *
- * Contributor(s):
- *   Jeff Beckley <beckley@qualcomm.com> original author
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
   Eudora filters
@@ -46,11 +13,13 @@
 #include "nspr.h"
 #include "plstr.h"
 #include "nsMsgBaseCID.h"
+#include "nsMsgUtils.h"
 #include "nsIPrefBranch.h"
 #include "nsIPrefService.h"
 #include "nsIMsgFilterList.h"
 #include "nsIMsgAccountManager.h"
 #include "nsIStringBundle.h"
+#include "mozilla/Services.h"
 
 #include "nsEudoraFilters.h"
 #include "nsEudoraStringBundle.h"
@@ -88,26 +57,26 @@ nsEudoraFilters::~nsEudoraFilters()
 
 NS_IMPL_ISUPPORTS1(nsEudoraFilters, nsIImportFilters)
 
-NS_IMETHODIMP nsEudoraFilters::AutoLocate(PRUnichar **aDescription, nsIFile **aLocation, PRBool *_retval)
+NS_IMETHODIMP nsEudoraFilters::AutoLocate(PRUnichar **aDescription, nsIFile **aLocation, bool *_retval)
 {
   NS_ENSURE_ARG_POINTER(aDescription);
   NS_ENSURE_ARG_POINTER(aLocation);
   NS_ENSURE_ARG_POINTER(_retval);
 
-  *aDescription = nsnull;
-  *_retval = PR_FALSE;
+  *aDescription = nullptr;
+  *_retval = false;
 
   nsresult rv;
   m_pLocation =  do_CreateInstance (NS_LOCAL_FILE_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  *aDescription = nsEudoraStringBundle::GetStringByID( EUDORAIMPORT_NAME);
+  *aDescription = nsEudoraStringBundle::GetStringByID(EUDORAIMPORT_NAME);
 
 #if defined(XP_WIN) || defined(XP_OS2)
-  *_retval = nsEudoraWin32::FindFiltersFile( getter_AddRefs(m_pLocation) );
+  *_retval = nsEudoraWin32::FindFiltersFile(getter_AddRefs(m_pLocation));
 #endif
 #ifdef XP_MACOSX
-  *_retval = nsEudoraMac::FindFiltersFile( getter_AddRefs(m_pLocation) );
+  *_retval = nsEudoraMac::FindFiltersFile(getter_AddRefs(m_pLocation));
 #endif
 
   NS_IF_ADDREF(*aLocation = m_pLocation);
@@ -118,17 +87,17 @@ NS_IMETHODIMP nsEudoraFilters::SetLocation(nsIFile *aLocation)
 {
   m_pLocation = aLocation;
 
-  return( NS_OK);
+  return NS_OK;
 }
 
-NS_IMETHODIMP nsEudoraFilters::Import(PRUnichar **aError, PRBool *_retval)
+NS_IMETHODIMP nsEudoraFilters::Import(PRUnichar **aError, bool *_retval)
 {
   NS_ENSURE_ARG_POINTER(aError);
   NS_ENSURE_ARG_POINTER(_retval);
   nsresult rv;
 
-  *_retval = PR_FALSE;
-  *aError = nsnull;
+  *_retval = false;
+  *aError = nullptr;
 
   // Get the settings file if it doesn't exist
   if (!m_pLocation)
@@ -137,18 +106,18 @@ NS_IMETHODIMP nsEudoraFilters::Import(PRUnichar **aError, PRBool *_retval)
     NS_ENSURE_SUCCESS(rv, rv);
 #if defined(XP_WIN) || defined(XP_OS2)
     if (!nsEudoraWin32::FindFiltersFile(getter_AddRefs(m_pLocation)))
-      m_pLocation = nsnull;
+      m_pLocation = nullptr;
 #endif
 #ifdef XP_MACOSX
     if (!nsEudoraMac::FindFiltersFile(getter_AddRefs(m_pLocation)))
-      m_pLocation = nsnull;
+      m_pLocation = nullptr;
 #endif
   }
 
   if (!m_pLocation)
   {
-    IMPORT_LOG0( "*** Error, unable to locate filters file for import.\n");
-    return( NS_ERROR_FAILURE);
+    IMPORT_LOG0("*** Error, unable to locate filters file for import.\n");
+    return NS_ERROR_FAILURE;
   }
 
   // Now perform actual importing task
@@ -156,22 +125,22 @@ NS_IMETHODIMP nsEudoraFilters::Import(PRUnichar **aError, PRBool *_retval)
   *aError = ToNewUnicode(m_errorLog);
 
   if (*_retval)
-    IMPORT_LOG0( "Successful import of eudora filters\n");
+    IMPORT_LOG0("Successful import of eudora filters\n");
   else
-    IMPORT_LOG0( "*** Error, Unsuccessful import of eudora filters\n");
+    IMPORT_LOG0("*** Error, Unsuccessful import of eudora filters\n");
 
-  return( NS_OK);
+  return NS_OK;
 }
 
-PRBool nsEudoraFilters::RealImport()
+bool nsEudoraFilters::RealImport()
 {
   nsresult rv;
 
   rv = Init();
   if (NS_FAILED(rv))
   {
-    IMPORT_LOG0( "*** Error initializing filter import process\n");
-    return PR_FALSE;
+    IMPORT_LOG0("*** Error initializing filter import process\n");
+    return false;
   }
 
   nsCOMPtr <nsIInputStream> inputStream;
@@ -179,22 +148,22 @@ PRBool nsEudoraFilters::RealImport()
 
   if (NS_FAILED(rv))
   {
-    IMPORT_LOG0( "*** Error opening filters file for reading\n");
-    return PR_FALSE;
+    IMPORT_LOG0("*** Error opening filters file for reading\n");
+    return false;
   }
 
   rv = LoadServers();
   if (NS_FAILED(rv))
   {
-    IMPORT_LOG0( "*** Error loading servers with filters\n");
-    return PR_FALSE;
+    IMPORT_LOG0("*** Error loading servers with filters\n");
+    return false;
   }
 
   nsCOMPtr<nsILineInputStream> lineStream(do_QueryInterface(inputStream, &rv));
   NS_ENSURE_SUCCESS(rv, rv);
 
   nsCString     line;
-  PRBool        more = PR_TRUE;
+  bool          more = true;
   nsCAutoString header;
   nsCAutoString verb;
   nsAutoString  name;
@@ -229,11 +198,11 @@ PRBool nsEudoraFilters::RealImport()
       {
         const char* cj = pLine + 12;
         if (!strcmp(cj, "and"))
-          m_isAnd = PR_TRUE;
+          m_isAnd = true;
         else if (!strcmp(cj, "unless"))
-          m_isUnless = PR_TRUE;
+          m_isUnless = true;
         else if (!strcmp(cj, "ignore"))
-          m_ignoreTerm = PR_TRUE;
+          m_ignoreTerm = true;
       }
       else if (!strncmp(pLine, "header ", 7))
         header = (pLine + 7);
@@ -248,29 +217,33 @@ PRBool nsEudoraFilters::RealImport()
           if (rv == NS_ERROR_INVALID_ARG)
           {
             rv = NS_OK;
-            m_termNotGroked = PR_TRUE;
+            m_termNotGroked = true;
           }
         }
       }
       else if (!strcmp(pLine, "incoming"))
-        m_isIncoming = PR_TRUE;
+        m_isIncoming = true;
       else if (!strncmp(pLine, "transfer ", 9) ||
                !strncmp(pLine, "copy ", 5))
       {
         const char* pMailboxPath = strchr(pLine, ' ') + 1;
-        PRBool isTransfer = (*pLine == 't');
+        bool isTransfer = (*pLine == 't');
         rv = AddMailboxAction(pMailboxPath, isTransfer);
         if (rv == NS_ERROR_INVALID_ARG)
         {
           nsAutoString unicodeMailboxPath;
           NS_CopyNativeToUnicode(nsCString(pMailboxPath), unicodeMailboxPath);
-          m_errorLog += NS_LITERAL_STRING("- ") + name + NS_LITERAL_STRING(": ") + nsEudoraStringBundle::FormatString(EUDORAIMPORT_FILTERS_WARN_MAILBOX_MISSING, unicodeMailboxPath.get()) + NS_LITERAL_STRING("\n") ;
+          m_errorLog += NS_LITERAL_STRING("- ");
+          m_errorLog += name;
+          m_errorLog += NS_LITERAL_STRING(": ");
+          m_errorLog += nsEudoraStringBundle::FormatString(EUDORAIMPORT_FILTERS_WARN_MAILBOX_MISSING, unicodeMailboxPath.get());
+          m_errorLog += NS_LITERAL_STRING("\n");
           rv = NS_OK;
         }
       }
       // Doing strncmp() here because Win Eudora puts a space after "stop" but Mac Eudora doesn't
       else if (!strncmp(pLine, "stop", 4))
-        m_hasStop = PR_TRUE;
+        m_hasStop = true;
       else if (!strncmp(pLine, "forward ", 8))
         rv = AddStringAction(nsMsgFilterAction::Forward, pLine + 8);
       else if (!strncmp(pLine, "reply ", 6))
@@ -280,7 +253,7 @@ PRBool nsEudoraFilters::RealImport()
         // Win Eudora's  priority values are 0 (highest) to 4 (lowest)
         // Mac Eudora's  priority values are 1 (highest) to 5 (lowest)
         // Thunderbird's priority values are 6 (highest) to 2 (lowest)
-        PRInt32 TBPriority = 6 - atoi(pLine + 9);
+        int32_t TBPriority = 6 - atoi(pLine + 9);
 #ifdef XP_MACOSX
         TBPriority++;
 #endif
@@ -298,7 +271,7 @@ PRBool nsEudoraFilters::RealImport()
       else if (!strncmp(pLine, "status ", 7))
       {
         // Win Eudora's read status is 1, whereas Mac Eudora's read status is 2
-        PRUint32 status = atoi(pLine + 7);
+        uint32_t status = atoi(pLine + 7);
 #ifdef XP_MACOSX
         status--;
 #endif
@@ -308,14 +281,14 @@ PRBool nsEudoraFilters::RealImport()
       else if (!strncmp(pLine, "serverOpt ", 10))
       {
         // Win and Mac Eudora have the two bits swapped in the file
-        PRUint32 bits = atoi(pLine + 10);
+        uint32_t bits = atoi(pLine + 10);
 #if defined(XP_WIN) || defined(XP_OS2)
-        PRBool bFetch  = (bits & 1);
-        PRBool bDelete = (bits & 2);
+        bool bFetch  = (bits & 1);
+        bool bDelete = (bits & 2);
 #endif
 #ifdef XP_MACOSX
-        PRBool bFetch  = (bits & 2);
-        PRBool bDelete = (bits & 1);
+        bool bFetch  = (bits & 2);
+        bool bDelete = (bits & 1);
 #endif
         rv = AddAction(bDelete? (nsMsgRuleActionType)nsMsgFilterAction::DeleteFromPop3Server : (nsMsgRuleActionType)nsMsgFilterAction::LeaveOnPop3Server);
         if (NS_SUCCEEDED(rv) && bFetch)
@@ -324,12 +297,22 @@ PRBool nsEudoraFilters::RealImport()
       else if (strcmp(pLine, "manual") == 0)
         ;// Just ignore manual as TB handles manual in a different way
       else if (strcmp(pLine, "outgoing") == 0)
-        m_errorLog += NS_LITERAL_STRING("- ") + name + NS_LITERAL_STRING(": ") + nsEudoraStringBundle::FormatString(EUDORAIMPORT_FILTERS_WARN_OUTGOING) + NS_LITERAL_STRING("\n") ;
+      {
+        m_errorLog += NS_LITERAL_STRING("- ");
+        m_errorLog += name;
+        m_errorLog += NS_LITERAL_STRING(": ");
+        m_errorLog += nsEudoraStringBundle::FormatString(EUDORAIMPORT_FILTERS_WARN_OUTGOING);
+        m_errorLog += NS_LITERAL_STRING("\n");
+      }
       else
       {
         nsAutoString unicodeLine;
         NS_CopyNativeToUnicode(nsCString(pLine), unicodeLine);
-        m_errorLog += NS_LITERAL_STRING("- ") + name + NS_LITERAL_STRING(": ") + nsEudoraStringBundle::FormatString(EUDORAIMPORT_FILTERS_WARN_ACTION, unicodeLine.get()) + NS_LITERAL_STRING("\n");
+        m_errorLog += NS_LITERAL_STRING("- ");
+        m_errorLog += name;
+        m_errorLog += NS_LITERAL_STRING(": ");
+        m_errorLog += nsEudoraStringBundle::FormatString(EUDORAIMPORT_FILTERS_WARN_ACTION, unicodeLine.get());
+        m_errorLog += NS_LITERAL_STRING("\n");
       }
     }
   }
@@ -342,8 +325,8 @@ PRBool nsEudoraFilters::RealImport()
 
   if (more)
   {
-    IMPORT_LOG0( "*** Error reading the filters, didn't reach the end\n");
-    return PR_FALSE;
+    IMPORT_LOG0("*** Error reading the filters, didn't reach the end\n");
+    return false;
   }
 
   rv = SaveFilters();
@@ -374,20 +357,19 @@ nsresult nsEudoraFilters::Init()
 
   // Get the name of the folder where one-off imported mail is placed
   nsAutoString folderName(NS_LITERAL_STRING("Eudora Import"));
-  nsCOMPtr<nsIStringBundleService> bundleService(do_GetService(
-                                     NS_STRINGBUNDLE_CONTRACTID, &rv));
+  nsCOMPtr<nsIStringBundleService> bundleService = 
+    mozilla::services::GetStringBundleService();
+  NS_ENSURE_TRUE(bundleService, NS_ERROR_UNEXPECTED);
+
+  nsCOMPtr<nsIStringBundle> bundle;
+  rv = bundleService->CreateBundle("chrome://messenger/locale/importMsgs.properties",
+                                   getter_AddRefs(bundle));
   if (NS_SUCCEEDED(rv))
   {
-    nsCOMPtr<nsIStringBundle> bundle;
-    rv = bundleService->CreateBundle("chrome://messenger/locale/importMsgs.properties",
-                                     getter_AddRefs(bundle));
-    if (NS_SUCCEEDED(rv))
-    {
-      nsAutoString Eudora(NS_LITERAL_STRING("Eudora"));
-      const PRUnichar *moduleName[] = { Eudora.get() };
-      rv = bundle->FormatStringFromName(NS_LITERAL_STRING("ImportModuleFolderName").get(),
-                                        moduleName, 1, getter_Copies(folderName));
-    }
+    nsAutoString Eudora(NS_LITERAL_STRING("Eudora"));
+    const PRUnichar *moduleName[] = { Eudora.get() };
+    rv = bundle->FormatStringFromName(NS_LITERAL_STRING("ImportModuleFolderName").get(),
+                                      moduleName, 1, getter_Copies(folderName));
   }
   localRootFolder->GetChildNamed(folderName, getter_AddRefs(m_pMailboxesRoot));
   if (!m_pMailboxesRoot)
@@ -414,7 +396,6 @@ nsresult nsEudoraFilters::LoadServers()
     rv = NS_NewISupportsArray(getter_AddRefs(m_pFilterArray));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  nsCOMPtr<nsIMsgFilterList> filterList;
   nsCOMPtr<nsIMsgAccountManager> accountMgr = do_GetService(NS_MSGACCOUNTMANAGER_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -422,15 +403,15 @@ nsresult nsEudoraFilters::LoadServers()
   rv = accountMgr->GetAllServers(getter_AddRefs(allServers));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRUint32 numServers;
+  uint32_t numServers;
   rv = allServers->Count(&numServers);
   NS_ENSURE_SUCCESS(rv, rv);
-  for (PRUint32 serverIndex = 0; serverIndex < numServers; serverIndex++)
+  for (uint32_t serverIndex = 0; serverIndex < numServers; serverIndex++)
   {
     nsCOMPtr<nsIMsgIncomingServer> server = do_QueryElementAt(allServers, serverIndex, &rv);
     if (server && NS_SUCCEEDED(rv))
     {
-      PRBool canHaveFilters;
+      bool canHaveFilters;
       rv = server->GetCanHaveFilters(&canHaveFilters);
       if (NS_SUCCEEDED(rv) && canHaveFilters)
       {
@@ -445,7 +426,7 @@ nsresult nsEudoraFilters::LoadServers()
             // Pre-fetch filters now so that if there's any problem reading up the
             // filter file we know about it in advance and can stop importing
             nsCOMPtr<nsIMsgFilterList> filterList;
-            rv = server->GetFilterList(nsnull, getter_AddRefs(filterList));
+            rv = server->GetFilterList(nullptr, getter_AddRefs(filterList));
             NS_ENSURE_SUCCESS(rv, rv);
 
             m_pServerArray->AppendElement(server);
@@ -462,16 +443,16 @@ nsresult nsEudoraFilters::SaveFilters()
 {
   nsresult rv;
 
-  PRUint32 numServers;
+  uint32_t numServers;
   rv = m_pServerArray->Count(&numServers);
   NS_ENSURE_SUCCESS(rv, rv);
-  for (PRUint32 serverIndex = 0; serverIndex < numServers; serverIndex++)
+  for (uint32_t serverIndex = 0; serverIndex < numServers; serverIndex++)
   {
     nsCOMPtr<nsIMsgIncomingServer> server = do_QueryElementAt(m_pServerArray, serverIndex, &rv);
     NS_ENSURE_SUCCESS(rv, rv);
 
     nsCOMPtr <nsIMsgFilterList> filterList;
-    rv = server->GetFilterList(nsnull, getter_AddRefs(filterList));
+    rv = server->GetFilterList(nullptr, getter_AddRefs(filterList));
     NS_ENSURE_SUCCESS(rv, rv);
 
     rv = filterList->SaveToDefaultFile();
@@ -490,26 +471,26 @@ nsresult nsEudoraFilters::CreateNewFilter(const char* pName)
 
   nsAutoString unicodeName;
   NS_CopyNativeToUnicode(nsCString(pName), unicodeName);
-  PRUint32 numServers;
+  uint32_t numServers;
   rv = m_pServerArray->Count(&numServers);
   NS_ENSURE_SUCCESS(rv, rv);
-  for (PRUint32 serverIndex = 0; serverIndex < numServers; serverIndex++)
+  for (uint32_t serverIndex = 0; serverIndex < numServers; serverIndex++)
   {
     nsCOMPtr<nsIMsgIncomingServer> server = do_QueryElementAt(m_pServerArray, serverIndex, &rv);
     NS_ENSURE_SUCCESS(rv, rv);
 
     nsCOMPtr <nsIMsgFilterList> filterList;
-    rv = server->GetFilterList(nsnull, getter_AddRefs(filterList));
+    rv = server->GetFilterList(nullptr, getter_AddRefs(filterList));
     NS_ENSURE_SUCCESS(rv, rv);
 
     nsCOMPtr<nsIMsgFilter> newFilter;
     rv = filterList->CreateFilter(unicodeName, getter_AddRefs(newFilter));
     NS_ENSURE_SUCCESS(rv, rv);
 
-    rv = newFilter->SetEnabled(PR_FALSE);
+    rv = newFilter->SetEnabled(false);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    PRUint32 count;
+    uint32_t count;
     rv = filterList->GetFilterCount(&count);
     NS_ENSURE_SUCCESS(rv, rv);
 
@@ -519,14 +500,14 @@ nsresult nsEudoraFilters::CreateNewFilter(const char* pName)
     m_pFilterArray->AppendElement(newFilter);
   }
 
-  m_isAnd = PR_FALSE;
-  m_isUnless = PR_FALSE;
-  m_ignoreTerm = PR_FALSE;
-  m_isIncoming = PR_FALSE;
-  m_addedAction = PR_FALSE;
-  m_hasTransfer = PR_FALSE;
-  m_hasStop = PR_FALSE;
-  m_termNotGroked = PR_FALSE;
+  m_isAnd = false;
+  m_isUnless = false;
+  m_ignoreTerm = false;
+  m_isIncoming = false;
+  m_addedAction = false;
+  m_hasTransfer = false;
+  m_hasStop = false;
+  m_termNotGroked = false;
 
   return NS_OK;
 }
@@ -546,19 +527,19 @@ nsresult nsEudoraFilters::FinalizeFilter()
   // we disable the filter (gives the user a chance to add their own actions and enable).
   // Lastly, only enable if all terms were fully understood.
   if (m_isIncoming && m_addedAction && !m_termNotGroked)
-    rv = EnableFilter(PR_TRUE);
+    rv = EnableFilter(true);
 
   return rv;
 }
 
-nsresult nsEudoraFilters::EnableFilter(PRBool enable)
+nsresult nsEudoraFilters::EnableFilter(bool enable)
 {
   nsresult rv;
 
-  PRUint32 numFilters;
+  uint32_t numFilters;
   rv = m_pFilterArray->Count(&numFilters);
   NS_ENSURE_SUCCESS(rv, rv);
-  for (PRUint32 filterIndex = 0; filterIndex < numFilters; filterIndex++)
+  for (uint32_t filterIndex = 0; filterIndex < numFilters; filterIndex++)
   {
     nsCOMPtr<nsIMsgFilter> filter = do_QueryElementAt(m_pFilterArray, filterIndex, &rv);
     NS_ENSURE_SUCCESS(rv, rv);
@@ -582,21 +563,21 @@ static const char* gStandardHeaders[] =
 {
 // Eudora string        nsMsgSearchAttribValue
 // -------------        ----------------------
-    "Subject:",              // Subject
-    "From:",                 // Sender
-    LDAQ"Body"RDAQ,          // Body
-    "Date:",                 // Date
-    "X-Priority:",           // Priority
-    "",                      // MsgStatus
-    "To:",                   // To
-    "Cc:",                   // CC
-    LDAQ"Any Recipient"RDAQ, // ToOrCC
+    "Subject:",                // Subject
+    "From:",                   // Sender
+    LDAQ "Body" RDAQ,          // Body
+    "Date:",                   // Date
+    "X-Priority:",             // Priority
+    "",                        // MsgStatus
+    "To:",                     // To
+    "Cc:",                     // CC
+    LDAQ "Any Recipient" RDAQ, // ToOrCC
     NULL
 };
 
-static PRInt32 FindHeader(const char* pHeader)
+static int32_t FindHeader(const char* pHeader)
 {
-  for (PRInt32 i = 0; gStandardHeaders[i]; i++)
+  for (int32_t i = 0; gStandardHeaders[i]; i++)
   {
     if (*gStandardHeaders[i] && !PL_strcasecmp(pHeader, gStandardHeaders[i]))
       return i;
@@ -630,9 +611,9 @@ static const char* gOperators[] =
     NULL
 };
 
-static PRInt32 FindOperator(const char* pOperator)
+static int32_t FindOperator(const char* pOperator)
 {
-  for (PRInt32 i = 0; gOperators[i]; i++)
+  for (int32_t i = 0; gOperators[i]; i++)
   {
     if (*gOperators[i] && !strcmp(pOperator, gOperators[i]))
       return i;
@@ -643,10 +624,10 @@ static PRInt32 FindOperator(const char* pOperator)
 
 #define MAILNEWS_CUSTOM_HEADERS "mailnews.customHeaders"
 
-static PRInt32 AddCustomHeader(const char* pHeader)
+static int32_t AddCustomHeader(const char* pHeader)
 {
   nsresult rv;
-  PRInt32 index = -1;
+  int32_t index = -1;
   nsCOMPtr<nsIPrefBranch> pref(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
   NS_ENSURE_SUCCESS(rv, index);
 
@@ -677,7 +658,7 @@ static PRInt32 AddCustomHeader(const char* pHeader)
   return index;
 }
 
-nsresult nsEudoraFilters::AddTerm(const char* pHeader, const char* pVerb, const char* pValue, PRBool booleanAnd, PRBool negateVerb)
+nsresult nsEudoraFilters::AddTerm(const char* pHeader, const char* pVerb, const char* pValue, bool booleanAnd, bool negateVerb)
 {
   nsresult rv;
 
@@ -691,17 +672,27 @@ nsresult nsEudoraFilters::AddTerm(const char* pHeader, const char* pVerb, const 
   NS_CopyNativeToUnicode(nsCString(pVerb), unicodeVerb);
   NS_CopyNativeToUnicode(nsCString(pValue), unicodeValue);
 
-  filterTitle = NS_LITERAL_STRING("- ") + unicodeHeader + NS_LITERAL_STRING(" ") + unicodeVerb + NS_LITERAL_STRING(" ") + unicodeValue + NS_LITERAL_STRING(": ");
+  filterTitle = NS_LITERAL_STRING("- ");
+  filterTitle += unicodeHeader;
+  filterTitle += NS_LITERAL_STRING(" ");
+  filterTitle += unicodeVerb;
+  filterTitle += NS_LITERAL_STRING(" ");
+  filterTitle += unicodeValue;
+  filterTitle += NS_LITERAL_STRING(": ");
 
   if (op < 0)
   {
-    m_errorLog += filterTitle + nsEudoraStringBundle::FormatString(EUDORAIMPORT_FILTERS_WARN_VERB, pVerb) + NS_LITERAL_STRING("\n");
+    m_errorLog += filterTitle;
+    m_errorLog += nsEudoraStringBundle::FormatString(EUDORAIMPORT_FILTERS_WARN_VERB, pVerb);
+    m_errorLog += NS_LITERAL_STRING("\n");
     return NS_ERROR_INVALID_ARG;
   }
 
   if (!pHeader || !*pHeader)
   {
-    m_errorLog += filterTitle + nsEudoraStringBundle::FormatString(EUDORAIMPORT_FILTERS_WARN_EMPTY_HEADER) + NS_LITERAL_STRING("\n");
+    m_errorLog += filterTitle;
+    m_errorLog += nsEudoraStringBundle::FormatString(EUDORAIMPORT_FILTERS_WARN_EMPTY_HEADER);
+    m_errorLog += NS_LITERAL_STRING("\n");
     return NS_ERROR_INVALID_ARG;
   }
 
@@ -720,7 +711,9 @@ nsresult nsEudoraFilters::AddTerm(const char* pHeader, const char* pVerb, const 
         op--;
         break;
       default:
-        m_errorLog += filterTitle + nsEudoraStringBundle::FormatString(EUDORAIMPORT_FILTERS_WARN_NEGATE_VERB, unicodeVerb.get()) + NS_LITERAL_STRING("\n");
+        m_errorLog += filterTitle;
+        m_errorLog += nsEudoraStringBundle::FormatString(EUDORAIMPORT_FILTERS_WARN_NEGATE_VERB, unicodeVerb.get());
+        m_errorLog += NS_LITERAL_STRING("\n");
         return NS_ERROR_INVALID_ARG;
     }
   }
@@ -730,26 +723,28 @@ nsresult nsEudoraFilters::AddTerm(const char* pHeader, const char* pVerb, const 
     // Can't handle other Eudora meta-headers (Any Header, Personality, Junk Score)
     if (*pHeader == *LDAQ)
     {
-      m_errorLog += filterTitle + nsEudoraStringBundle::FormatString(EUDORAIMPORT_FILTERS_WARN_META_HEADER, unicodeHeader.get()) + NS_LITERAL_STRING("\n");
+      m_errorLog += filterTitle;
+      m_errorLog += nsEudoraStringBundle::FormatString(EUDORAIMPORT_FILTERS_WARN_META_HEADER, unicodeHeader.get());
+      m_errorLog += NS_LITERAL_STRING("\n");
       return NS_ERROR_INVALID_ARG;
     }
 
     // Arbitrary headers for filters don't like the colon at the end
     arbitraryHeader = pHeader;
-    PRInt32 index = arbitraryHeader.FindChar(':');
+    int32_t index = arbitraryHeader.FindChar(':');
     if (index >= 0)
       arbitraryHeader.SetLength(index);
 
-    PRInt32 headerIndex = AddCustomHeader(arbitraryHeader.get());
+    int32_t headerIndex = AddCustomHeader(arbitraryHeader.get());
     NS_ENSURE_TRUE(headerIndex >= 0, NS_ERROR_FAILURE);
 
     attrib = nsMsgSearchAttrib::OtherHeader + 1 + headerIndex;
   }
 
-  PRUint32 numFilters;
+  uint32_t numFilters;
   rv = m_pFilterArray->Count(&numFilters);
   NS_ENSURE_SUCCESS(rv, rv);
-  for (PRUint32 filterIndex = 0; filterIndex < numFilters; filterIndex++)
+  for (uint32_t filterIndex = 0; filterIndex < numFilters; filterIndex++)
   {
     nsCOMPtr<nsIMsgFilter> filter = do_QueryElementAt(m_pFilterArray, filterIndex, &rv);
     NS_ENSURE_SUCCESS(rv, rv);
@@ -764,8 +759,8 @@ nsresult nsEudoraFilters::AddTerm(const char* pHeader, const char* pVerb, const 
       term = do_QueryElementAt(terms, 0, &rv);
       if (NS_SUCCEEDED(rv) && term)
       {
-        term->SetBooleanAnd(PR_TRUE);
-        term = nsnull;
+        term->SetBooleanAnd(true);
+        term = nullptr;
       }
     }
 
@@ -790,15 +785,15 @@ nsresult nsEudoraFilters::AddTerm(const char* pHeader, const char* pVerb, const 
   return NS_OK;
 }
 
-nsresult nsEudoraFilters::AddAction(nsMsgRuleActionType actionType, PRInt32 junkScore /*= 0*/, nsMsgLabelValue label/*= 0*/,
-                                    nsMsgPriorityValue priority/*= 0*/, const char* strValue/*= nsnull*/, const char* targetFolderUri/*= nsnull*/)
+nsresult nsEudoraFilters::AddAction(nsMsgRuleActionType actionType, int32_t junkScore /*= 0*/, nsMsgLabelValue label/*= 0*/,
+                                    nsMsgPriorityValue priority/*= 0*/, const char* strValue/*= nullptr*/, const char* targetFolderUri/*= nullptr*/)
 {
   nsresult rv;
 
-  PRUint32 numFilters;
+  uint32_t numFilters;
   rv = m_pFilterArray->Count(&numFilters);
   NS_ENSURE_SUCCESS(rv, rv);
-  for (PRUint32 filterIndex = 0; filterIndex < numFilters; filterIndex++)
+  for (uint32_t filterIndex = 0; filterIndex < numFilters; filterIndex++)
   {
     nsCOMPtr<nsIMsgFilter> filter = do_QueryElementAt(m_pFilterArray, filterIndex, &rv);
     NS_ENSURE_SUCCESS(rv, rv);
@@ -854,20 +849,20 @@ nsresult nsEudoraFilters::AddAction(nsMsgRuleActionType actionType, PRInt32 junk
     NS_ENSURE_SUCCESS(rv, rv);
   }
 
-  m_addedAction = PR_TRUE;
+  m_addedAction = true;
 
   return rv;
 }
 
 
-nsresult nsEudoraFilters::AddMailboxAction(const char* pMailboxPath, PRBool isTransfer)
+nsresult nsEudoraFilters::AddMailboxAction(const char* pMailboxPath, bool isTransfer)
 {
   nsresult rv;
   nsCString nameHierarchy;
 #if defined(XP_WIN) || defined(XP_OS2)
   nsCString filePath;
   m_pLocation->GetNativePath(filePath);
-  PRInt32 index = filePath.RFindChar('\\');
+  int32_t index = filePath.RFindChar('\\');
   if (index >= 0)
     filePath.SetLength(index);
   if (!nsEudoraWin32::GetMailboxNameHierarchy(filePath, pMailboxPath,
@@ -887,10 +882,10 @@ nsresult nsEudoraFilters::AddMailboxAction(const char* pMailboxPath, PRBool isTr
   if (NS_FAILED(rv))
     return NS_ERROR_INVALID_ARG;
 
-  rv = AddAction(isTransfer? (nsMsgRuleActionType)nsMsgFilterAction::MoveToFolder : (nsMsgRuleActionType)nsMsgFilterAction::CopyToFolder, 0, 0, 0, nsnull, folderURI.get());
+  rv = AddAction(isTransfer? (nsMsgRuleActionType)nsMsgFilterAction::MoveToFolder : (nsMsgRuleActionType)nsMsgFilterAction::CopyToFolder, 0, 0, 0, nullptr, folderURI.get());
 
   if (NS_SUCCEEDED(rv) && isTransfer)
-    m_hasTransfer = PR_TRUE;
+    m_hasTransfer = true;
 
   return rv;
 }
@@ -903,10 +898,10 @@ nsresult nsEudoraFilters::GetMailboxFolder(const char* pNameHierarchy, nsIMsgFol
 
   // We've already grabbed the pointer on incoming, so now ensure
   // *ppFolder is null on outgoing if there is an error
-  *ppFolder = nsnull;
+  *ppFolder = nullptr;
   
   nsCAutoString name(pNameHierarchy + 1);
-  PRInt32 sepIndex = name.FindChar(*pNameHierarchy);
+  int32_t sepIndex = name.FindChar(*pNameHierarchy);
   if (sepIndex >= 0)
     name.SetLength(sepIndex);
 

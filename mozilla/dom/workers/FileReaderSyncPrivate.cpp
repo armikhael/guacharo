@@ -1,51 +1,18 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set ts=2 et sw=2 tw=80: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   William Chen <wchen@mozilla.com> (Original Author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "FileReaderSyncPrivate.h"
 
 #include "nsCExternalHandlerService.h"
 #include "nsComponentManagerUtils.h"
 #include "nsCOMPtr.h"
-#include "nsDOMClassInfo.h"
-#include "nsDOMError.h"
+#include "nsDOMClassInfoID.h"
+#include "nsError.h"
 #include "nsIDOMFile.h"
-#include "nsICharsetAlias.h"
+#include "nsCharsetAlias.h"
 #include "nsICharsetDetector.h"
 #include "nsIConverterInputStream.h"
 #include "nsIInputStream.h"
@@ -74,14 +41,14 @@ FileReaderSyncPrivate::~FileReaderSyncPrivate()
 }
 
 nsresult
-FileReaderSyncPrivate::ReadAsArrayBuffer(nsIDOMBlob* aBlob, PRUint32 aLength,
+FileReaderSyncPrivate::ReadAsArrayBuffer(nsIDOMBlob* aBlob, uint32_t aLength,
                                          uint8* aBuffer)
 {
   nsCOMPtr<nsIInputStream> stream;
   nsresult rv = aBlob->GetInternalStream(getter_AddRefs(stream));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRUint32 numRead;
+  uint32_t numRead;
   rv = stream->Read((char*)aBuffer, aLength, &numRead);
   NS_ENSURE_SUCCESS(rv, rv);
   NS_ASSERTION(numRead == aLength, "failed to read data");
@@ -96,13 +63,13 @@ FileReaderSyncPrivate::ReadAsBinaryString(nsIDOMBlob* aBlob, nsAString& aResult)
   nsresult rv = aBlob->GetInternalStream(getter_AddRefs(stream));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRUint32 numRead;
+  uint32_t numRead;
   do {
     char readBuf[4096];
     rv = stream->Read(readBuf, sizeof(readBuf), &numRead);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    PRUint32 oldLength = aResult.Length();
+    uint32_t oldLength = aResult.Length();
     AppendASCIItoUTF16(Substring(readBuf, readBuf + numRead), aResult);
     if (aResult.Length() - oldLength != numRead) {
       return NS_ERROR_OUT_OF_MEMORY;
@@ -135,12 +102,8 @@ FileReaderSyncPrivate::ReadAsText(nsIDOMBlob* aBlob,
     CopyUTF16toUTF8(aEncoding, charsetGuess);
   }
 
-  nsCOMPtr<nsICharsetAlias> alias =
-    do_GetService(NS_CHARSETALIAS_CONTRACTID, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
-
   nsCString charset;
-  rv = alias->GetPreferred(charsetGuess, charset);
+  rv = nsCharsetAlias::GetPreferred(charsetGuess, charset);
   NS_ENSURE_SUCCESS(rv, rv);
 
   return ConvertStream(stream, charset.get(), aResult);
@@ -166,7 +129,7 @@ FileReaderSyncPrivate::ReadAsDataURL(nsIDOMBlob* aBlob, nsAString& aResult)
   nsresult rv = aBlob->GetInternalStream(getter_AddRefs(stream));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRUint64 size;
+  uint64_t size;
   rv = aBlob->GetSize(&size);
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -201,11 +164,11 @@ FileReaderSyncPrivate::ConvertStream(nsIInputStream *aStream,
     do_QueryInterface(converterStream);
   NS_ENSURE_TRUE(unicharStream, NS_ERROR_FAILURE);
 
-  PRUint32 numChars;
+  uint32_t numChars;
   nsString result;
   while (NS_SUCCEEDED(unicharStream->ReadString(8192, result, &numChars)) &&
          numChars > 0) {
-    PRUint32 oldLength = aResult.Length();
+    uint32_t oldLength = aResult.Length();
     aResult.Append(result);
     if (aResult.Length() - oldLength != result.Length()) {
       return NS_ERROR_OUT_OF_MEMORY;
@@ -242,8 +205,8 @@ FileReaderSyncPrivate::GuessCharset(nsIInputStream *aStream,
   if (detector) {
     detector->Init(this);
 
-    PRBool done;
-    PRUint32 numRead;
+    bool done;
+    uint32_t numRead;
     do {
       char readBuf[4096];
       rv = aStream->Read(readBuf, sizeof(readBuf), &numRead);
@@ -260,7 +223,7 @@ FileReaderSyncPrivate::GuessCharset(nsIInputStream *aStream,
   } else {
     // no charset detector available, check the BOM
     unsigned char sniffBuf[4];
-    PRUint32 numRead;
+    uint32_t numRead;
     rv = aStream->Read(reinterpret_cast<char*>(sniffBuf),
                        sizeof(sniffBuf), &numRead);
     NS_ENSURE_SUCCESS(rv, rv);

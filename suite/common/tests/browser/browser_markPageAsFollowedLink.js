@@ -14,8 +14,6 @@ const PAGE_URL = BASE_URL + "/framedPage.html";
 const LEFT_URL = BASE_URL + "/frameLeft.html";
 const RIGHT_URL = BASE_URL + "/frameRight.html";
 
-Components.utils.import("resource://gre/modules/XPCOMUtils.jsm");
-
 let gTabLoaded = false;
 let gLeftFrameVisited = false;
 
@@ -45,12 +43,13 @@ function test()
   gBrowser.selectedTab = gBrowser.addTab(PAGE_URL);
   let frameCount = 0;
   gBrowser.selectedTab.linkedBrowser.addEventListener("DOMContentLoaded",
-    function (event)
+    function gBrowserDOMContentLoaded(event)
     {
       // Wait for all the frames.
       if (frameCount++ < 2)
         return;
-      gBrowser.selectedTab.linkedBrowser.removeEventListener("DOMContentLoaded", arguments.callee, false)
+      gBrowser.selectedTab.linkedBrowser.removeEventListener("DOMContentLoaded",
+        gBrowserDOMContentLoaded, false)
       gTabLoaded = true;
       maybeClickLink();
     }, false

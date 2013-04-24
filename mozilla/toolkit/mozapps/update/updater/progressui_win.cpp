@@ -1,42 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim:set ts=2 sw=2 sts=2 et cindent: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is Google Inc.
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Darin Fisher <darin@meer.net>
- *  Masayuki Nakano <masayuki@d-toybox.com>
- *  Robert Strong <robert.bugzilla@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <stdio.h>
 #include <windows.h>
@@ -75,6 +41,8 @@
 
 static float sProgress;  // between 0 and 100
 static BOOL  sQuit = FALSE;
+static BOOL sIndeterminate = FALSE;
+static StringTable sUIStrings;
 
 static BOOL
 GetStringsFile(WCHAR filename[MAX_PATH])
@@ -135,20 +103,12 @@ CenterDialog(HWND hDlg)
 static void
 InitDialog(HWND hDlg)
 {
-  WCHAR filename[MAX_PATH];
-  if (!GetStringsFile(filename))
-    return;
-
-  StringTable uiStrings;
-  if (ReadStrings(filename, &uiStrings) != OK)
-    return;
-
   WCHAR szwTitle[MAX_TEXT_LEN];
   WCHAR szwInfo[MAX_TEXT_LEN];
 
-  MultiByteToWideChar(CP_UTF8, 0, uiStrings.title, -1, szwTitle,
+  MultiByteToWideChar(CP_UTF8, 0, sUIStrings.title, -1, szwTitle,
                       sizeof(szwTitle)/sizeof(szwTitle[0]));
-  MultiByteToWideChar(CP_UTF8, 0, uiStrings.info, -1, szwInfo,
+  MultiByteToWideChar(CP_UTF8, 0, sUIStrings.info, -1, szwInfo,
                       sizeof(szwInfo)/sizeof(szwInfo[0]));
 
   SetWindowTextW(hDlg, szwTitle);
@@ -161,6 +121,11 @@ InitDialog(HWND hDlg)
 
   HWND hWndPro = GetDlgItem(hDlg, IDC_PROGRESS);
   SendMessage(hWndPro, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
+  if (sIndeterminate) {
+    LONG_PTR val = GetWindowLongPtr(hWndPro, GWL_STYLE);
+    SetWindowLongPtr(hWndPro, GWL_STYLE, val|PBS_MARQUEE); 
+    SendMessage(hWndPro,(UINT) PBM_SETMARQUEE,(WPARAM) TRUE,(LPARAM)50 );
+  }
 
   // Resize the dialog to fit all of the text if necessary.
   RECT infoSize, textSize;
@@ -239,28 +204,49 @@ InitProgressUI(int *argc, NS_tchar ***argv)
   return 0;
 }
 
+/**
+ * Initializes the progress UI strings
+ * 
+ * @return 0 on success, -1 on error
+*/
 int
-ShowProgressUI()
-{
-  // Only show the Progress UI if the process is taking a significant amount of
-  // time where a significant amount of time is defined as .5 seconds after
-  // ShowProgressUI is called sProgress is less than 70.
-  Sleep(500);
-
-  if (sQuit || sProgress > 70.0f)
-    return 0;
-
+InitProgressUIStrings() {
   // If we do not have updater.ini, then we should not bother showing UI.
   WCHAR filename[MAX_PATH];
-  if (!GetStringsFile(filename))
+  if (!GetStringsFile(filename)) {
     return -1;
-  if (_waccess(filename, 04))
+  }
+
+  if (_waccess(filename, 04)) {
     return -1;
+  }
+  
   // If the updater.ini doesn't have the required strings, then we should not
   // bother showing UI.
-  StringTable uiStrings;
-  if (ReadStrings(filename, &uiStrings) != OK)
+  if (ReadStrings(filename, &sUIStrings) != OK) {
     return -1;
+  }
+
+  return 0;
+}
+
+int
+ShowProgressUI(bool indeterminate, bool initUIStrings)
+{
+  sIndeterminate = indeterminate;
+  if (!indeterminate) {
+    // Only show the Progress UI if the process is taking a significant amount of
+    // time where a significant amount of time is defined as .5 seconds after
+    // ShowProgressUI is called sProgress is less than 70.
+    Sleep(500);
+
+    if (sQuit || sProgress > 70.0f)
+      return 0;
+  }
+
+  if (initUIStrings && InitProgressUIStrings() == -1) {
+    return -1;
+  }
 
   INITCOMMONCONTROLSEX icc = {
     sizeof(INITCOMMONCONTROLSEX),

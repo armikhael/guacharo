@@ -1,4 +1,8 @@
 <?xml version="1.0"?>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
 <?xml-stylesheet href="chrome://global/skin" type="text/css"?>
 <window xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
         width="800" height="800" orient="vertical" onload="initRemoteFrameScript();">
@@ -93,27 +97,42 @@
       // 1. Test that loading a script works, and that accessing process level mm and
       //     global mm works.
       var ppm = Components.classes["@mozilla.org/parentprocessmessagemanager;1"]
-                          .getService(Components.interfaces.nsIFrameMessageManager);
+                          .getService(Components.interfaces.nsIMessageBroadcaster);
       var gm = Components.classes["@mozilla.org/globalmessagemanager;1"]
-                         .getService(Components.interfaces.nsIChromeFrameMessageManager);
-      var didThrow = false;
-      try {
-        var cpm = Components.classes["@mozilla.org/childprocessmessagemanager;1"]
-                            .getService(Components.interfaces.nsISyncMessageSender);  
-      } catch (ex) {
-        didThrow = true;
+                         .getService(Components.interfaces.nsIMessageBroadcaster);
+      var cpm = Components.classes["@mozilla.org/childprocessmessagemanager;1"]
+                            .getService(Components.interfaces.nsISyncMessageSender);
+
+      if (ppm.childCount != 2) {
+        alert("Should have two child processes!");
       }
-      if (!didThrow) {
-        alert("One shouldn't be able to create content process message manager in chrome process!");
-      }
+      var childprocessmm = ppm.getChildAt(1); // 0 is the in-process child process mm
+      
+      childprocessmm.addMessageListener("ppm-sync",
+        function(m) {
+          if (m.target != childprocessmm) alert("Wrong target!");
+          document.getElementById("messageLog").value += "[SYNC1 PPM]"; 
+        }
+      );
+      
       ppm.addMessageListener("ppm-sync",
         function(m) {
-          document.getElementById("messageLog").value += "[SYNC PPM]"; 
+          // Check that global process message manager gets the per-process mm as target.
+          if (m.target != childprocessmm) alert("Wrong target!");
+          document.getElementById("messageLog").value += "[SYNC2 PPM]"; 
+        }
+      );
+      childprocessmm.addMessageListener("ppm-async",
+        function(m) {
+          if (m.target != childprocessmm) alert("Wrong target!");
+          document.getElementById("messageLog").value += "[ASYNC1 PPM]"; 
         }
       );
       ppm.addMessageListener("ppm-async",
         function(m) {
-          document.getElementById("messageLog").value += "[ASYNC PPM]"; 
+          // Check that global process message manager gets the per-process mm as target.
+          if (m.target != childprocessmm) alert("Wrong target!");
+          document.getElementById("messageLog").value += "[ASYNC2 PPM]"; 
         }
       );
       messageManager.loadFrameScript("chrome://global/content/remote-test-ipc.js", true);
@@ -141,7 +160,7 @@
           receiveMessage: function(m) {
             var s = (m.json.message == "linkclick-received") &amp;&amp;
                     (this.foobarObjectVar) ? "PASS" : "FAIL";
-            messageManager.sendAsyncMessage("chrome-message", { ok : s } );
+            messageManager.broadcastAsyncMessage("chrome-message", { ok : s } );
           }
         }
         );
@@ -177,7 +196,7 @@
     function messageSpeed() {
       speedTestCount = 0;
       messageManager.addMessageListener("speed-test", speedHandler);
-      messageManager.sendAsyncMessage("speed-test-start");
+      messageManager.broadcastAsyncMessage("speed-test-start");
     }
 
     function speedHandler() {
@@ -197,7 +216,7 @@
       if (++addRemoveTestCount == 1) {
         alert("Expected echo message");
         messageManager.removeMessageListener("async-echo", echoListener);
-        messageManager.sendAsyncMessage("async-echo");
+        messageManager.broadcastAsyncMessage("async-echo");
         return;
       }
       alert("Unexpected echo message");
@@ -206,7 +225,7 @@
     function listenerAddRemove() {
       addRemoveTestCount = 0;
       messageManager.addMessageListener("async-echo", echoListener);
-      messageManager.sendAsyncMessage("async-echo");
+      messageManager.broadcastAsyncMessage("async-echo");
     }
 
     var MozAfterPaintCount = 0;
@@ -266,8 +285,10 @@
   </toolbar>
   <toolbar><label value="Load a script (URL) to content process:"/>
     <textbox flex="1" id="script"/><button
-      label="send" oncommand="document.getElementById('page').QueryInterface(Components.interfaces.nsIFrameLoaderOwner).frameLoader.
-                              messageManager.loadFrameScript(this.previousSibling.value, false);"/>
+      label="send" oncommand="document.getElementById('page')
+                                      .QueryInterface(Components.interfaces.nsIFrameLoaderOwner)
+                                      .frameLoader.messageManager
+                                      .loadFrameScript(this.previousSibling.value, false);"/>
   </toolbar>
   <toolbar>
     <label value="Eval script in chrome context"/>

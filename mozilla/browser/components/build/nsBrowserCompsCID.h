@@ -1,58 +1,16 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /////////////////////////////////////////////////////////////////////////////
 
-#define NS_BROWSERPROFILEMIGRATOR_CONTRACTID_PREFIX "@mozilla.org/profile/migrator;1?app=browser&type="
-
 #ifdef XP_WIN
-#define NS_WINIEPROFILEMIGRATOR_CID \
-{ 0xbc15c73d, 0xc05b, 0x497b, { 0xa3, 0x73, 0x4b, 0xae, 0x6c, 0x17, 0x86, 0x31 } }
+#define NS_WINIEHISTORYENUMERATOR_CID \
+{ 0x93480624, 0x806e, 0x4756, { 0xb7, 0xcb, 0x0f, 0xb7, 0xdd, 0x74, 0x6a, 0x8f } }
+
+#define NS_IEHISTORYENUMERATOR_CONTRACTID \
+  "@mozilla.org/profile/migrator/iehistoryenumerator;1"
 #endif
-
-#ifdef XP_MACOSX
-#define NS_SAFARIPROFILEMIGRATOR_CID \
-{ 0x29e3b139, 0xad19, 0x44f3, { 0xb2, 0xc2, 0xe9, 0xf1, 0x3b, 0xa2, 0xbb, 0xc6 } }
-#endif
-
-#define NS_OPERAPROFILEMIGRATOR_CID \
-{ 0xf34ff792, 0x722e, 0x4490, { 0xb1, 0x95, 0x47, 0xd2, 0x42, 0xed, 0xca, 0x1c } }
-
-#define NS_SEAMONKEYPROFILEMIGRATOR_CID \
-{ 0x9a28ffa7, 0xe6ef, 0x4b52, { 0xa1, 0x27, 0x6a, 0xd9, 0x51, 0xde, 0x8e, 0x9b } }
 
 #define NS_SHELLSERVICE_CID \
 { 0x63c7b9f4, 0xcc8, 0x43f8, { 0xb6, 0x66, 0xa, 0x66, 0x16, 0x55, 0xcb, 0x73 } }

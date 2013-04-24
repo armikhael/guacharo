@@ -8,7 +8,7 @@ function test() {
   // Navigate to malware site.  Can't use an onload listener here since
   // error pages don't fire onload
   window.addEventListener("DOMContentLoaded", testMalware, true);
-  content.location = "http://www.mozilla.com/firefox/its-an-attack.html";
+  content.location = "http://www.mozilla.org/firefox/its-an-attack.html";
 }
 
 function testMalware() {
@@ -19,11 +19,11 @@ function testMalware() {
   ok(el, "Ignore warning button should be present for malware");
   
   var style = content.getComputedStyle(el, null);
-  is(style.display, "inline", "Ignore Warning button should be display:inline for malware");
+  is(style.display, "inline-block", "Ignore Warning button should be display:inline-block for malware");
   
   // Now launch the phishing test
   window.addEventListener("DOMContentLoaded", testPhishing, true);
-  content.location = "http://www.mozilla.com/firefox/its-a-trap.html";
+  content.location = "http://www.mozilla.org/firefox/its-a-trap.html";
 }
 
 function testPhishing() {
@@ -33,7 +33,7 @@ function testPhishing() {
   ok(el, "Ignore warning button should be present for phishing");
   
   var style = content.getComputedStyle(el, null);
-  is(style.display, "inline", "Ignore Warning button should be display:inline for phishing");
+  is(style.display, "inline-block", "Ignore Warning button should be display:inline-block for phishing");
   
   gBrowser.removeCurrentTab();
   finish();

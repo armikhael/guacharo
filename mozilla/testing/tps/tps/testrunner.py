@@ -1,39 +1,6 @@
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
-# The Original Code is TPS.
-#
-# The Initial Developer of the Original Code is
-# Mozilla Foundation.
-# Portions created by the Initial Developer are Copyright (C) 2011
-# the Initial Developer. All Rights Reserved.
-#
-# Contributor(s):
-#   Jonathan Griffin <jgriffin@mozilla.com>
-#
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import httplib
 import json
@@ -53,7 +20,7 @@ from mozprofile import Profile
 
 from tps.firefoxrunner import TPSFirefoxRunner
 from tps.phase import TPSTestPhase
-
+from tps.mozhttpd import MozHttpd
 
 class TempFile(object):
   """Class for temporary files that delete themselves when garbage-collected.
@@ -89,24 +56,31 @@ class TPSTestRunner(object):
                   'XPCOM_DEBUG_BREAK': 'warn',
                 }
   default_preferences = { 'app.update.enabled' : False,
+                          'extensions.getAddons.get.url': 'http://127.0.0.1:4567/en-US/firefox/api/%API_VERSION%/search/guid:%IDS%',
                           'extensions.update.enabled'    : False,
                           'extensions.update.notifyUser' : False,
                           'browser.shell.checkDefaultBrowser' : False,
                           'browser.tabs.warnOnClose' : False,
                           'browser.warnOnQuit': False,
                           'browser.sessionstore.resume_from_crash': False,
+                          'services.sync.addons.ignoreRepositoryChecking': True,
                           'services.sync.firstSync': 'notReady',
                           'services.sync.lastversion': '1.0',
                           'services.sync.log.rootLogger': 'Trace',
+                          'services.sync.log.logger.engine.addons': 'Trace',
                           'services.sync.log.logger.service.main': 'Trace',
                           'services.sync.log.logger.engine.bookmarks': 'Trace',
                           'services.sync.log.appender.console': 'Trace',
                           'services.sync.log.appender.debugLog.enabled': True,
+                          'toolkit.startup.max_resumed_crashes': -1,
                           'browser.dom.window.dump.enabled': True,
-                          'extensions.checkCompatibility.4.0': False,
+                          # Allow installing extensions dropped into the profile folder
+                          'extensions.autoDisableScopes': 10,
+                          # Don't open a dialog to show available add-on updates
+                          'extensions.update.notifyUser' : False,
                         }
   syncVerRe = re.compile(
-      r"Weave version: (?P<syncversion>.*)\n")
+      r"Sync version: (?P<syncversion>.*)\n")
   ffVerRe = re.compile(
       r"Firefox version: (?P<ffver>.*)\n")
   ffDateRe = re.compile(
@@ -114,12 +88,14 @@ class TPSTestRunner(object):
 
   def __init__(self, extensionDir, emailresults=False, testfile="sync.test",
                binary=None, config=None, rlock=None, mobile=False,
-               autolog=False, logfile="tps.log"):
+               autolog=False, logfile="tps.log",
+               ignore_unused_engines=False):
     self.extensions = []
     self.emailresults = emailresults
     self.testfile = testfile
     self.logfile = os.path.abspath(logfile)
     self.binary = binary
+    self.ignore_unused_engines = ignore_unused_engines
     self.config = config if config else {}
     self.repo = None
     self.changeset = None
@@ -169,29 +145,6 @@ class TPSTestRunner(object):
       for f in files:
         zip.write(os.path.join(root, f), os.path.join(dir, f))
 
-  def make_xpi(self):
-    """Build the test extension."""
-
-    if self.tpsxpi is None:
-      tpsxpi = os.path.join(self.extensionDir, "tps.xpi")
-
-      if os.access(tpsxpi, os.F_OK):
-        os.remove(tpsxpi)
-      if not os.access(os.path.join(self.extensionDir, "install.rdf"), os.F_OK):
-        raise Exception("extension code not found in %s" % self.extensionDir)
-
-      from zipfile import ZipFile
-      z = ZipFile(tpsxpi, 'w')
-      self._zip_add_file(z, 'chrome.manifest', self.extensionDir)
-      self._zip_add_file(z, 'install.rdf', self.extensionDir)
-      self._zip_add_dir(z, 'components', self.extensionDir)
-      self._zip_add_dir(z, 'modules', self.extensionDir)
-      z.close()
-
-      self.tpsxpi = tpsxpi
-
-    return self.tpsxpi
-
   def run_single_test(self, testdir, testname):
     testpath = os.path.join(testdir, testname)
     self.log("Running test %s\n" % testname)
@@ -231,14 +184,16 @@ class TPSTestRunner(object):
                                         addons = self.extensions)
 
       # create the test phase
-      phaselist.append(TPSTestPhase(phase,
-                                    profiles[profilename],
-                                    testname,
-                                    tmpfile.filename,
-                                    self.logfile,
-                                    self.env,
-                                    self.firefoxRunner,
-                                    self.log))
+      phaselist.append(TPSTestPhase(
+          phase,
+          profiles[profilename],
+          testname,
+          tmpfile.filename,
+          self.logfile,
+          self.env,
+          self.firefoxRunner,
+          self.log,
+          ignore_unused_engines=self.ignore_unused_engines))
 
     # sort the phase list by name
     phaselist = sorted(phaselist, key=lambda phase: phase.phase)
@@ -255,11 +210,17 @@ class TPSTestRunner(object):
             for f in files:
               weavelog = os.path.join(profiles[profile].profile, 'weave', 'logs', f)
               if os.access(weavelog, os.F_OK):
-                f = open(weavelog, 'r')
-                msg = f.read()
-                self.log(msg)
-                f.close()
-              self.log("\n")
+                with open(weavelog, 'r') as fh:
+                  for line in fh:
+                    possible_time = line[0:13]
+                    if len(possible_time) == 13 and possible_time.isdigit():
+                      time_ms = int(possible_time)
+                      formatted = time.strftime('%Y-%m-%d %H:%M:%S',
+                              time.localtime(time_ms / 1000))
+                      self.log('%s.%03d %s' % (
+                          formatted, time_ms % 1000, line[14:] ))
+                    else:
+                      self.log(line)
         break;
 
     # grep the log for FF and sync versions
@@ -285,7 +246,10 @@ class TPSTestRunner(object):
     } [phase.status](phase.errline)
     logstr = "\n%s | %s%s\n" % (result[0], testname, (' | %s' % result[1] if result[1] else ''))
 
-    repoinfo = self.firefoxRunner.get_respository_info()
+    try:
+      repoinfo = self.firefoxRunner.runner.get_repositoryInfo()
+    except:
+      repoinfo = {}
     apprepo = repoinfo.get('application_repository', '')
     appchangeset = repoinfo.get('application_changeset', '')
 
@@ -400,7 +364,8 @@ class TPSTestRunner(object):
     self.numfailed = 0
 
     # build our tps.xpi extension
-    self.extensions.append(self.make_xpi())
+    self.extensions.append(os.path.join(self.extensionDir, 'tps'))
+    self.extensions.append(os.path.join(self.extensionDir, "mozmill"))
 
     # build the test list
     try:
@@ -412,6 +377,9 @@ class TPSTestRunner(object):
     except ValueError:
       testlist = [os.path.basename(self.testfile)]
     testdir = os.path.dirname(self.testfile)
+
+    self.mozhttpd = MozHttpd(port=4567, docroot=testdir)
+    self.mozhttpd.start()
 
     # run each test, and save the results
     for test in testlist:
@@ -431,6 +399,8 @@ class TPSTestRunner(object):
       else:
         self.numfailed += 1
 
+    self.mozhttpd.stop()
+
     # generate the postdata we'll use to post the results to the db
     self.postdata = { 'tests': self.results, 
                       'os':os_string,
@@ -449,7 +419,14 @@ class TPSTestRunner(object):
       from tps.emailtemplate import GenerateEmailBody
 
       if body is None:
-        body = GenerateEmailBody(self.postdata, self.numpassed, self.numfailed, self.config['account']['serverURL'])
+        buildUrl = None
+        if self.firefoxRunner and self.firefoxRunner.url:
+          buildUrl = self.firefoxRunner.url
+        body = GenerateEmailBody(self.postdata,
+                                 self.numpassed,
+                                 self.numfailed,
+                                 self.config['account']['serverURL'],
+                                 buildUrl)
 
       subj = "TPS Report: "
       if self.numfailed == 0 and self.numpassed > 0:
@@ -514,7 +491,12 @@ class TPSTestRunner(object):
               text = test['message'],
               logfile = errorlog_filename
             )
-    group.submit()
+    try:
+        group.submit()
+    except:
+        self.sendEmail('<pre>%s</pre>' % traceback.format_exc(),
+                       sendTo='crossweave@mozilla.com')
+        return
 
     # Iterate through all testfailure objects, and update the postdata
     # dict with the testfailure logurl's, if any.

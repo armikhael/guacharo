@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #ifndef nsSimplePageSequence_h___
 #define nsSimplePageSequence_h___
 
@@ -96,9 +64,9 @@ public:
                                const nsDisplayListSet& aLists);
 
   // nsIPageSequenceFrame
-  NS_IMETHOD SetPageNo(PRInt32 aPageNo) { return NS_OK;}
+  NS_IMETHOD SetPageNo(int32_t aPageNo) { return NS_OK;}
   NS_IMETHOD SetSelectionHeight(nscoord aYOffset, nscoord aHeight) { mYSelOffset = aYOffset; mSelectionHeight = aHeight; return NS_OK; }
-  NS_IMETHOD SetTotalNumPages(PRInt32 aTotal) { mTotalPages = aTotal; return NS_OK; }
+  NS_IMETHOD SetTotalNumPages(int32_t aTotal) { mTotalPages = aTotal; return NS_OK; }
   
   // For Shrink To Fit
   NS_IMETHOD GetSTFPercent(float& aSTFPercent);
@@ -109,15 +77,15 @@ public:
                         PRUnichar*        aDocTitle,
                         PRUnichar*        aDocURL);
   NS_IMETHOD PrintNextPage();
-  NS_IMETHOD GetCurrentPageNum(PRInt32* aPageNum);
-  NS_IMETHOD GetNumPages(PRInt32* aNumPages);
-  NS_IMETHOD IsDoingPrintRange(PRBool* aDoing);
-  NS_IMETHOD GetPrintRange(PRInt32* aFromPage, PRInt32* aToPage);
+  NS_IMETHOD GetCurrentPageNum(int32_t* aPageNum);
+  NS_IMETHOD GetNumPages(int32_t* aNumPages);
+  NS_IMETHOD IsDoingPrintRange(bool* aDoing);
+  NS_IMETHOD GetPrintRange(int32_t* aFromPage, int32_t* aToPage);
   NS_IMETHOD DoPageEnd();
 
   // We must allow Print Preview UI to have a background, no matter what the
   // user's settings
-  virtual PRBool HonorPrintBackgroundSettings() { return PR_FALSE; }
+  virtual bool HonorPrintBackgroundSettings() { return false; }
 
   /**
    * Get the "type" of the frame
@@ -126,7 +94,7 @@ public:
    */
   virtual nsIAtom* GetType() const;
   
-#ifdef NS_DEBUG
+#ifdef DEBUG
   NS_IMETHOD  GetFrameName(nsAString& aResult) const;
 #endif
 
@@ -138,11 +106,11 @@ protected:
   nsSimplePageSequenceFrame(nsStyleContext* aContext);
   virtual ~nsSimplePageSequenceFrame();
 
-  void SetPageNumberFormat(const char* aPropName, const char* aDefPropVal, PRBool aPageNumOnly);
+  void SetPageNumberFormat(const char* aPropName, const char* aDefPropVal, bool aPageNumOnly);
 
   // SharedPageData Helper methods
   void SetDateTimeStr(PRUnichar * aDateTimeStr);
-  void SetPageNumberFormat(PRUnichar * aFormatStr, PRBool aForPageNumOnly);
+  void SetPageNumberFormat(PRUnichar * aFormatStr, bool aForPageNumOnly);
 
   // Sets the frame desired size to the size of the viewport, or the given
   // nscoords, whichever is larger. Print scaling is applied in this function.
@@ -160,21 +128,22 @@ protected:
 
   // Asynch Printing
   nsIFrame *   mCurrentPageFrame;
-  PRInt32      mPageNum;
-  PRInt32      mTotalPages;
-  PRInt32      mPrintRangeType;
-  PRInt32      mFromPageNum;
-  PRInt32      mToPageNum;
+  int32_t      mPageNum;
+  int32_t      mTotalPages;
+  int32_t      mPrintRangeType;
+  int32_t      mFromPageNum;
+  int32_t      mToPageNum;
+  nsTArray<int32_t> mPageRanges;
 
   // Selection Printing Info
   nscoord      mSelectionHeight;
   nscoord      mYSelOffset;
 
   // Asynch Printing
-  PRPackedBool mPrintThisPage;
-  PRPackedBool mDoingPageRange;
+  bool mPrintThisPage;
+  bool mDoingPageRange;
 
-  PRPackedBool mIsPrintingSelection;
+  bool mIsPrintingSelection;
 };
 
 #endif /* nsSimplePageSequence_h___ */

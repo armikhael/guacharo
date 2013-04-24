@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Sun Microsystems, Inc.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Created by Cyrille Moureaux <Cyrille.Moureaux@sun.com>
- *   Seth Spitzer <sspitzer@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #define INITGUID
 #define USES_IID_IMAPIProp
 #define USES_IID_IMAPIContainer
@@ -174,7 +140,7 @@ static unsigned char Base64To6Bits(char aBase64)
     return 0 ;
 }
 
-static void Base64ToUnsigned(const char *& aBase64, PRUint32 aNbBase64, 
+static void Base64ToUnsigned(const char *& aBase64, uint32_t aNbBase64, 
                              unsigned char *&aUnsigned)
 {
     // By design of the encoding, we must have at least two characters to use
@@ -212,7 +178,7 @@ void nsMapiEntry::Assign(const nsCString& aString)
     }
     const char *currentSource = aString.get() ;
     unsigned char *currentTarget = new unsigned char [byteCount] ;
-    PRUint32 i = 0 ;
+    uint32_t i = 0 ;
 
     mByteCount = byteCount ;
     mEntryId = reinterpret_cast<LPENTRYID>(currentTarget) ;
@@ -266,9 +232,9 @@ void nsMapiEntryArray::CleanUp(void)
 
 using namespace mozilla;
 
-PRUint32 nsAbWinHelper::mEntryCounter = 0;
+uint32_t nsAbWinHelper::mEntryCounter = 0;
 nsAutoPtr<mozilla::Mutex> nsAbWinHelper::mMutex;
-PRUint32 nsAbWinHelper::mUseCount = 0;
+uint32_t nsAbWinHelper::mUseCount = 0;
 // There seems to be a deadlock/auto-destruction issue
 // in MAPI when multiple threads perform init/release 
 // operations at the same time. So I've put a mutex
@@ -288,7 +254,7 @@ nsAbWinHelper::nsAbWinHelper(void)
 nsAbWinHelper::~nsAbWinHelper(void)
 {
   if (!--mUseCount)
-    mMutex = nsnull;
+    mMutex = nullptr;
   MOZ_COUNT_DTOR(nsAbWinHelper) ;
 }
 
@@ -390,7 +356,7 @@ BOOL nsAbWinHelper::GetPropertyString(const nsMapiEntry& aObject,
         if (PROP_TYPE(values->ulPropTag) == PT_STRING8)
             aName = values->Value.lpszA ;
         else if (PROP_TYPE(values->ulPropTag) == PT_UNICODE)
-            LossyCopyUTF16toASCII(values->Value.lpszW, aName);
+            aName = NS_LossyConvertUTF16toASCII(values->Value.lpszW);
     }
     FreeBuffer(values) ;
     return TRUE ;
@@ -408,7 +374,7 @@ BOOL nsAbWinHelper::GetPropertyUString(const nsMapiEntry& aObject, ULONG aProper
         if (PROP_TYPE(values->ulPropTag) == PT_UNICODE)
             aName = values->Value.lpszW ;
         else if (PROP_TYPE(values->ulPropTag) == PT_STRING8)
-            CopyASCIItoUTF16(values->Value.lpszA, aName);
+            aName.AssignASCII(values->Value.lpszA);
     }
     FreeBuffer(values) ;
     return TRUE ;
@@ -431,7 +397,7 @@ BOOL nsAbWinHelper::GetPropertiesUString(const nsMapiEntry& aObject, const ULONG
       if (PROP_ID(values[i].ulPropTag) == PROP_ID(aPropertyTags[i]))
       {
         if (PROP_TYPE(values[i].ulPropTag) == PT_STRING8)
-          CopyASCIItoUTF16(values[i].Value.lpszA, aNames[i]);
+          aNames[i].AssignASCII(values[i].Value.lpszA);
         else if (PROP_TYPE(values[i].ulPropTag) == PT_UNICODE)
           aNames[i] = values[i].Value.lpszW;
       }
@@ -554,7 +520,7 @@ BOOL nsAbWinHelper::SetPropertyUString(const nsMapiEntry& aObject, ULONG aProper
         value.Value.lpszW = const_cast<WCHAR *>(aValue) ;
     }
     else if (PROP_TYPE(aPropertyTag) == PT_STRING8) {
-        LossyCopyUTF16toASCII(aValue, alternativeValue);
+        alternativeValue = NS_LossyConvertUTF16toASCII(aValue);
         value.Value.lpszA = const_cast<char *>(alternativeValue.get()) ;
     }
     else {
@@ -582,7 +548,7 @@ BOOL nsAbWinHelper::SetPropertiesUString(const nsMapiEntry& aObject, const ULONG
             values [currentValue ++].Value.lpszW = const_cast<WCHAR *>(aValues [i].get()) ;
         }
         else if (PROP_TYPE(aPropertiesTag [i]) == PT_STRING8) {
-            LossyCopyUTF16toASCII(aValues [i].get(), alternativeValue);
+            LossyCopyUTF16toASCII(aValues [i], alternativeValue);
             char *av = strdup(alternativeValue.get()) ;
             if (!av) {
                 retCode = FALSE ;
@@ -972,7 +938,7 @@ void nsAbWinHelper::MyFreeProws(LPSRowSet aRowset)
     FreeBuffer(aRowset) ;
 }
 
-nsAbWinHelperGuard::nsAbWinHelperGuard(PRUint32 aType)
+nsAbWinHelperGuard::nsAbWinHelperGuard(uint32_t aType)
 : mHelper(NULL) 
 {
     switch(aType) {
@@ -1000,7 +966,7 @@ nsAbWinType getAbWinType(const char *aScheme, const char *aUri, nsCString& aStub
 {
     aStub.Truncate() ;
     aEntry.Truncate() ;
-    PRUint32 schemeLength = strlen(aScheme) ;
+    uint32_t schemeLength = strlen(aScheme) ;
 
     if (strncmp(aUri, aScheme, schemeLength) == 0) {
         if (strncmp(aUri + schemeLength, kOutlookStub, kOutlookStubLength) == 0) {
@@ -1017,7 +983,7 @@ nsAbWinType getAbWinType(const char *aScheme, const char *aUri, nsCString& aStub
     return nsAbWinType_Unknown ;   
 }
 
-void buildAbWinUri(const char *aScheme, PRUint32 aType, nsCString& aUri)
+void buildAbWinUri(const char *aScheme, uint32_t aType, nsCString& aUri)
 {
     aUri.Assign(aScheme) ;
     switch(aType) {

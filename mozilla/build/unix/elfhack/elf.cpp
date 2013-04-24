@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is elfhack.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Mike Hommey <mh@glandium.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #undef NDEBUG
 #include <cstring>
@@ -265,6 +232,15 @@ Elf::Elf(std::ifstream &file)
     file.seekg(ehdr->e_phoff);
     for (int i = 0; i < ehdr->e_phnum; i++) {
         Elf_Phdr phdr(file, e_ident[EI_CLASS], e_ident[EI_DATA]);
+        if (phdr.p_type == PT_LOAD) {
+            // Default alignment for PT_LOAD on x86-64 prevents elfhack from
+            // doing anything useful. However, the system doesn't actually
+            // require such a big alignment, so in order for elfhack to work
+            // efficiently, reduce alignment when it's originally the default
+            // one.
+            if ((ehdr->e_machine == EM_X86_64) && (phdr.p_align == 0x200000))
+              phdr.p_align = 0x1000;
+        }
         ElfSegment *segment = new ElfSegment(&phdr);
         // Some segments aren't entirely filled (if at all) by sections
         // For those, we use fake sections
@@ -371,7 +347,7 @@ ElfDynamic_Section *Elf::getDynSection()
     return NULL;
 }
 
-void Elf::write(std::ofstream &file)
+void Elf::normalize()
 {
     // fixup section headers sh_name; TODO: that should be done by sections
     // themselves
@@ -411,6 +387,11 @@ void Elf::write(std::ofstream &file)
     ehdr->e_shoff = shdr_section->getOffset();
     ehdr->e_entry = eh_entry.getValue();
     ehdr->e_shstrndx = eh_shstrndx->getIndex();
+}
+
+void Elf::write(std::ofstream &file)
+{
+    normalize();
     for (ElfSection *section = ehdr;
          section != NULL; section = section->getNext()) {
         file.seekp(section->getOffset());
@@ -503,12 +484,17 @@ unsigned int ElfSection::getOffset()
     if (previous->getType() != SHT_NOBITS)
         offset += previous->getSize();
 
+    Elf32_Word align = 0x1000;
+    for (std::vector<ElfSegment *>::iterator seg = segments.begin(); seg != segments.end(); seg++)
+        align = std::max(align, (*seg)->getAlign());
+
+    Elf32_Word mask = align - 1;
     // SHF_TLS is used for .tbss which is some kind of special case.
     if (((getType() != SHT_NOBITS) || (getFlags() & SHF_TLS)) && (getFlags() & SHF_ALLOC)) {
-        if ((getAddr() & 4095) < (offset & 4095))
-            offset = (offset | 4095) + (getAddr() & 4095) + 1;
+        if ((getAddr() & mask) < (offset & mask))
+            offset = (offset | mask) + (getAddr() & mask) + 1;
         else
-            offset = (offset & ~4095) + (getAddr() & 4095);
+            offset = (offset & ~mask) + (getAddr() & mask);
     }
     if ((getType() != SHT_NOBITS) && (offset & (getAddrAlign() - 1)))
         offset = (offset | (getAddrAlign() - 1)) + 1;
@@ -632,7 +618,7 @@ ElfSegment *ElfSegment::splitBefore(ElfSection *section)
     phdr.p_vaddr = 0;
     phdr.p_paddr = phdr.p_vaddr + v_p_diff;
     phdr.p_flags = flags;
-    phdr.p_align = 0x1000;
+    phdr.p_align = getAlign();
     phdr.p_filesz = (unsigned int)-1;
     phdr.p_memsz = (unsigned int)-1;
     ElfSegment *segment = new ElfSegment(&phdr);
@@ -661,34 +647,25 @@ ElfSection *ElfDynamic_Section::getSectionForType(unsigned int tag)
     return value ? value->getSection() : NULL;
 }
 
-void ElfDynamic_Section::setValueForType(unsigned int tag, ElfValue *val)
+bool ElfDynamic_Section::setValueForType(unsigned int tag, ElfValue *val)
 {
     unsigned int i;
-    for (i = 0; (i < shdr.sh_size / shdr.sh_entsize) && (dyns[i].tag != DT_NULL); i++)
+    unsigned int shnum = shdr.sh_size / shdr.sh_entsize;
+    for (i = 0; (i < shnum) && (dyns[i].tag != DT_NULL); i++)
         if (dyns[i].tag == tag) {
             delete dyns[i].value;
             dyns[i].value = val;
-            return;
+            return true;
         }
-    // This should never happen, as the last entry is always tagged DT_NULL
-    assert(i < shdr.sh_size / shdr.sh_entsize);
     // If we get here, this means we didn't match for the given tag
+    // Most of the time, there are a few DT_NULL entries, that we can
+    // use to add our value, but if we are on the last entry, we can't.
+    if (i >= shnum - 1)
+        return false;
+
     dyns[i].tag = tag;
-    dyns[i++].value = val;
-
-    // If we were on the last entry, we need to grow the section.
-    // Most of the time, though, there are a few DT_NULL entries.
-    if (i < shdr.sh_size / shdr.sh_entsize)
-        return;
-
-    Elf_DynValue value;
-    value.tag = DT_NULL;
-    value.value = NULL;
-    dyns.push_back(value);
-    // Resize the section accordingly
-    shdr.sh_size += shdr.sh_entsize;
-    if (getNext() != NULL)
-        getNext()->markDirty();
+    dyns[i].value = val;
+    return true;
 }
 
 ElfDynamic_Section::ElfDynamic_Section(Elf_Shdr &s, std::ifstream *file, Elf *parent)

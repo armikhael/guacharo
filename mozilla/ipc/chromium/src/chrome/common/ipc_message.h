@@ -18,12 +18,8 @@
 #include "base/ref_counted.h"
 #endif
 
-#if defined(CHROMIUM_MOZILLA_BUILD)
-#define IPC_MESSAGE_ENABLE_RPC
-#endif
-
 namespace base {
-class FileDescriptor;
+struct FileDescriptor;
 }
 
 class FileDescriptorSet;
@@ -38,11 +34,7 @@ struct LogData;
 
 class Message : public Pickle {
  public:
-#if defined(CHROMIUM_MOZILLA_BUILD)
   typedef uint32 msgid_t;
-#else
-  typedef uint16 msgid_t;
-#endif
 
   // Implemented by objects that can send IPC messages across a channel.
   class Sender {
@@ -62,18 +54,20 @@ class Message : public Pickle {
     PRIORITY_HIGH
   };
 
+  enum MessageCompression {
+    COMPRESSION_NONE,
+    COMPRESSION_ENABLED
+  };
+
   virtual ~Message();
 
   Message();
 
   // Initialize a message with a user-defined type, priority value, and
   // destination WebView ID.
-#if !defined(CHROMIUM_MOZILLA_BUILD)
-  Message(int32 routing_id, msgid_t type, PriorityValue priority);
-#else
   Message(int32 routing_id, msgid_t type, PriorityValue priority,
+          MessageCompression compression = COMPRESSION_NONE,
           const char* const name="???");
-#endif
 
   // Initializes a message from a const block of data.  The data is not copied;
   // instead the data is merely referenced by this message.  Only const methods
@@ -92,12 +86,15 @@ class Message : public Pickle {
     return (header()->flags & SYNC_BIT) != 0;
   }
 
-#if defined(IPC_MESSAGE_ENABLE_RPC)
   // True if this is a synchronous message.
   bool is_rpc() const {
     return (header()->flags & RPC_BIT) != 0;
   }
-#endif
+
+  // True if compression is enabled for this message.
+  bool compress() const {
+    return (header()->flags & COMPRESS_BIT) != 0;
+  }
 
   // Set this on a reply to a synchronous message.
   void set_reply() {
@@ -151,7 +148,6 @@ class Message : public Pickle {
     header()->routing = new_id;
   }
 
-#if defined(CHROMIUM_MOZILLA_BUILD)
   uint32 rpc_remote_stack_depth_guess() const {
     return header()->rpc_remote_stack_depth_guess;
   }
@@ -185,7 +181,6 @@ class Message : public Pickle {
   void set_name(const char* const name) {
     name_ = name;
   }
-#endif
 
   template<class T>
   static bool Dispatch(const Message* msg, T* obj, void (T::*func)()) {
@@ -254,9 +249,6 @@ class Message : public Pickle {
   bool dont_log() const { return dont_log_; }
 #endif
 
-#if !defined(CHROMIUM_MOZILLA_BUILD)
- protected:
-#endif
   friend class Channel;
   friend class MessageReplyDeserializer;
   friend class SyncMessage;
@@ -265,13 +257,11 @@ class Message : public Pickle {
     header()->flags |= SYNC_BIT;
   }
 
-#if defined(IPC_MESSAGE_ENABLE_RPC)
   void set_rpc() {
     header()->flags |= RPC_BIT;
   }
-#endif
 
-#if defined(CHROMIUM_MOZILLA_BUILD) && !defined(OS_MACOSX)
+#if !defined(OS_MACOSX)
  protected:
 #endif
 
@@ -284,31 +274,24 @@ class Message : public Pickle {
     UNBLOCK_BIT     = 0x0020,
     PUMPING_MSGS_BIT= 0x0040,
     HAS_SENT_TIME_BIT = 0x0080,
-#if defined(IPC_MESSAGE_ENABLE_RPC)
-    RPC_BIT        = 0x0100,
-#endif
+    RPC_BIT         = 0x0100,
+    COMPRESS_BIT    = 0x0200
   };
 
 #pragma pack(push, 2)
   struct Header : Pickle::Header {
     int32 routing;  // ID of the view that this message is destined for
     msgid_t type;   // specifies the user-defined message type
-#if defined(CHROMIUM_MOZILLA_BUILD)
     uint32 flags;   // specifies control flags for the message
-#else
-    uint16 flags;   // specifies control flags for the message
-#endif
 #if defined(OS_POSIX)
     uint32 num_fds; // the number of descriptors included with this message
 #endif
-#if defined(CHROMIUM_MOZILLA_BUILD)
     // For RPC messages, a guess at what the *other* side's stack depth is.
     uint32 rpc_remote_stack_depth_guess;
     // The actual local stack depth.
     uint32 rpc_local_stack_depth;
     // Sequence number
     int32 seqno;
-#endif
   };
 #pragma pack(pop)
 
@@ -319,11 +302,7 @@ class Message : public Pickle {
     return headerT<Header>();
   }
 
-#if !defined(CHROMIUM_MOZILLA_BUILD)
-  void InitLoggingVariables();
-#else
   void InitLoggingVariables(const char* const name="???");
-#endif
 
 #if defined(OS_POSIX)
   // The set of file descriptors associated with this message.
@@ -341,9 +320,7 @@ class Message : public Pickle {
   }
 #endif
 
-#if defined(CHROMIUM_MOZILLA_BUILD)
   const char* name_;
-#endif
 
 #ifdef IPC_MESSAGE_LOG_ENABLED
   // Used for logging.
@@ -363,7 +340,7 @@ enum SpecialRoutingIDs {
   MSG_ROUTING_NONE = kint32min,
 
   // indicates a general message not sent to a particular tab.
-  MSG_ROUTING_CONTROL = kint32max,
+  MSG_ROUTING_CONTROL = kint32max
 };
 
 #define IPC_REPLY_ID 0xFFF0  // Special message id for replies

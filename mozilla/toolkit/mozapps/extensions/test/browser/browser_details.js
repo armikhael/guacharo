@@ -7,6 +7,7 @@
 const PREF_AUTOUPDATE_DEFAULT = "extensions.update.autoUpdateDefault"
 const PREF_GETADDONS_GETSEARCHRESULTS = "extensions.getAddons.search.url";
 const SEARCH_URL = TESTROOT + "browser_details.xml";
+const PREF_EM_HOTFIX_ID = "extensions.hotfix.id";
 
 var gManagerWindow;
 var gCategoryUtilities;
@@ -47,6 +48,7 @@ function test() {
   // Turn on searching for this test
   Services.prefs.setIntPref(PREF_SEARCH_MAXRESULTS, 15);
   Services.prefs.setCharPref(PREF_GETADDONS_GETSEARCHRESULTS, SEARCH_URL);
+  Services.prefs.setCharPref(PREF_EM_HOTFIX_ID, "hotfix@tests.mozilla.org");
 
   waitForExplicitFinish();
 
@@ -81,7 +83,11 @@ function test() {
     contributionAmount: null,
     updateDate: gDate,
     permissions: 0,
-    screenshots: [{url: "http://example.com/screenshot"}],
+    screenshots: [{
+      url: "chrome://branding/content/about.png",
+      width: 200,
+      height: 150
+    }],
   }, {
     id: "addon3@tests.mozilla.org",
     name: "Test add-on 3",
@@ -101,7 +107,11 @@ function test() {
                  AddonManager.PERM_CAN_UPGRADE,
     screenshots: [{
       url: "http://example.com/screenshot",
-      thumbnailURL: "http://example.com/thumbnail"
+      width: 400,
+      height: 300,
+      thumbnailURL: "chrome://branding/content/icon64.png",
+      thumbnailWidth: 160,
+      thumbnailHeight: 120
     }],
   }, {
     id: "addon4@tests.mozilla.org",
@@ -133,6 +143,9 @@ function test() {
     blocklistURL: "http://example.com/addon8@tests.mozilla.org",
     name: "Test add-on 8",
     blocklistState: Ci.nsIBlocklistService.STATE_OUTDATED
+  }, {
+    id: "hotfix@tests.mozilla.org",
+    name: "Test hotfix 1",
   }]);
 
   open_manager(null, function(aWindow) {
@@ -144,6 +157,7 @@ function test() {
 }
 
 function end_test() {
+  Services.prefs.clearUserPref(PREF_EM_HOTFIX_ID);
   close_manager(gManagerWindow, function() {
     finish();
   });
@@ -158,6 +172,8 @@ add_test(function() {
     is(get("detail-icon").src, "chrome://foo/skin/icon64.png", "Icon should be correct");
     is_element_hidden(get("detail-creator"), "Creator should be hidden");
     is_element_hidden(get("detail-screenshot"), "Screenshot should be hidden");
+    is(get("detail-screenshot").width, "", "Screenshot dimensions should not be set");
+    is(get("detail-screenshot").height, "", "Screenshot dimensions should not be set");
     is(get("detail-desc").textContent, "Short description", "Description should be correct");
     is(get("detail-fulldesc").textContent, "Longer description", "Full description should be correct");
 
@@ -165,6 +181,7 @@ add_test(function() {
     is_element_visible(get("detail-contrib-suggested"), "Contributions amount should be visible");
     ok(get("detail-contrib-suggested").value, "$0.99");
 
+    is_element_visible(get("detail-updates-row"), "Updates should not be hidden");
     is_element_hidden(get("detail-dateUpdated"), "Update date should be hidden");
 
     is_element_visible(get("detail-rating-row"), "Rating row should not be hidden");
@@ -262,7 +279,10 @@ add_test(function() {
     is_element_hidden(get("detail-creator")._creatorLink, "Creator link should be hidden");
 
     is_element_visible(get("detail-screenshot"), "Screenshot should be visible");
-    is(get("detail-screenshot").src, "http://example.com/screenshot", "Should be showing the full sized screenshot");
+    is(get("detail-screenshot").src, "chrome://branding/content/about.png", "Should be showing the full sized screenshot");
+    is(get("detail-screenshot").width, 200, "Screenshot dimensions should be set");
+    is(get("detail-screenshot").height, 150, "Screenshot dimensions should be set");
+    is(get("detail-screenshot").hasAttribute("loading"), true, "Screenshot should have loading attribute");
     is(get("detail-desc").textContent, "Short description", "Description should be correct");
     is_element_hidden(get("detail-fulldesc"), "Full description should be hidden");
 
@@ -294,7 +314,11 @@ add_test(function() {
     is_element_hidden(get("detail-error-link"), "Error link should be hidden");
     is_element_hidden(get("detail-pending"), "Pending message should be hidden");
 
-    run_next_test();
+    get("detail-screenshot").addEventListener("load", function() {
+      this.removeEventListener("load", arguments.callee, false);
+      is(this.hasAttribute("loading"), false, "Screenshot should not have loading attribute");
+      run_next_test();
+    }, false);
   });
 });
 
@@ -312,10 +336,14 @@ add_test(function() {
     is(get("detail-creator")._creatorLink.href, "http://www.mozilla.org", "Creator link href should be correct");
 
     is_element_visible(get("detail-screenshot"), "Screenshot should be visible");
-    is(get("detail-screenshot").src, "http://example.com/thumbnail", "Should be showing the thumbnail");
+    is(get("detail-screenshot").src, "chrome://branding/content/icon64.png", "Should be showing the thumbnail");
+    is(get("detail-screenshot").width, 160, "Screenshot dimensions should be set");
+    is(get("detail-screenshot").height, 120, "Screenshot dimensions should be set");
+    is(get("detail-screenshot").hasAttribute("loading"), true, "Screenshot should have loading attribute");
 
     is_element_hidden(get("detail-contributions"), "Contributions section should be hidden");
 
+    is_element_visible(get("detail-updates-row"), "Updates should not be hidden");
     is_element_visible(get("detail-dateUpdated"), "Update date should not be hidden");
     is(get("detail-dateUpdated").value, formatDate(gDate), "Update date should be correct");
 
@@ -369,7 +397,11 @@ add_test(function() {
     is_element_hidden(get("detail-error-link"), "Error link should be hidden");
     is_element_hidden(get("detail-pending"), "Pending message should be hidden");
 
-    run_next_test();
+    get("detail-screenshot").addEventListener("load", function() {
+      this.removeEventListener("load", arguments.callee, false);
+      is(this.hasAttribute("loading"), false, "Screenshot should not have loading attribute");
+      run_next_test();
+    }, false);
   });
 });
 
@@ -654,6 +686,26 @@ add_test(function() {
   });
 });
 
+// Opens and tests the details view for hotfix 1
+add_test(function() {
+  open_details("hotfix@tests.mozilla.org", "extension", function() {
+    is(get("detail-name").textContent, "Test hotfix 1", "Name should be correct");
+
+    is_element_hidden(get("detail-updates-row"), "Updates should be hidden");
+
+    is_element_hidden(get("detail-prefs-btn"), "Preferences button should be hidden");
+    is_element_hidden(get("detail-enable-btn"), "Enable button should be hidden");
+    is_element_visible(get("detail-disable-btn"), "Disable button should be visible");
+    is_element_visible(get("detail-uninstall-btn"), "Remove button should be visible");
+
+    is_element_hidden(get("detail-warning"), "Warning message should be hidden");
+    is_element_hidden(get("detail-warning-link"), "Warning link should be hidden");
+    is_element_hidden(get("detail-pending"), "Pending message should be hidden");
+
+    run_next_test();
+  });
+});
+
 // Tests that upgrades with onExternalInstall apply immediately
 add_test(function() {
   open_details("addon1@tests.mozilla.org", "extension", function() {
@@ -708,5 +760,31 @@ add_test(function() {
     is_element_hidden(get("detail-pending"), "Pending message should be hidden");
 
     run_next_test();
+  });
+});
+
+// Check that onPropertyChanges for appDisabled updates the UI
+add_test(function() {
+  info("Checking that onPropertyChanges for appDisabled updates the UI");
+
+  AddonManager.getAddonByID("addon1@tests.mozilla.org", function(aAddon) {
+    aAddon.userDisabled = true;
+    aAddon.isCompatible = true;
+    aAddon.appDisabled = false;
+
+    open_details("addon1@tests.mozilla.org", "extension", function() {
+      is(get("detail-view").getAttribute("active"), "false", "Addon should not be marked as active");
+      is_element_hidden(get("detail-warning"), "Warning message should not be visible");
+
+      info("Making addon incompatible and appDisabled");
+      aAddon.isCompatible = false;
+      aAddon.appDisabled = true;
+
+      is(get("detail-view").getAttribute("active"), "false", "Addon should not be marked as active");
+      is_element_visible(get("detail-warning"), "Warning message should be visible");
+      is(get("detail-warning").textContent, "Test add-on replacement is incompatible with " + gApp + " " + gVersion + ".", "Warning message should be correct");
+
+      run_next_test();
+    });
   });
 });

@@ -1,44 +1,13 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * vim: sw=4 ts=4 et :
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Plugin App.
- *
- * The Initial Developer of the Original Code is
- *   Ben Turner <bent.mozilla@gmail.com>.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Chris Jones <jones.chris.g@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef dom_plugins_PluginModuleChild_h
 #define dom_plugins_PluginModuleChild_h 1
+
+#include "mozilla/Attributes.h"
 
 #include <string>
 #include <vector>
@@ -71,11 +40,7 @@
  * itself), to ensure that the function has the
  * right calling conventions on OS/2.
  */
-#ifdef XP_OS2
-#define NP_CALLBACK _System
-#else
-#define NP_CALLBACK
-#endif
+#define NP_CALLBACK NP_LOADDS
 
 #if defined(XP_WIN)
 #define NS_NPAPIPLUGIN_CALLBACK(_type, _name) _type (__stdcall * _name)
@@ -91,6 +56,10 @@ typedef NS_NPAPIPLUGIN_CALLBACK(NPError, NP_PLUGINUNIXINIT) (const NPNetscapeFun
 typedef NS_NPAPIPLUGIN_CALLBACK(NPError, NP_PLUGINSHUTDOWN) (void);
 
 namespace mozilla {
+namespace dom {
+class PCrashReporterChild;
+}
+
 namespace plugins {
 
 #ifdef MOZ_WIDGET_QT
@@ -103,17 +72,19 @@ class PluginInstanceChild;
 
 class PluginModuleChild : public PPluginModuleChild
 {
+    typedef mozilla::dom::PCrashReporterChild PCrashReporterChild;
 protected:
-    NS_OVERRIDE
     virtual mozilla::ipc::RPCChannel::RacyRPCPolicy
-    MediateRPCRace(const Message& parent, const Message& child)
+    MediateRPCRace(const Message& parent, const Message& child) MOZ_OVERRIDE
     {
         return MediateRace(parent, child);
     }
 
+    virtual bool ShouldContinueFromReplyTimeout() MOZ_OVERRIDE;
+
     // Implement the PPluginModuleChild interface
     virtual bool AnswerNP_GetEntryPoints(NPError* rv);
-    virtual bool AnswerNP_Initialize(NativeThreadId* tid, NPError* rv);
+    virtual bool AnswerNP_Initialize(const uint32_t& aFlags, NPError* rv);
 
     virtual PPluginIdentifierChild*
     AllocPPluginIdentifier(const nsCString& aString,
@@ -168,13 +139,26 @@ protected:
                             const nsString& aDisplayName,
                             const nsString& aIconPath);
 
+    virtual bool
+    RecvSetParentHangTimeout(const uint32_t& aSeconds);
+
+    virtual PCrashReporterChild*
+    AllocPCrashReporter(mozilla::dom::NativeThreadId* id,
+                        uint32_t* processType);
+    virtual bool
+    DeallocPCrashReporter(PCrashReporterChild* actor);
+    virtual bool
+    AnswerPCrashReporterConstructor(PCrashReporterChild* actor,
+                                    mozilla::dom::NativeThreadId* id,
+                                    uint32_t* processType);
+
     virtual void
     ActorDestroy(ActorDestroyReason why);
 
-    NS_NORETURN void QuickExit();
+    MOZ_NORETURN void QuickExit();
 
-    NS_OVERRIDE virtual bool
-    RecvProcessNativeEventsInRPCCall();
+    virtual bool
+    RecvProcessNativeEventsInRPCCall() MOZ_OVERRIDE;
 
 public:
     PluginModuleChild();
@@ -204,6 +188,8 @@ public:
 #ifdef DEBUG
     bool NPObjectIsRegistered(NPObject* aObject);
 #endif
+
+    bool AsyncDrawingAllowed() { return mAsyncDrawingAllowed; }
 
     /**
      * The child implementation of NPN_CreateObject.
@@ -298,6 +284,9 @@ public:
         // set focus on the child. Addresses a full screen dialog prompt
         // problem in Silverlight.
         QUIRK_SILVERLIGHT_FOCUS_CHECK_PARENT            = 1 << 8,
+        // Mac: Allow the plugin to use offline renderer mode.
+        // Use this only if the plugin is certified the support the offline renderer.
+        QUIRK_ALLOW_OFFLINE_RENDERER                    = 1 << 9,
     };
 
     int GetQuirks() { return mQuirks; }
@@ -311,26 +300,23 @@ private:
     void InitQuirksModes(const nsCString& aMimeType);
     bool InitGraphics();
     void DeinitGraphics();
-#if defined(MOZ_WIDGET_GTK2)
+#if defined(MOZ_WIDGET_GTK)
     static gboolean DetectNestedEventLoop(gpointer data);
     static gboolean ProcessBrowserEvents(gpointer data);
 
-    NS_OVERRIDE
-    virtual void EnteredCxxStack();
-    NS_OVERRIDE
-    virtual void ExitedCxxStack();
+    virtual void EnteredCxxStack() MOZ_OVERRIDE;
+    virtual void ExitedCxxStack() MOZ_OVERRIDE;
 #elif defined(MOZ_WIDGET_QT)
 
-    NS_OVERRIDE
-    virtual void EnteredCxxStack();
-    NS_OVERRIDE
-    virtual void ExitedCxxStack();
+    virtual void EnteredCxxStack() MOZ_OVERRIDE;
+    virtual void ExitedCxxStack() MOZ_OVERRIDE;
 #endif
 
     PRLibrary* mLibrary;
     nsCString mPluginFilename; // UTF8
     nsCString mUserAgent;
     int mQuirks;
+    bool mAsyncDrawingAllowed;
 
     // we get this from the plugin
     NP_PLUGINSHUTDOWN mShutdownFunc;
@@ -344,7 +330,7 @@ private:
     NPPluginFuncs mFunctions;
     NPSavedData mSavedData;
 
-#if defined(MOZ_WIDGET_GTK2)
+#if defined(MOZ_WIDGET_GTK)
     // If a plugin spins a nested glib event loop in response to a
     // synchronous IPC message from the browser, the loop might break
     // only after the browser responds to a request sent by the
@@ -433,10 +419,8 @@ private:
     static PLDHashOperator CollectForInstance(NPObjectData* d, void* userArg);
 
 #if defined(OS_WIN)
-    NS_OVERRIDE
-    virtual void EnteredCall();
-    NS_OVERRIDE
-    virtual void ExitedCall();
+    virtual void EnteredCall() MOZ_OVERRIDE;
+    virtual void ExitedCall() MOZ_OVERRIDE;
 
     // Entered/ExitedCall notifications keep track of whether the plugin has
     // entered a nested event loop within this RPC call.

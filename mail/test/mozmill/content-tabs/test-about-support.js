@@ -1,48 +1,12 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Mail Client.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Siddharth Agarwal <sid.bugzilla@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var MODULE_NAME = 'test-about-support';
 
 var RELATIVE_ROOT = '../shared-modules';
 var MODULE_REQUIRES = ['folder-display-helpers', 'content-tab-helpers',
                        'compose-helpers', 'window-helpers'];
-
-var controller = {};
-Components.utils.import('resource://mozmill/modules/controller.js', controller);
 
 Components.utils.import("resource://gre/modules/Services.jsm");
 
@@ -87,15 +51,12 @@ const ABOUT_SUPPORT_ERROR_STRINGS = ["undefined", "null"];
  * @returns the about:support tab.
  */
 function open_about_support() {
-  let tab = open_content_tab_with_click(mc.menus.helpMenu.aboutsupport_open);
-  assert_content_tab_has_url(tab, "about:support");
+  let tab = open_content_tab_with_click(mc.menus.helpMenu.aboutsupport_open,
+                                        "about:support");
   // We have one variable that's asynchronously populated -- wait for it to be
   // populated.
-  if (!controller.waitForEval("subject.gExtensions !== undefined",
-                              NORMAL_TIMEOUT, FAST_INTERVAL,
-                              tab.browser.contentWindow)) {
-    mark_failure(["Timeout waiting for about:support's gExtensions to populate."]);
-  }
+  mc.waitFor(function () tab.browser.contentWindow.gExtensions !== undefined,
+             "Timeout waiting for about:support's gExtensions to populate.");
   return tab;
 }
 
@@ -236,7 +197,7 @@ function test_copy_to_clipboard_public() {
   for (let [, flavor] in Iterator(["text/html", "text/unicode"])) {
     let data = {};
     transferable.getTransferData(flavor, data, {});
-    let text = data.value.data;
+    let text = data.value.QueryInterface(Ci.nsISupportsString).data;
 
     for (let [, str] in Iterator(ABOUT_SUPPORT_STRINGS)) {
       if (text.indexOf(str) == -1)
@@ -277,7 +238,7 @@ function test_copy_to_clipboard_private() {
   for (let [, flavor] in Iterator(["text/html", "text/unicode"])) {
     let data = {};
     transferable.getTransferData(flavor, data, {});
-    let text = data.value.data;
+    let text = data.value.QueryInterface(Ci.nsISupportsString).data;
 
     for (let [, str] in Iterator(ABOUT_SUPPORT_STRINGS)) {
       if (text.indexOf(str) == -1)

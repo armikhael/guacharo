@@ -1,43 +1,7 @@
 /* -*- Mode: C++; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *   Seth Spitzer <sspitzer@netscape.com>
- *   Howard Chu <hyc@symas.com>
- *   Karsten Düsterloh <mnyromyr@tprac.de>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // this file implements the nsMsgFilter interface
 
@@ -60,7 +24,9 @@
 #include "nsComponentManagerUtils.h"
 #include "nsServiceManagerUtils.h"
 #include "nsIMsgFilterService.h"
+#include "nsMemory.h"
 #include "prmem.h"
+#include "mozilla/Services.h"
 
 static const char *kImapPrefix = "//imap:";
 static const char *kWhitespace = "\b\t\r\n ";
@@ -134,7 +100,7 @@ nsMsgRuleAction::GetTargetFolderUri(nsACString &aResult)
 }
 
 NS_IMETHODIMP
-nsMsgRuleAction::SetJunkScore(PRInt32 aJunkScore)
+nsMsgRuleAction::SetJunkScore(int32_t aJunkScore)
 {
   NS_ENSURE_TRUE(m_type == nsMsgFilterAction::JunkScore && aJunkScore >= 0 && aJunkScore <= 100,
                  NS_ERROR_ILLEGAL_VALUE);
@@ -143,7 +109,7 @@ nsMsgRuleAction::SetJunkScore(PRInt32 aJunkScore)
 }
 
 NS_IMETHODIMP
-nsMsgRuleAction::GetJunkScore(PRInt32 *aResult)
+nsMsgRuleAction::GetJunkScore(int32_t *aResult)
 {
   NS_ENSURE_ARG_POINTER(aResult);
   NS_ENSURE_TRUE(m_type == nsMsgFilterAction::JunkScore, NS_ERROR_ILLEGAL_VALUE);
@@ -201,10 +167,10 @@ NS_IMETHODIMP nsMsgRuleAction::GetCustomAction(nsIMsgFilterCustomAction **aCusto
 }
 
 nsMsgFilter::nsMsgFilter():
-    m_temporary(PR_FALSE),
-    m_unparseable(PR_FALSE),
-    m_filterList(nsnull),
-    m_expressionTree(nsnull)
+    m_temporary(false),
+    m_unparseable(false),
+    m_filterList(nullptr),
+    m_expressionTree(nullptr)
 {
   NS_NewISupportsArray(getter_AddRefs(m_termList));
   NS_NewISupportsArray(getter_AddRefs(m_actionList));
@@ -220,9 +186,9 @@ nsMsgFilter::~nsMsgFilter()
 NS_IMPL_ISUPPORTS1(nsMsgFilter, nsIMsgFilter)
 
 NS_IMPL_GETSET(nsMsgFilter, FilterType, nsMsgFilterTypeType, m_type)
-NS_IMPL_GETSET(nsMsgFilter, Enabled, PRBool, m_enabled)
-NS_IMPL_GETSET(nsMsgFilter, Temporary, PRBool, m_temporary)
-NS_IMPL_GETSET(nsMsgFilter, Unparseable, PRBool, m_unparseable)
+NS_IMPL_GETSET(nsMsgFilter, Enabled, bool, m_enabled)
+NS_IMPL_GETSET(nsMsgFilter, Temporary, bool, m_temporary)
+NS_IMPL_GETSET(nsMsgFilter, Unparseable, bool, m_unparseable)
 
 NS_IMETHODIMP nsMsgFilter::GetFilterName(nsAString &name)
 {
@@ -264,8 +230,8 @@ NS_IMETHODIMP nsMsgFilter::AddTerm(
                                    nsMsgSearchAttribValue attrib,    /* attribute for this term          */
                                    nsMsgSearchOpValue op,         /* operator e.g. opContains           */
                                    nsIMsgSearchValue *value,        /* value e.g. "Dogbert"               */
-                                  PRBool BooleanAND,       /* PR_TRUE if AND is the boolean operator.
-                                                            PR_FALSE if OR is the boolean operators */
+                                  bool BooleanAND,       /* true if AND is the boolean operator.
+                                                            false if OR is the boolean operators */
                                   const nsACString & arbitraryHeader)  /* arbitrary header specified by user.
                                   ignored unless attrib = attribOtherHeader */
 {
@@ -277,13 +243,14 @@ NS_IMETHODIMP nsMsgFilter::AppendTerm(nsIMsgSearchTerm * aTerm)
     NS_ENSURE_TRUE(aTerm, NS_ERROR_NULL_POINTER);
     // invalidate expression tree if we're changing the terms
     delete m_expressionTree;
-    m_expressionTree = nsnull;
+    m_expressionTree = nullptr;
     return m_termList->AppendElement(static_cast<nsISupports*>(aTerm));
 }
 
 NS_IMETHODIMP
 nsMsgFilter::CreateTerm(nsIMsgSearchTerm **aResult)
 {
+    NS_ENSURE_ARG_POINTER(aResult);
     nsMsgSearchTerm *term = new nsMsgSearchTerm;
     NS_ENSURE_TRUE(term, NS_ERROR_OUT_OF_MEMORY);
 
@@ -325,16 +292,17 @@ NS_IMETHODIMP
 nsMsgFilter::GetSortedActionList(nsISupportsArray *actionList)
 {
   NS_ENSURE_ARG_POINTER(actionList);
-  PRUint32 numActions;
+  uint32_t numActions;
   nsresult rv = m_actionList->Count(&numActions);
   NS_ENSURE_SUCCESS(rv, rv);
 
   // hold separate pointers into the action list
-  PRUint32 nextIndexForNormal = 0, nextIndexForCopy = 0, nextIndexForMove = 0;
-  for (PRUint32 index = 0; index < numActions; ++index)
+  uint32_t nextIndexForNormal = 0, nextIndexForCopy = 0, nextIndexForMove = 0;
+  for (uint32_t index = 0; index < numActions; ++index)
   {
     nsCOMPtr<nsIMsgRuleAction> action;
-    rv = m_actionList->QueryElementAt(index, NS_GET_IID(nsIMsgRuleAction), (void **)getter_AddRefs(action));
+    rv = m_actionList->QueryElementAt(index, NS_GET_IID(nsIMsgRuleAction),
+                                      (void **)getter_AddRefs(action));
     if (!action)
       continue;
 
@@ -345,7 +313,8 @@ nsMsgFilter::GetSortedActionList(nsISupportsArray *actionList)
       case nsMsgFilterAction::FetchBodyFromPop3Server:
       {
         // always insert in front
-        rv = actionList->InsertElementAt(action, 0);
+        // XXX Cast from bool to nsresult
+        rv = static_cast<nsresult>(actionList->InsertElementAt(action, 0));
         NS_ENSURE_SUCCESS(rv, rv);
         ++nextIndexForNormal;
         ++nextIndexForCopy;
@@ -356,7 +325,8 @@ nsMsgFilter::GetSortedActionList(nsISupportsArray *actionList)
       case nsMsgFilterAction::CopyToFolder:
       {
         // insert into copy actions block, in order of appearance
-        rv = actionList->InsertElementAt(action, nextIndexForCopy);
+        // XXX Cast from bool to nsresult
+        rv = static_cast<nsresult>(actionList->InsertElementAt(action, nextIndexForCopy));
         NS_ENSURE_SUCCESS(rv, rv);
         ++nextIndexForCopy;
         ++nextIndexForMove;
@@ -367,7 +337,8 @@ nsMsgFilter::GetSortedActionList(nsISupportsArray *actionList)
       case nsMsgFilterAction::Delete:
       {
         // insert into move/delete action block
-        rv = actionList->InsertElementAt(action, nextIndexForMove);
+        // XXX Cast from bool to nsresult
+        rv = static_cast<nsresult>(actionList->InsertElementAt(action, nextIndexForMove));
         NS_ENSURE_SUCCESS(rv, rv);
         ++nextIndexForMove;
         break;
@@ -376,7 +347,8 @@ nsMsgFilter::GetSortedActionList(nsISupportsArray *actionList)
       case nsMsgFilterAction::StopExecution:
       {
         // insert into stop action block
-        rv = actionList->AppendElement(action);
+        // XXX Cast from bool to nsresult
+        rv = static_cast<nsresult>(actionList->AppendElement(action));
         NS_ENSURE_SUCCESS(rv, rv);
         break;
       }
@@ -384,7 +356,8 @@ nsMsgFilter::GetSortedActionList(nsISupportsArray *actionList)
       default:
       {
         // insert into normal action block, in order of appearance
-        rv = actionList->InsertElementAt(action, nextIndexForNormal);
+        // XXX Cast from bool to nsresult
+        rv = static_cast<nsresult>(actionList->InsertElementAt(action, nextIndexForNormal));
         NS_ENSURE_SUCCESS(rv, rv);
         ++nextIndexForNormal;
         ++nextIndexForCopy;
@@ -399,20 +372,23 @@ nsMsgFilter::GetSortedActionList(nsISupportsArray *actionList)
 NS_IMETHODIMP
 nsMsgFilter::AppendAction(nsIMsgRuleAction *aAction)
 {
+  NS_ENSURE_ARG_POINTER(aAction);
   return m_actionList->AppendElement(static_cast<nsISupports*>(aAction));
 }
 
 NS_IMETHODIMP
-nsMsgFilter::GetActionAt(PRInt32 aIndex, nsIMsgRuleAction **aAction)
+nsMsgFilter::GetActionAt(int32_t aIndex, nsIMsgRuleAction **aAction)
 {
   NS_ENSURE_ARG_POINTER(aAction);
   return m_actionList->QueryElementAt(aIndex, NS_GET_IID(nsIMsgRuleAction),
-                                       (void **) aAction);
+                                      (void **) aAction);
 }
 
 NS_IMETHODIMP
 nsMsgFilter::GetActionList(nsISupportsArray **actionList)
 {
+  NS_ENSURE_ARG_POINTER(actionList);
+
   NS_IF_ADDREF(*actionList = m_actionList);
   return NS_OK;
 }
@@ -423,17 +399,16 @@ nsMsgFilter::ClearActionList()
   return m_actionList->Clear();
 }
 
-NS_IMETHODIMP nsMsgFilter::GetTerm(PRInt32 termIndex,
+NS_IMETHODIMP nsMsgFilter::GetTerm(int32_t termIndex,
                                    nsMsgSearchAttribValue *attrib,    /* attribute for this term          */
                                    nsMsgSearchOpValue *op,         /* operator e.g. opContains           */
                                    nsIMsgSearchValue **value,         /* value e.g. "Dogbert"               */
-                                   PRBool *booleanAnd, /* PR_TRUE if AND is the boolean operator. PR_FALSE if OR is the boolean operator */
+                                   bool *booleanAnd, /* true if AND is the boolean operator. false if OR is the boolean operator */
                                    nsACString &arbitraryHeader) /* arbitrary header specified by user.ignore unless attrib = attribOtherHeader */
 {
-  nsresult rv;
   nsCOMPtr<nsIMsgSearchTerm> term;
-  rv = m_termList->QueryElementAt(termIndex, NS_GET_IID(nsIMsgSearchTerm),
-                                    (void **)getter_AddRefs(term));
+  nsresult rv = m_termList->QueryElementAt(termIndex, NS_GET_IID(nsIMsgSearchTerm),
+                                           (void **)getter_AddRefs(term));
   if (NS_SUCCEEDED(rv) && term)
   {
     if(attrib)
@@ -456,7 +431,7 @@ NS_IMETHODIMP nsMsgFilter::GetSearchTerms(nsISupportsArray **aResult)
     NS_ENSURE_ARG_POINTER(aResult);
     // caller can change m_termList, which can invalidate m_expressionTree.
     delete m_expressionTree;
-    m_expressionTree = nsnull;
+    m_expressionTree = nullptr;
     NS_IF_ADDREF(*aResult = m_termList);
     return NS_OK;
 }
@@ -464,7 +439,7 @@ NS_IMETHODIMP nsMsgFilter::GetSearchTerms(nsISupportsArray **aResult)
 NS_IMETHODIMP nsMsgFilter::SetSearchTerms(nsISupportsArray *aSearchList)
 {
     delete m_expressionTree;
-    m_expressionTree = nsnull;
+    m_expressionTree = nullptr;
     m_termList = aSearchList;
     return NS_OK;
 }
@@ -489,6 +464,9 @@ NS_IMETHODIMP nsMsgFilter::GetScope(nsIMsgSearchScopeTerm **aResult)
 
 NS_IMETHODIMP nsMsgFilter::LogRuleHit(nsIMsgRuleAction *aFilterAction, nsIMsgDBHdr *aMsgHdr)
 {
+    NS_ENSURE_ARG_POINTER(aFilterAction);
+    NS_ENSURE_ARG_POINTER(aMsgHdr);
+
     NS_ENSURE_TRUE(m_filterList, NS_OK);
     nsCOMPtr <nsIOutputStream> logStream;
     nsresult rv = m_filterList->GetLogStream(getter_AddRefs(logStream));
@@ -517,7 +495,7 @@ NS_IMETHODIMP nsMsgFilter::LogRuleHit(nsIMsgRuleAction *aFilterAction, nsIMsgDBH
         return NS_ERROR_FAILURE;
       }
     }
-    mDateFormatter->FormatPRExplodedTime(nsnull, kDateFormatShort,
+    mDateFormatter->FormatPRExplodedTime(nullptr, kDateFormatShort,
                                          kTimeFormatSeconds, &exploded,
                                          dateValue);
 
@@ -532,8 +510,8 @@ NS_IMETHODIMP nsMsgFilter::LogRuleHit(nsIMsgRuleAction *aFilterAction, nsIMsgDBH
 #endif
 
     nsCOMPtr<nsIStringBundleService> bundleService =
-      do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-    NS_ENSURE_SUCCESS(rv, rv);
+      mozilla::services::GetStringBundleService();
+    NS_ENSURE_TRUE(bundleService, NS_ERROR_UNEXPECTED);
 
     nsCOMPtr<nsIStringBundle> bundle;
     rv = bundleService->CreateBundle("chrome://messenger/locale/filter.properties",
@@ -600,7 +578,7 @@ NS_IMETHODIMP nsMsgFilter::LogRuleHit(nsIMsgRuleAction *aFilterAction, nsIMsgDBH
     }
     buffer += "\n";
 
-    PRUint32 writeCount;
+    uint32_t writeCount;
 
     rv = logStream->Write(LOG_ENTRY_START_TAG, LOG_ENTRY_START_TAG_LEN, &writeCount);
     NS_ENSURE_SUCCESS(rv,rv);
@@ -613,7 +591,7 @@ NS_IMETHODIMP nsMsgFilter::LogRuleHit(nsIMsgRuleAction *aFilterAction, nsIMsgDBH
     if (!escapedBuffer)
       return NS_ERROR_OUT_OF_MEMORY;
 
-    PRUint32 escapedBufferLen = strlen(escapedBuffer);
+    uint32_t escapedBufferLen = strlen(escapedBuffer);
     rv = logStream->Write(escapedBuffer, escapedBufferLen, &writeCount);
     PR_Free(escapedBuffer);
     NS_ENSURE_SUCCESS(rv,rv);
@@ -628,7 +606,7 @@ NS_IMETHODIMP nsMsgFilter::LogRuleHit(nsIMsgRuleAction *aFilterAction, nsIMsgDBH
 NS_IMETHODIMP
 nsMsgFilter::MatchHdr(nsIMsgDBHdr *msgHdr, nsIMsgFolder *folder,
                       nsIMsgDatabase *db, const char *headers,
-                      PRUint32 headersSize, PRBool *pResult)
+                      uint32_t headersSize, bool *pResult)
 {
   NS_ENSURE_ARG_POINTER(folder);
   NS_ENSURE_ARG_POINTER(msgHdr);
@@ -640,19 +618,20 @@ nsMsgFilter::MatchHdr(nsIMsgDBHdr *msgHdr, nsIMsgFolder *folder,
   return rv;
 }
 
-void
+NS_IMETHODIMP
 nsMsgFilter::SetFilterList(nsIMsgFilterList *filterList)
 {
   // doesn't hold a ref.
   m_filterList = filterList;
+  return NS_OK;
 }
 
-nsresult
+NS_IMETHODIMP
 nsMsgFilter::GetFilterList(nsIMsgFilterList **aResult)
 {
-    NS_ENSURE_ARG_POINTER(aResult);
-    NS_IF_ADDREF(*aResult = m_filterList);
-    return NS_OK;
+  NS_ENSURE_ARG_POINTER(aResult);
+  NS_IF_ADDREF(*aResult = m_filterList);
+  return NS_OK;
 }
 
 void nsMsgFilter::SetFilterScript(nsCString *fileName)
@@ -663,7 +642,7 @@ void nsMsgFilter::SetFilterScript(nsCString *fileName)
 nsresult nsMsgFilter::ConvertMoveOrCopyToFolderValue(nsIMsgRuleAction *filterAction, nsCString &moveValue)
 {
   NS_ENSURE_ARG_POINTER(filterAction);
-  PRInt16 filterVersion = kFileVersion;
+  int16_t filterVersion = kFileVersion;
   if (m_filterList)
       m_filterList->GetVersion(&filterVersion);
   if (filterVersion <= k60Beta1Version)
@@ -675,7 +654,7 @@ nsresult nsMsgFilter::ConvertMoveOrCopyToFolderValue(nsIMsgRuleAction *filterAct
     // if relative path starts with kImap, this is a move to folder on the same server
     if (moveValue.Find(kImapPrefix) == 0)
     {
-      PRInt32 prefixLen = PL_strlen(kImapPrefix);
+      int32_t prefixLen = PL_strlen(kImapPrefix);
       nsCAutoString originalServerPath(Substring(moveValue, prefixLen));
       if (filterVersion == k45Version)
       {
@@ -731,7 +710,7 @@ nsresult nsMsgFilter::ConvertMoveOrCopyToFolderValue(nsIMsgRuleAction *filterAct
         nsCString destFolderUri;
         destFolderUri.Assign( localRootURI);
         // need to remove ".sbd" from moveValue, and perhaps escape it.
-        PRInt32 offset = moveValue.Find(".sbd/");
+        int32_t offset = moveValue.Find(".sbd/");
         if (offset != -1)
           moveValue.Cut(offset, 4);
 
@@ -750,7 +729,7 @@ nsresult nsMsgFilter::ConvertMoveOrCopyToFolderValue(nsIMsgRuleAction *filterAct
           rv = NS_MsgEscapeEncodeURLPath(unicodeStr, moveValue);
         }
         destFolderUri.Append(moveValue);
-        localMailRootMsgFolder->GetChildWithURI (destFolderUri, PR_TRUE, PR_FALSE /*caseInsensitive*/, getter_AddRefs(destIMsgFolder));
+        localMailRootMsgFolder->GetChildWithURI (destFolderUri, true, false /*caseInsensitive*/, getter_AddRefs(destIMsgFolder));
 
         if (destIMsgFolder)
         {
@@ -768,14 +747,15 @@ nsresult nsMsgFilter::ConvertMoveOrCopyToFolderValue(nsIMsgRuleAction *filterAct
   // set m_action.m_value.m_folderUri
 }
 
-nsresult nsMsgFilter::SaveToTextFile(nsIOutputStream *aStream)
+NS_IMETHODIMP
+nsMsgFilter::SaveToTextFile(nsIOutputStream *aStream)
 {
   NS_ENSURE_ARG_POINTER(aStream);
   if (m_unparseable)
   {
-    PRUint32 bytesWritten;
+    uint32_t bytesWritten;
     //we need to trim leading whitespaces before filing out
-    m_unparsedBuffer.Trim(kWhitespace, PR_TRUE /*leadingCharacters*/, PR_FALSE /*trailingCharacters*/);
+    m_unparsedBuffer.Trim(kWhitespace, true /*leadingCharacters*/, false /*trailingCharacters*/);
     return aStream->Write(m_unparsedBuffer.get(), m_unparsedBuffer.Length(), &bytesWritten);
   }
   nsresult err = m_filterList->WriteWstrAttr(nsIMsgFilterList::attribName, m_filterName.get(), aStream);
@@ -796,14 +776,15 @@ nsresult nsMsgFilter::SaveRule(nsIOutputStream *aStream)
   GetFilterList(getter_AddRefs(filterList));
   nsCAutoString  actionFilingStr;
 
-  PRUint32 numActions;
+  uint32_t numActions;
   err = m_actionList->Count(&numActions);
   NS_ENSURE_SUCCESS(err, err);
 
-  for (PRUint32 index =0; index < numActions; index++)
+  for (uint32_t index =0; index < numActions; index++)
   {
     nsCOMPtr<nsIMsgRuleAction> action;
-    err = m_actionList->QueryElementAt(index, NS_GET_IID(nsIMsgRuleAction), (void **)getter_AddRefs(action));
+    err = m_actionList->QueryElementAt(index, NS_GET_IID(nsIMsgRuleAction),
+                                       (void **)getter_AddRefs(action));
     if (!action)
       continue;
 
@@ -843,7 +824,7 @@ nsresult nsMsgFilter::SaveRule(nsIOutputStream *aStream)
       break;
       case nsMsgFilterAction::JunkScore:
       {
-        PRInt32 junkScore;
+        int32_t junkScore;
         action->GetJunkScore(&junkScore);
         err = filterList->WriteIntAttr(nsIMsgFilterList::attribActionValue, junkScore, aStream);
       }
@@ -911,14 +892,15 @@ static struct RuleActionsTableEntry ruleActionsTable[] =
   { nsMsgFilterAction::JunkScore,               "JunkScore"},
   { nsMsgFilterAction::FetchBodyFromPop3Server, "Fetch body from Pop3Server"},
   { nsMsgFilterAction::AddTag,                  "AddTag"},
+  { nsMsgFilterAction::MarkUnread,              "Mark unread"},
   { nsMsgFilterAction::Custom,                  "Custom"},
 };
 
+static const unsigned int sNumActions = NS_ARRAY_LENGTH(ruleActionsTable);
+
 const char *nsMsgFilter::GetActionStr(nsMsgRuleActionType action)
 {
-  int  numActions = sizeof(ruleActionsTable) / sizeof(ruleActionsTable[0]);
-
-  for (int i = 0; i < numActions; i++)
+  for (unsigned int i = 0; i < sNumActions; i++)
   {
     if (action == ruleActionsTable[i].action)
       return ruleActionsTable[i].actionFilingStr;
@@ -927,9 +909,7 @@ const char *nsMsgFilter::GetActionStr(nsMsgRuleActionType action)
 }
 /*static */nsresult nsMsgFilter::GetActionFilingStr(nsMsgRuleActionType action, nsCString &actionStr)
 {
-  int  numActions = sizeof(ruleActionsTable) / sizeof(ruleActionsTable[0]);
-
-  for (int i = 0; i < numActions; i++)
+  for (unsigned int i = 0; i < sNumActions; i++)
   {
     if (action == ruleActionsTable[i].action)
     {
@@ -943,9 +923,7 @@ const char *nsMsgFilter::GetActionStr(nsMsgRuleActionType action)
 
 nsMsgRuleActionType nsMsgFilter::GetActionForFilingStr(nsCString &actionStr)
 {
-  int  numActions = sizeof(ruleActionsTable) / sizeof(ruleActionsTable[0]);
-
-  for (int i = 0; i < numActions; i++)
+  for (unsigned int i = 0; i < sNumActions; i++)
   {
     if (actionStr.Equals(ruleActionsTable[i].actionFilingStr))
       return ruleActionsTable[i].action;
@@ -953,11 +931,11 @@ nsMsgRuleActionType nsMsgFilter::GetActionForFilingStr(nsCString &actionStr)
   return nsMsgFilterAction::None;
 }
 
-PRInt16
+int16_t
 nsMsgFilter::GetVersion()
 {
     if (!m_filterList) return 0;
-    PRInt16 version;
+    int16_t version;
     m_filterList->GetVersion(&version);
     return version;
 }

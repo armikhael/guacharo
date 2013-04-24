@@ -1,119 +1,127 @@
 /* -*- Mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil; -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is about:memory
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Vladimir Vukicevic <vladimir@pobox.com>
- *   Nicholas Nethercote <nnethercote@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+// This file is used for both about:memory and about:compartments.
 
 "use strict";
+
+//---------------------------------------------------------------------------
+// Code shared by about:memory and about:compartments
+//---------------------------------------------------------------------------
 
 const Cc = Components.classes;
 const Ci = Components.interfaces;
 const Cu = Components.utils;
 
-// Must use .href here instead of .search because "about:memory" is a
-// non-standard URL.
-var gVerbose = (location.href.split(/[\?,]/).indexOf("verbose") !== -1);
-
-var gAddedObserver = false;
-
-const KIND_NONHEAP = Ci.nsIMemoryReporter.KIND_NONHEAP;
-const KIND_HEAP    = Ci.nsIMemoryReporter.KIND_HEAP;
-const KIND_OTHER   = Ci.nsIMemoryReporter.KIND_OTHER;
-const UNITS_BYTES  = Ci.nsIMemoryReporter.UNITS_BYTES;
-const UNITS_COUNT  = Ci.nsIMemoryReporter.UNITS_COUNT;
+const KIND_NONHEAP           = Ci.nsIMemoryReporter.KIND_NONHEAP;
+const KIND_HEAP              = Ci.nsIMemoryReporter.KIND_HEAP;
+const KIND_OTHER             = Ci.nsIMemoryReporter.KIND_OTHER;
+const UNITS_BYTES            = Ci.nsIMemoryReporter.UNITS_BYTES;
+const UNITS_COUNT            = Ci.nsIMemoryReporter.UNITS_COUNT;
 const UNITS_COUNT_CUMULATIVE = Ci.nsIMemoryReporter.UNITS_COUNT_CUMULATIVE;
-const UNITS_PERCENTAGE = Ci.nsIMemoryReporter.UNITS_PERCENTAGE;
+const UNITS_PERCENTAGE       = Ci.nsIMemoryReporter.UNITS_PERCENTAGE;
 
-const kUnknown = -1;    // used for _amount if a memory reporter failed
-
-function onLoad()
+// Because about:memory and about:compartments are non-standard URLs,
+// location.search is undefined, so we have to use location.href here.
+// The toLowerCase() calls ensure that addresses like "ABOUT:MEMORY" work.
+let gVerbose;
 {
-  var os = Cc["@mozilla.org/observer-service;1"].
+  let split = document.location.href.split('?');
+  document.title = split[0].toLowerCase();
+  gVerbose = split.length == 2 && split[1].toLowerCase() == 'verbose';
+}
+
+let gChildMemoryListener = undefined;
+
+// This is a useful function and an efficient way to implement it.
+String.prototype.startsWith =
+  function(s) { return this.lastIndexOf(s, 0) === 0; }
+
+//---------------------------------------------------------------------------
+
+// Forward slashes in URLs in paths are represented with backslashes to avoid
+// being mistaken for path separators.  Paths/names where this hasn't been
+// undone are prefixed with "unsafe"; the rest are prefixed with "safe".
+function flipBackslashes(aUnsafeStr)
+{
+  // Save memory by only doing the replacement if it's necessary.
+  return (aUnsafeStr.indexOf('\\') === -1)
+         ? aUnsafeStr
+         : aUnsafeStr.replace(/\\/g, '/');
+}
+
+const gAssertionFailureMsgPrefix = "aboutMemory.js assertion failed: ";
+
+function assert(aCond, aMsg)
+{
+  if (!aCond) {
+    reportAssertionFailure(aMsg)
+    throw(gAssertionFailureMsgPrefix + aMsg);
+  }
+}
+
+function reportAssertionFailure(aMsg)
+{
+  let debug = Cc["@mozilla.org/xpcom/debug;1"].getService(Ci.nsIDebug2);
+  if (debug.isDebugBuild) {
+    debug.assertion(aMsg, "false", "aboutMemory.js", 0);
+  }
+}
+
+function debug(x)
+{
+  appendElementWithText(document.body, "div", "debug", JSON.stringify(x));
+}
+
+//---------------------------------------------------------------------------
+
+function addChildObserversAndUpdate(aUpdateFn)
+{
+  let os = Cc["@mozilla.org/observer-service;1"].
       getService(Ci.nsIObserverService);
   os.notifyObservers(null, "child-memory-reporter-request", null);
 
-  os.addObserver(ChildMemoryListener, "child-memory-reporter-update", false);
-  gAddedObserver = true;
+  gChildMemoryListener = aUpdateFn;
+  os.addObserver(gChildMemoryListener, "child-memory-reporter-update", false);
 
-  update();
+  gChildMemoryListener();
+}
+
+function onLoad()
+{
+  if (document.title === "about:memory") {
+    onLoadAboutMemory();
+  } else if (document.title === "about:compartments") {
+    onLoadAboutCompartments();
+  } else {
+    assert(false, "Unknown location: " + document.title);
+  }
 }
 
 function onUnload()
 {
   // We need to check if the observer has been added before removing; in some
   // circumstances (eg. reloading the page quickly) it might not have because
-  // onLoad might not fire.
-  if (gAddedObserver) {
-    var os = Cc["@mozilla.org/observer-service;1"].
+  // onLoadAbout{Memory,Compartments} might not fire.
+  if (gChildMemoryListener) {
+    let os = Cc["@mozilla.org/observer-service;1"].
         getService(Ci.nsIObserverService);
-    os.removeObserver(ChildMemoryListener, "child-memory-reporter-update");
+    os.removeObserver(gChildMemoryListener, "child-memory-reporter-update");
   }
-}
-
-function ChildMemoryListener(aSubject, aTopic, aData)
-{
-  update();
-}
-
-function $(n)
-{
-  return document.getElementById(n);
-}
-
-function doGlobalGC()
-{
-  Cu.forceGC();
-  update();
-}
-
-function doCC()
-{
-  window.QueryInterface(Ci.nsIInterfaceRequestor)
-        .getInterface(Ci.nsIDOMWindowUtils)
-        .cycleCollect();
-  update();
 }
 
 // For maximum effect, this returns to the event loop between each
 // notification.  See bug 610166 comment 12 for an explanation.
 // Ideally a single notification would be enough.
-function sendHeapMinNotifications()
+function minimizeMemoryUsage3x(fAfter)
 {
+  let i = 0;
+
   function runSoon(f)
   {
-    var tm = Cc["@mozilla.org/thread-manager;1"]
+    let tm = Cc["@mozilla.org/thread-manager;1"]
               .getService(Ci.nsIThreadManager);
 
     tm.mainThread.dispatch({ run: f }, Ci.nsIThread.DISPATCH_NORMAL);
@@ -121,123 +129,280 @@ function sendHeapMinNotifications()
 
   function sendHeapMinNotificationsInner()
   {
-    var os = Cc["@mozilla.org/observer-service;1"]
+    let os = Cc["@mozilla.org/observer-service;1"]
              .getService(Ci.nsIObserverService);
     os.notifyObservers(null, "memory-pressure", "heap-minimize");
 
-    if (++j < 3)
+    if (++i < 3) {
       runSoon(sendHeapMinNotificationsInner);
-    else
-      runSoon(update);
+    } else {
+      os.notifyObservers(null, "after-minimize-memory-usage", "about:memory");
+      runSoon(fAfter);
+    }
   }
 
-  var j = 0;
   sendHeapMinNotificationsInner();
 }
 
-function Reporter(aPath, aKind, aUnits, aAmount, aDescription)
+//---------------------------------------------------------------------------
+
+/**
+ * Iterates over each reporter and multi-reporter.
+ *
+ * @param aMgr
+ *        The memory reporter manager.
+ * @param aIgnoreSingle
+ *        Function that indicates if we should skip a single reporter, based
+ *        on its path.
+ * @param aIgnoreMulti
+ *        Function that indicates if we should skip a multi-reporter, based on
+ *        its name.
+ * @param aHandleReport
+ *        The function that's called for each report.
+ */
+function processMemoryReporters(aMgr, aIgnoreSingle, aIgnoreMulti,
+                                aHandleReport)
 {
-  this._path        = aPath;
-  this._kind        = aKind;
-  this._units       = aUnits;
-  this._amount      = aAmount;
-  this._description = aDescription;
-  // this._nMerged is only defined if > 1
-  // this._done is defined when getBytes is called
-}
-
-Reporter.prototype = {
-  // Sum the values (accounting for possible kUnknown amounts), and mark |this|
-  // as a dup.  We mark dups because it's useful to know when a reporter is
-  // duplicated;  it might be worth investigating and splitting up to have
-  // non-duplicated names.
-  merge: function(r) {
-    if (this._amount !== kUnknown && r._amount !== kUnknown) {
-      this._amount += r._amount;
-    } else if (this._amount === kUnknown && r._amount !== kUnknown) {
-      this._amount = r._amount;
-    }
-    this._nMerged = this._nMerged ? this._nMerged + 1 : 2;
-  },
-
-  treeNameMatches: function(aTreeName) {
-    return this._path.slice(0, aTreeName.length) === aTreeName;
-  }
-};
-
-function getReportersByProcess()
-{
-  var mgr = Cc["@mozilla.org/memory-reporter-manager;1"].
-      getService(Ci.nsIMemoryReporterManager);
-
-  // Process each memory reporter:
-  // - Make a copy of it into a sub-table indexed by its process.  Each copy
-  //   is a Reporter object.  After this point we never use the original memory
-  //   reporter again.
+  // Process each memory reporter with aHandleReport.
   //
   // - Note that copying rOrig.amount (which calls a C++ function under the
   //   IDL covers) to r._amount for every reporter now means that the
   //   results as consistent as possible -- measurements are made all at
   //   once before most of the memory required to generate this page is
   //   allocated.
-  var reportersByProcess = {};
+  //
+  // - After this point we never use the original memory report again.
 
-  function addReporter(aProcess, aPath, aKind, aUnits, aAmount, aDescription)
-  {
-    var process = aProcess === "" ? "Main" : aProcess;
-    var r = new Reporter(aPath, aKind, aUnits, aAmount, aDescription);
-    if (!reportersByProcess[process]) {
-      reportersByProcess[process] = {};
-    }
-    var reporters = reportersByProcess[process];
-    var reporter = reporters[r._path];
-    if (reporter) {
-      // Already an entry;  must be a duplicated reporter.  This can happen
-      // legitimately.  Merge them.
-      reporter.merge(r);
-    } else {
-      reporters[r._path] = r;
-    }
-  }
-
-  // Process vanilla reporters first, then multi-reporters.
-  var e = mgr.enumerateReporters();
+  let e = aMgr.enumerateReporters();
   while (e.hasMoreElements()) {
-    var rOrig = e.getNext().QueryInterface(Ci.nsIMemoryReporter);
-    addReporter(rOrig.process, rOrig.path, rOrig.kind, rOrig.units,
-                rOrig.amount, rOrig.description);
-  }
-  var e = mgr.enumerateMultiReporters();
-  while (e.hasMoreElements()) {
-    var mrOrig = e.getNext().QueryInterface(Ci.nsIMemoryMultiReporter);
-    mrOrig.collectReports(addReporter, null);
+    let rOrig = e.getNext().QueryInterface(Ci.nsIMemoryReporter);
+    let unsafePath;
+    try {
+      unsafePath = rOrig.path;
+      if (!aIgnoreSingle(unsafePath)) {
+        aHandleReport(rOrig.process, unsafePath, rOrig.kind, rOrig.units,
+                      rOrig.amount, rOrig.description);
+      }
+    }
+    catch (ex) {
+      debug("Exception thrown by memory reporter: " + unsafePath + ": " + ex);
+    }
   }
 
-  return reportersByProcess;
+  let e = aMgr.enumerateMultiReporters();
+  while (e.hasMoreElements()) {
+    let mr = e.getNext().QueryInterface(Ci.nsIMemoryMultiReporter);
+    let name = mr.name;
+    try {
+      if (!aIgnoreMulti(name)) {
+        mr.collectReports(aHandleReport, null);
+      }
+    }
+    catch (ex) {
+      // There are two exception cases that must be distinguished here.
+      //
+      // - We want to halt proceedings on exceptions thrown within this file
+      //   (i.e. assertion failures in aHandleReport);  such exceptions contain
+      //   gAssertionFailureMsgPrefix in their string representation.
+      //
+      // - We want to continue on when faced with exceptions thrown outside
+      //   this file (i.e. when measuring an amount in collectReports).
+      let str = ex.toString();
+      if (str.search(gAssertionFailureMsgPrefix) >= 0) {
+        throw(ex);
+      } else {
+        debug("Exception thrown within memory multi-reporter: " + name + ": " +
+              ex);
+      }
+    }
+  }
 }
+
+//---------------------------------------------------------------------------
+
+function clearBody()
+{
+  let oldBody = document.body;
+  let body = oldBody.cloneNode(false);
+  oldBody.parentNode.replaceChild(body, oldBody);
+  body.classList.add(gVerbose ? 'verbose' : 'non-verbose');
+  return body;
+}
+
+function appendTextNode(aP, aText)
+{
+  let e = document.createTextNode(aText);
+  aP.appendChild(e);
+  return e;
+}
+
+function appendElement(aP, aTagName, aClassName)
+{
+  let e = document.createElement(aTagName);
+  if (aClassName) {
+    e.className = aClassName;
+  }
+  aP.appendChild(e);
+  return e;
+}
+
+function appendElementWithText(aP, aTagName, aClassName, aText)
+{
+  let e = appendElement(aP, aTagName, aClassName);
+  // Setting textContent clobbers existing children, but there are none.  More
+  // importantly, it avoids creating a JS-land object for the node, saving
+  // memory.
+  e.textContent = aText;
+  return e;
+}
+
+//---------------------------------------------------------------------------
+// Code specific to about:memory
+//---------------------------------------------------------------------------
+
+const kTreeDescriptions = {
+  'explicit' :
+"This tree covers explicit memory allocations by the application, both at the \
+operating system level (via calls to functions such as VirtualAlloc, \
+vm_allocate, and mmap), and at the heap allocation level (via functions such \
+as malloc, calloc, realloc, memalign, operator new, and operator new[]).\
+\n\n\
+It excludes memory that is mapped implicitly such as code and data segments, \
+and thread stacks.  It also excludes heap memory that has been freed by the \
+application but is still being held onto by the heap allocator. \
+\n\n\
+It is not guaranteed to cover every explicit allocation, but it does cover \
+most (including the entire heap), and therefore it is the single best number \
+to focus on when trying to reduce memory usage.",
+
+  'rss':
+"This tree shows how much space in physical memory each of the process's \
+mappings is currently using (the mapping's 'resident set size', or 'RSS'). \
+This is a good measure of the 'cost' of the mapping, although it does not \
+take into account the fact that shared libraries may be mapped by multiple \
+processes but appear only once in physical memory. \
+\n\n\
+Note that the 'rss' value here might not equal the value for 'resident' \
+under 'Other Measurements' because the two measurements are not taken at \
+exactly the same time.",
+
+  'pss':
+"This tree shows how much space in physical memory can be 'blamed' on this \
+process.  For each mapping, its 'proportional set size' (PSS) is the \
+mapping's resident size divided by the number of processes which use the \
+mapping.  So if a mapping is private to this process, its PSS should equal \
+its RSS.  But if a mapping is shared between three processes, its PSS in each \
+of the processes would be 1/3 its RSS.",
+
+  'size':
+"This tree shows how much virtual addres space each of the process's mappings \
+takes up (a.k.a. the mapping's 'vsize').  A mapping may have a large size but use \
+only a small amount of physical memory; the resident set size of a mapping is \
+a better measure of the mapping's 'cost'. \
+\n\n\
+Note that the 'size' value here might not equal the value for 'vsize' under \
+'Other Measurements' because the two measurements are not taken at exactly \
+the same time.",
+
+  'swap':
+"This tree shows how much space in the swap file each of the process's \
+mappings is currently using. Mappings which are not in the swap file (i.e., \
+nodes which would have a value of 0 in this tree) are omitted."
+};
+
+const kSectionNames = {
+  'explicit': 'Explicit Allocations',
+  'rss':      'Resident Set Size (RSS) Breakdown',
+  'pss':      'Proportional Set Size (PSS) Breakdown',
+  'size':     'Virtual Size Breakdown',
+  'swap':     'Swap Breakdown',
+  'other':    'Other Measurements'
+};
+
+const kSmapsTreeNames    = ['rss',  'pss',  'size',  'swap' ];
+const kSmapsTreePrefixes = ['rss/', 'pss/', 'size/', 'swap/'];
+
+function isExplicitPath(aUnsafePath)
+{
+  return aUnsafePath.startsWith("explicit/");
+}
+
+function isSmapsPath(aUnsafePath)
+{
+  for (let i = 0; i < kSmapsTreePrefixes.length; i++) {
+    if (aUnsafePath.startsWith(kSmapsTreePrefixes[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+//---------------------------------------------------------------------------
+
+function onLoadAboutMemory()
+{
+  addChildObserversAndUpdate(updateAboutMemory);
+}
+
+function doGlobalGC()
+{
+  Cu.forceGC();
+  let os = Cc["@mozilla.org/observer-service;1"]
+            .getService(Ci.nsIObserverService);
+  os.notifyObservers(null, "child-gc-request", null);
+  updateAboutMemory();
+}
+
+function doCC()
+{
+  window.QueryInterface(Ci.nsIInterfaceRequestor)
+        .getInterface(Ci.nsIDOMWindowUtils)
+        .cycleCollect();
+  let os = Cc["@mozilla.org/observer-service;1"]
+            .getService(Ci.nsIObserverService);
+  os.notifyObservers(null, "child-cc-request", null);
+  updateAboutMemory();
+}
+
+//---------------------------------------------------------------------------
 
 /**
  * Top-level function that does the work of generating the page.
  */
-function update()
+function updateAboutMemory()
 {
-  // First, clear the page contents.  Necessary because update() might be
-  // called more than once due to ChildMemoryListener.
-  var content = $("content");
-  content.parentNode.replaceChild(content.cloneNode(false), content);
-  content = $("content");
+  // First, clear the page contents.  Necessary because updateAboutMemory()
+  // might be called more than once due to the "child-memory-reporter-update"
+  // observer.
+  let body = clearBody();
+
+  let mgr = Cc["@mozilla.org/memory-reporter-manager;1"].
+      getService(Ci.nsIMemoryReporterManager);
+
+  let treesByProcess = {}, degeneratesByProcess = {}, heapTotalByProcess = {};
+  getTreesByProcess(mgr, treesByProcess, degeneratesByProcess,
+                    heapTotalByProcess);
 
   // Generate output for one process at a time.  Always start with the
   // Main process.
-  var reportersByProcess = getReportersByProcess();
-  var text = genProcessText("Main", reportersByProcess["Main"]);
-  for (var process in reportersByProcess) {
+  let hasMozMallocUsableSize = mgr.hasMozMallocUsableSize;
+  appendProcessAboutMemoryElements(body, "Main", treesByProcess["Main"],
+                                   degeneratesByProcess["Main"],
+                                   heapTotalByProcess["Main"],
+                                   hasMozMallocUsableSize);
+  for (let process in treesByProcess) {
     if (process !== "Main") {
-      text += genProcessText(process, reportersByProcess[process]);
+      appendProcessAboutMemoryElements(body, process, treesByProcess[process],
+                                       degeneratesByProcess[process],
+                                       heapTotalByProcess[process],
+                                       hasMozMallocUsableSize);
     }
   }
 
+  appendElement(body, "hr");
+
   // Memory-related actions.
+  const UpDesc = "Re-measure.";
   const GCDesc = "Do a global garbage collection.";
   const CCDesc = "Do a cycle collection.";
   const MPDesc = "Send three \"heap-minimize\" notifications in a " +
@@ -246,285 +411,563 @@ function update()
                  "process to reduce memory usage in other ways, e.g. by " +
                  "flushing various caches.";
 
-  text += "<div>" +
-    "<button title='" + GCDesc + "' onclick='doGlobalGC()'>GC</button>" +
-    "<button title='" + CCDesc + "' onclick='doCC()'>CC</button>" +
-    "<button title='" + MPDesc + "' onclick='sendHeapMinNotifications()'>" + "Minimize memory usage</button>" +
-    "</div>";
+  function appendButton(aTitle, aOnClick, aText, aId)
+  {
+    let b = appendElementWithText(body, "button", "", aText);
+    b.title = aTitle;
+    b.onclick = aOnClick
+    if (aId) {
+      b.id = aId;
+    }
+  }
 
-  // Generate verbosity option link at the bottom.
-  text += "<div>";
-  text += gVerbose
-        ? "<span class='option'><a href='about:memory'>Less verbose</a></span>"
-        : "<span class='option'><a href='about:memory?verbose'>More verbose</a></span>";
-  text += "</div>";
+  // The "Update" button has an id so it can be clicked in a test.
+  appendButton(UpDesc, updateAboutMemory, "Update", "updateButton");
+  appendButton(GCDesc, doGlobalGC,        "GC");
+  appendButton(CCDesc, doCC,              "CC");
+  appendButton(MPDesc, function() { minimizeMemoryUsage3x(updateAboutMemory); },
+                                          "Minimize memory usage");
 
-  text += "<div>" +
-          "<span class='legend'>Hover the pointer over the name of a memory " +
-          "reporter to see a detailed description of what it measures.</span>"
-          "</div>";
+  let div1 = appendElement(body, "div");
+  if (gVerbose) {
+    let a = appendElementWithText(div1, "a", "option", "Less verbose");
+    a.href = "about:memory";
+  } else {
+    let a = appendElementWithText(div1, "a", "option", "More verbose");
+    a.href = "about:memory?verbose";
+  }
 
-  var div = document.createElement("div");
-  div.innerHTML = text;
-  content.appendChild(div);
+  let div2 = appendElement(body, "div");
+  let a = appendElementWithText(div2, "a", "option",
+                                "Troubleshooting information");
+  a.href = "about:support";
+
+  let legendText1 = "Click on a non-leaf node in a tree to expand ('++') " +
+                    "or collapse ('--') its children.";
+  let legendText2 = "Hover the pointer over the name of a memory report " +
+                    "to see a description of what it measures.";
+
+  appendElementWithText(body, "div", "legend", legendText1);
+  appendElementWithText(body, "div", "legend", legendText2);
 }
 
-// There are two kinds of TreeNode.  Those that correspond to Reporters
-// have more properties.  The remainder are just scaffolding nodes for the
-// tree, whose values are derived from their children.
-function TreeNode(aName)
+//---------------------------------------------------------------------------
+
+// This regexp matches sentences and sentence fragments, i.e. strings that
+// start with a capital letter and ends with a '.'.  (The final sentence may be
+// in parentheses, so a ')' might appear after the '.'.)
+const gSentenceRegExp = /^[A-Z].*\.\)?$/m;
+
+/**
+ * This function reads all the memory reports, and puts that data in structures
+ * that will be used to generate the page.
+ *
+ * @param aMgr
+ *        The memory reporter manager.
+ * @param aTreesByProcess
+ *        Table of non-degenerate trees, indexed by process, which this
+ *        function appends to.
+ * @param aDegeneratesByProcess
+ *        Table of degenerate trees, indexed by process, which this function
+ *        appends to.
+ * @param aHeapTotalByProcess
+ *        Table of heap total counts, indexed by process, which this function
+ *        appends to.
+ */
+function getTreesByProcess(aMgr, aTreesByProcess, aDegeneratesByProcess,
+                           aHeapTotalByProcess)
 {
-  // Nb: _units is not needed, it's always UNITS_BYTES.
-  this._name = aName;
-  this._kids = [];
-  // All TreeNodes have these properties added later:
-  // - _amount (which is never |kUnknown|)
+  // Ignore the "smaps" multi-reporter in non-verbose mode, and the
+  // "compartments" and "ghost-windows" multi-reporters all the time.  (Note
+  // that reports from these multi-reporters can reach here as single reports
+  // if they were in the child process.)
+
+  function ignoreSingle(aUnsafePath)
+  {
+    return (isSmapsPath(aUnsafePath) && !gVerbose) ||
+           aUnsafePath.startsWith("compartments/") ||
+           aUnsafePath.startsWith("ghost-windows/");
+  }
+
+  function ignoreMulti(aMRName)
+  {
+    return (aMRName === "smaps" && !gVerbose) ||
+           aMRName === "compartments" ||
+           aMRName === "ghost-windows";
+  }
+
+  function handleReport(aProcess, aUnsafePath, aKind, aUnits, aAmount,
+                        aDescription)
+  {
+    if (isExplicitPath(aUnsafePath)) {
+      assert(aKind === KIND_HEAP || aKind === KIND_NONHEAP, "bad explicit kind");
+      assert(aUnits === UNITS_BYTES, "bad explicit units");
+      assert(gSentenceRegExp.test(aDescription),
+             "non-sentence explicit description");
+
+    } else if (isSmapsPath(aUnsafePath)) {
+      assert(aKind === KIND_NONHEAP, "bad smaps kind");
+      assert(aUnits === UNITS_BYTES, "bad smaps units");
+      assert(aDescription !== "", "empty smaps description");
+
+    } else {
+      assert(gSentenceRegExp.test(aDescription),
+             "non-sentence other description");
+    }
+
+    let process = aProcess === "" ? "Main" : aProcess;
+    let unsafeNames = aUnsafePath.split('/');
+    let unsafeName0 = unsafeNames[0];
+    let isDegenerate = unsafeNames.length === 1;
+
+    // Get the appropriate trees table (non-degenerate or degenerate) for the
+    // process, creating it if necessary.
+    let t;
+    let thingsByProcess =
+      isDegenerate ? aDegeneratesByProcess : aTreesByProcess;
+    let things = thingsByProcess[process];
+    if (!thingsByProcess[process]) {
+      things = thingsByProcess[process] = {};
+    }
+
+    // Get the root node, creating it if necessary.
+    t = things[unsafeName0];
+    if (!t) {
+      t = things[unsafeName0] =
+        new TreeNode(unsafeName0, aUnits, isDegenerate);
+    }
+
+    if (!isDegenerate) {
+      // Add any missing nodes in the tree implied by aUnsafePath, and fill in
+      // the properties that we can with a top-down traversal.
+      for (let i = 1; i < unsafeNames.length; i++) {
+        let unsafeName = unsafeNames[i];
+        let u = t.findKid(unsafeName);
+        if (!u) {
+          u = new TreeNode(unsafeName, aUnits, isDegenerate);
+          if (!t._kids) {
+            t._kids = [];
+          }
+          t._kids.push(u);
+        }
+        t = u;
+      }
+
+      // Update the heap total if necessary.
+      if (unsafeName0 === "explicit" && aKind == KIND_HEAP) {
+        if (!aHeapTotalByProcess[process]) {
+          aHeapTotalByProcess[process] = 0;
+        }
+        aHeapTotalByProcess[process] += aAmount;
+      }
+    }
+
+    if (t._amount) {
+      // Duplicate!  Sum the values and mark it as a dup.
+      t._amount += aAmount;
+      t._nMerged = t._nMerged ? t._nMerged + 1 : 2;
+    } else {
+      // New leaf node.  Fill in extra details node from the report.
+      t._amount = aAmount;
+      t._description = aDescription;
+    }
+  }
+
+  processMemoryReporters(aMgr, ignoreSingle, ignoreMulti, handleReport);
+}
+
+//---------------------------------------------------------------------------
+
+// There are two kinds of TreeNode.
+// - Leaf TreeNodes correspond to reports.
+// - Non-leaf TreeNodes are just scaffolding nodes for the tree;  their values
+//   are derived from their children.
+// Some trees are "degenerate", i.e. they contain a single node, i.e. they
+// correspond to a report whose path has no '/' separators.
+function TreeNode(aUnsafeName, aUnits, aIsDegenerate)
+{
+  this._units = aUnits;
+  this._unsafeName = aUnsafeName;
+  if (aIsDegenerate) {
+    this._isDegenerate = true;
+  }
+
+  // Leaf TreeNodes have these properties added immediately after construction:
+  // - _amount
   // - _description
+  // - _nMerged (only defined if > 1)
   //
-  // TreeNodes corresponding to Reporters have these properties added later:
-  // - _kind
-  // - _nMerged (if > 1)
-  // - _hasProblem (only defined if true)
+  // Non-leaf TreeNodes have these properties added later:
+  // - _kids
+  // - _amount
+  // - _description
+  // - _hideKids (only defined if true)
 }
 
 TreeNode.prototype = {
-  findKid: function(aName) {
-    for (var i = 0; i < this._kids.length; i++) {
-      if (this._kids[i]._name === aName) {
-        return this._kids[i];
+  findKid: function(aUnsafeName) {
+    if (this._kids) {
+      for (let i = 0; i < this._kids.length; i++) {
+        if (this._kids[i]._unsafeName === aUnsafeName) {
+          return this._kids[i];
+        }
       }
     }
     return undefined;
   },
 
   toString: function() {
-    return formatBytes(this._amount);
+    switch (this._units) {
+      case UNITS_BYTES:            return formatBytes(this._amount);
+      case UNITS_COUNT:
+      case UNITS_COUNT_CUMULATIVE: return formatInt(this._amount);
+      case UNITS_PERCENTAGE:       return formatPercentage(this._amount);
+      default:
+        assert(false, "bad units in TreeNode.toString");
+    }
   }
 };
 
-TreeNode.compare = function(a, b) {
+TreeNode.compareAmounts = function(a, b) {
   return b._amount - a._amount;
 };
 
+TreeNode.compareUnsafeNames = function(a, b) {
+  return a._unsafeName < b._unsafeName ? -1 :
+         a._unsafeName > b._unsafeName ?  1 :
+         0;
+};
+
+
 /**
- * From a list of memory reporters, builds a tree that mirrors the tree
- * structure that will be shown as output.
+ * Fill in the remaining properties for the specified tree in a bottom-up
+ * fashion.
  *
- * @param aReporters
- *        The table of Reporters, indexed by path.
- * @return The built tree.
+ * @param aRoot
+ *        The tree root.
  */
-function buildTree(aReporters)
+function fillInTree(aRoot)
 {
-  const treeName = "explicit";
-
-  // We want to process all reporters that begin with |treeName|.  First we
-  // build the tree but only fill the properties that we can with a top-down
-  // traversal.
-  var t = new TreeNode("falseRoot");
-  for (var path in aReporters) {
-    // Add any missing nodes in the tree implied by the path.
-    var r = aReporters[path];
-    if (r.treeNameMatches(treeName)) {
-      assert(r._kind === KIND_HEAP || r._kind === KIND_NONHEAP,
-             "reporters in the tree must have KIND_HEAP or KIND_NONHEAP");
-      assert(r._units === UNITS_BYTES);
-      var names = r._path.split('/');
-      var u = t;
-      for (var i = 0; i < names.length; i++) {
-        var name = names[i];
-        var uMatch = u.findKid(name);
-        if (uMatch) {
-          u = uMatch;
-        } else {
-          var v = new TreeNode(name);
-          u._kids.push(v);
-          u = v;
-        }
-      }
-      // Fill in extra details from the Reporter.
-      u._kind = r._kind;
-      if (r._nMerged) {
-        u._nMerged = r._nMerged;
-      }
-    }
-  }
-  // Using falseRoot makes the above code simpler.  Now discard it, leaving
-  // treeName at the root.
-  t = t._kids[0];
-
-  // Next, fill in the remaining properties bottom-up.
-  // Note that this function never returns kUnknown.
-  function fillInTree(aT, aPrepath)
+  // Fill in the remaining properties bottom-up.
+  function fillInNonLeafNodes(aT)
   {
-    var path = aPrepath ? aPrepath + '/' + aT._name : aT._name;
-    if (aT._kids.length === 0) {
-      // Leaf node.  Must have a reporter.
-      assert(aT._kind !== undefined);
-      aT._description = getDescription(aReporters, path);
-      var amount = getBytes(aReporters, path);
-      if (amount !== kUnknown) {
-        aT._amount = amount;
+    if (!aT._kids) {
+      // Leaf node.  Has already been filled in.
+
+    } else if (aT._kids.length === 1 && aT != aRoot) {
+      // Non-root, non-leaf node with one child.  Merge the child with the node
+      // to avoid redundant entries.
+      let kid = aT._kids[0];
+      let kidBytes = fillInNonLeafNodes(kid);
+      aT._unsafeName += '/' + kid._unsafeName;
+      if (kid._kids) {
+        aT._kids = kid._kids;
       } else {
-        aT._amount = 0;
-        aT._hasProblem = true;
+        delete aT._kids;
       }
+      aT._amount = kid._amount;
+      aT._description = kid._description;
+      if (kid._nMerged !== undefined) {
+        aT._nMerged = kid._nMerged
+      }
+      assert(!aT._hideKids && !kid._hideKids, "_hideKids set when merging");
+
     } else {
-      // Non-leaf node.  Get the size of the children.
-      var childrenBytes = 0;
-      for (var i = 0; i < aT._kids.length; i++) {
-        // Allow for kUnknown, treat it like 0.
-        childrenBytes += fillInTree(aT._kids[i], path);
+      // Non-leaf node with multiple children.  Derive its _amount and
+      // _description entirely from its children.
+      let kidsBytes = 0;
+      for (let i = 0; i < aT._kids.length; i++) {
+        kidsBytes += fillInNonLeafNodes(aT._kids[i]);
       }
-      if (aT._kind !== undefined) {
-        aT._description = getDescription(aReporters, path);
-        var amount = getBytes(aReporters, path);
-        if (amount !== kUnknown) {
-          // Non-leaf node with its own reporter.  Use the reporter and add
-          // an "other" child node.
-          aT._amount = amount;
-          var other = new TreeNode("other");
-          other._description = "All unclassified " + aT._name + " memory.",
-          other._amount = aT._amount - childrenBytes,
-          aT._kids.push(other);
-        } else {
-          // Non-leaf node with a reporter that returns kUnknown.
-          // Use the sum of the children and mark it as problematic.
-          aT._amount = childrenBytes;
-          aT._hasProblem = true;
-        }
-      } else {
-        // Non-leaf node without its own reporter.  Derive its size and
-        // description entirely from its children.
-        aT._amount = childrenBytes;
-        aT._description = "The sum of all entries below '" + aT._name + "'.";
-      }
+      assert(aT._amount === undefined, "_amount already set for non-leaf node");
+      aT._amount = kidsBytes;
+      aT._description = "The sum of all entries below this one.";
     }
-    assert(aT._amount !== kUnknown);
     return aT._amount;
   }
-  fillInTree(t, "");
 
-  // Determine how many bytes are reported by heap reporters.  Be careful
-  // with non-leaf reporters;  if we count a non-leaf reporter we don't want
-  // to count any of its child reporters.
-  var s = "";
-  function getKnownHeapUsedBytes(aT)
-  {
-    if (aT._kind === KIND_HEAP) {
-      return aT._amount;
-    } else {
-      var n = 0;
-      for (var i = 0; i < aT._kids.length; i++) {
-        n += getKnownHeapUsedBytes(aT._kids[i]);
-      }
-      return n;
-    }
-  }
-
-  // A special case:  compute the derived "heap-unclassified" value.  Don't
-  // mark "heap-allocated" when we get its size because we want it to appear
-  // in the "Other Measurements" list.
-  var heapUsedBytes = getBytes(aReporters, "heap-allocated", true);
-  var unknownHeapUsedBytes = 0;
-  var hasProblem = true;
-  if (heapUsedBytes !== kUnknown) {
-    unknownHeapUsedBytes = heapUsedBytes - getKnownHeapUsedBytes(t);
-    hasProblem = false;
-  }
-  var heapUnclassified = new TreeNode("heap-unclassified");
-  // This kindToString() ensures the "(Heap)" prefix is set without having to
-  // set the _kind property, which would mean that there is a corresponding
-  // Reporter for this TreeNode (which isn't true).
-  heapUnclassified._description =
-      kindToString(KIND_HEAP) +
-      "Memory not classified by a more specific reporter. This includes " +
-      "waste due to internal fragmentation in the heap allocator (caused " +
-      "when the allocator rounds up request sizes).";
-  heapUnclassified._amount = unknownHeapUsedBytes;
-  if (hasProblem) {
-    heapUnclassified._hasProblem = true;
-  }
-
-  t._kids.push(heapUnclassified);
-  t._amount += unknownHeapUsedBytes;
-
-  return t;
+  // cannotMerge is set because don't want to merge into a tree's root node.
+  fillInNonLeafNodes(aRoot);
 }
 
 /**
- * Sort all kid nodes from largest to smallest and aggregate insignificant
- * nodes.
+ * Compute the "heap-unclassified" value and insert it into the "explicit"
+ * tree.
+ *
+ * @param aT
+ *        The "explicit" tree.
+ * @param aHeapAllocatedNode
+ *        The "heap-allocated" tree node.
+ * @param aHeapTotal
+ *        The sum of all explicit HEAP reporters for this process.
+ * @return A boolean indicating if "heap-allocated" is known for the process.
+ */
+function addHeapUnclassifiedNode(aT, aHeapAllocatedNode, aHeapTotal)
+{
+  if (aHeapAllocatedNode === undefined)
+    return false;
+
+  assert(aHeapAllocatedNode._isDegenerate, "heap-allocated is not degenerate");
+  let heapAllocatedBytes = aHeapAllocatedNode._amount;
+  let heapUnclassifiedT = new TreeNode("heap-unclassified", UNITS_BYTES);
+  heapUnclassifiedT._amount = heapAllocatedBytes - aHeapTotal;
+  heapUnclassifiedT._description =
+      "Memory not classified by a more specific reporter. This includes " +
+      "slop bytes due to internal fragmentation in the heap allocator " +
+      "(caused when the allocator rounds up request sizes).";
+  aT._kids.push(heapUnclassifiedT);
+  aT._amount += heapUnclassifiedT._amount;
+  return true;
+}
+
+/**
+ * Sort all kid nodes from largest to smallest, and insert aggregate nodes
+ * where appropriate.
  *
  * @param aTotalBytes
  *        The size of the tree's root node.
  * @param aT
  *        The tree.
  */
-function filterTree(aTotalBytes, aT)
+function sortTreeAndInsertAggregateNodes(aTotalBytes, aT)
 {
-  const omitThresholdPerc = 0.5; /* percent */
+  const kSignificanceThresholdPerc = 1;
 
-  function shouldOmit(aBytes)
+  function isInsignificant(aT)
   {
     return !gVerbose &&
-           aTotalBytes !== kUnknown &&
-           (100 * aBytes / aTotalBytes) < omitThresholdPerc;
+           (100 * aT._amount / aTotalBytes) < kSignificanceThresholdPerc;
   }
 
-  aT._kids.sort(TreeNode.compare);
+  if (!aT._kids) {
+    return;
+  }
 
-  for (var i = 0; i < aT._kids.length; i++) {
-    if (shouldOmit(aT._kids[i]._amount)) {
-      // This sub-tree is below the significance threshold
-      // Remove it and all remaining (smaller) sub-trees, and
-      // replace them with a single aggregate node.
-      var i0 = i;
-      var aggBytes = 0;
+  aT._kids.sort(TreeNode.compareAmounts);
+
+  // If the first child is insignificant, they all are, and there's no point
+  // creating an aggregate node that lacks siblings.  Just set the parent's
+  // _hideKids property and process all children.
+  if (isInsignificant(aT._kids[0])) {
+    aT._hideKids = true;
+    for (let i = 0; i < aT._kids.length; i++) {
+      sortTreeAndInsertAggregateNodes(aTotalBytes, aT._kids[i]);
+    }
+    return;
+  }
+
+  // Look at all children except the last one.
+  let i;
+  for (i = 0; i < aT._kids.length - 1; i++) {
+    if (isInsignificant(aT._kids[i])) {
+      // This child is below the significance threshold.  If there are other
+      // (smaller) children remaining, move them under an aggregate node.
+      let i0 = i;
+      let nAgg = aT._kids.length - i0;
+      // Create an aggregate node.  Inherit units from the parent;  everything
+      // in the tree should have the same units anyway (we test this later).
+      let aggT = new TreeNode("(" + nAgg + " tiny)", aT._units);
+      aggT._kids = [];
+      let aggBytes = 0;
       for ( ; i < aT._kids.length; i++) {
         aggBytes += aT._kids[i]._amount;
+        aggT._kids.push(aT._kids[i]);
       }
-      aT._kids.splice(i0);
-      var n = i - i0;
-      var rSub = new TreeNode("(" + n + " omitted)");
-      rSub._amount = aggBytes;
-      rSub._description =
-        n + " sub-trees that were below the " + omitThresholdPerc +
-        "% significance threshold.  Click 'More verbose' at the bottom of " +
-        "this page to see them.";
+      aggT._hideKids = true;
+      aggT._amount = aggBytes;
+      aggT._description =
+        nAgg + " sub-trees that are below the " + kSignificanceThresholdPerc +
+        "% significance threshold.";
+      aT._kids.splice(i0, nAgg, aggT);
+      aT._kids.sort(TreeNode.compareAmounts);
 
-      // Add the "omitted" sub-tree at the end and then re-sort, because the
-      // sum of the omitted sub-trees may be larger than some of the shown
-      // sub-trees.
-      aT._kids[i0] = rSub;
-      aT._kids.sort(TreeNode.compare);
-      break;
+      // Process the moved children.
+      for (i = 0; i < aggT._kids.length; i++) {
+        sortTreeAndInsertAggregateNodes(aTotalBytes, aggT._kids[i]);
+      }
+      return;
     }
-    filterTree(aTotalBytes, aT._kids[i]);
+
+    sortTreeAndInsertAggregateNodes(aTotalBytes, aT._kids[i]);
+  }
+
+  // The first n-1 children were significant.  Don't consider if the last child
+  // is significant;  there's no point creating an aggregate node that only has
+  // one child.  Just process it.
+  sortTreeAndInsertAggregateNodes(aTotalBytes, aT._kids[i]);
+}
+
+// Global variable indicating if we've seen any invalid values for this
+// process;  it holds the unsafePaths of any such reports.  It is reset for
+// each new process.
+let gUnsafePathsWithInvalidValuesForThisProcess = [];
+
+function appendWarningElements(aP, aHasKnownHeapAllocated,
+                               aHasMozMallocUsableSize)
+{
+  if (!aHasKnownHeapAllocated && !aHasMozMallocUsableSize) {
+    appendElementWithText(aP, "p", "",
+      "WARNING: the 'heap-allocated' memory reporter and the " +
+      "moz_malloc_usable_size() function do not work for this platform " +
+      "and/or configuration.  This means that 'heap-unclassified' is not " +
+      "shown and the 'explicit' tree shows much less memory than it should.\n\n");
+
+  } else if (!aHasKnownHeapAllocated) {
+    appendElementWithText(aP, "p", "",
+      "WARNING: the 'heap-allocated' memory reporter does not work for this " +
+      "platform and/or configuration. This means that 'heap-unclassified' " +
+      "is not shown and the 'explicit' tree shows less memory than it should.\n\n");
+
+  } else if (!aHasMozMallocUsableSize) {
+    appendElementWithText(aP, "p", "",
+      "WARNING: the moz_malloc_usable_size() function does not work for " +
+      "this platform and/or configuration.  This means that much of the " +
+      "heap-allocated memory is not measured by individual memory reporters " +
+      "and so will fall under 'heap-unclassified'.\n\n");
+  }
+
+  if (gUnsafePathsWithInvalidValuesForThisProcess.length > 0) {
+    let div = appendElement(aP, "div");
+    appendElementWithText(div, "p", "",
+      "WARNING: the following values are negative or unreasonably large.\n");
+
+    let ul = appendElement(div, "ul");
+    for (let i = 0;
+         i < gUnsafePathsWithInvalidValuesForThisProcess.length;
+         i++)
+    {
+      appendTextNode(ul, " ");
+      appendElementWithText(ul, "li", "",
+        flipBackslashes(gUnsafePathsWithInvalidValuesForThisProcess[i]) + "\n");
+    }
+
+    appendElementWithText(div, "p", "",
+      "This indicates a defect in one or more memory reporters.  The " +
+      "invalid values are highlighted.\n\n");
+    gUnsafePathsWithInvalidValuesForThisProcess = [];  // reset for the next process
   }
 }
 
 /**
- * Generates the text for a single process.
+ * Appends the about:memory elements for a single process.
  *
+ * @param aP
+ *        The parent DOM node.
  * @param aProcess
  *        The name of the process.
- * @param aReporters
- *        Table of Reporters for this process, indexed by _path.
+ * @param aTrees
+ *        The table of non-degenerate trees for this process.
+ * @param aDegenerates
+ *        The table of degenerate trees for this process.
+ * @param aHasMozMallocUsableSize
+ *        Boolean indicating if moz_malloc_usable_size works.
  * @return The generated text.
  */
-function genProcessText(aProcess, aReporters)
+function appendProcessAboutMemoryElements(aP, aProcess, aTrees, aDegenerates,
+                                          aHeapTotal, aHasMozMallocUsableSize)
 {
-  var tree = buildTree(aReporters);
-  filterTree(tree._amount, tree);
+  appendElementWithText(aP, "h1", "", aProcess + " Process\n\n");
 
-  // Nb: the newlines give nice spacing if we cut+paste into a text buffer.
-  var text = "";
-  text += "<h1>" + aProcess + " Process</h1>\n\n";
-  text += genTreeText(tree);
-  text += genOtherText(aReporters);
-  text += "<hr></hr>";
-  return text;
+  // We'll fill this in later.
+  let warningsDiv = appendElement(aP, "div", "accuracyWarning");
+
+  // The explicit tree.
+  let hasKnownHeapAllocated;
+  {
+    let treeName = "explicit";
+    let t = aTrees[treeName];
+    assert(t, "no explicit tree");
+    fillInTree(t);
+    hasKnownHeapAllocated =
+      addHeapUnclassifiedNode(t, aDegenerates["heap-allocated"], aHeapTotal);
+    sortTreeAndInsertAggregateNodes(t._amount, t);
+    t._description = kTreeDescriptions[treeName];
+    let pre = appendSectionHeader(aP, kSectionNames[treeName]);
+    appendTreeElements(pre, t, aProcess, "");
+    appendTextNode(aP, "\n");  // gives nice spacing when we cut and paste
+    delete aTrees[treeName];
+  }
+
+  // The smaps trees, which are only shown in verbose mode.
+  if (gVerbose) {
+    kSmapsTreeNames.forEach(function(aTreeName) {
+      // |t| will be undefined if we don't have any reports for the given
+      // unsafePath.
+      let t = aTrees[aTreeName];
+      if (t) {
+        fillInTree(t);
+        sortTreeAndInsertAggregateNodes(t._amount, t);
+        t._description = kTreeDescriptions[aTreeName];
+        t._hideKids = true;   // smaps trees are always initially collapsed
+        let pre = appendSectionHeader(aP, kSectionNames[aTreeName]);
+        appendTreeElements(pre, t, aProcess, "");
+        appendTextNode(aP, "\n");  // gives nice spacing when we cut and paste
+        delete aTrees[aTreeName];
+      }
+    });
+  }
+
+  // Fill in and sort all the non-degenerate other trees.
+  let otherTrees = [];
+  for (let unsafeName in aTrees) {
+    let t = aTrees[unsafeName];
+    assert(!t._isDegenerate, "tree is degenerate");
+    fillInTree(t);
+    sortTreeAndInsertAggregateNodes(t._amount, t);
+    otherTrees.push(t);
+  }
+  otherTrees.sort(TreeNode.compareUnsafeNames);
+
+  // Get the length of the longest root value among the degenerate other trees,
+  // and sort them as well.
+  let otherDegenerates = [];
+  let maxStringLength = 0;
+  for (let unsafeName in aDegenerates) {
+    let t = aDegenerates[unsafeName];
+    assert(t._isDegenerate, "tree is not degenerate");
+    let length = t.toString().length;
+    if (length > maxStringLength) {
+      maxStringLength = length;
+    }
+    otherDegenerates.push(t);
+  }
+  otherDegenerates.sort(TreeNode.compareUnsafeNames);
+
+  // Now generate the elements, putting non-degenerate trees first. 
+  let pre = appendSectionHeader(aP, kSectionNames['other']);
+  for (let i = 0; i < otherTrees.length; i++) {
+    let t = otherTrees[i];
+    appendTreeElements(pre, t, aProcess, "");
+    appendTextNode(pre, "\n");  // blank lines after non-degenerate trees
+  }
+  for (let i = 0; i < otherDegenerates.length; i++) {
+    let t = otherDegenerates[i];
+    let padText = pad("", maxStringLength - t.toString().length, ' ');
+    appendTreeElements(pre, t, aProcess, padText);
+  }
+  appendTextNode(aP, "\n");  // gives nice spacing when we cut and paste
+
+  // Add any warnings about inaccuracies due to platform limitations.
+  // These must be computed after generating all the text.  The newlines give
+  // nice spacing if we cut+paste into a text buffer.
+  appendWarningElements(warningsDiv, hasKnownHeapAllocated,
+                        aHasMozMallocUsableSize);
+}
+
+/**
+ * Determines if a number has a negative sign when converted to a string.
+ * Works even for -0.
+ *
+ * @param aN
+ *        The number.
+ * @return A boolean.
+ */
+function hasNegativeSign(aN)
+{
+  if (aN === 0) {                   // this succeeds for 0 and -0
+    return 1 / aN === -Infinity;    // this succeeds for -0
+  }
+  return aN < 0;
 }
 
 /**
@@ -532,33 +975,45 @@ function genProcessText(aProcess, aReporters)
  *
  * @param aN
  *        The integer to format.
+ * @param aExtra
+ *        An extra string to tack onto the end.
  * @return A human-readable string representing the int.
+ *
+ * Note: building an array of chars and converting that to a string with
+ * Array.join at the end is more memory efficient than using string
+ * concatenation.  See bug 722972 for details.
  */
-function formatInt(aN)
+function formatInt(aN, aExtra)
 {
-  var neg = false;
-  if (aN < 0) {
+  let neg = false;
+  if (hasNegativeSign(aN)) {
     neg = true;
     aN = -aN;
   }
-  var s = "";
+  let s = [];
   while (true) {
-    var k = aN % 1000;
+    let k = aN % 1000;
     aN = Math.floor(aN / 1000);
     if (aN > 0) {
       if (k < 10) {
-        s = ",00" + k + s;
+        s.unshift(",00", k);
       } else if (k < 100) {
-        s = ",0" + k + s;
+        s.unshift(",0", k);
       } else {
-        s = "," + k + s;
+        s.unshift(",", k);
       }
     } else {
-      s = k + s;
+      s.unshift(k);
       break;
     }
   }
-  return neg ? "-" + s : s;
+  if (neg) {
+    s.unshift("-");
+  }
+  if (aExtra) {
+    s.push(aExtra);
+  }
+  return s.join("");
 }
 
 /**
@@ -570,15 +1025,16 @@ function formatInt(aN)
  */
 function formatBytes(aBytes)
 {
-  var unit = gVerbose ? "B" : "MB";
+  let unit = gVerbose ? " B" : " MB";
 
-  var s;
+  let s;
   if (gVerbose) {
-    s = formatInt(aBytes) + " " + unit;
+    s = formatInt(aBytes, unit);
   } else {
-    var mbytes = (aBytes / (1024 * 1024)).toFixed(2);
-    var a = String(mbytes).split(".");
-    s = formatInt(a[0]) + "." + a[1] + " " + unit;
+    let mbytes = (aBytes / (1024 * 1024)).toFixed(2);
+    let a = String(mbytes).split(".");
+    // If the argument to formatInt() is -0, it will print the negative sign.
+    s = formatInt(Number(a[0])) + "." + a[1] + unit;
   }
   return s;
 }
@@ -608,332 +1064,560 @@ function formatPercentage(aPerc100x)
  */
 function pad(aS, aN, aC)
 {
-  var padding = "";
-  var n2 = aN - aS.length;
-  for (var i = 0; i < n2; i++) {
+  let padding = "";
+  let n2 = aN - aS.length;
+  for (let i = 0; i < n2; i++) {
     padding += aC;
   }
   return padding + aS;
 }
 
-/**
- * Gets the byte count for a particular Reporter and sets its _done
- * property.
- *
- * @param aReporters
- *        Table of Reporters for this process, indexed by _path.
- * @param aPath
- *        The path of the R.
- * @param aDoNotMark
- *        If true, the _done property is not set.
- * @return The byte count.
- */
-function getBytes(aReporters, aPath, aDoNotMark)
+// There's a subset of the Unicode "light" box-drawing chars that is widely
+// implemented in terminals, and this code sticks to that subset to maximize
+// the chance that cutting and pasting about:memory output to a terminal will
+// work correctly.
+const kHorizontal                   = "\u2500",
+      kVertical                     = "\u2502",
+      kUpAndRight                   = "\u2514",
+      kUpAndRight_Right_Right       = "\u2514\u2500\u2500",
+      kVerticalAndRight             = "\u251c",
+      kVerticalAndRight_Right_Right = "\u251c\u2500\u2500",
+      kVertical_Space_Space         = "\u2502  ";
+
+const kNoKidsSep                    = " \u2500\u2500 ",
+      kHideKidsSep                  = " ++ ",
+      kShowKidsSep                  = " -- ";
+
+function appendMrNameSpan(aP, aDescription, aUnsafeName, aIsInvalid, aNMerged)
 {
-  var r = aReporters[aPath];
-  assert(r, "getBytes: no such Reporter: " + aPath);
-  if (!aDoNotMark) {
-    r._done = true;
+  let safeName = flipBackslashes(aUnsafeName);
+  if (!aIsInvalid && !aNMerged) {
+    safeName += "\n";
   }
-  return r._amount;
-}
+  let nameSpan = appendElementWithText(aP, "span", "mrName", safeName);
+  nameSpan.title = aDescription;
 
-/**
- * Gets the description for a particular Reporter.
- *
- * @param aReporters
- *        Table of Reporters for this process, indexed by _path.
- * @param aPath
- *        The path of the Reporter.
- * @return The description.
- */
-function getDescription(aReporters, aPath)
-{
-  var r = aReporters[aPath];
-  assert(r, "getDescription: no such Reporter: " + aPath);
-  return r._description;
-}
-
-function genMrValueText(aValue)
-{
-  return "<span class='mrValue'>" + aValue + "</span>";
-}
-
-function kindToString(aKind)
-{
-  switch (aKind) {
-   case KIND_NONHEAP: return "(Non-heap) ";
-   case KIND_HEAP:    return "(Heap) ";
-   case KIND_OTHER:
-   case undefined:    return "";
-   default:           assert(false, "bad kind in kindToString");
+  if (aIsInvalid) {
+    let noteText = " [?!]";
+    if (!aNMerged) {
+      noteText += "\n";
+    }
+    let noteSpan = appendElementWithText(aP, "span", "mrNote", noteText);
+    noteSpan.title =
+      "Warning: this value is invalid and indicates a bug in one or more " +
+      "memory reporters. ";
   }
-}
 
-function escapeQuotes(aStr)
-{
-  return aStr.replace(/\&/g, '&amp;').replace(/'/g, '&#39;');
-}
-
-// For user-controlled strings.
-function escapeAll(aStr)
-{
-  return aStr.replace(/\&/g, '&amp;').replace(/'/g, '&#39;').
-              replace(/\</g, '&lt;').replace(/>/g, '&gt;').
-              replace(/\"/g, '&quot;');
-}
-
-// Compartment reporter names are URLs and so can include forward slashes.  But
-// forward slash is the memory reporter path separator.  So the memory
-// reporters change them to backslashes.  Undo that here.  
-function flipBackslashes(aStr)
-{
-  return aStr.replace(/\\/g, '/');
-}
-
-// Truncate the URL in a compartment name if not in verbose mode.
-function truncateCompartmentName(aStr)
-{
-  return (gVerbose)
-       ? aStr
-       : aStr.replace(/compartment\((.{40}).*\)/, 'compartment($1...)');
-}
-
-function prepName(aStr)
-{
-  return escapeAll(flipBackslashes(truncateCompartmentName(aStr)));
-}
-
-function prepDesc(aStr)
-{
-  return escapeQuotes(flipBackslashes(aStr));
-}
-
-function genMrNameText(aKind, aDesc, aName, aHasProblem, aNMerged)
-{
-  var text = "-- <span class='mrName hasDesc' title='" +
-             kindToString(aKind) + prepDesc(aDesc) +
-             "'>" + prepName(aName) + "</span>";
-  if (aHasProblem) {
-    const problemDesc =
-      "Warning: this memory reporter was unable to compute a useful value. " +
-      "The reported value is the sum of all entries below '" + aName + "', " +
-      "which is probably less than the true value.";
-    text += " <span class='mrStar' title=\"" + problemDesc + "\">[*]</span>";
-  }
   if (aNMerged) {
-    const dupDesc = "This value is the sum of " + aNMerged +
-                    " memory reporters that all have the same path.";
-    text += " <span class='mrStar' title=\"" + dupDesc + "\">[" + 
-            aNMerged + "]</span>";
+    let noteSpan = appendElementWithText(aP, "span", "mrNote",
+                                         " [" + aNMerged + "]\n");
+    noteSpan.title =
+      "This value is the sum of " + aNMerged +
+      " memory reporters that all have the same path.";
   }
-  return text + '\n';
+}
+
+// This is used to record the (safe) IDs of which sub-trees have been manually
+// expanded (marked as true) and collapsed (marked as false).  It's used to
+// replicate the collapsed/expanded state when the page is updated.  It can end
+// up holding IDs of nodes that no longer exist, e.g. for compartments that
+// have been closed.  This doesn't seem like a big deal, because the number is
+// limited by the number of entries the user has changed from their original
+// state.
+let gShowSubtreesBySafeTreeId = {};
+
+function assertClassListContains(e, className) {
+  assert(e, "undefined " + className);
+  assert(e.classList.contains(className), "classname isn't " + className);
+}
+
+function toggle(aEvent)
+{
+  // This relies on each line being a span that contains at least four spans:
+  // mrValue, mrPerc, mrSep, mrName, and then zero or more mrNotes.  All
+  // whitespace must be within one of these spans for this function to find the
+  // right nodes.  And the span containing the children of this line must
+  // immediately follow.  Assertions check this.
+
+  // |aEvent.target| will be one of the spans.  Get the outer span.
+  let outerSpan = aEvent.target.parentNode;
+  assertClassListContains(outerSpan, "hasKids");
+
+  // Toggle the '++'/'--' separator.
+  let isExpansion;
+  let sepSpan = outerSpan.childNodes[2];
+  assertClassListContains(sepSpan, "mrSep");
+  if (sepSpan.textContent === kHideKidsSep) {
+    isExpansion = true;
+    sepSpan.textContent = kShowKidsSep;
+  } else if (sepSpan.textContent === kShowKidsSep) {
+    isExpansion = false;
+    sepSpan.textContent = kHideKidsSep;
+  } else {
+    assert(false, "bad sepSpan textContent");
+  }
+
+  // Toggle visibility of the span containing this node's children.
+  let subTreeSpan = outerSpan.nextSibling;
+  assertClassListContains(subTreeSpan, "kids");
+  subTreeSpan.classList.toggle("hidden");
+
+  // Record/unrecord that this sub-tree was toggled.
+  let safeTreeId = outerSpan.id;
+  if (gShowSubtreesBySafeTreeId[safeTreeId] !== undefined) {
+    delete gShowSubtreesBySafeTreeId[safeTreeId];
+  } else {
+    gShowSubtreesBySafeTreeId[safeTreeId] = isExpansion;
+  }
+}
+
+function expandPathToThisElement(aElement)
+{
+  if (aElement.classList.contains("kids")) {
+    // Unhide the kids.
+    aElement.classList.remove("hidden");
+    expandPathToThisElement(aElement.previousSibling);  // hasKids
+
+  } else if (aElement.classList.contains("hasKids")) {
+    // Change the separator to '--'.
+    let sepSpan = aElement.childNodes[2];
+    assertClassListContains(sepSpan, "mrSep");
+    sepSpan.textContent = kShowKidsSep;
+    expandPathToThisElement(aElement.parentNode);       // kids or pre.entries
+
+  } else {
+    assertClassListContains(aElement, "entries");
+  }
 }
 
 /**
- * Generates the text for the tree, including its heading.
+ * Appends the elements for the tree, including its heading.
  *
- * @param aT
- *        The tree.
- * @return The generated text.
+ * @param aP
+ *        The parent DOM node.
+ * @param aRoot
+ *        The tree root.
+ * @param aProcess
+ *        The process the tree corresponds to.
+ * @param aPadText
+ *        A string to pad the start of each entry.
  */
-function genTreeText(aT)
+function appendTreeElements(aP, aRoot, aProcess, aPadText)
 {
-  var treeBytes = aT._amount;
-  var rootStringLength = aT.toString().length;
-
   /**
-   * Generates the text for a particular tree, without a heading.
+   * Appends the elements for a particular tree, without a heading.
    *
+   * @param aP
+   *        The parent DOM node.
+   * @param aProcess
+   *        The process the tree corresponds to.
+   * @param aUnsafeNames
+   *        An array of the names forming the path to aT.
+   * @param aRoot
+   *        The root of the tree this sub-tree belongs to.
    * @param aT
    *        The tree.
-   * @param aIndentGuide
-   *        Records what indentation is required for this tree.  It has one
-   *        entry per level of indentation.  For each entry, ._isLastKid
-   *        records whether the node in question is the last child, and
-   *        ._depth records how many chars of indentation are required.
+   * @param aTreelineText1
+   *        The first part of the treeline for this entry and this entry's
+   *        children.
+   * @param aTreelineText2a
+   *        The second part of the treeline for this entry.
+   * @param aTreelineText2b
+   *        The second part of the treeline for this entry's children.
    * @param aParentStringLength
    *        The length of the formatted byte count of the top node in the tree.
-   * @return The generated text.
    */
-  function genTreeText2(aT, aIndentGuide, aParentStringLength)
+  function appendTreeElements2(aP, aProcess, aUnsafeNames, aRoot, aT,
+                               aTreelineText1, aTreelineText2a,
+                               aTreelineText2b, aParentStringLength)
   {
-    function repeatStr(aC, aN)
+    function appendN(aS, aC, aN)
     {
-      var s = "";
-      for (var i = 0; i < aN; i++) {
-        s += aC;
+      for (let i = 0; i < aN; i++) {
+        aS += aC;
       }
-      return s;
+      return aS;
     }
 
-    // Generate the indent.  There's a subset of the Unicode "light"
-    // box-drawing chars that are widely implemented in terminals, and
-    // this code sticks to that subset to maximize the chance that
-    // cutting and pasting about:memory output to a terminal will work
-    // correctly:
-    const kHorizontal       = "\u2500",
-          kVertical         = "\u2502",
-          kUpAndRight       = "\u2514",
-          kVerticalAndRight = "\u251c";
-    var indent = "<span class='treeLine'>";
-    if (aIndentGuide.length > 0) {
-      for (var i = 0; i < aIndentGuide.length - 1; i++) {
-        indent += aIndentGuide[i]._isLastKid ? " " : kVertical;
-        indent += repeatStr(" ", aIndentGuide[i]._depth - 1);
-      }
-      indent += aIndentGuide[i]._isLastKid ? kUpAndRight : kVerticalAndRight;
-      indent += repeatStr(kHorizontal, aIndentGuide[i]._depth - 1);
+    // The tree line.  Indent more if this entry is narrower than its parent.
+    let valueText = aT.toString();
+    let extraTreelineLength =
+      Math.max(aParentStringLength - valueText.length, 0);
+    if (extraTreelineLength > 0) {
+      aTreelineText2a =
+        appendN(aTreelineText2a, kHorizontal, extraTreelineLength);
+      aTreelineText2b =
+        appendN(aTreelineText2b, " ",         extraTreelineLength);
+    }
+    let treelineText = aTreelineText1 + aTreelineText2a;
+    appendElementWithText(aP, "span", "treeline", treelineText);
+
+    // Detect and record invalid values.
+    assert(aRoot._units === aT._units, "units within a tree are inconsistent");
+    let tIsInvalid = false;
+    if (!(0 <= aT._amount && aT._amount <= aRoot._amount)) {
+      tIsInvalid = true;
+      let unsafePath = aUnsafeNames.join("/");
+      gUnsafePathsWithInvalidValuesForThisProcess.push(unsafePath);
+      reportAssertionFailure("Invalid value for " + flipBackslashes(unsafePath));
     }
 
-    // Indent more if this entry is narrower than its parent, and update
-    // aIndentGuide accordingly.
-    var tString = aT.toString();
-    var extraIndentLength = Math.max(aParentStringLength - tString.length, 0);
-    if (extraIndentLength > 0) {
-      for (var i = 0; i < extraIndentLength; i++) {
-        indent += kHorizontal;
+    // For non-leaf nodes, the entire sub-tree is put within a span so it can
+    // be collapsed if the node is clicked on.
+    let d;
+    let sep;
+    let showSubtrees;
+    if (aT._kids) {
+      // Determine if we should show the sub-tree below this entry;  this
+      // involves reinstating any previous toggling of the sub-tree.
+      let unsafePath = aUnsafeNames.join("/");
+      let safeTreeId = aProcess + ":" + flipBackslashes(unsafePath);
+      showSubtrees = !aT._hideKids;
+      if (gShowSubtreesBySafeTreeId[safeTreeId] !== undefined) {
+        showSubtrees = gShowSubtreesBySafeTreeId[safeTreeId];
       }
-      aIndentGuide[aIndentGuide.length - 1]._depth += extraIndentLength;
-    }
-    indent += "</span>";
-
-    // Generate the percentage.
-    var perc = "";
-    if (aT._amount === treeBytes) {
-      perc = "100.0";
+      d = appendElement(aP, "span", "hasKids");
+      d.id = safeTreeId;
+      d.onclick = toggle;
+      sep = showSubtrees ? kShowKidsSep : kHideKidsSep;
     } else {
-      perc = (100 * aT._amount / treeBytes).toFixed(2);
-      perc = pad(perc, 5, '0');
+      assert(!aT._hideKids, "leaf node with _hideKids set")
+      sep = kNoKidsSep;
+      d = aP;
     }
-    perc = "<span class='mrPerc'>(" + perc + "%)</span> ";
 
-    var text = indent + genMrValueText(tString) + " " + perc +
-               genMrNameText(aT._kind, aT._description, aT._name,
-                             aT._hasProblem, aT._nMerged);
+    // The value.
+    appendElementWithText(d, "span", "mrValue" + (tIsInvalid ? " invalid" : ""),
+                          valueText);
 
-    for (var i = 0; i < aT._kids.length; i++) {
-      // 3 is the standard depth, the callee adjusts it if necessary.
-      aIndentGuide.push({ _isLastKid: (i === aT._kids.length - 1), _depth: 3 });
-      text += genTreeText2(aT._kids[i], aIndentGuide, tString.length);
-      aIndentGuide.pop();
+    // The percentage (omitted for single entries).
+    let percText;
+    if (!aT._isDegenerate) {
+      // Treat 0 / 0 as 100%.
+      let num = aRoot._amount === 0 ? 100 : (100 * aT._amount / aRoot._amount);
+      let numText = num.toFixed(2);
+      percText = numText === "100.00"
+               ? " (100.0%)"
+               : (0 <= num && num < 10 ? " (0" : " (") + numText + "%)";
+      appendElementWithText(d, "span", "mrPerc", percText);
     }
-    return text;
+
+    // The separator.
+    appendElementWithText(d, "span", "mrSep", sep);
+
+    // The entry's name.
+    appendMrNameSpan(d, aT._description, aT._unsafeName,
+                     tIsInvalid, aT._nMerged);
+
+    // In non-verbose mode, invalid nodes can be hidden in collapsed sub-trees.
+    // But it's good to always see them, so force this.
+    if (!gVerbose && tIsInvalid) {
+      expandPathToThisElement(d);
+    }
+
+    // Recurse over children.
+    if (aT._kids) {
+      // The 'kids' class is just used for sanity checking in toggle().
+      d = appendElement(aP, "span", showSubtrees ? "kids" : "kids hidden");
+
+      let kidTreelineText1 = aTreelineText1 + aTreelineText2b;
+      for (let i = 0; i < aT._kids.length; i++) {
+        let kidTreelineText2a, kidTreelineText2b;
+        if (i < aT._kids.length - 1) {
+          kidTreelineText2a = kVerticalAndRight_Right_Right;
+          kidTreelineText2b = kVertical_Space_Space;
+        } else {
+          kidTreelineText2a = kUpAndRight_Right_Right;
+          kidTreelineText2b = "   ";
+        }
+        aUnsafeNames.push(aT._kids[i]._unsafeName);
+        appendTreeElements2(d, aProcess, aUnsafeNames, aRoot, aT._kids[i],
+                            kidTreelineText1, kidTreelineText2a,
+                            kidTreelineText2b, valueText.length);
+        aUnsafeNames.pop();
+      }
+    }
   }
 
-  var text = genTreeText2(aT, [], rootStringLength);
-  // Nb: the newlines give nice spacing if we cut+paste into a text buffer.
-  const desc =
-    "This tree covers explicit memory allocations by the application, " +
-    "both at the operating system level (via calls to functions such as " +
-    "VirtualAlloc, vm_allocate, and mmap), and at the heap allocation level " +
-    "(via functions such as malloc, calloc, realloc, memalign, operator " +
-    "new, and operator new[]).  It excludes memory that is mapped implicitly " +
-    "such as code and data segments, and thread stacks.  It also excludes " +
-    "heap memory that has been freed by the application but is still being " +
-    "held onto by the heap allocator.  It is not guaranteed to cover every " +
-    "explicit allocation, but it does cover most (including the entire " +
-    "heap), and therefore it is the single best number to focus on when " +
-    "trying to reduce memory usage.";
-               
-  return "<h2 class='hasDesc' title='" + escapeQuotes(desc) +
-         "'>Explicit Allocations</h2>\n" + "<pre>" + text + "</pre>\n";
+  let rootStringLength = aRoot.toString().length;
+  appendTreeElements2(aP, aProcess, [aRoot._unsafeName], aRoot, aRoot,
+                      aPadText, "", "", rootStringLength);
 }
 
-function OtherReporter(aPath, aUnits, aAmount, aDescription, 
-                       aNMerged)
+//---------------------------------------------------------------------------
+
+function appendSectionHeader(aP, aText)
 {
-  // Nb: _kind is not needed, it's always KIND_OTHER.
-  this._path        = aPath;
-  this._units       = aUnits;
-  if (aAmount === kUnknown) {
-    this._amount     = 0;
-    this._hasProblem = true;
-  } else {
-    this._amount = aAmount;
-  }
-  this._description = aDescription;
-  this.asString = this.toString();
+  appendElementWithText(aP, "h2", "", aText + "\n");
+  return appendElement(aP, "pre", "entries");
 }
 
-OtherReporter.prototype = {
-  toString: function() {
-    switch(this._units) {
-      case UNITS_BYTES:            return formatBytes(this._amount);
-      case UNITS_COUNT:
-      case UNITS_COUNT_CUMULATIVE: return formatInt(this._amount);
-      case UNITS_PERCENTAGE:       return formatPercentage(this._amount);
-      default:
-        assert(false, "bad units in OtherReporter.toString");
-    }
-  }
-};
+//-----------------------------------------------------------------------------
+// Code specific to about:compartments
+//-----------------------------------------------------------------------------
 
-OtherReporter.compare = function(a, b) {
-  return a._path < b._path ? -1 :
-         a._path > b._path ?  1 :
-         0;
-};
+function onLoadAboutCompartments()
+{
+  // First generate the page, then minimize memory usage to collect any dead
+  // compartments, then update the page.  The first generation step may sound
+  // unnecessary, but it avoids a short delay in showing content when the page
+  // is loaded, which makes test_aboutcompartments.xul more reliable (see bug
+  // 729018 for details).
+  updateAboutCompartments();
+  minimizeMemoryUsage3x(
+    function() { addChildObserversAndUpdate(updateAboutCompartments); });
+}
 
 /**
- * Generates the text for the "Other Measurements" section.
- *
- * @param aReportersByProcess
- *        Table of Reporters for this process, indexed by _path.
- * @return The generated text.
+ * Top-level function that does the work of generating the page.
  */
-function genOtherText(aReportersByProcess)
+function updateAboutCompartments()
 {
-  // Generate an array of Reporter-like elements, stripping out all the
-  // Reporters that have already been handled.  Also find the width of the
-  // widest element, so we can format things nicely.
-  var maxStringLength = 0;
-  var otherReporters = [];
-  for (var path in aReportersByProcess) {
-    var r = aReportersByProcess[path];
-    if (!r._done) {
-      assert(r._kind === KIND_OTHER, "_kind !== KIND_OTHER for " + r._path);
-      assert(r.nMerged === undefined);  // we don't allow dup'd OTHER reporters 
-      var hasProblem = false;
-      if (r._amount === kUnknown) {
-        hasProblem = true;
-      }
-      var o = new OtherReporter(r._path, r._units, r._amount, r._description);
-      otherReporters.push(o);
-      if (o.asString.length > maxStringLength) {
-        maxStringLength = o.asString.length;
-      }
+  // First, clear the page contents.  Necessary because
+  // updateAboutCompartments() might be called more than once due to the
+  // "child-memory-reporter-update" observer.
+  let body = clearBody();
+
+  let mgr = Cc["@mozilla.org/memory-reporter-manager;1"].
+      getService(Ci.nsIMemoryReporterManager);
+
+  let compartmentsByProcess = getCompartmentsByProcess(mgr);
+  let ghostWindowsByProcess = getGhostWindowsByProcess(mgr);
+
+  function handleProcess(aProcess) {
+    appendProcessAboutCompartmentsElements(body, aProcess,
+                                           compartmentsByProcess[aProcess],
+                                           ghostWindowsByProcess[aProcess]);
+  }
+
+  // Generate output for one process at a time.  Always start with the
+  // Main process.
+  handleProcess('Main');
+  for (let process in compartmentsByProcess) {
+    if (process !== "Main") {
+      handleProcess(process);
     }
   }
-  otherReporters.sort(OtherReporter.compare);
 
-  // Generate text for the not-yet-printed values.
-  var text = "";
-  for (var i = 0; i < otherReporters.length; i++) {
-    var o = otherReporters[i];
-    text += genMrValueText(pad(o.asString, maxStringLength, ' ')) + " ";
-    text += genMrNameText(KIND_OTHER, o._description, o._path, o._hasProblem);
-  }
+  appendElement(body, "hr");
 
-  // Nb: the newlines give nice spacing if we cut+paste into a text buffer.
-  const desc = "This list contains other memory measurements that cross-cut " +
-               "the requested memory measurements above."
-  return "<h2 class='hasDesc' title='" + desc + "'>Other Measurements</h2>\n" +
-         "<pre>" + text + "</pre>\n";
-}
-
-function assert(aCond, aMsg)
-{
-  if (!aCond) {
-    throw("assertion failed: " + aMsg);
+  let div1 = appendElement(body, "div");
+  let a;
+  if (gVerbose) {
+    let a = appendElementWithText(div1, "a", "option", "Less verbose");
+    a.href = "about:compartments";
+  } else {
+    let a = appendElementWithText(div1, "a", "option", "More verbose");
+    a.href = "about:compartments?verbose";
   }
 }
 
-function debug(x)
+//---------------------------------------------------------------------------
+
+function Compartment(aUnsafeName, aIsSystemCompartment)
 {
-  var content = $("content");
-  var div = document.createElement("div");
-  div.innerHTML = JSON.stringify(x);
-  content.appendChild(div);
+  this._unsafeName          = aUnsafeName;
+  this._isSystemCompartment = aIsSystemCompartment;
+  // this._nMerged is only defined if > 1
+}
+
+Compartment.prototype = {
+  merge: function(r) {
+    this._nMerged = this._nMerged ? this._nMerged + 1 : 2;
+  }
+};
+
+function getCompartmentsByProcess(aMgr)
+{
+  // Ignore anything that didn't come from the "compartments" multi-reporter.
+  // (Note that some such reports can reach here as single reports if they were
+  // in the child process.)
+
+  function ignoreSingle(aUnsafePath)
+  {
+    return !aUnsafePath.startsWith("compartments/");
+  }
+
+  function ignoreMulti(aMRName)
+  {
+    return aMRName !== "compartments";
+  }
+
+  let compartmentsByProcess = {};
+
+  function handleReport(aProcess, aUnsafePath, aKind, aUnits, aAmount,
+                        aDescription)
+  {
+    let process = aProcess === "" ? "Main" : aProcess;
+    let unsafeNames = aUnsafePath.split('/');
+    let isSystemCompartment;
+    if (unsafeNames[0] === "compartments" && unsafeNames[1] == "system" &&
+        unsafeNames.length == 3)
+    {
+      isSystemCompartment = true;
+
+    } else if (unsafeNames[0] === "compartments" && unsafeNames[1] == "user" &&
+        unsafeNames.length == 3)
+    {
+      isSystemCompartment = false;
+      // These null principal compartments are user compartments according to
+      // the JS engine, but they look odd being shown with content
+      // compartments, so we put them in the system compartments list.
+      if (unsafeNames[2].startsWith("moz-nullprincipal:{")) {
+        isSystemCompartment = true;
+      }
+
+    } else {
+      assert(false, "bad compartments path: " + aUnsafePath);
+    }
+    assert(aKind === KIND_OTHER,   "bad compartments kind");
+    assert(aUnits === UNITS_COUNT, "bad compartments units");
+    assert(aAmount === 1,          "bad compartments amount");
+    assert(aDescription === "",    "bad compartments description");
+
+    let c = new Compartment(unsafeNames[2], isSystemCompartment);
+
+    if (!compartmentsByProcess[process]) {
+      compartmentsByProcess[process] = {};
+    }
+    let compartments = compartmentsByProcess[process];
+    let cOld = compartments[c._unsafeName];
+    if (cOld) {
+      // Already an entry;  must be a duplicated compartment.  This can happen
+      // legitimately.  Merge them.
+      cOld.merge(c);
+    } else {
+      compartments[c._unsafeName] = c;
+    }
+  }
+
+  processMemoryReporters(aMgr, ignoreSingle, ignoreMulti, handleReport);
+
+  return compartmentsByProcess;
+}
+
+function GhostWindow(aUnsafeURL)
+{
+  // Call it _unsafeName rather than _unsafeURL for symmetry with the
+  // Compartment object.
+  this._unsafeName = aUnsafeURL;
+
+  // this._nMerged is only defined if > 1
+}
+
+GhostWindow.prototype = {
+  merge: function(r) {
+    this._nMerged = this._nMerged ? this._nMerged + 1 : 2;
+  }
+};
+
+function getGhostWindowsByProcess(aMgr)
+{
+  function ignoreSingle(aUnsafePath)
+  {
+    return !aUnsafePath.startsWith('ghost-windows/')
+  }
+
+  function ignoreMulti(aName)
+  {
+    return aName !== "ghost-windows";
+  }
+
+  let ghostWindowsByProcess = {};
+
+  function handleReport(aProcess, aUnsafePath, aKind, aUnits, aAmount,
+                        aDescription)
+  {
+    let unsafeSplit = aUnsafePath.split('/');
+    assert(unsafeSplit[0] === 'ghost-windows' && unsafeSplit.length === 2,
+           'Unexpected path in getGhostWindowsByProcess: ' + aUnsafePath);
+    assert(aKind === KIND_OTHER,   "bad ghost-windows kind");
+    assert(aUnits === UNITS_COUNT, "bad ghost-windows units");
+    assert(aAmount === 1,          "bad ghost-windows amount");
+    assert(aDescription === "",    "bad ghost-windows description");
+
+    let unsafeURL = unsafeSplit[1];
+    let ghostWindow = new GhostWindow(unsafeURL);
+
+    let process = aProcess === "" ? "Main" : aProcess;
+    if (!ghostWindowsByProcess[process]) {
+      ghostWindowsByProcess[process] = {};
+    }
+
+    if (ghostWindowsByProcess[process][unsafeURL]) {
+      ghostWindowsByProcess[process][unsafeURL].merge(ghostWindow);
+    }
+    else {
+      ghostWindowsByProcess[process][unsafeURL] = ghostWindow;
+    }
+  }
+
+  processMemoryReporters(aMgr, ignoreSingle, ignoreMulti, handleReport);
+
+  return ghostWindowsByProcess;
+}
+
+//---------------------------------------------------------------------------
+
+function appendProcessAboutCompartmentsElementsHelper(aP, aEntries, aKindString)
+{
+  // aEntries might be null or undefined, e.g. if there are no ghost windows
+  // for this process.
+  aEntries = aEntries ? aEntries : {};
+
+  appendElementWithText(aP, "h2", "", aKindString + "\n");
+
+  let uPre = appendElement(aP, "pre", "entries");
+
+  let lines = [];
+  for (let name in aEntries) {
+    let e = aEntries[name];
+    let line = flipBackslashes(e._unsafeName);
+    if (e._nMerged) {
+      line += ' [' + e._nMerged + ']';
+    }
+    line += '\n';
+    lines.push(line);
+  }
+  lines.sort();
+
+  for (let i = 0; i < lines.length; i++) {
+    appendElementWithText(uPre, "span", "", lines[i]);
+  }
+
+  appendTextNode(aP, "\n");   // gives nice spacing when we cut and paste
+}
+
+/**
+ * Appends the elements for a single process.
+ *
+ * @param aP
+ *        The parent DOM node.
+ * @param aProcess
+ *        The name of the process.
+ * @param aCompartments
+ *        Table of Compartments for this process, indexed by _unsafeName.
+ * @param aGhostWindows
+ *        Array of window URLs of ghost windows.
+ */
+function appendProcessAboutCompartmentsElements(aP, aProcess, aCompartments, aGhostWindows)
+{
+  appendElementWithText(aP, "h1", "", aProcess + " Process\n\n");
+
+  let userCompartments = {};
+  let systemCompartments = {};
+  for (let name in aCompartments) {
+    let c = aCompartments[name];
+    if (c._isSystemCompartment) {
+      systemCompartments[name] = c;
+    }
+    else {
+      userCompartments[name] = c;
+    }
+  }
+
+  appendProcessAboutCompartmentsElementsHelper(aP, userCompartments, "User Compartments");
+  appendProcessAboutCompartmentsElementsHelper(aP, systemCompartments, "System Compartments");
+  appendProcessAboutCompartmentsElementsHelper(aP, aGhostWindows, "Ghost Windows");
 }
 

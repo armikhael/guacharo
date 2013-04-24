@@ -1,41 +1,8 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Global Database.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Andrew Sutherland <asutherland@asutherland.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const EXPORTED_SYMBOLS = ["GlodaAttributeDBDef",
+const EXPORTED_SYMBOLS = ["GlodaAttributeDBDef", "GlodaAccount",
                     "GlodaConversation", "GlodaFolder", "GlodaMessage",
                     "GlodaContact", "GlodaIdentity", "GlodaAttachment"];
 
@@ -44,10 +11,20 @@ const Ci = Components.interfaces;
 const Cr = Components.results;
 const Cu = Components.utils;
 
+Cu.import("resource:///modules/mailServices.js");
+
 Cu.import("resource:///modules/gloda/log4moz.js");
 const LOG = Log4Moz.repository.getLogger("gloda.datamodel");
 
 Cu.import("resource:///modules/gloda/utils.js");
+
+// Make it lazy.
+let gMessenger;
+function getMessenger () {
+  if (!gMessenger)
+    gMessenger = Cc["@mozilla.org/messenger;1"].createInstance(Ci.nsIMessenger);
+  return gMessenger;
+}
 
 /**
  * @class Represents a gloda attribute definition's DB form.  This class
@@ -185,6 +162,27 @@ function MixIn(aConstructor, aMixIn) {
 }
 
 /**
+ * @class A gloda wrapper around nsIMsgIncomingServer.
+ */
+function GlodaAccount(aIncomingServer) {
+  this._incomingServer = aIncomingServer;
+}
+
+GlodaAccount.prototype = {
+  NOUN_ID: 106,
+  get id() { return this._incomingServer.key; },
+  get name() { return this._incomingServer.prettyName; },
+  get incomingServer() { return this._incomingServer; },
+  toString: function gloda_account_toString() {
+    return "Account: " + this.id;
+  },
+
+  toLocaleString: function gloda_account_toLocaleString() {
+    return this.name;
+  }
+};
+
+/**
  * @class A gloda conversation (thread) exists so that messages can belong.
  */
 function GlodaConversation(aDatastore, aID, aSubject, aOldestMessageDate,
@@ -229,6 +227,7 @@ function GlodaFolder(aDatastore, aID, aURI, aDirtyStatus, aPrettyName,
   this._dirtyStatus = aDirtyStatus;
   this._prettyName = aPrettyName;
   this._xpcomFolder = null;
+  this._account = null;
   this._activeIndexing = false;
   this._activeHeaderRetrievalLastStamp = 0;
   this._indexingPriority = aIndexingPriority;
@@ -424,6 +423,19 @@ GlodaFolder.prototype = {
   },
 
   /**
+   * Retrieve a GlodaAccount instance corresponding to this folder.
+   *
+   * @return The GlodaAccount instance.
+   */
+  getAccount: function gloda_folder_getAccount() {
+    if (!this._account) {
+      let msgFolder = this.getXPCOMFolder(this.kActivityFolderOnlyNoData);
+      this._account = new GlodaAccount(msgFolder.server);
+    }
+    return this._account;
+  },
+
+  /**
    * How many milliseconds must a folder have not had any header retrieval
    *  activity before it's okay to lose the database reference?
    */
@@ -470,14 +482,6 @@ GlodaFolder.prototype = {
     }
 
     return true;
-  },
-
-  /**
-   * Return the string associated with this account.
-   */
-  get accountLabel() {
-    let msgFolder = this.getXPCOMFolder(this.kActivityFolderOnlyNoData);
-    return msgFolder.server.prettyName;
   }
 };
 
@@ -549,6 +553,19 @@ GlodaMessage.prototype = {
     }
     catch (ex) {
     }
+    return null;
+  },
+  get account() {
+    // XXX due to a deletion bug it is currently possible to get in a state
+    //  where we have an illegal folderID value.  This will result in an
+    //  exception.  As a workaround, let's just return null in that case.
+    try {
+      if (this._folderID == null)
+        return null;
+      let folder = this._datastore._mapFolderID(this._folderID);
+      return folder.getAccount();
+    }
+    catch (ex) { }
     return null;
   },
   get conversation() {
@@ -680,7 +697,8 @@ GlodaMessage.prototype = {
       if (folderMessage !== null) {
         // verify the message-id header matches what we expect...
         if (folderMessage.messageId != this._headerMessageID) {
-          LOG.info("Message with message key does not match expected " +
+          LOG.info("Message with message key " + this._messageKey +
+                   " in folder '" + folder.URI + "' does not match expected " +
                    "header! (" + this._headerMessageID + " expected, got " +
                    folderMessage.messageId + ")");
           folderMessage = null;
@@ -845,12 +863,14 @@ GlodaIdentity.prototype = {
 /**
  * An attachment, with as much information as we can gather on it
  */
-function GlodaAttachment(aName, aContentType, aSize, aURL, aIsExternal) {
+function GlodaAttachment(aGlodaMessage, aName, aContentType, aSize, aPart, aExternalUrl, aIsExternal) {
   // _datastore set on the prototype by GlodaDatastore
+  this._glodaMessage = aGlodaMessage;
   this._name = aName;
   this._contentType = aContentType;
   this._size = aSize;
-  this._url = aURL;
+  this._part = aPart;
+  this._externalUrl = aExternalUrl;
   this._isExternal = aIsExternal;
 }
 
@@ -860,7 +880,22 @@ GlodaAttachment.prototype = {
   get name() { return this._name; },
   get contentType() { return this._contentType; },
   get size() { return this._size; },
-  get url() { return this._url; },
+  get url() {
+    if (this.isExternal)
+      return this._externalUrl;
+    else {
+      let uri = this._glodaMessage.folderMessageURI;
+      if (!uri)
+        throw new Error("The message doesn't exist anymore, unable to rebuild attachment URL");
+      let neckoURL = {};
+      let msgService = getMessenger().messageServiceFromURI(uri);
+      msgService.GetUrlForUri(uri, neckoURL, null);
+      let url = neckoURL.value.spec;
+      let hasParamAlready = url.match(/\?[a-z]+=[^\/]+$/);
+      let sep = hasParamAlready ? "&" : "?";
+      return url+sep+"part="+this._part+"&filename="+encodeURIComponent(this._name);
+    }
+  },
   get isExternal() { return this._isExternal; },
 
   toString: function gloda_attachment_toString() {

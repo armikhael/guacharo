@@ -1,44 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   William A. ("PowerGUI") Law <law@netscape.com>
- *   Scott MacGregor <mscott@netscape.com>
- *   jean-Francois Ducarroz <ducarroz@netscape.com>
- *   Žiga Sancin <bisi@pikslar.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var nsIMsgCompDeliverMode = Components.interfaces.nsIMsgCompDeliverMode;
 
@@ -46,7 +9,7 @@ var nsIMsgCompDeliverMode = Components.interfaces.nsIMsgCompDeliverMode;
 var dialog;
 
 // the msgProgress is a nsIMsgProgress object
-var msgProgress = null; 
+var msgProgress = null;
 
 // random global variables...
 var itsASaveOperation = false;
@@ -61,7 +24,7 @@ var progressListener = {
         // Put progress meter in undetermined mode.
         dialog.progress.setAttribute("mode", "undetermined");
       }
-      
+
       if (aStateFlags & Components.interfaces.nsIWebProgressListener.STATE_STOP)
       {
         // we are done sending/saving the message...
@@ -82,7 +45,7 @@ var progressListener = {
         window.close();
       }
     },
-    
+
     onProgressChange: function(aWebProgress, aRequest, aCurSelfProgress, aMaxSelfProgress, aCurTotalProgress, aMaxTotalProgress)
     {
       // Calculate percentage.
@@ -92,17 +55,17 @@ var progressListener = {
         percent = Math.round(aCurTotalProgress / aMaxTotalProgress * 100);
         if (percent > 100)
           percent = 100;
-        
+
         dialog.progress.removeAttribute("mode");
-        
+
         // Advance progress meter.
         dialog.progress.setAttribute("value", percent);
 
         // Update percentage label on progress meter.
         var percentMsg = gSendProgressStringBundle.getFormattedString("percentMsg", [percent]);
         dialog.progressText.setAttribute("value", percentMsg);
-      } 
-      else 
+      }
+      else
       {
         // Progress meter should be barber-pole in this case.
         dialog.progress.setAttribute("mode", "undetermined");
@@ -111,7 +74,7 @@ var progressListener = {
       }
     },
 
-	  onLocationChange: function(aWebProgress, aRequest, aLocation)
+    onLocationChange: function(aWebProgress, aRequest, aLocation, aFlags)
     {
       // we can ignore this notification
     },
@@ -133,7 +96,7 @@ var progressListener = {
           iid.equals(Components.interfaces.nsISupportsWeakReference) ||
           iid.equals(Components.interfaces.nsISupports))
         return this;
-     
+
       throw Components.results.NS_NOINTERFACE;
     }
 };
@@ -141,12 +104,20 @@ var progressListener = {
 function onLoad()
 {
     // Set global variables.
-    var subject = "";
+    let subject = "";
     gSendProgressStringBundle = document.getElementById("sendProgressStringBundle");
+
     msgProgress = window.arguments[0];
+    if (!msgProgress)
+    {
+      Components.utils.reportError("Invalid argument to sendProgress.xul.");
+      window.close();
+      return;
+    }
+
     if (window.arguments[1])
     {
-      var progressParams = window.arguments[1].QueryInterface(Components.interfaces.nsIMsgComposeProgressParams)
+      let progressParams = window.arguments[1].QueryInterface(Components.interfaces.nsIMsgComposeProgressParams);
       if (progressParams)
       {
         itsASaveOperation = (progressParams.deliveryMode != nsIMsgCompDeliverMode.Now);
@@ -154,11 +125,12 @@ function onLoad()
       }
     }
 
-    if (!msgProgress)
-    {
-      dump("Invalid argument to sendProgress.xul\n");
-      window.close()
-      return;
+    if (subject) {
+      let title = itsASaveOperation ? "titleSaveMsgSubject" : "titleSendMsgSubject";
+      document.title = gSendProgressStringBundle.getFormattedString(title, [subject]);
+    } else {
+      let title = itsASaveOperation ? "titleSaveMsg" : "titleSendMsg";
+      document.title = gSendProgressStringBundle.getString(title);
     }
 
     dialog = {};
@@ -168,12 +140,9 @@ function onLoad()
 
     // set our web progress listener on the helper app launcher
     msgProgress.registerListener(progressListener);
-
-    var prefix = itsASaveOperation ? "titlePrefixSave" : "titlePrefixSend";
-    document.title = gSendProgressStringBundle.getString(prefix) + " " + subject;
 }
 
-function onUnload() 
+function onUnload()
 {
   if (msgProgress)
   {
@@ -186,7 +155,7 @@ function onUnload()
 }
 
 // If the user presses cancel, tell the app launcher and close the dialog...
-function onCancel () 
+function onCancel()
 {
   // Cancel app launcher.
   try
@@ -196,7 +165,7 @@ function onCancel ()
   {
     return true;
   }
-    
+
   // don't Close up dialog by returning false, the backend will close the dialog when everything will be aborted.
   return false;
 }

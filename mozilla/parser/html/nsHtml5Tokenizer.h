@@ -35,9 +35,7 @@
 #include "nsIAtom.h"
 #include "nsHtml5AtomTable.h"
 #include "nsString.h"
-#include "nsINameSpaceManager.h"
 #include "nsIContent.h"
-#include "nsIDocument.h"
 #include "nsTraceRefcnt.h"
 #include "jArray.h"
 #include "nsHtml5DocumentMode.h"
@@ -45,10 +43,10 @@
 #include "nsHtml5NamedCharacters.h"
 #include "nsHtml5NamedCharactersAccel.h"
 #include "nsHtml5Atoms.h"
-#include "nsHtml5ByteReadable.h"
-#include "nsIUnicodeDecoder.h"
 #include "nsAHtml5TreeBuilderState.h"
 #include "nsHtml5Macros.h"
+#include "nsHtml5Highlighter.h"
+#include "nsHtml5TokenizerLoopPolicies.h"
 
 class nsHtml5StreamParser;
 
@@ -74,56 +72,56 @@ class nsHtml5Tokenizer
     static PRUnichar OCTYPE[];
     static PRUnichar UBLIC[];
     static PRUnichar YSTEM[];
-    static staticJArray<PRUnichar,PRInt32> TITLE_ARR;
-    static staticJArray<PRUnichar,PRInt32> SCRIPT_ARR;
-    static staticJArray<PRUnichar,PRInt32> STYLE_ARR;
-    static staticJArray<PRUnichar,PRInt32> PLAINTEXT_ARR;
-    static staticJArray<PRUnichar,PRInt32> XMP_ARR;
-    static staticJArray<PRUnichar,PRInt32> TEXTAREA_ARR;
-    static staticJArray<PRUnichar,PRInt32> IFRAME_ARR;
-    static staticJArray<PRUnichar,PRInt32> NOEMBED_ARR;
-    static staticJArray<PRUnichar,PRInt32> NOSCRIPT_ARR;
-    static staticJArray<PRUnichar,PRInt32> NOFRAMES_ARR;
+    static staticJArray<PRUnichar,int32_t> TITLE_ARR;
+    static staticJArray<PRUnichar,int32_t> SCRIPT_ARR;
+    static staticJArray<PRUnichar,int32_t> STYLE_ARR;
+    static staticJArray<PRUnichar,int32_t> PLAINTEXT_ARR;
+    static staticJArray<PRUnichar,int32_t> XMP_ARR;
+    static staticJArray<PRUnichar,int32_t> TEXTAREA_ARR;
+    static staticJArray<PRUnichar,int32_t> IFRAME_ARR;
+    static staticJArray<PRUnichar,int32_t> NOEMBED_ARR;
+    static staticJArray<PRUnichar,int32_t> NOSCRIPT_ARR;
+    static staticJArray<PRUnichar,int32_t> NOFRAMES_ARR;
   protected:
     nsHtml5TreeBuilder* tokenHandler;
     nsHtml5StreamParser* encodingDeclarationHandler;
-    PRBool lastCR;
-    PRInt32 stateSave;
+    bool lastCR;
+    int32_t stateSave;
   private:
-    PRInt32 returnStateSave;
+    int32_t returnStateSave;
   protected:
-    PRInt32 index;
+    int32_t index;
   private:
-    PRBool forceQuirks;
+    bool forceQuirks;
     PRUnichar additional;
-    PRInt32 entCol;
-    PRInt32 firstCharKey;
-    PRInt32 lo;
-    PRInt32 hi;
-    PRInt32 candidate;
-    PRInt32 strBufMark;
-    PRInt32 prevValue;
+    int32_t entCol;
+    int32_t firstCharKey;
+    int32_t lo;
+    int32_t hi;
+    int32_t candidate;
+    int32_t strBufMark;
+    int32_t prevValue;
   protected:
-    PRInt32 value;
+    int32_t value;
   private:
-    PRBool seenDigits;
+    bool seenDigits;
   protected:
-    PRInt32 cstart;
+    int32_t cstart;
   private:
     nsString* publicId;
     nsString* systemId;
-    autoJArray<PRUnichar,PRInt32> strBuf;
-    PRInt32 strBufLen;
-    autoJArray<PRUnichar,PRInt32> longStrBuf;
-    PRInt32 longStrBufLen;
-    autoJArray<PRUnichar,PRInt32> bmpChar;
-    autoJArray<PRUnichar,PRInt32> astralChar;
+    autoJArray<PRUnichar,int32_t> strBuf;
+    int32_t strBufLen;
+    autoJArray<PRUnichar,int32_t> longStrBuf;
+    int32_t longStrBufLen;
+    autoJArray<PRUnichar,int32_t> bmpChar;
+    autoJArray<PRUnichar,int32_t> astralChar;
   protected:
     nsHtml5ElementName* endTagExpectation;
   private:
-    jArray<PRUnichar,PRInt32> endTagExpectationAsArray;
+    jArray<PRUnichar,int32_t> endTagExpectationAsArray;
   protected:
-    PRBool endTag;
+    bool endTag;
   private:
     nsHtml5ElementName* tagName;
   protected:
@@ -133,24 +131,25 @@ class nsHtml5Tokenizer
     nsString* publicIdentifier;
     nsString* systemIdentifier;
     nsHtml5HtmlAttributes* attributes;
-    PRInt32 mappingLangToXmlLang;
-    PRBool shouldSuspend;
+    bool shouldSuspend;
   protected:
-    PRBool confident;
+    bool confident;
   private:
-    PRInt32 line;
+    int32_t line;
     nsHtml5AtomTable* interner;
+    bool viewingXmlSource;
   public:
-    nsHtml5Tokenizer(nsHtml5TreeBuilder* tokenHandler);
+    nsHtml5Tokenizer(nsHtml5TreeBuilder* tokenHandler, bool viewingXmlSource);
     void setInterner(nsHtml5AtomTable* interner);
     void initLocation(nsString* newPublicId, nsString* newSystemId);
-    void setStateAndEndTagExpectation(PRInt32 specialTokenizerState, nsIAtom* endTagExpectation);
-    void setStateAndEndTagExpectation(PRInt32 specialTokenizerState, nsHtml5ElementName* endTagExpectation);
+    bool isViewingXmlSource();
+    void setStateAndEndTagExpectation(int32_t specialTokenizerState, nsIAtom* endTagExpectation);
+    void setStateAndEndTagExpectation(int32_t specialTokenizerState, nsHtml5ElementName* endTagExpectation);
   private:
     void endTagExpectationToArray();
   public:
-    void setLineNumber(PRInt32 line);
-    inline PRInt32 getLineNumber()
+    void setLineNumber(int32_t line);
+    inline int32_t getLineNumber()
     {
       return line;
     }
@@ -193,32 +192,32 @@ class nsHtml5Tokenizer
 
     inline void adjustDoubleHyphenAndAppendToLongStrBufAndErr(PRUnichar c)
     {
-
+      errConsecutiveHyphens();
       appendLongStrBuf(c);
     }
 
-    void appendLongStrBuf(PRUnichar* buffer, PRInt32 offset, PRInt32 length);
+    void appendLongStrBuf(PRUnichar* buffer, int32_t offset, int32_t length);
     inline void appendStrBufToLongStrBuf()
     {
       appendLongStrBuf(strBuf, 0, strBufLen);
     }
 
     nsString* longStrBufToString();
-    void emitComment(PRInt32 provisionalHyphens, PRInt32 pos);
+    void emitComment(int32_t provisionalHyphens, int32_t pos);
   protected:
-    void flushChars(PRUnichar* buf, PRInt32 pos);
+    void flushChars(PRUnichar* buf, int32_t pos);
   private:
     void resetAttributes();
     void strBufToElementNameString();
-    PRInt32 emitCurrentTagToken(PRBool selfClosing, PRInt32 pos);
+    int32_t emitCurrentTagToken(bool selfClosing, int32_t pos);
     void attributeNameComplete();
     void addAttributeWithoutValue();
     void addAttributeWithValue();
   public:
     void start();
-    PRBool tokenizeBuffer(nsHtml5UTF16Buffer* buffer);
+    bool tokenizeBuffer(nsHtml5UTF16Buffer* buffer);
   private:
-    PRInt32 stateLoop(PRInt32 state, PRUnichar c, PRInt32 pos, PRUnichar* buf, PRBool reconsume, PRInt32 returnState, PRInt32 endPos);
+    template<class P> int32_t stateLoop(int32_t state, PRUnichar c, int32_t pos, PRUnichar* buf, bool reconsume, int32_t returnState, int32_t endPos);
     void initDoctypeFields();
     inline void adjustDoubleHyphenAndAppendToLongStrBufCarriageReturn()
     {
@@ -248,7 +247,7 @@ class nsHtml5Tokenizer
     inline void silentCarriageReturn()
     {
       ++line;
-      lastCR = PR_TRUE;
+      lastCR = true;
     }
 
     inline void silentLineFeed()
@@ -257,33 +256,33 @@ class nsHtml5Tokenizer
     }
 
   private:
-    void emitCarriageReturn(PRUnichar* buf, PRInt32 pos);
-    void emitReplacementCharacter(PRUnichar* buf, PRInt32 pos);
-    void emitPlaintextReplacementCharacter(PRUnichar* buf, PRInt32 pos);
+    void emitCarriageReturn(PRUnichar* buf, int32_t pos);
+    void emitReplacementCharacter(PRUnichar* buf, int32_t pos);
+    void emitPlaintextReplacementCharacter(PRUnichar* buf, int32_t pos);
     void setAdditionalAndRememberAmpersandLocation(PRUnichar add);
     void bogusDoctype();
     void bogusDoctypeWithoutQuirks();
-    void emitOrAppendStrBuf(PRInt32 returnState);
-    void handleNcrValue(PRInt32 returnState);
+    void emitOrAppendStrBuf(int32_t returnState);
+    void handleNcrValue(int32_t returnState);
   public:
     void eof();
   private:
-    void emitDoctypeToken(PRInt32 pos);
+    void emitDoctypeToken(int32_t pos);
   protected:
-    inline PRUnichar checkChar(PRUnichar* buf, PRInt32 pos)
+    inline PRUnichar checkChar(PRUnichar* buf, int32_t pos)
     {
       return buf[pos];
     }
 
   public:
-    PRBool internalEncodingDeclaration(nsString* internalCharset);
+    bool internalEncodingDeclaration(nsString* internalCharset);
   private:
-    void emitOrAppendTwo(const PRUnichar* val, PRInt32 returnState);
-    void emitOrAppendOne(const PRUnichar* val, PRInt32 returnState);
+    void emitOrAppendTwo(const PRUnichar* val, int32_t returnState);
+    void emitOrAppendOne(const PRUnichar* val, int32_t returnState);
   public:
     void end();
     void requestSuspension();
-    PRBool isInDataState();
+    bool isInDataState();
     void resetToDataState();
     void loadState(nsHtml5Tokenizer* other);
     void initializeWithoutStarting();
@@ -291,6 +290,8 @@ class nsHtml5Tokenizer
     ~nsHtml5Tokenizer();
     static void initializeStatics();
     static void releaseStatics();
+
+#include "nsHtml5TokenizerHSupplement.h"
 };
 
 #define NS_HTML5TOKENIZER_DATA_AND_RCDATA_MASK ~1
@@ -367,6 +368,8 @@ class nsHtml5Tokenizer
 #define NS_HTML5TOKENIZER_SCRIPT_DATA_DOUBLE_ESCAPED_DASH 70
 #define NS_HTML5TOKENIZER_SCRIPT_DATA_DOUBLE_ESCAPED_DASH_DASH 71
 #define NS_HTML5TOKENIZER_SCRIPT_DATA_DOUBLE_ESCAPE_END 72
+#define NS_HTML5TOKENIZER_PROCESSING_INSTRUCTION 73
+#define NS_HTML5TOKENIZER_PROCESSING_INSTRUCTION_QUESTION_MARK 74
 #define NS_HTML5TOKENIZER_LEAD_OFFSET (0xD800 - (0x10000 >> 10))
 #define NS_HTML5TOKENIZER_BUFFER_GROW_BY 1024
 

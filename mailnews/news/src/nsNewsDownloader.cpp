@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"
 #include "nntpCore.h"
@@ -56,6 +24,7 @@
 #include "nsServiceManagerUtils.h"
 #include "nsComponentManagerUtils.h"
 #include "nsMsgUtils.h"
+#include "mozilla/Services.h"
 
 // This file contains the news article download state machine.
 
@@ -64,19 +33,19 @@
 // or subclasses thereof. News can download marked objects, for example.
 nsresult nsNewsDownloader::DownloadArticles(nsIMsgWindow *window, nsIMsgFolder *folder, nsTArray<nsMsgKey> *pIds)
 {
-  if (pIds != nsnull)
+  if (pIds != nullptr)
     m_keysToDownload.InsertElementsAt(0, pIds->Elements(), pIds->Length());
 
   if (!m_keysToDownload.IsEmpty())
-    m_downloadFromKeys = PR_TRUE;
+    m_downloadFromKeys = true;
 
   m_folder = folder;
   m_window = window;
   m_numwrote = 0;
 
-  PRBool headersToDownload = GetNextHdrToRetrieve();
+  bool headersToDownload = GetNextHdrToRetrieve();
   // should we have a special error code for failure here?
-  return (headersToDownload) ? DownloadNext(PR_TRUE) : NS_ERROR_FAILURE;
+  return (headersToDownload) ? DownloadNext(true) : NS_ERROR_FAILURE;
 }
 
 /* Saving news messages
@@ -87,26 +56,26 @@ NS_IMPL_ISUPPORTS2(nsNewsDownloader, nsIUrlListener, nsIMsgSearchNotify)
 nsNewsDownloader::nsNewsDownloader(nsIMsgWindow *window, nsIMsgDatabase *msgDB, nsIUrlListener *listener)
 {
   m_numwrote = 0;
-  m_downloadFromKeys = PR_FALSE;
+  m_downloadFromKeys = false;
   m_newsDB = msgDB;
-  m_abort = PR_FALSE;
+  m_abort = false;
   m_listener = listener;
   m_window = window;
   m_lastPercent = -1;
-  LL_I2L(m_lastProgressTime, 0);
+  m_lastProgressTime = 0;
   // not the perfect place for this, but I think it will work.
   if (m_window)
-    m_window->SetStopped(PR_FALSE);
+    m_window->SetStopped(false);
 }
 
 nsNewsDownloader::~nsNewsDownloader()
 {
   if (m_listener)
-    m_listener->OnStopRunningUrl(/* don't have a url */nsnull, m_status);
+    m_listener->OnStopRunningUrl(/* don't have a url */nullptr, m_status);
   if (m_newsDB)
   {
     m_newsDB->Commit(nsMsgDBCommitType::kLargeCommit);
-    m_newsDB = nsnull;
+    m_newsDB = nullptr;
   }
 }
 
@@ -117,7 +86,7 @@ NS_IMETHODIMP nsNewsDownloader::OnStartRunningUrl(nsIURI* url)
 
 NS_IMETHODIMP nsNewsDownloader::OnStopRunningUrl(nsIURI* url, nsresult exitCode)
 {
-  PRBool stopped = PR_FALSE;
+  bool stopped = false;
   if (m_window)
     m_window->GetStopped(&stopped);
   if (stopped)
@@ -125,51 +94,51 @@ NS_IMETHODIMP nsNewsDownloader::OnStopRunningUrl(nsIURI* url, nsresult exitCode)
 
  nsresult rv = exitCode;
   if (NS_SUCCEEDED(exitCode) || exitCode == NS_MSG_NEWS_ARTICLE_NOT_FOUND)
-    rv = DownloadNext(PR_FALSE);
+    rv = DownloadNext(false);
 
   return rv;
 }
 
-nsresult nsNewsDownloader::DownloadNext(PRBool firstTimeP)
+nsresult nsNewsDownloader::DownloadNext(bool firstTimeP)
 {
   nsresult rv;
   if (!firstTimeP)
   {
-    PRBool moreHeaders = GetNextHdrToRetrieve();
+    bool moreHeaders = GetNextHdrToRetrieve();
     if (!moreHeaders)
     {
       if (m_listener)
-        m_listener->OnStopRunningUrl(nsnull, NS_OK);
+        m_listener->OnStopRunningUrl(nullptr, NS_OK);
       return NS_OK;
     }
   }
   StartDownload();
-  m_wroteAnyP = PR_FALSE;
+  m_wroteAnyP = false;
   nsCOMPtr <nsINntpService> nntpService = do_GetService(NS_NNTPSERVICE_CONTRACTID,&rv);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  return nntpService->FetchMessage(m_folder, m_keyToDownload, m_window, nsnull, this, nsnull);
+  return nntpService->FetchMessage(m_folder, m_keyToDownload, m_window, nullptr, this, nullptr);
 }
 
-PRBool DownloadNewsArticlesToOfflineStore::GetNextHdrToRetrieve()
+bool DownloadNewsArticlesToOfflineStore::GetNextHdrToRetrieve()
 {
   nsresult rv;
 
   if (m_downloadFromKeys)
     return nsNewsDownloader::GetNextHdrToRetrieve();
 
-  if (m_headerEnumerator == nsnull)
+  if (m_headerEnumerator == nullptr)
     rv = m_newsDB->EnumerateMessages(getter_AddRefs(m_headerEnumerator));
 
-  PRBool hasMore = PR_FALSE;
+  bool hasMore = false;
 
   while (NS_SUCCEEDED(rv = m_headerEnumerator->HasMoreElements(&hasMore)) && hasMore)
   {
     nsCOMPtr <nsISupports> supports;
     rv = m_headerEnumerator->GetNext(getter_AddRefs(supports));
     m_newsHeader = do_QueryInterface(supports);
-    NS_ENSURE_SUCCESS(rv, PR_FALSE);
-    PRUint32 hdrFlags;
+    NS_ENSURE_SUCCESS(rv, false);
+    uint32_t hdrFlags;
     m_newsHeader->GetFlags(&hdrFlags);
     if (hdrFlags & nsMsgMessageFlags::Marked)
     {
@@ -178,7 +147,7 @@ PRBool DownloadNewsArticlesToOfflineStore::GetNextHdrToRetrieve()
     }
     else
     {
-      m_newsHeader = nsnull;
+      m_newsHeader = nullptr;
     }
   }
   return hasMore;
@@ -187,39 +156,34 @@ PRBool DownloadNewsArticlesToOfflineStore::GetNextHdrToRetrieve()
 void nsNewsDownloader::Abort() {}
 void nsNewsDownloader::Complete() {}
 
-PRBool nsNewsDownloader::GetNextHdrToRetrieve()
+bool nsNewsDownloader::GetNextHdrToRetrieve()
 {
   nsresult rv;
   if (m_downloadFromKeys)
   {
-    if (m_numwrote >= (PRInt32) m_keysToDownload.Length())
-      return PR_FALSE;
+    if (m_numwrote >= (int32_t) m_keysToDownload.Length())
+      return false;
 
     m_keyToDownload = m_keysToDownload[m_numwrote++];
-    PRInt32 percent;
-    percent = (100 * m_numwrote) / (PRInt32) m_keysToDownload.Length();
+    int32_t percent;
+    percent = (100 * m_numwrote) / (int32_t) m_keysToDownload.Length();
 
-    PRInt64 nowMS = LL_ZERO;
+    int64_t nowMS = 0;
     if (percent < 100)  // always need to do 100%
     {
-      int64 minIntervalBetweenProgress;
-
-      LL_I2L(minIntervalBetweenProgress, 750);
-      int64 diffSinceLastProgress;
-      LL_I2L(nowMS, PR_IntervalToMilliseconds(PR_IntervalNow()));
-      LL_SUB(diffSinceLastProgress, nowMS, m_lastProgressTime); // r = a - b
-      LL_SUB(diffSinceLastProgress, diffSinceLastProgress, minIntervalBetweenProgress); // r = a - b
-      if (!LL_GE_ZERO(diffSinceLastProgress))
-        return PR_TRUE;
+      nowMS = PR_IntervalToMilliseconds(PR_IntervalNow());
+      if (nowMS - m_lastProgressTime < 750)
+        return true;
     }
 
     m_lastProgressTime = nowMS;
     nsCOMPtr <nsIMsgNewsFolder> newsFolder = do_QueryInterface(m_folder);
-    nsCOMPtr<nsIStringBundleService> bundleService = do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-    NS_ENSURE_SUCCESS(rv, PR_FALSE);
+    nsCOMPtr<nsIStringBundleService> bundleService =
+      mozilla::services::GetStringBundleService();
+    NS_ENSURE_TRUE(bundleService, false);
     nsCOMPtr<nsIStringBundle> bundle;
     rv = bundleService->CreateBundle(NEWS_MSGS_URL, getter_AddRefs(bundle));
-    NS_ENSURE_SUCCESS(rv, PR_FALSE);
+    NS_ENSURE_SUCCESS(rv, false);
 
     nsAutoString firstStr;
     firstStr.AppendInt(m_numwrote);
@@ -233,15 +197,15 @@ PRBool nsNewsDownloader::GetNextHdrToRetrieve()
     const PRUnichar *formatStrings[3] = { firstStr.get(), totalStr.get(), prettiestName.get() };
     rv = bundle->FormatStringFromName(NS_LITERAL_STRING("downloadingArticlesForOffline").get(),
                                       formatStrings, 3, getter_Copies(statusString));
-    NS_ENSURE_SUCCESS(rv, PR_FALSE);
+    NS_ENSURE_SUCCESS(rv, false);
     ShowProgress(statusString.get(), percent);
-    return PR_TRUE;
+    return true;
   }
-  NS_ASSERTION(PR_FALSE, "shouldn't get here if we're not downloading from keys.");
-  return PR_FALSE;  // shouldn't get here if we're not downloading from keys.
+  NS_ASSERTION(false, "shouldn't get here if we're not downloading from keys.");
+  return false;  // shouldn't get here if we're not downloading from keys.
 }
 
-nsresult nsNewsDownloader::ShowProgress(const PRUnichar *progressString, PRInt32 percent)
+nsresult nsNewsDownloader::ShowProgress(const PRUnichar *progressString, int32_t percent)
 {
   if (!m_statusFeedback)
   {
@@ -269,7 +233,7 @@ NS_IMETHODIMP DownloadNewsArticlesToOfflineStore::OnStartRunningUrl(nsIURI* url)
 NS_IMETHODIMP DownloadNewsArticlesToOfflineStore::OnStopRunningUrl(nsIURI* url, nsresult exitCode)
 {
   m_status = exitCode;
-  if (m_newsHeader != nsnull)
+  if (m_newsHeader != nullptr)
   {
 #ifdef DEBUG_bienvenu
     //    XP_Trace("finished retrieving %ld\n", m_newsHeader->GetMessageKey());
@@ -278,10 +242,10 @@ NS_IMETHODIMP DownloadNewsArticlesToOfflineStore::OnStopRunningUrl(nsIURI* url, 
     {
       nsMsgKey msgKey;
       m_newsHeader->GetMessageKey(&msgKey);
-      m_newsDB->MarkMarked(msgKey, PR_FALSE, nsnull);
+      m_newsDB->MarkMarked(msgKey, false, nullptr);
     }
   }
-  m_newsHeader = nsnull;
+  m_newsHeader = nullptr;
   return nsNewsDownloader::OnStopRunningUrl(url, exitCode);
 }
 
@@ -296,7 +260,7 @@ NS_IMETHODIMP nsNewsDownloader::OnSearchHit(nsIMsgDBHdr *header, nsIMsgFolder *f
   NS_ENSURE_ARG(header);
 
 
-  PRUint32 msgFlags;
+  uint32_t msgFlags;
   header->GetFlags(&msgFlags);
   // only need to download articles we don't already have...
   if (! (msgFlags & nsMsgMessageFlags::Offline))
@@ -313,13 +277,13 @@ NS_IMETHODIMP nsNewsDownloader::OnSearchDone(nsresult status)
   if (m_keysToDownload.IsEmpty())
   {
     if (m_listener)
-      return m_listener->OnStopRunningUrl(nsnull, NS_OK);
+      return m_listener->OnStopRunningUrl(nullptr, NS_OK);
   }
   nsresult rv = DownloadArticles(m_window, m_folder,
-                  /* we've already set m_keysToDownload, so don't pass it in */ nsnull);
+                  /* we've already set m_keysToDownload, so don't pass it in */ nullptr);
   if (NS_FAILED(rv))
     if (m_listener)
-      m_listener->OnStopRunningUrl(nsnull, rv);
+      m_listener->OnStopRunningUrl(nullptr, rv);
 
   return rv;
 }
@@ -352,7 +316,7 @@ DownloadMatchingNewsArticlesToNewsDB::DownloadMatchingNewsArticlesToNewsDB
   m_window = window;
   m_folder = folder;
   m_newsDB = newsDB;
-  m_downloadFromKeys = PR_TRUE;  // search term matching means downloadFromKeys.
+  m_downloadFromKeys = true;  // search term matching means downloadFromKeys.
 }
 
 DownloadMatchingNewsArticlesToNewsDB::~DownloadMatchingNewsArticlesToNewsDB()
@@ -367,9 +331,9 @@ nsMsgDownloadAllNewsgroups::nsMsgDownloadAllNewsgroups(nsIMsgWindow *window, nsI
 {
   m_window = window;
   m_listener = listener;
-  m_downloaderForGroup = new DownloadMatchingNewsArticlesToNewsDB(window, nsnull, nsnull, this);
+  m_downloaderForGroup = new DownloadMatchingNewsArticlesToNewsDB(window, nullptr, nullptr, this);
   NS_IF_ADDREF(m_downloaderForGroup);
-  m_downloadedHdrsForCurGroup = PR_FALSE;
+  m_downloadedHdrsForCurGroup = false;
 }
 
 nsMsgDownloadAllNewsgroups::~nsMsgDownloadAllNewsgroups()
@@ -390,12 +354,12 @@ nsMsgDownloadAllNewsgroups::OnStopRunningUrl(nsIURI* url, nsresult exitCode)
   {
     if (m_downloadedHdrsForCurGroup)
     {
-      PRBool savingArticlesOffline = PR_FALSE;
+      bool savingArticlesOffline = false;
       nsCOMPtr <nsIMsgNewsFolder> newsFolder = do_QueryInterface(m_currentFolder);
       if (newsFolder)
         newsFolder->GetSaveArticleOffline(&savingArticlesOffline);
 
-      m_downloadedHdrsForCurGroup = PR_FALSE;
+      m_downloadedHdrsForCurGroup = false;
       if (savingArticlesOffline) // skip this group - we're saving to it already
         rv = ProcessNextGroup();
       else
@@ -414,16 +378,16 @@ nsMsgDownloadAllNewsgroups::OnStopRunningUrl(nsIURI* url, nsresult exitCode)
 
 // leaves m_currentServer at the next nntp "server" that
 // might have folders to download for offline use. If no more servers,
-// m_currentServer will be left at nsnull.
+// m_currentServer will be left at nullptr.
 // Also, sets up m_serverEnumerator to enumerate over the server
 // If no servers found, m_serverEnumerator will be left at null,
-nsresult nsMsgDownloadAllNewsgroups::AdvanceToNextServer(PRBool *done)
+nsresult nsMsgDownloadAllNewsgroups::AdvanceToNextServer(bool *done)
 {
   nsresult rv;
 
   NS_ENSURE_ARG(done);
 
-  *done = PR_TRUE;
+  *done = true;
   if (!m_allServers)
   {
     nsCOMPtr<nsIMsgAccountManager> accountManager =
@@ -434,9 +398,9 @@ nsresult nsMsgDownloadAllNewsgroups::AdvanceToNextServer(PRBool *done)
     rv = accountManager->GetAllServers(getter_AddRefs(m_allServers));
     NS_ENSURE_SUCCESS(rv, rv);
   }
-  PRUint32 serverIndex = (m_currentServer) ? m_allServers->IndexOf(m_currentServer) + 1 : 0;
-  m_currentServer = nsnull;
-  PRUint32 numServers;
+  uint32_t serverIndex = (m_currentServer) ? m_allServers->IndexOf(m_currentServer) + 1 : 0;
+  m_currentServer = nullptr;
+  uint32_t numServers;
   m_allServers->Count(&numServers);
   nsCOMPtr <nsIMsgFolder> rootFolder;
 
@@ -463,7 +427,7 @@ nsresult nsMsgDownloadAllNewsgroups::AdvanceToNextServer(PRBool *done)
           rv = m_serverEnumerator->First();
           if (NS_SUCCEEDED(rv))
           {
-            *done = PR_FALSE;
+            *done = false;
             break;
           }
         }
@@ -473,33 +437,33 @@ nsresult nsMsgDownloadAllNewsgroups::AdvanceToNextServer(PRBool *done)
   return rv;
 }
 
-nsresult nsMsgDownloadAllNewsgroups::AdvanceToNextGroup(PRBool *done)
+nsresult nsMsgDownloadAllNewsgroups::AdvanceToNextGroup(bool *done)
 {
   nsresult rv;
   NS_ENSURE_ARG(done);
-  *done = PR_TRUE;
+  *done = true;
 
   if (m_currentFolder)
   {
     nsCOMPtr <nsIMsgNewsFolder> newsFolder = do_QueryInterface(m_currentFolder);
     if (newsFolder)
-      newsFolder->SetSaveArticleOffline(PR_FALSE);
+      newsFolder->SetSaveArticleOffline(false);
 
     nsCOMPtr<nsIMsgMailSession> session =
              do_GetService(NS_MSGMAILSESSION_CONTRACTID, &rv);
     if (NS_SUCCEEDED(rv) && session)
     {
-      PRBool folderOpen;
-      PRUint32 folderFlags;
+      bool folderOpen;
+      uint32_t folderFlags;
       m_currentFolder->GetFlags(&folderFlags);
       session->IsFolderOpenInWindow(m_currentFolder, &folderOpen);
       if (!folderOpen && ! (folderFlags & (nsMsgFolderFlags::Trash | nsMsgFolderFlags::Inbox)))
-        m_currentFolder->SetMsgDatabase(nsnull);
+        m_currentFolder->SetMsgDatabase(nullptr);
     }
-    m_currentFolder = nsnull;
+    m_currentFolder = nullptr;
   }
 
-  *done = PR_FALSE;
+  *done = false;
 
   if (!m_currentServer)
      rv = AdvanceToNextServer(done);
@@ -513,7 +477,7 @@ nsresult nsMsgDownloadAllNewsgroups::AdvanceToNextGroup(PRBool *done)
     nsCOMPtr <nsISupports> supports;
     rv = m_serverEnumerator->CurrentItem(getter_AddRefs(supports));
     m_currentFolder = do_QueryInterface(supports);
-    *done = PR_FALSE;
+    *done = false;
   }
   return rv;
 }
@@ -538,14 +502,14 @@ nsresult DownloadMatchingNewsArticlesToNewsDB::RunSearch(nsIMsgFolder *folder, n
 nsresult nsMsgDownloadAllNewsgroups::ProcessNextGroup()
 {
   nsresult rv = NS_OK;
-  PRBool done = PR_FALSE;
+  bool done = false;
 
   while (NS_SUCCEEDED(rv) && !done)
   {
     rv = AdvanceToNextGroup(&done);
     if (m_currentFolder)
     {
-      PRUint32 folderFlags;
+      uint32_t folderFlags;
       m_currentFolder->GetFlags(&folderFlags);
       if (folderFlags & nsMsgFolderFlags::Offline)
         break;
@@ -554,9 +518,9 @@ nsresult nsMsgDownloadAllNewsgroups::ProcessNextGroup()
   if (NS_FAILED(rv) || done)
   {
     if (m_listener)
-      return m_listener->OnStopRunningUrl(nsnull, NS_OK);
+      return m_listener->OnStopRunningUrl(nullptr, NS_OK);
   }
-  m_downloadedHdrsForCurGroup = PR_TRUE;
+  m_downloadedHdrsForCurGroup = true;
   return m_currentFolder ? m_currentFolder->GetNewMessages(m_window, this) : NS_ERROR_NOT_INITIALIZED;
 }
 
@@ -571,13 +535,13 @@ nsresult nsMsgDownloadAllNewsgroups::DownloadMsgsForCurrentGroup()
 
   nsCOMPtr <nsIMsgNewsFolder> newsFolder = do_QueryInterface(m_currentFolder);
   if (newsFolder)
-    newsFolder->SetSaveArticleOffline(PR_TRUE);
+    newsFolder->SetSaveArticleOffline(true);
 
   nsCOMPtr <nsIMsgSearchSession> searchSession = do_CreateInstance(NS_MSGSEARCHSESSION_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool downloadByDate, downloadUnreadOnly;
-  PRUint32 ageLimitOfMsgsToDownload;
+  bool downloadByDate, downloadUnreadOnly;
+  uint32_t ageLimitOfMsgsToDownload;
 
   downloadSettings->GetDownloadByDate(&downloadByDate);
   downloadSettings->GetDownloadUnreadOnly(&downloadUnreadOnly);
@@ -594,17 +558,17 @@ nsresult nsMsgDownloadAllNewsgroups::DownloadMsgsForCurrentGroup()
   {
     value->SetAttrib(nsMsgSearchAttrib::MsgStatus);
     value->SetStatus(nsMsgMessageFlags::Read);
-    searchSession->AddSearchTerm(nsMsgSearchAttrib::MsgStatus, nsMsgSearchOp::Isnt, value, PR_TRUE, nsnull);
+    searchSession->AddSearchTerm(nsMsgSearchAttrib::MsgStatus, nsMsgSearchOp::Isnt, value, true, nullptr);
   }
   if (downloadByDate)
   {
     value->SetAttrib(nsMsgSearchAttrib::AgeInDays);
     value->SetAge(ageLimitOfMsgsToDownload);
-    searchSession->AddSearchTerm(nsMsgSearchAttrib::AgeInDays, nsMsgSearchOp::IsLessThan, value, nsMsgSearchBooleanOp::BooleanAND, nsnull);
+    searchSession->AddSearchTerm(nsMsgSearchAttrib::AgeInDays, nsMsgSearchOp::IsLessThan, value, nsMsgSearchBooleanOp::BooleanAND, nullptr);
   }
   value->SetAttrib(nsMsgSearchAttrib::MsgStatus);
   value->SetStatus(nsMsgMessageFlags::Offline);
-  searchSession->AddSearchTerm(nsMsgSearchAttrib::MsgStatus, nsMsgSearchOp::Isnt, value, nsMsgSearchBooleanOp::BooleanAND, nsnull);
+  searchSession->AddSearchTerm(nsMsgSearchAttrib::MsgStatus, nsMsgSearchOp::Isnt, value, nsMsgSearchBooleanOp::BooleanAND, nullptr);
 
   m_downloaderForGroup->RunSearch(m_currentFolder, db, searchSession);
   return rv;

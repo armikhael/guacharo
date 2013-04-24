@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Windows Integration.
- *
- * The Initial Developer of the Original Code is
- *   Scott MacGregor <mscott@mozilla.org>.
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Robert Strong  <robert.bugzilla@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsMailWinIntegration.h"
 #include "nsIServiceManager.h"
@@ -43,7 +10,7 @@
 #include "nsIPrefService.h"
 #include "windows.h"
 #include "shellapi.h"
-#include "nsILocalFile.h"
+#include "nsIFile.h"
 #include "nsDirectoryServiceDefs.h"
 #include "nsUnicharUtils.h"
 #include "nsIWinTaskbar.h"
@@ -151,9 +118,9 @@ GetHelperPath(nsAutoString& aPath)
     do_GetService(NS_DIRECTORY_SERVICE_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  nsCOMPtr<nsILocalFile> appHelper;
+  nsCOMPtr<nsIFile> appHelper;
   rv = directoryService->Get(NS_XPCOM_CURRENT_PROCESS_DIR,
-                             NS_GET_IID(nsILocalFile),
+                             NS_GET_IID(nsIFile),
                              getter_AddRefs(appHelper));
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -207,7 +174,7 @@ nsWindowsShellService::ShortcutMaintenance()
     return NS_OK;
 
   // Avoid if this isn't Win7+
-  PRBool isSupported = PR_FALSE;
+  bool isSupported = false;
   taskbarInfo->GetAvailable(&isSupported);
   if (!isSupported)
     return NS_OK;
@@ -223,7 +190,7 @@ nsWindowsShellService::ShortcutMaintenance()
     return NS_ERROR_UNEXPECTED;
 
   nsCOMPtr<nsIPrefBranch> prefBranch;
-  prefs->GetBranch(nsnull, getter_AddRefs(prefBranch));
+  prefs->GetBranch(nullptr, getter_AddRefs(prefBranch));
   if (!prefBranch)
     return NS_ERROR_UNEXPECTED;
 
@@ -282,20 +249,20 @@ nsresult nsWindowsShellService::Init()
 }
 
 nsWindowsShellService::nsWindowsShellService()
-:mCheckedThisSession(PR_FALSE)
+:mCheckedThisSession(false)
 {
 }
 
 NS_IMETHODIMP
-nsWindowsShellService::IsDefaultClient(PRBool aStartupCheck, PRUint16 aApps, PRBool *aIsDefaultClient)
+nsWindowsShellService::IsDefaultClient(bool aStartupCheck, uint16_t aApps, bool *aIsDefaultClient)
 {
   // If this is the first mail window, maintain internal state that we've
   // checked this session (so that subsequent window opens don't show the
   // default client dialog).
   if (aStartupCheck)
-    mCheckedThisSession = PR_TRUE;
+    mCheckedThisSession = true;
 
-  *aIsDefaultClient = PR_TRUE;
+  *aIsDefaultClient = true;
 
   // for each type,
   if (aApps & nsIShellService::MAIL)
@@ -314,17 +281,17 @@ nsWindowsShellService::IsDefaultClient(PRBool aStartupCheck, PRUint16 aApps, PRB
     if (*aIsDefaultClient)
       IsDefaultClientVista(nsIShellService::NEWS, aIsDefaultClient);
   }
-  // RSS / feed protocol shell integration is not working so return PR_TRUE
+  // RSS / feed protocol shell integration is not working so return true
   // until it is fixed (bug 445823).
   if (aApps & nsIShellService::RSS)
-    *aIsDefaultClient &= PR_TRUE;
+    *aIsDefaultClient &= true;
 //    *aIsDefaultClient &= TestForDefault(gFeedSettings, sizeof(gFeedSettings)/sizeof(SETTING));
 
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsWindowsShellService::SetDefaultClient(PRBool aForAllUsers, PRUint16 aApps)
+nsWindowsShellService::SetDefaultClient(bool aForAllUsers, uint16_t aApps)
 {
   nsAutoString appHelperPath;
   if (NS_FAILED(GetHelperPath(appHelperPath)))
@@ -349,11 +316,11 @@ nsWindowsShellService::SetDefaultClient(PRBool aForAllUsers, PRUint16 aApps)
 }
 
 NS_IMETHODIMP
-nsWindowsShellService::GetShouldCheckDefaultClient(PRBool* aResult)
+nsWindowsShellService::GetShouldCheckDefaultClient(bool* aResult)
 {
   if (mCheckedThisSession)
   {
-    *aResult = PR_FALSE;
+    *aResult = false;
     return NS_OK;
   }
 
@@ -362,17 +329,17 @@ nsWindowsShellService::GetShouldCheckDefaultClient(PRBool* aResult)
 }
 
 NS_IMETHODIMP
-nsWindowsShellService::SetShouldCheckDefaultClient(PRBool aShouldCheck)
+nsWindowsShellService::SetShouldCheckDefaultClient(bool aShouldCheck)
 {
   nsCOMPtr<nsIPrefBranch> prefs(do_GetService(NS_PREFSERVICE_CONTRACTID));
   return prefs->SetBoolPref("mail.shell.checkDefaultClient", aShouldCheck);
 }
 
 /* helper routine. Iterate over the passed in settings object. */
-PRBool
-nsWindowsShellService::TestForDefault(SETTING aSettings[], PRInt32 aSize)
+bool
+nsWindowsShellService::TestForDefault(SETTING aSettings[], int32_t aSize)
 {
-  PRBool isDefault = PR_TRUE;
+  bool isDefault = true;
   PRUnichar currValue[MAX_BUF];
   SETTING* end = aSettings + aSize;
   for (SETTING * settings = aSettings; settings < end; ++settings)
@@ -382,7 +349,7 @@ nsWindowsShellService::TestForDefault(SETTING aSettings[], PRInt32 aSize)
     NS_ConvertUTF8toUTF16 value(settings->valueName);
     if (settings->flags & APP_PATH_SUBSTITUTION)
     {
-      PRInt32 offset = dataLongPath.Find("%APPPATH%");
+      int32_t offset = dataLongPath.Find("%APPPATH%");
       dataLongPath.Replace(offset, 9, mAppLongPath);
     }
 
@@ -392,7 +359,7 @@ nsWindowsShellService::TestForDefault(SETTING aSettings[], PRInt32 aSize)
     if (NS_FAILED(rv))
     {
       // Key doesn't exist
-      isDefault = PR_FALSE;
+      isDefault = false;
       break;
     }
 
@@ -405,7 +372,7 @@ nsWindowsShellService::TestForDefault(SETTING aSettings[], PRInt32 aSize)
         !dataLongPath.Equals(currValue, nsCaseInsensitiveStringComparator()))
     {
       // Key wasn't set, or was set to something else (something else became the default client)
-      isDefault = PR_FALSE;
+      isDefault = false;
       break;
     }
   }  // for each registry key we want to look at
@@ -413,10 +380,9 @@ nsWindowsShellService::TestForDefault(SETTING aSettings[], PRInt32 aSize)
   return isDefault;
 }
 
-PRBool
-nsWindowsShellService::IsDefaultClientVista(PRUint16 aApps, PRBool* aIsDefaultClient)
+bool
+nsWindowsShellService::IsDefaultClientVista(uint16_t aApps, bool* aIsDefaultClient)
 {
-#if MOZ_WINSDK_TARGETVER >= MOZ_NTDDI_LONGHORN
   IApplicationAssociationRegistration* pAAR;
 
   HRESULT hr = CoCreateInstance (CLSID_ApplicationAssociationRegistration,
@@ -427,8 +393,8 @@ nsWindowsShellService::IsDefaultClientVista(PRUint16 aApps, PRBool* aIsDefaultCl
 
   if (SUCCEEDED(hr))
   {
-    PRBool isDefaultMail = PR_TRUE;
-    PRBool isDefaultNews = PR_TRUE;
+    BOOL isDefaultMail = true;
+    BOOL isDefaultNews = true;
     if (aApps & nsIShellService::MAIL)
       pAAR->QueryAppIsDefaultAll(AL_EFFECTIVE, APP_REG_NAME_MAIL, &isDefaultMail);
     if (aApps & nsIShellService::NEWS)
@@ -437,8 +403,7 @@ nsWindowsShellService::IsDefaultClientVista(PRUint16 aApps, PRBool* aIsDefaultCl
     *aIsDefaultClient = isDefaultNews && isDefaultMail;
 
     pAAR->Release();
-    return PR_TRUE;
+    return true;
   }
-#endif
-  return PR_FALSE;
+  return false;
 }

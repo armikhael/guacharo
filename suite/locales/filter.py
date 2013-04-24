@@ -1,8 +1,12 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 def test(mod, path, entity = None):
   import re
   # ignore anything but SeaMonkey
   if mod not in ("netwerk", "dom", "toolkit", "security/manager",
-                 "editor/ui", "suite"):
+                 "editor/ui", "suite", "services/sync"):
     return False
   # ignore temporary files, hiden files and files from rejects
   if (re.match(r".*?\/[.#].+", path) or

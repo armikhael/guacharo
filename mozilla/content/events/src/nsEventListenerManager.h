@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsEventListenerManager_h__
 #define nsEventListenerManager_h__
@@ -50,6 +18,7 @@
 #include "nsCycleCollectionParticipant.h"
 #include "nsTObserverArray.h"
 #include "nsGUIEvent.h"
+#include "nsIJSEventListener.h"
 
 class nsIDOMEvent;
 class nsIAtom;
@@ -61,13 +30,34 @@ class nsPIDOMWindow;
 class nsCxPusher;
 class nsIEventListenerInfo;
 
-typedef struct {
+typedef enum
+{
+    eNativeListener = 0,
+    eJSEventListener,
+    eWrappedJSListener
+} nsListenerType;
+
+struct nsListenerStruct
+{
   nsRefPtr<nsIDOMEventListener> mListener;
-  PRUint32                      mEventType;
+  uint32_t                      mEventType;
   nsCOMPtr<nsIAtom>             mTypeAtom;
-  PRUint16                      mFlags;
-  PRBool                        mHandlerIsString;
-} nsListenerStruct;
+  uint16_t                      mFlags;
+  uint8_t                       mListenerType;
+  bool                          mHandlerIsString;
+
+  nsIJSEventListener* GetJSListener() const {
+    return (mListenerType == eJSEventListener) ?
+      static_cast<nsIJSEventListener *>(mListener.get()) : nullptr;
+  }
+
+  ~nsListenerStruct()
+  {
+    if ((mListenerType == eJSEventListener) && mListener) {
+      static_cast<nsIJSEventListener*>(mListener.get())->Disconnect();
+    }
+  }
+};
 
 /*
  * Event listener manager
@@ -80,46 +70,52 @@ public:
   nsEventListenerManager(nsISupports* aTarget);
   virtual ~nsEventListenerManager();
 
-  NS_INLINE_DECL_REFCOUNTING(nsEventListenerManager)
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(nsEventListenerManager)
 
   NS_DECL_CYCLE_COLLECTION_NATIVE_CLASS(nsEventListenerManager)
 
-  nsresult AddEventListener(const nsAString& aType,
-                            nsIDOMEventListener* aListener,
-                            PRBool aUseCapture,
-                            PRBool aWantsUntrusted);
+  void AddEventListener(const nsAString& aType,
+                        nsIDOMEventListener* aListener,
+                        bool aUseCapture,
+                        bool aWantsUntrusted);
   void RemoveEventListener(const nsAString& aType,
                            nsIDOMEventListener* aListener,
-                           PRBool aUseCapture);
+                           bool aUseCapture);
 
   /**
   * Sets events listeners of all types. 
   * @param an event listener
   */
-  nsresult AddEventListenerByType(nsIDOMEventListener *aListener,
-                                  const nsAString& type,
-                                  PRInt32 aFlags);
+  void AddEventListenerByType(nsIDOMEventListener *aListener,
+                              const nsAString& type,
+                              int32_t aFlags);
   void RemoveEventListenerByType(nsIDOMEventListener *aListener,
                                  const nsAString& type,
-                                 PRInt32 aFlags);
+                                 int32_t aFlags);
+
+  /**
+   * Sets the current "inline" event listener for aName to be a
+   * function compiled from aFunc if !aDeferCompilation.  If
+   * aDeferCompilation, then we assume that we can get the string from
+   * mTarget later and compile lazily.
+   */
+  // XXXbz does that play correctly with nodes being adopted across
+  // documents?  Need to double-check the spec here.
   nsresult AddScriptEventListener(nsIAtom *aName,
                                   const nsAString& aFunc,
-                                  PRUint32 aLanguage,
-                                  PRBool aDeferCompilation,
-                                  PRBool aPermitUntrustedEvents);
-  nsresult RegisterScriptEventListener(nsIScriptContext *aContext,
-                                       void *aScopeObject,
-                                       nsIAtom* aName);
+                                  uint32_t aLanguage,
+                                  bool aDeferCompilation,
+                                  bool aPermitUntrustedEvents);
+  /**
+   * Remove the current "inline" event listener for aName.
+   */
   void RemoveScriptEventListener(nsIAtom *aName);
-  nsresult CompileScriptEventListener(nsIScriptContext *aContext,
-                                      void *aScopeObject,
-                                      nsIAtom* aName, PRBool *aDidCompile);
 
   void HandleEvent(nsPresContext* aPresContext,
                    nsEvent* aEvent, 
                    nsIDOMEvent** aDOMEvent,
                    nsIDOMEventTarget* aCurrentTarget,
-                   PRUint32 aFlags,
+                   uint32_t aFlags,
                    nsEventStatus* aEventStatus,
                    nsCxPusher* aPusher)
   {
@@ -151,95 +147,191 @@ public:
                            nsEvent* aEvent, 
                            nsIDOMEvent** aDOMEvent,
                            nsIDOMEventTarget* aCurrentTarget,
-                           PRUint32 aFlags,
+                           uint32_t aFlags,
                            nsEventStatus* aEventStatus,
                            nsCxPusher* aPusher);
 
+  /**
+   * Tells the event listener manager that its target (which owns it) is
+   * no longer using it (and could go away).
+   */
   void Disconnect();
 
-  PRBool HasMutationListeners();
+  /**
+   * Allows us to quickly determine if we have mutation listeners registered.
+   */
+  bool HasMutationListeners();
 
-  PRBool HasUnloadListeners();
+  /**
+   * Allows us to quickly determine whether we have unload or beforeunload
+   * listeners registered.
+   */
+  bool HasUnloadListeners();
 
-  PRUint32 MutationListenerBits();
+  /**
+   * Returns the mutation bits depending on which mutation listeners are
+   * registered to this listener manager.
+   * @note If a listener is an nsIDOMMutationListener, all possible mutation
+   *       event bits are returned. All bits are also returned if one of the
+   *       event listeners is registered to handle DOMSubtreeModified events.
+   */
+  uint32_t MutationListenerBits();
 
-  PRBool HasListenersFor(const nsAString& aEventName);
+  /**
+   * Returns true if there is at least one event listener for aEventName.
+   */
+  bool HasListenersFor(const nsAString& aEventName);
 
-  PRBool HasListeners();
+  /**
+   * Returns true if there is at least one event listener.
+   */
+  bool HasListeners();
 
+  /**
+   * Sets aList to the list of nsIEventListenerInfo objects representing the
+   * listeners managed by this listener manager.
+   */
   nsresult GetListenerInfo(nsCOMArray<nsIEventListenerInfo>* aList);
 
-  PRUint32 GetIdentifierForEvent(nsIAtom* aEvent);
+  uint32_t GetIdentifierForEvent(nsIAtom* aEvent);
 
   static void Shutdown();
 
   /**
-   * Returns PR_TRUE if there may be a paint event listener registered,
-   * PR_FALSE if there definitely isn't.
+   * Returns true if there may be a paint event listener registered,
+   * false if there definitely isn't.
    */
-  PRBool MayHavePaintEventListener() { return mMayHavePaintEventListener; }
+  bool MayHavePaintEventListener() { return mMayHavePaintEventListener; }
 
   /**
-   * Returns PR_TRUE if there may be a MozAudioAvailable event listener registered,
-   * PR_FALSE if there definitely isn't.
+   * Returns true if there may be a MozAudioAvailable event listener registered,
+   * false if there definitely isn't.
    */
-  PRBool MayHaveAudioAvailableEventListener() { return mMayHaveAudioAvailableEventListener; }
+  bool MayHaveAudioAvailableEventListener() { return mMayHaveAudioAvailableEventListener; }
 
   /**
-   * Returns PR_TRUE if there may be a touch event listener registered,
-   * PR_FALSE if there definitely isn't.
+   * Returns true if there may be a touch event listener registered,
+   * false if there definitely isn't.
    */
-  PRBool MayHaveTouchEventListener() { return mMayHaveTouchEventListener; }
+  bool MayHaveTouchEventListener() { return mMayHaveTouchEventListener; }
 
+  bool MayHaveMouseEnterLeaveEventListener() { return mMayHaveMouseEnterLeaveEventListener; }
+
+  size_t SizeOfIncludingThis(nsMallocSizeOfFun aMallocSizeOf) const;
+
+  void UnmarkGrayJSListeners();
+
+  nsISupports* GetTarget() { return mTarget; }
 protected:
   nsresult HandleEventSubType(nsListenerStruct* aListenerStruct,
                               nsIDOMEventListener* aListener,
                               nsIDOMEvent* aDOMEvent,
                               nsIDOMEventTarget* aCurrentTarget,
-                              PRUint32 aPhaseFlags,
+                              uint32_t aPhaseFlags,
                               nsCxPusher* aPusher);
-  nsresult CompileEventHandlerInternal(nsIScriptContext *aContext,
-                                       void *aScopeObject,
-                                       nsISupports *aObject,
-                                       nsIAtom *aName,
-                                       nsListenerStruct *aListenerStruct,
-                                       nsISupports* aCurrentTarget,
-                                       PRBool aNeedsCxPush);
-  nsListenerStruct* FindJSEventListener(PRUint32 aEventType, nsIAtom* aTypeAtom);
+
+  /**
+   * Compile the "inline" event listener for aListenerStruct.  The
+   * body of the listener can be provided in aBody; if this is null we
+   * will look for it on mTarget.
+   */
+  nsresult CompileEventHandlerInternal(nsListenerStruct *aListenerStruct,
+                                       bool aNeedsCxPush,
+                                       const nsAString* aBody);
+
+  /**
+   * Find the nsListenerStruct for the "inline" event listener for aTypeAtom.
+   */
+  nsListenerStruct* FindJSEventListener(uint32_t aEventType, nsIAtom* aTypeAtom);
+
+  /**
+   * Set the "inline" event listener for aName to aHandler.  aHandler
+   * may be null to indicate that we should lazily get and compile the
+   * string for this listener.  The nsListenerStruct that results, if
+   * any, is returned in aListenerStruct.
+   */
   nsresult SetJSEventListener(nsIScriptContext *aContext,
-                              void *aScopeGlobal,
-                              nsIAtom* aName, PRBool aIsString,
-                              PRBool aPermitUntrustedEvents);
-  nsresult AddEventListener(nsIDOMEventListener *aListener, 
-                            PRUint32 aType,
-                            nsIAtom* aTypeAtom,
-                            PRInt32 aFlags);
+                              JSObject* aScopeGlobal,
+                              nsIAtom* aName,
+                              JSObject *aHandler,
+                              bool aPermitUntrustedEvents,
+                              nsListenerStruct **aListenerStruct);
+
+  bool IsDeviceType(uint32_t aType);
+  void EnableDevice(uint32_t aType);
+  void DisableDevice(uint32_t aType);
+
+public:
+  /**
+   * Set the "inline" event listener for aEventName to |v|.  This
+   * might actually remove the event listener, depending on the value
+   * of |v|.  Note that on entry to this function cx and aScope might
+   * not be in the same compartment, though cx and v are guaranteed to
+   * be in the same compartment.
+   */
+  nsresult SetJSEventListenerToJsval(nsIAtom *aEventName, JSContext *cx,
+                                     JSObject *aScope, const jsval &v);
+  /**
+   * Get the value of the "inline" event listener for aEventName.
+   * This may cause lazy compilation if the listener is uncompiled.
+   */
+  void GetJSEventListener(nsIAtom *aEventName, jsval *vp);
+
+protected:
+  void AddEventListener(nsIDOMEventListener *aListener, 
+                        uint32_t aType,
+                        nsIAtom* aTypeAtom,
+                        int32_t aFlags);
   void RemoveEventListener(nsIDOMEventListener *aListener,
-                           PRUint32 aType,
+                           uint32_t aType,
                            nsIAtom* aUserType,
-                           PRInt32 aFlags);
+                           int32_t aFlags);
   void RemoveAllListeners();
   const EventTypeData* GetTypeDataForIID(const nsIID& aIID);
   const EventTypeData* GetTypeDataForEventName(nsIAtom* aName);
   nsPIDOMWindow* GetInnerWindowForTarget();
 
-  PRUint32 mMayHavePaintEventListener : 1;
-  PRUint32 mMayHaveMutationListeners : 1;
-  PRUint32 mMayHaveCapturingListeners : 1;
-  PRUint32 mMayHaveSystemGroupListeners : 1;
-  PRUint32 mMayHaveAudioAvailableEventListener : 1;
-  PRUint32 mMayHaveTouchEventListener : 1;
-  PRUint32 mNoListenerForEvent : 26;
+  uint32_t mMayHavePaintEventListener : 1;
+  uint32_t mMayHaveMutationListeners : 1;
+  uint32_t mMayHaveCapturingListeners : 1;
+  uint32_t mMayHaveSystemGroupListeners : 1;
+  uint32_t mMayHaveAudioAvailableEventListener : 1;
+  uint32_t mMayHaveTouchEventListener : 1;
+  uint32_t mMayHaveMouseEnterLeaveEventListener : 1;
+  uint32_t mClearingListeners : 1;
+  uint32_t mNoListenerForEvent : 24;
 
   nsAutoTObserverArray<nsListenerStruct, 2> mListeners;
   nsISupports*                              mTarget;  //WEAK
   nsCOMPtr<nsIAtom>                         mNoListenerForEventAtom;
 
-  static PRUint32                           mInstanceCount;
+  static uint32_t                           mInstanceCount;
   static jsid                               sAddListenerID;
 
   friend class nsEventTargetChainItem;
-  static PRUint32                           sCreatedCount;
+  static uint32_t                           sCreatedCount;
 };
+
+/**
+ * NS_AddSystemEventListener() is a helper function for implementing
+ * nsIDOMEventTarget::AddSystemEventListener().
+ */
+inline nsresult
+NS_AddSystemEventListener(nsIDOMEventTarget* aTarget,
+                          const nsAString& aType,
+                          nsIDOMEventListener *aListener,
+                          bool aUseCapture,
+                          bool aWantsUntrusted)
+{
+  nsEventListenerManager* listenerManager = aTarget->GetListenerManager(true);
+  NS_ENSURE_STATE(listenerManager);
+  uint32_t flags = NS_EVENT_FLAG_SYSTEM_EVENT;
+  flags |= aUseCapture ? NS_EVENT_FLAG_CAPTURE : NS_EVENT_FLAG_BUBBLE;
+  if (aWantsUntrusted) {
+    flags |= NS_PRIV_EVENT_UNTRUSTED_PERMITTED;
+  }
+  listenerManager->AddEventListenerByType(aListener, aType, flags);
+  return NS_OK;
+}
 
 #endif // nsEventListenerManager_h__

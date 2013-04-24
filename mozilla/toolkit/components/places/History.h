@@ -1,47 +1,18 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  * vim: sw=2 ts=2 et lcs=trail\:.,tab\:>~ :
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Places code.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Shawn Wilsher <me@shawnwilsher.com> (Original Author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef mozilla_places_History_h_
 #define mozilla_places_History_h_
 
 #include "mozilla/IHistory.h"
+#include "mozilla/Mutex.h"
 #include "mozIAsyncHistory.h"
+#include "nsIDownloadHistory.h"
+#include "Database.h"
+
 #include "mozilla/dom/Link.h"
 #include "nsTHashtable.h"
 #include "nsString.h"
@@ -50,7 +21,6 @@
 #include "nsDeque.h"
 #include "nsIObserver.h"
 #include "mozIStorageConnection.h"
-#include "mozilla/storage/StatementCache.h"
 
 namespace mozilla {
 namespace places {
@@ -60,13 +30,18 @@ struct VisitData;
 #define NS_HISTORYSERVICE_CID \
   {0x0937a705, 0x91a6, 0x417a, {0x82, 0x92, 0xb2, 0x2e, 0xb1, 0x0d, 0xa8, 0x6c}}
 
+// Max size of History::mRecentlyVisitedURIs
+#define RECENTLY_VISITED_URI_SIZE 8
+
 class History : public IHistory
+              , public nsIDownloadHistory
               , public mozIAsyncHistory
               , public nsIObserver
 {
 public:
   NS_DECL_ISUPPORTS
   NS_DECL_IHISTORY
+  NS_DECL_NSIDOWNLOADHISTORY
   NS_DECL_MOZIASYNCHISTORY
   NS_DECL_NSIOBSERVER
 
@@ -111,6 +86,12 @@ public:
   bool FetchPageInfo(VisitData& _place);
 
   /**
+   * Get the number of bytes of memory this History object is using,
+   * including sizeof(*this))
+   */
+  size_t SizeOfIncludingThis(nsMallocSizeOfFun aMallocSizeOf);
+
+  /**
    * Obtains a pointer to this service.
    */
   static History* GetService();
@@ -121,10 +102,27 @@ public:
    */
   static History* GetSingleton();
 
+  template<int N>
+  already_AddRefed<mozIStorageStatement>
+  GetStatement(const char (&aQuery)[N])
+  {
+    mozIStorageConnection* dbConn = GetDBConn();
+    NS_ENSURE_TRUE(dbConn, nullptr);
+    return mDB->GetStatement(aQuery);
+  }
+
+  bool IsShuttingDown() const {
+    return mShuttingDown;
+  }
+  Mutex& GetShutdownMutex() {
+    return mShutdownMutex;
+  }
+
   /**
-   * Statement cache that is used for background thread statements only.
+   * Helper function to append a new URI to mRecentlyVisitedURIs. See
+   * mRecentlyVisitedURIs.
    */
-  storage::StatementCache<mozIStorageStatement> syncStatements;
+  void AppendToRecentlyVisitedURIs(nsIURI* aURI);
 
 private:
   virtual ~History();
@@ -135,13 +133,11 @@ private:
   mozIStorageConnection* GetDBConn();
 
   /**
-   * A read-write database connection used for adding history visits and setting
-   * a page's title.
-   *
-   * @note this should only be accessed by GetDBConn.
-   * @note this is the same connection as the one found on nsNavHistory.
+   * The database handle.  This is initialized lazily by the first call to
+   * GetDBConn(), so never use it directly, or, if you really need, always
+   * invoke GetDBConn() before.
    */
-  nsCOMPtr<mozIStorageConnection> mDBConn;
+  nsRefPtr<mozilla::places::Database> mDB;
 
   /**
    * A read-only database connection used for checking if a URI is visited.
@@ -166,6 +162,12 @@ private:
 
   // Ensures new tasks aren't started on destruction.
   bool mShuttingDown;
+  // This mutex guards mShuttingDown. Code running in other threads that might
+  // schedule tasks that use the database should grab it and check the value of
+  // mShuttingDown. If we are already shutting down, the code must gracefully
+  // avoid using the db. If we are not, the lock will prevent shutdown from
+  // starting in an unexpected moment.
+  Mutex mShutdownMutex;
 
   typedef nsTObserverArray<mozilla::dom::Link* > ObserverArray;
 
@@ -184,7 +186,26 @@ private:
     ObserverArray array;
   };
 
+  /**
+   * Helper function for nsTHashtable::SizeOfExcludingThis call in
+   * SizeOfIncludingThis().
+   */
+  static size_t SizeOfEntryExcludingThis(KeyClass* aEntry,
+                                         nsMallocSizeOfFun aMallocSizeOf,
+                                         void*);
+
   nsTHashtable<KeyClass> mObservers;
+
+  /**
+   * mRecentlyVisitedURIs remembers URIs which are recently added to the DB,
+   * to avoid saving these locations repeatedly in a short period.
+   */
+  typedef nsAutoTArray<nsCOMPtr<nsIURI>, RECENTLY_VISITED_URI_SIZE>
+          RecentlyVisitedArray;
+  RecentlyVisitedArray mRecentlyVisitedURIs;
+  RecentlyVisitedArray::index_type mRecentlyVisitedURIsNextIndex;
+
+  bool IsRecentlyVisitedURI(nsIURI* aURI);
 };
 
 } // namespace places

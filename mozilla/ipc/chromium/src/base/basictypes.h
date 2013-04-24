@@ -5,8 +5,6 @@
 #ifndef BASE_BASICTYPES_H_
 #define BASE_BASICTYPES_H_
 
-#ifdef CHROMIUM_MOZILLA_BUILD
-
 // Chromium includes a prtypes.h also, but it has been modified to include
 // their build_config.h as well. We can therefore test for both to determine
 // if someone screws up the include order.
@@ -33,15 +31,10 @@
 
 #include "obsolete/protypes.h"
 
-#define _INT32
-#define _UINT32
-
 #ifdef _WIN32_SAVE
 #undef _WIN32_SAVE
 #define _WIN32
 #endif
-
-#endif // CHROMIUM_MOZILLA_BUILD
 
 #include <limits.h>         // So we can set the bounds of our types
 #include <stddef.h>         // For size_t
@@ -52,37 +45,6 @@
 #ifndef COMPILER_MSVC
 // stdint.h is part of C99 but MSVC doesn't have it.
 #include <stdint.h>         // For intptr_t.
-#endif
-
-typedef signed char         schar;
-typedef signed char         int8;
-typedef short               int16;
-// TODO(mbelshe) Remove these type guards.  These are
-//               temporary to avoid conflicts with npapi.h.
-#ifndef _INT32
-#define _INT32
-typedef int                 int32;
-#endif
-#if !(defined(CHROMIUM_MOZILLA_BUILD) && defined(PROTYPES_H))
-typedef long long           int64;
-#endif
-
-// NOTE: unsigned types are DANGEROUS in loops and other arithmetical
-// places.  Use the signed types unless your variable represents a bit
-// pattern (eg a hash value) or you really need the extra bit.  Do NOT
-// use 'unsigned' to express "this value should always be positive";
-// use assertions for this.
-
-typedef unsigned char      uint8;
-typedef unsigned short     uint16;
-// TODO(mbelshe) Remove these type guards.  These are
-//               temporary to avoid conflicts with npapi.h.
-#ifndef _UINT32
-#define _UINT32
-typedef unsigned int       uint32;
-#endif
-#if !(defined(CHROMIUM_MOZILLA_BUILD) && defined(PROTYPES_H))
-typedef unsigned long long uint64;
 #endif
 
 // A type to represent a Unicode code-point value. As of Unicode 4.0,
@@ -104,7 +66,6 @@ const  int32 kint32max  = (( int32) 0x7FFFFFFF);
 const  int64 kint64min  = (( int64) GG_LONGLONG(0x8000000000000000));
 const  int64 kint64max  = (( int64) GG_LONGLONG(0x7FFFFFFFFFFFFFFF));
 
-#if defined(CHROMIUM_MOZILLA_BUILD)
 // Platform- and hardware-dependent printf specifiers
 #  if defined(OS_POSIX)
 #    define __STDC_FORMAT_MACROS 1
@@ -120,7 +81,6 @@ const  int64 kint64max  = (( int64) GG_LONGLONG(0x7FFFFFFFFFFFFFFF));
 #    define PRIu64L L"I64u"
 #    define PRIx64L L"I64x"
 #  endif
-#endif  // defined(CHROMIUM_MOZILLA_BUILD)
 
 // A macro to disallow the copy constructor and operator= functions
 // This should be used in the private: declarations for a class

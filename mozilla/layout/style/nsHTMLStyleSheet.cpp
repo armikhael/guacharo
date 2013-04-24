@@ -1,40 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK *****
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
  * This Original Code has been modified by IBM Corporation. Modifications made by IBM 
  * described herein are Copyright (c) International Business Machines Corporation, 2000.
@@ -55,7 +23,6 @@
 #include "nsIURL.h"
 #include "nsMappedAttributes.h"
 #include "nsILink.h"
-#include "nsIFrame.h"
 #include "nsStyleContext.h"
 #include "nsGkAtoms.h"
 #include "nsPresContext.h"
@@ -66,7 +33,7 @@
 #include "nsCSSAnonBoxes.h"
 #include "nsRuleWalker.h"
 #include "nsRuleData.h"
-#include "nsContentErrors.h"
+#include "nsError.h"
 #include "nsRuleProcessorData.h"
 #include "nsCSSRuleProcessor.h"
 #include "mozilla/dom/Element.h"
@@ -89,7 +56,7 @@ nsHTMLStyleSheet::HTMLColorRule::MapRuleInfoInto(nsRuleData* aRuleData)
 
 #ifdef DEBUG
 /* virtual */ void
-nsHTMLStyleSheet::HTMLColorRule::List(FILE* out, PRInt32 aIndent) const
+nsHTMLStyleSheet::HTMLColorRule::List(FILE* out, int32_t aIndent) const
 {
 }
 #endif
@@ -99,7 +66,7 @@ NS_IMPL_ISUPPORTS1(nsHTMLStyleSheet::GenericTableRule, nsIStyleRule)
 
 #ifdef DEBUG
 /* virtual */ void
-nsHTMLStyleSheet::GenericTableRule::List(FILE* out, PRInt32 aIndent) const
+nsHTMLStyleSheet::GenericTableRule::List(FILE* out, int32_t aIndent) const
 {
 }
 #endif
@@ -153,7 +120,7 @@ MappedAttrTable_ClearEntry(PLDHashTable *table, PLDHashEntryHdr *hdr)
   memset(entry, 0, sizeof(MappedAttrTableEntry));
 }
 
-static PRBool
+static bool
 MappedAttrTable_MatchEntry(PLDHashTable *table, const PLDHashEntryHdr *hdr,
                            const void *key)
 {
@@ -178,18 +145,15 @@ static PLDHashTableOps MappedAttrTable_Ops = {
 
 // -----------------------------------------------------------
 
-nsHTMLStyleSheet::nsHTMLStyleSheet(void)
-  : mDocument(nsnull)
+nsHTMLStyleSheet::nsHTMLStyleSheet(nsIURI* aURL, nsIDocument* aDocument)
+  : mURL(aURL)
+  , mDocument(aDocument)
+  , mTableQuirkColorRule(new TableQuirkColorRule())
+  , mTableTHRule(new TableTHRule())
 {
-  mMappedAttrTable.ops = nsnull;
-}
-
-nsresult
-nsHTMLStyleSheet::Init()
-{
-  mTableTHRule = new TableTHRule();
-  mTableQuirkColorRule = new TableQuirkColorRule();
-  return NS_OK;
+  MOZ_ASSERT(aURL);
+  MOZ_ASSERT(aDocument);
+  mMappedAttrTable.ops = nullptr;
 }
 
 nsHTMLStyleSheet::~nsHTMLStyleSheet()
@@ -212,6 +176,7 @@ nsHTMLStyleSheet::RulesMatching(ElementRuleProcessorData* aData)
       if (mLinkRule || mVisitedRule || mActiveRule) {
         nsEventStates state = nsCSSRuleProcessor::GetContentStateForVisitedHandling(
                                   aData->mElement,
+                                  aData->mTreeMatchContext,
                                   aData->mTreeMatchContext.VisitedHandling(),
                                   // If the node being matched is a link,
                                   // it's the relevant link.
@@ -262,10 +227,10 @@ nsHTMLStyleSheet::HasStateDependentStyle(StateRuleProcessorData* aData)
   return nsRestyleHint(0);
 }
 
-/* virtual */ PRBool
+/* virtual */ bool
 nsHTMLStyleSheet::HasDocumentStateDependentStyle(StateRuleProcessorData* aData)
 {
-  return PR_FALSE;
+  return false;
 }
 
 /* virtual */ nsRestyleHint
@@ -305,14 +270,20 @@ nsHTMLStyleSheet::HasAttributeDependentStyle(AttributeRuleProcessorData* aData)
   return nsRestyleHint(0);
 }
 
-/* virtual */ PRBool
+/* virtual */ bool
 nsHTMLStyleSheet::MediumFeaturesChanged(nsPresContext* aPresContext)
 {
-  return PR_FALSE;
+  return false;
 }
 
-/* virtual */ PRInt64
-nsHTMLStyleSheet::SizeOf() const
+/* virtual */ size_t
+nsHTMLStyleSheet::SizeOfExcludingThis(nsMallocSizeOfFun aMallocSizeOf) const
+{
+  return 0; // nsHTMLStyleSheets are charged to the DOM, not layout
+}
+
+/* virtual */ size_t
+nsHTMLStyleSheet::SizeOfIncludingThis(nsMallocSizeOfFun aMallocSizeOf) const
 {
   return 0; // nsHTMLStyleSheets are charged to the DOM, not layout
 }
@@ -359,27 +330,27 @@ nsHTMLStyleSheet::GetType(nsString& aType) const
   aType.AssignLiteral("text/html");
 }
 
-/* virtual */ PRBool
+/* virtual */ bool
 nsHTMLStyleSheet::HasRules() const
 {
-  return PR_TRUE; // We have rules at all reasonable times
+  return true; // We have rules at all reasonable times
 }
 
-/* virtual */ PRBool
+/* virtual */ bool
 nsHTMLStyleSheet::IsApplicable() const
 {
-  return PR_TRUE;
+  return true;
 }
 
 /* virtual */ void
-nsHTMLStyleSheet::SetEnabled(PRBool aEnabled)
+nsHTMLStyleSheet::SetEnabled(bool aEnabled)
 { // these can't be disabled
 }
 
-/* virtual */ PRBool
+/* virtual */ bool
 nsHTMLStyleSheet::IsComplete() const
 {
-  return PR_TRUE;
+  return true;
 }
 
 /* virtual */ void
@@ -390,7 +361,7 @@ nsHTMLStyleSheet::SetComplete()
 /* virtual */ nsIStyleSheet*
 nsHTMLStyleSheet::GetParentSheet() const
 {
-  return nsnull;
+  return nullptr;
 }
 
 /* virtual */ nsIDocument*
@@ -405,33 +376,18 @@ nsHTMLStyleSheet::SetOwningDocument(nsIDocument* aDocument)
   mDocument = aDocument; // not refcounted
 }
 
-nsresult
-nsHTMLStyleSheet::Init(nsIURI* aURL, nsIDocument* aDocument)
-{
-  NS_PRECONDITION(aURL && aDocument, "null ptr");
-  if (! aURL || ! aDocument)
-    return NS_ERROR_NULL_POINTER;
-
-  if (mURL || mDocument)
-    return NS_ERROR_ALREADY_INITIALIZED;
-
-  mDocument = aDocument; // not refcounted!
-  mURL = aURL;
-  return NS_OK;
-}
-
 void
 nsHTMLStyleSheet::Reset(nsIURI* aURL)
 {
   mURL = aURL;
 
-  mLinkRule          = nsnull;
-  mVisitedRule       = nsnull;
-  mActiveRule        = nsnull;
+  mLinkRule          = nullptr;
+  mVisitedRule       = nullptr;
+  mActiveRule        = nullptr;
 
   if (mMappedAttrTable.ops) {
     PL_DHashTableFinish(&mMappedAttrTable);
-    mMappedAttrTable.ops = nsnull;
+    mMappedAttrTable.ops = nullptr;
   }
 }
 
@@ -482,17 +438,17 @@ already_AddRefed<nsMappedAttributes>
 nsHTMLStyleSheet::UniqueMappedAttributes(nsMappedAttributes* aMapped)
 {
   if (!mMappedAttrTable.ops) {
-    PRBool res = PL_DHashTableInit(&mMappedAttrTable, &MappedAttrTable_Ops,
-                                   nsnull, sizeof(MappedAttrTableEntry), 16);
+    bool res = PL_DHashTableInit(&mMappedAttrTable, &MappedAttrTable_Ops,
+                                   nullptr, sizeof(MappedAttrTableEntry), 16);
     if (!res) {
-      mMappedAttrTable.ops = nsnull;
-      return nsnull;
+      mMappedAttrTable.ops = nullptr;
+      return nullptr;
     }
   }
   MappedAttrTableEntry *entry = static_cast<MappedAttrTableEntry*>
                                            (PL_DHashTableOperate(&mMappedAttrTable, aMapped, PL_DHASH_ADD));
   if (!entry)
-    return nsnull;
+    return nullptr;
   if (!entry->mAttributes) {
     // We added a new entry to the hashtable, so we have a new unique set.
     entry->mAttributes = aMapped;
@@ -508,7 +464,7 @@ nsHTMLStyleSheet::DropMappedAttributes(nsMappedAttributes* aMapped)
 
   NS_ASSERTION(mMappedAttrTable.ops, "table uninitialized");
 #ifdef DEBUG
-  PRUint32 entryCount = mMappedAttrTable.entryCount - 1;
+  uint32_t entryCount = mMappedAttrTable.entryCount - 1;
 #endif
 
   PL_DHashTableOperate(&mMappedAttrTable, aMapped, PL_DHASH_REMOVE);
@@ -518,10 +474,10 @@ nsHTMLStyleSheet::DropMappedAttributes(nsMappedAttributes* aMapped)
 
 #ifdef DEBUG
 /* virtual */ void
-nsHTMLStyleSheet::List(FILE* out, PRInt32 aIndent) const
+nsHTMLStyleSheet::List(FILE* out, int32_t aIndent) const
 {
   // Indent
-  for (PRInt32 index = aIndent; --index >= 0; ) fputs("  ", out);
+  for (int32_t index = aIndent; --index >= 0; ) fputs("  ", out);
 
   fputs("HTML Style Sheet: ", out);
   nsCAutoString urlSpec;
@@ -533,80 +489,40 @@ nsHTMLStyleSheet::List(FILE* out, PRInt32 aIndent) const
 }
 #endif
 
-static
-PLDHashOperator
-GetHashEntryAttributesSize(PLDHashTable* aTable, PLDHashEntryHdr* aEntry,
-                           PRUint32 number, void* aArg)
+static size_t
+SizeOfAttributesEntryExcludingThis(PLDHashEntryHdr* aEntry,
+                                   nsMallocSizeOfFun aMallocSizeOf,
+                                   void* aArg)
 {
   NS_PRECONDITION(aEntry, "The entry should not be null!");
-  NS_PRECONDITION(aArg, "The passed argument should not be null!");
 
   MappedAttrTableEntry* entry = static_cast<MappedAttrTableEntry*>(aEntry);
-  PRInt64 size = *static_cast<PRInt64*>(aArg);
-
   NS_ASSERTION(entry->mAttributes, "entry->mAttributes should not be null!");
-  size += entry->mAttributes->SizeOf();
-
-  return PL_DHASH_NEXT;
+  return entry->mAttributes->SizeOfIncludingThis(aMallocSizeOf);
 }
 
-PRInt64
-nsHTMLStyleSheet::DOMSizeOf() const
+size_t
+nsHTMLStyleSheet::DOMSizeOfIncludingThis(nsMallocSizeOfFun aMallocSizeOf) const
 {
-  PRInt64 size = sizeof(*this);
-
-  size += mLinkRule ? sizeof(*mLinkRule.get()) : 0;
-  size += mVisitedRule ? sizeof(*mVisitedRule.get()) : 0;
-  size += mActiveRule ? sizeof(*mActiveRule.get()) : 0;
-  size += mTableQuirkColorRule ? sizeof(*mTableQuirkColorRule.get()) : 0;
-  size += mTableTHRule ? sizeof(*mTableTHRule.get()) : 0;
+  size_t n = aMallocSizeOf(this);
 
   if (mMappedAttrTable.ops) {
-    size += PL_DHASH_TABLE_SIZE(&mMappedAttrTable) * sizeof(MappedAttrTableEntry);
-    PL_DHashTableEnumerate(const_cast<PLDHashTable*>(&mMappedAttrTable),
-                           GetHashEntryAttributesSize, &size);
+    n += PL_DHashTableSizeOfExcludingThis(&mMappedAttrTable,
+                                          SizeOfAttributesEntryExcludingThis,
+                                          aMallocSizeOf);
   }
 
-  return size;
+  // Measurement of the following members may be added later if DMD finds it is
+  // worthwhile:
+  // - mURL
+  // - mLinkRule
+  // - mVisitedRule
+  // - mActiveRule
+  // - mTableQuirkColorRule
+  // - mTableTHRule
+  //
+  // The following members are not measured:
+  // - mDocument, because it's non-owning
+
+  return n;
 }
-
-// XXX For convenience and backwards compatibility
-nsresult
-NS_NewHTMLStyleSheet(nsHTMLStyleSheet** aInstancePtrResult, nsIURI* aURL, 
-                     nsIDocument* aDocument)
-{
-  nsresult rv;
-  nsHTMLStyleSheet* sheet;
-  if (NS_FAILED(rv = NS_NewHTMLStyleSheet(&sheet)))
-    return rv;
-
-  if (NS_FAILED(rv = sheet->Init(aURL, aDocument))) {
-    NS_RELEASE(sheet);
-    return rv;
-  }
-
-  *aInstancePtrResult = sheet;
-  return NS_OK;
-}
-
-
-nsresult
-NS_NewHTMLStyleSheet(nsHTMLStyleSheet** aInstancePtrResult)
-{
-  NS_ASSERTION(aInstancePtrResult, "null out param");
-
-  nsHTMLStyleSheet *it = new nsHTMLStyleSheet();
-  if (!it) {
-    *aInstancePtrResult = nsnull;
-    return NS_ERROR_OUT_OF_MEMORY;
-  }
-
-  NS_ADDREF(it);
-  nsresult rv = it->Init();
-  if (NS_FAILED(rv))
-    NS_RELEASE(it);
-
-  *aInstancePtrResult = it; // NS_ADDREF above, or set to null by NS_RELEASE
-  return rv;
-}
-

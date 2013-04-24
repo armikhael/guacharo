@@ -17,7 +17,6 @@ XPCOMUtils.defineLazyServiceGetter(this, "gGlobalHistory",
                                    "nsIGlobalHistory2");
 
 const TEST_DOMAIN = "http://mozilla.org/";
-const TOPIC_UPDATEPLACES_COMPLETE = "places-updatePlaces-complete";
 const URI_VISIT_SAVED = "uri-visit-saved";
 const RECENT_EVENT_THRESHOLD = 15 * 60 * 1000000;
 
@@ -40,29 +39,6 @@ function VisitInfo(aTransitionType,
     aTransitionType === undefined ? TRANSITION_LINK : aTransitionType;
   this.visitDate = aVisitTime || Date.now() * 1000;
 }
-
-/**
- * Generic nsINavHistoryObserver that doesn't implement anything, but provides
- * dummy methods to prevent errors about an object not having a certain method.
- */
-function NavHistoryObserver()
-{
-}
-NavHistoryObserver.prototype =
-{
-  onBeginUpdateBatch: function() { },
-  onEndUpdateBatch: function() { },
-  onVisit: function() { },
-  onTitleChanged: function() { },
-  onBeforeDeleteURI: function() { },
-  onDeleteURI: function() { },
-  onClearHistory: function() { },
-  onPageChanged: function() { },
-  onDeleteVisits: function() { },
-  QueryInterface: XPCOMUtils.generateQI([
-    Ci.nsINavHistoryObserver,
-  ]),
-};
 
 /**
  * Listens for a title change notification, and calls aCallback when it gets it.
@@ -742,14 +718,14 @@ function test_place_id_ignored()
   }));
 }
 
-function test_observer_topic_dispatched_when_complete()
+function test_handleCompletion_called_when_complete()
 {
   // We test a normal visit, and embeded visit, and a uri that would fail
   // the canAddURI test to make sure that the notification happens after *all*
   // of them have had a callback.
   let places = [
     { uri: NetUtil.newURI(TEST_DOMAIN +
-                          "test_observer_topic_dispatched_when_complete"),
+                          "test_handleCompletion_called_when_complete"),
       visits: [
         new VisitInfo(),
         new VisitInfo(TRANSITION_EMBED),
@@ -777,20 +753,13 @@ function test_observer_topic_dispatched_when_complete()
     },
     handleError: function handleError(aResultCode, aPlaceInfo) {
       callbackCountFailure++;
-    }
-  });
-
-  let observer = {
-    observe: function(aSubject, aTopic, aData)
-    {
-      do_check_eq(aTopic, TOPIC_UPDATEPLACES_COMPLETE);
+    },
+    handleCompletion: function handleCompletion() {
       do_check_eq(callbackCountSuccess, EXPECTED_COUNT_SUCCESS);
       do_check_eq(callbackCountFailure, EXPECTED_COUNT_FAILURE);
-      Services.obs.removeObserver(observer, TOPIC_UPDATEPLACES_COMPLETE);
       waitForAsyncUpdates(run_next_test);
     },
-  };
-  Services.obs.addObserver(observer, TOPIC_UPDATEPLACES_COMPLETE, false);
+  });
 }
 
 function test_add_visit()
@@ -1300,15 +1269,8 @@ function test_callbacks_not_supplied()
     }
   });
   
-  gHistory.updatePlaces(places, {} );
-  let observer = {
-    observe: function(aSubject, aTopic, aData)
-    {
-      Services.obs.removeObserver(observer, TOPIC_UPDATEPLACES_COMPLETE);
-      waitForAsyncUpdates(run_next_test);
-    },
-  };
-  Services.obs.addObserver(observer, TOPIC_UPDATEPLACES_COMPLETE, false);
+  gHistory.updatePlaces(places, {});
+  waitForAsyncUpdates(run_next_test);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1333,7 +1295,7 @@ function test_callbacks_not_supplied()
   test_unstored_sessionId_ignored,
   test_old_referrer_ignored,
   test_place_id_ignored,
-  test_observer_topic_dispatched_when_complete,
+  test_handleCompletion_called_when_complete,
   test_add_visit,
   test_properties_saved,
   test_guid_saved,

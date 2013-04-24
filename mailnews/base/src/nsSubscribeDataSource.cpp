@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Seth Spitzer <sspitzer@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsSubscribeDataSource.h"
 
@@ -122,52 +89,52 @@ nsSubscribeDataSource::Init()
 NS_IMETHODIMP 
 nsSubscribeDataSource::GetURI(char * *aURI)
 {
-  if ((*aURI = strdup("rdf:subscribe")) == nsnull)
+  if ((*aURI = strdup("rdf:subscribe")) == nullptr)
     return NS_ERROR_OUT_OF_MEMORY;
   else
     return NS_OK;
 }
 
 NS_IMETHODIMP 
-nsSubscribeDataSource::GetSource(nsIRDFResource *property, nsIRDFNode *target, PRBool tv, nsIRDFResource **source)
+nsSubscribeDataSource::GetSource(nsIRDFResource *property, nsIRDFNode *target, bool tv, nsIRDFResource **source)
 {
-    NS_PRECONDITION(property != nsnull, "null ptr");
+    NS_PRECONDITION(property != nullptr, "null ptr");
     if (! property)
         return NS_ERROR_NULL_POINTER;
 
-    NS_PRECONDITION(target != nsnull, "null ptr");
+    NS_PRECONDITION(target != nullptr, "null ptr");
     if (! target)
         return NS_ERROR_NULL_POINTER;
 
-    NS_PRECONDITION(source != nsnull, "null ptr");
+    NS_PRECONDITION(source != nullptr, "null ptr");
     if (! source)
         return NS_ERROR_NULL_POINTER;
 
-    *source = nsnull;
+    *source = nullptr;
     return NS_RDF_NO_VALUE;
 }
 
 NS_IMETHODIMP
 nsSubscribeDataSource::GetTarget(nsIRDFResource *source,
                                 nsIRDFResource *property,
-                                PRBool tv,
+                                bool tv,
                                 nsIRDFNode **target /* out */)
 {
 	nsresult rv = NS_RDF_NO_VALUE;
 
-	NS_PRECONDITION(source != nsnull, "null ptr");
+	NS_PRECONDITION(source != nullptr, "null ptr");
 	if (! source)
 		return NS_ERROR_NULL_POINTER;
 
-	NS_PRECONDITION(property != nsnull, "null ptr");
+	NS_PRECONDITION(property != nullptr, "null ptr");
 	if (! property)
 		return NS_ERROR_NULL_POINTER;
 
-	NS_PRECONDITION(target != nsnull, "null ptr");
+	NS_PRECONDITION(target != nullptr, "null ptr");
 	if (! target)
 		return NS_ERROR_NULL_POINTER;
 
-	*target = nsnull;
+	*target = nullptr;
 
 	// we only have positive assertions in the subscribe data source.
 	if (! tv) return NS_RDF_NO_VALUE;
@@ -201,7 +168,7 @@ nsSubscribeDataSource::GetTarget(nsIRDFResource *source,
         return childResource->QueryInterface(NS_GET_IID(nsIRDFNode), (void**) target);
     }
     else if (property == kNC_Subscribed.get()) {
-        PRBool isSubscribed;
+        bool isSubscribed;
         rv = server->IsSubscribed(relativePath, &isSubscribed);
         NS_ENSURE_SUCCESS(rv,rv);
     
@@ -209,7 +176,7 @@ nsSubscribeDataSource::GetTarget(nsIRDFResource *source,
         return NS_OK;
     }
     else if (property == kNC_Subscribable.get()) {
-        PRBool isSubscribable;
+        bool isSubscribable;
         rv = server->IsSubscribable(relativePath, &isSubscribable);
         NS_ENSURE_SUCCESS(rv,rv);
         
@@ -257,24 +224,24 @@ nsSubscribeDataSource::GetTarget(nsIRDFResource *source,
 NS_IMETHODIMP
 nsSubscribeDataSource::GetTargets(nsIRDFResource *source,
 				nsIRDFResource *property,
-				PRBool tv,
+				bool tv,
 				nsISimpleEnumerator **targets /* out */)
 {
 	nsresult rv = NS_OK;
 
-	NS_PRECONDITION(source != nsnull, "null ptr");
+	NS_PRECONDITION(source != nullptr, "null ptr");
 	if (! source)
 		return NS_ERROR_NULL_POINTER;
 
-	NS_PRECONDITION(property != nsnull, "null ptr");
+	NS_PRECONDITION(property != nullptr, "null ptr");
 	if (! property)
 		return NS_ERROR_NULL_POINTER;
 
-	NS_PRECONDITION(targets != nsnull, "null ptr");
+	NS_PRECONDITION(targets != nullptr, "null ptr");
 	if (! targets)
 		return NS_ERROR_NULL_POINTER;
 
-    *targets = nsnull;
+    *targets = nullptr;
 
 	// we only have positive assertions in the subscribe data source.
 	if (!tv) return NS_RDF_NO_VALUE;
@@ -306,7 +273,7 @@ nsSubscribeDataSource::GetTargets(nsIRDFResource *source,
         return NS_NewSingletonEnumerator(targets, leafName);
     }
     else if (property == kNC_Subscribed.get()) {
-        PRBool isSubscribed;
+        bool isSubscribed;
         rv = server->IsSubscribed(relativePath, &isSubscribed);
         NS_ENSURE_SUCCESS(rv,rv);
 
@@ -314,7 +281,7 @@ nsSubscribeDataSource::GetTargets(nsIRDFResource *source,
                  isSubscribed ? kTrueLiteral : kFalseLiteral);
     }
     else if (property == kNC_Subscribable.get()) {
-        PRBool isSubscribable;
+        bool isSubscribable;
         rv = server->IsSubscribable(relativePath, &isSubscribable);
         NS_ENSURE_SUCCESS(rv,rv);
 
@@ -352,7 +319,7 @@ NS_IMETHODIMP
 nsSubscribeDataSource::Assert(nsIRDFResource *source,
                        nsIRDFResource *property,
                        nsIRDFNode *target,
-                       PRBool tv)
+                       bool tv)
 {
 	return NS_RDF_ASSERTION_REJECTED;
 }
@@ -404,7 +371,7 @@ nsSubscribeDataSource::GetServerAndRelativePathFromResource(nsIRDFResource *sour
 {
     nsresult rv = NS_OK;
 
-    const char *sourceURI = nsnull;
+    const char *sourceURI = nullptr;
     rv = source->GetValueConst(&sourceURI);
     NS_ENSURE_SUCCESS(rv,rv);
 
@@ -424,9 +391,9 @@ nsSubscribeDataSource::GetServerAndRelativePathFromResource(nsIRDFResource *sour
     rv = incomingServer->GetServerURI(serverURI);
     NS_ENSURE_SUCCESS(rv,rv);
  
-    PRUint32 serverURILen = serverURI.Length();
+    uint32_t serverURILen = serverURI.Length();
     if (serverURILen == strlen(sourceURI))
-      *relativePath = nsnull;
+      *relativePath = nullptr;
     else {
       // XXX : perhaps, have to unescape before returning 
       *relativePath = strdup(sourceURI + serverURILen + 1);
@@ -441,28 +408,28 @@ NS_IMETHODIMP
 nsSubscribeDataSource::HasAssertion(nsIRDFResource *source,
                              nsIRDFResource *property,
                              nsIRDFNode *target,
-                             PRBool tv,
-                             PRBool *hasAssertion /* out */)
+                             bool tv,
+                             bool *hasAssertion /* out */)
 {
     nsresult rv = NS_OK;
 
-	NS_PRECONDITION(source != nsnull, "null ptr");
+	NS_PRECONDITION(source != nullptr, "null ptr");
 	if (! source)
 		return NS_ERROR_NULL_POINTER;
 
-	NS_PRECONDITION(property != nsnull, "null ptr");
+	NS_PRECONDITION(property != nullptr, "null ptr");
 	if (! property)
 		return NS_ERROR_NULL_POINTER;
 
-	NS_PRECONDITION(target != nsnull, "null ptr");
+	NS_PRECONDITION(target != nullptr, "null ptr");
 	if (! target)
 		return NS_ERROR_NULL_POINTER;
 
-	NS_PRECONDITION(hasAssertion != nsnull, "null ptr");
+	NS_PRECONDITION(hasAssertion != nullptr, "null ptr");
 	if (! hasAssertion)
 		return NS_ERROR_NULL_POINTER;
 
-	*hasAssertion = PR_FALSE;
+	*hasAssertion = false;
 
   // we only have positive assertions in the subscribe data source.
 	if (!tv) return NS_OK;
@@ -473,7 +440,7 @@ nsSubscribeDataSource::HasAssertion(nsIRDFResource *source,
 
     rv = GetServerAndRelativePathFromResource(source, getter_AddRefs(server), getter_Copies(relativePath));
     if (NS_FAILED(rv) || !server) {
-        *hasAssertion = PR_FALSE;
+        *hasAssertion = false;
         return NS_OK;
     }
 
@@ -483,23 +450,23 @@ nsSubscribeDataSource::HasAssertion(nsIRDFResource *source,
     }
     else if (property == kNC_Name.get()) {
         // everything has a name
-        *hasAssertion = PR_TRUE;
+        *hasAssertion = true;
     }
     else if (property == kNC_LeafName.get()) {
         // everything has a leaf name
-        *hasAssertion = PR_TRUE;
+        *hasAssertion = true;
     }
     else if (property == kNC_Subscribed.get()) {
         // everything is subscribed or not
-        *hasAssertion = PR_TRUE;
+        *hasAssertion = true;
     }
     else if (property == kNC_Subscribable.get()) {
         // everything is subscribable or not
-        *hasAssertion = PR_TRUE;
+        *hasAssertion = true;
     }
     else if (property == kNC_ServerType.get()) {
         // everything has a server type
-        *hasAssertion = PR_TRUE;
+        *hasAssertion = true;
     }
     else {
         // do nothing
@@ -510,13 +477,13 @@ nsSubscribeDataSource::HasAssertion(nsIRDFResource *source,
 
 
 NS_IMETHODIMP 
-nsSubscribeDataSource::HasArcIn(nsIRDFNode *aNode, nsIRDFResource *aArc, PRBool *result)
+nsSubscribeDataSource::HasArcIn(nsIRDFNode *aNode, nsIRDFResource *aArc, bool *result)
 {
     return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP 
-nsSubscribeDataSource::HasArcOut(nsIRDFResource *source, nsIRDFResource *aArc, PRBool *result)
+nsSubscribeDataSource::HasArcOut(nsIRDFResource *source, nsIRDFResource *aArc, bool *result)
 {
     nsresult rv = NS_OK;
 
@@ -526,11 +493,11 @@ nsSubscribeDataSource::HasArcOut(nsIRDFResource *source, nsIRDFResource *aArc, P
     if (aArc == kNC_Child.get()) {
     rv = GetServerAndRelativePathFromResource(source, getter_AddRefs(server), getter_Copies(relativePath));
     if (NS_FAILED(rv) || !server) {
-	    *result = PR_FALSE;
+	    *result = false;
         return NS_OK;
     }
 
-        PRBool hasChildren = PR_FALSE;
+        bool hasChildren = false;
         rv = server->HasChildren(relativePath, &hasChildren);
         NS_ENSURE_SUCCESS(rv,rv);
         *result = hasChildren;
@@ -541,11 +508,11 @@ nsSubscribeDataSource::HasArcOut(nsIRDFResource *source, nsIRDFResource *aArc, P
              (aArc == kNC_LeafName.get()) ||
              (aArc == kNC_ServerType.get()) ||
              (aArc == kNC_Name.get())) {
-        *result = PR_TRUE;
+        *result = true;
         return NS_OK;
     }
 
-    *result = PR_FALSE;
+    *result = false;
     return NS_OK;
 }
 
@@ -565,11 +532,11 @@ nsSubscribeDataSource::ArcLabelsOut(nsIRDFResource *source,
 {
     nsresult rv = NS_OK;
 
-    NS_PRECONDITION(source != nsnull, "null ptr");
+    NS_PRECONDITION(source != nullptr, "null ptr");
     if (! source)
 	return NS_ERROR_NULL_POINTER;
 
-    NS_PRECONDITION(labels != nsnull, "null ptr");
+    NS_PRECONDITION(labels != nullptr, "null ptr");
     if (! labels)
 	return NS_ERROR_NULL_POINTER;
 
@@ -581,7 +548,7 @@ nsSubscribeDataSource::ArcLabelsOut(nsIRDFResource *source,
         return NS_NewEmptyEnumerator(labels);
     }
 
-    PRBool hasChildren = PR_FALSE;
+    bool hasChildren = false;
     rv = server->HasChildren(relativePath, &hasChildren);
     NS_ENSURE_SUCCESS(rv,rv);
 
@@ -614,7 +581,7 @@ nsSubscribeDataSource::GetAllResources(nsISimpleEnumerator** aCursor)
 NS_IMETHODIMP
 nsSubscribeDataSource::AddObserver(nsIRDFObserver *n)
 {
-    NS_PRECONDITION(n != nsnull, "null ptr");
+    NS_PRECONDITION(n != nullptr, "null ptr");
     if (! n)
         return NS_ERROR_NULL_POINTER;
 
@@ -632,7 +599,7 @@ nsSubscribeDataSource::AddObserver(nsIRDFObserver *n)
 NS_IMETHODIMP
 nsSubscribeDataSource::RemoveObserver(nsIRDFObserver *n)
 {
-    NS_PRECONDITION(n != nsnull, "null ptr");
+    NS_PRECONDITION(n != nullptr, "null ptr");
     if (! n)
         return NS_ERROR_NULL_POINTER;
 
@@ -644,18 +611,18 @@ nsSubscribeDataSource::RemoveObserver(nsIRDFObserver *n)
 }
 
 NS_IMETHODIMP
-nsSubscribeDataSource::GetHasObservers(PRBool *hasObservers)
+nsSubscribeDataSource::GetHasObservers(bool *hasObservers)
 {
     nsresult rv = NS_OK;
     NS_ASSERTION(hasObservers, "null ptr");
     if (!hasObservers) return NS_ERROR_NULL_POINTER;
     
     if (!mObservers) {
-        *hasObservers = PR_FALSE;
+        *hasObservers = false;
         return NS_OK;
     }
     
-    PRUint32 count = 0;
+    uint32_t count = 0;
     rv = mObservers->Count(&count);
     NS_ENSURE_SUCCESS(rv,rv);
 
@@ -674,7 +641,7 @@ NS_IMETHODIMP
 nsSubscribeDataSource::IsCommandEnabled(nsISupportsArray/*<nsIRDFResource>*/* aSources,
                                        nsIRDFResource*   aCommand,
                                        nsISupportsArray/*<nsIRDFResource>*/* aArguments,
-                                       PRBool* aResult)
+                                       bool* aResult)
 {
 	return(NS_ERROR_NOT_IMPLEMENTED);
 }
@@ -708,9 +675,9 @@ nsSubscribeDataSource::EndUpdateBatch()
 
 
 NS_IMETHODIMP 
-nsSubscribeDataSource::GetSources(nsIRDFResource *aProperty, nsIRDFNode *aTarget, PRBool aTruthValue, nsISimpleEnumerator **_retval)
+nsSubscribeDataSource::GetSources(nsIRDFResource *aProperty, nsIRDFNode *aTarget, bool aTruthValue, nsISimpleEnumerator **_retval)
 {
-  NS_ASSERTION(PR_FALSE, "Not implemented");
+  NS_ASSERTION(false, "Not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -718,7 +685,7 @@ NS_IMETHODIMP
 nsSubscribeDataSource::NotifyObservers(nsIRDFResource *subject,
                                                 nsIRDFResource *property,
                                                 nsIRDFNode *object,
-                                                PRBool assert, PRBool change)
+                                                bool assert, bool change)
 {
     NS_ASSERTION(!(change && assert),
                  "Can't change and assert at the same time!\n");
@@ -736,7 +703,7 @@ nsSubscribeDataSource::NotifyObservers(nsIRDFResource *subject,
     return NS_OK;
 }
 
-PRBool
+bool
 nsSubscribeDataSource::changeEnumFunc(nsISupports *aElement, void *aData)
 {
   nsSubscribeNotification* note = (nsSubscribeNotification*)aData;
@@ -745,11 +712,11 @@ nsSubscribeDataSource::changeEnumFunc(nsISupports *aElement, void *aData)
   observer->OnChange(note->datasource,
                      note->subject,
                      note->property,
-                     nsnull, note->object);
-  return PR_TRUE;
+                     nullptr, note->object);
+  return true;
 }
 
-PRBool
+bool
 nsSubscribeDataSource::assertEnumFunc(nsISupports *aElement, void *aData)
 {
   nsSubscribeNotification* note = (nsSubscribeNotification*)aData;
@@ -759,10 +726,10 @@ nsSubscribeDataSource::assertEnumFunc(nsISupports *aElement, void *aData)
                      note->subject,
                      note->property,
                      note->object);
-  return PR_TRUE;
+  return true;
 }
 
-PRBool
+bool
 nsSubscribeDataSource::unassertEnumFunc(nsISupports *aElement, void *aData)
 {
   nsSubscribeNotification* note = (nsSubscribeNotification*)aData;
@@ -772,5 +739,5 @@ nsSubscribeDataSource::unassertEnumFunc(nsISupports *aElement, void *aData)
                        note->subject,
                        note->property,
                        note->object);
-  return PR_TRUE;
+  return true;
 }

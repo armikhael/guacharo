@@ -1,4 +1,8 @@
 <?xml version="1.0"?> 
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
 <?xml-stylesheet href="chrome://communicator/skin/tasksOverlay.css" type="text/css"?> 
 
 <!DOCTYPE overlay [
@@ -71,7 +75,7 @@
                     observes="sync-syncnow-state"
                     oncommand="gSyncUI.doSync(event);"
                     hidden="true"/>
-          <menuseparator/>
+          <menuseparator id="devToolsSeparator"/>
           <menu label="&webDevelopment.label;" accesskey="&webDevelopment.accesskey;">
             <menupopup id="toolsPopup">
               <menuitem id="javascriptConsole" label="&errorConsoleCmd.label;"

@@ -1,48 +1,12 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  * 
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Dan Mosedale <dmose@netscape.com> (Original Author)
- *   Leif Hedstrom <leif@netscape.com>
- *   Simon Wilkinson <simon@sxw.org.uk>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsLDAPAutoCompleteSession.h"
 #include "nsIComponentManager.h"
 #include "nsIServiceManager.h"
-#include "nsIProxyObjectManager.h"
 #include "nsILDAPURL.h"
 #include "nsILDAPService.h"
 #include "nspr.h"
@@ -125,7 +89,7 @@ nsLDAPAutoCompleteSession::OnStartLookup(const PRUnichar *searchString,
           mCjkMinStringLength && NS_strlen(searchString) < 
           mCjkMinStringLength ) ) {
 
-        FinishAutoCompleteLookup(nsIAutoCompleteStatus::ignored, 0, mState);
+        FinishAutoCompleteLookup(nsIAutoCompleteStatus::ignored, NS_OK, mState);
         return NS_OK;
     } else {
         mSearchString = searchString;        // save it for later use
@@ -311,7 +275,7 @@ nsLDAPAutoCompleteSession::OnAutoComplete(const PRUnichar *searchString,
 NS_IMETHODIMP 
 nsLDAPAutoCompleteSession::OnLDAPMessage(nsILDAPMessage *aMessage)
 {
-    PRInt32 messageType;
+    int32_t messageType;
 
     // Just in case.
     // XXXdmose the semantics of NULL are currently undefined, but are likely
@@ -337,7 +301,7 @@ nsLDAPAutoCompleteSession::OnLDAPMessage(nsILDAPMessage *aMessage)
     // If this message is not associated with the current operation,
     // discard it, since it is probably from a previous (aborted)
     // operation.
-    PRBool isCurrent;
+    bool isCurrent;
     rv = IsMessageCurrent(aMessage, &isCurrent);
     if (NS_FAILED(rv)) {
         // IsMessageCurrent will have logged any necessary errors
@@ -426,9 +390,9 @@ nsLDAPAutoCompleteSession::OnLDAPMessage(nsILDAPMessage *aMessage)
 }
 
 void
-nsLDAPAutoCompleteSession::InitFailed(PRBool aCancelled)
+nsLDAPAutoCompleteSession::InitFailed(bool aCancelled)
 {
-  FinishAutoCompleteLookup(nsIAutoCompleteStatus::failureItems, 0,
+  FinishAutoCompleteLookup(nsIAutoCompleteStatus::failureItems, NS_OK,
                            UNBOUND);
 }
 
@@ -474,17 +438,38 @@ nsLDAPAutoCompleteSession::OnLDAPSearchEntry(nsILDAPMessage *aMessage)
         return NS_ERROR_FAILURE;
     }
 
-    rv = mResultsArray->AppendElement(item);
-    if (NS_FAILED(rv)) {
-        NS_ERROR("nsLDAPAutoCompleteSession::OnLDAPSearchEntry(): "
-                 "mItems->AppendElement() failed");
-        return NS_ERROR_FAILURE;
-    }
+  nsString itemValue;
+  item->GetValue(itemValue);
 
-    // Remember that something has been returned.
-    mEntriesReturned++;
+  uint32_t nbrOfItems;
+  rv = mResultsArray->Count(&nbrOfItems);
+  if (NS_FAILED(rv)) {
+    NS_ERROR("nsLDAPAutoCompleteSession::OnLDAPSearchEntry(): "
+             "mResultsArray->Count() failed");
+    return NS_ERROR_FAILURE;
+  }
 
-    return NS_OK;
+  int32_t insertPosition = 0;
+
+  nsCOMPtr<nsIAutoCompleteItem> currentItem;
+  for (; insertPosition < nbrOfItems; insertPosition++) {
+    currentItem = do_QueryElementAt(mResultsArray, insertPosition, &rv);
+
+    if (NS_FAILED(rv))
+      continue;
+
+    nsString currentItemValue;
+    currentItem->GetValue(currentItemValue);
+    if (itemValue < currentItemValue) 
+      break;
+  }
+
+  mResultsArray->InsertElementAt(item, insertPosition);
+
+  // Remember that something has been returned.
+  mEntriesReturned++;
+
+  return NS_OK;
 }
 
 nsresult
@@ -498,7 +483,7 @@ nsLDAPAutoCompleteSession::OnLDAPSearchResult(nsILDAPMessage *aMessage)
     // Figure out if we succeeded or failed, and set the status
     // and default index appropriately.
     AutoCompleteStatus status;
-    PRInt32 lderrno;
+    int32_t lderrno;
 
     if (mEntriesReturned) {
 
@@ -553,7 +538,6 @@ nsresult
 nsLDAPAutoCompleteSession::DoTask()
 {
     nsresult rv; // temp for xpcom return values
-    nsCOMPtr<nsILDAPMessageListener> selfProxy; // for callback
 
     PR_LOG(sLDAPAutoCompleteLogModule, PR_LOG_DEBUG, 
            ("nsLDAPAutoCompleteSession::DoTask entered\n"));
@@ -571,27 +555,8 @@ nsLDAPAutoCompleteSession::DoTask()
         return NS_ERROR_FAILURE;
     }
 
-    // Get a proxy object so the callback happens on the main thread.
-    nsCOMPtr<nsIProxyObjectManager> proxyObjMgr = do_GetService(NS_XPCOMPROXY_CONTRACTID, &rv);
-    if (NS_FAILED(rv)) {
-        FinishAutoCompleteLookup(nsIAutoCompleteStatus::failureItems, rv, UNBOUND);
-        return NS_ERROR_FAILURE;
-    }
-    rv = proxyObjMgr->GetProxyForObject(NS_PROXY_TO_MAIN_THREAD,
-                              NS_GET_IID(nsILDAPMessageListener), 
-                              static_cast<nsILDAPMessageListener *>(this), 
-                              NS_PROXY_ASYNC | NS_PROXY_ALWAYS, 
-                              getter_AddRefs(selfProxy));
-    if (NS_FAILED(rv)) {
-        NS_ERROR("nsLDAPAutoCompleteSession::DoTask(): couldn't "
-                 "create proxy to this object for callback");
-        FinishAutoCompleteLookup(nsIAutoCompleteStatus::failureItems, rv, 
-                                 BOUND);
-        return NS_ERROR_FAILURE;
-    }
-
     // Initialize the LDAP operation object.
-    rv = mOperation->Init(mConnection, selfProxy, nsnull);
+    rv = mOperation->Init(mConnection, this, nullptr);
     if (NS_FAILED(rv)) {
         NS_ERROR("nsLDAPAutoCompleteSession::DoTask(): couldn't "
                  "initialize LDAP operation");
@@ -646,7 +611,7 @@ nsLDAPAutoCompleteSession::DoTask()
     // If urlFilter is unset (or set to the default "objectclass=*"), there's
     // no need to AND in an empty search term, so leave prefix and suffix empty.
     nsCAutoString prefix, suffix;
-    if (urlFilter.Length() && !urlFilter.Equals(NS_LITERAL_CSTRING("(objectclass=*)"))) {
+    if (urlFilter.Length() && !urlFilter.EqualsLiteral("(objectclass=*)")) {
 
         // If urlFilter isn't parenthesized, we need to add in parens so that
         // the filter works as a term to &
@@ -723,7 +688,7 @@ nsLDAPAutoCompleteSession::DoTask()
     }
 
     // And the scope
-    PRInt32 scope;
+    int32_t scope;
     rv = mDirectoryUrl->GetScope(&scope);
     if ( NS_FAILED(rv) ){
         mState = BOUND;
@@ -814,8 +779,6 @@ nsresult
 nsLDAPAutoCompleteSession::InitConnection()
 {
     nsresult rv;        // temp for xpcom return values
-    nsCOMPtr<nsILDAPMessageListener> selfProxy;
-    
     NS_ASSERTION(!mConnection, "in InitConnection w/ existing connection");
 
     // Create an LDAP connection
@@ -840,29 +803,10 @@ nsLDAPAutoCompleteSession::InitConnection()
         return NS_ERROR_NOT_INITIALIZED;
     }
 
-    // Get a proxy object so the callback happens on the main thread.
-    nsCOMPtr<nsIProxyObjectManager> proxyObjMgr = do_GetService(NS_XPCOMPROXY_CONTRACTID, &rv);
-    if (NS_FAILED(rv)) {
-        FinishAutoCompleteLookup(nsIAutoCompleteStatus::failureItems, rv, UNBOUND);
-        return NS_ERROR_FAILURE;
-    }
-    rv = proxyObjMgr->GetProxyForObject(NS_PROXY_TO_MAIN_THREAD, 
-                              NS_GET_IID(nsILDAPMessageListener), 
-                              static_cast<nsILDAPMessageListener *>(this), 
-                              NS_PROXY_ASYNC | NS_PROXY_ALWAYS, 
-                              getter_AddRefs(selfProxy));
-    if (NS_FAILED(rv)) {
-        NS_ERROR("nsLDAPAutoCompleteSession::InitConnection(): couldn't "
-                 "create proxy to this object for callback");
-        FinishAutoCompleteLookup(nsIAutoCompleteStatus::failureItems, rv, 
-                                 UNBOUND);
-        return NS_ERROR_FAILURE;
-    }
-
     // Initialize the connection. This will cause an asynchronous DNS
     // lookup to occur, and we'll finish the binding of the connection
     // in the OnLDAPInit() listener function.
-    rv = mConnection->Init(mDirectoryUrl, mLogin, selfProxy, nsnull, mVersion);
+    rv = mConnection->Init(mDirectoryUrl, mLogin, this, nullptr, mVersion);
     if (NS_FAILED(rv)) {
         switch (rv) {
 
@@ -1050,7 +994,7 @@ nsLDAPAutoCompleteSession::SetFilterTemplate(const nsACString & aFilterTemplate)
 
 // attribute long maxHits;
 NS_IMETHODIMP 
-nsLDAPAutoCompleteSession::GetMaxHits(PRInt32 *aMaxHits)
+nsLDAPAutoCompleteSession::GetMaxHits(int32_t *aMaxHits)
 {
     if (!aMaxHits) {
         return NS_ERROR_NULL_POINTER;
@@ -1060,7 +1004,7 @@ nsLDAPAutoCompleteSession::GetMaxHits(PRInt32 *aMaxHits)
     return NS_OK;
 }
 NS_IMETHODIMP 
-nsLDAPAutoCompleteSession::SetMaxHits(PRInt32 aMaxHits)
+nsLDAPAutoCompleteSession::SetMaxHits(int32_t aMaxHits)
 {
     if ( aMaxHits < -1 || aMaxHits > 65535) {
         return NS_ERROR_ILLEGAL_VALUE;
@@ -1104,7 +1048,7 @@ nsLDAPAutoCompleteSession::SetServerURL(nsILDAPURL * aServerURL)
 
 // attribute unsigned long minStringLength
 NS_IMETHODIMP
-nsLDAPAutoCompleteSession::GetMinStringLength(PRUint32 *aMinStringLength)
+nsLDAPAutoCompleteSession::GetMinStringLength(uint32_t *aMinStringLength)
 {
     if (!aMinStringLength) {
         return NS_ERROR_NULL_POINTER;
@@ -1114,7 +1058,7 @@ nsLDAPAutoCompleteSession::GetMinStringLength(PRUint32 *aMinStringLength)
     return NS_OK;
 }
 NS_IMETHODIMP
-nsLDAPAutoCompleteSession::SetMinStringLength(PRUint32 aMinStringLength)
+nsLDAPAutoCompleteSession::SetMinStringLength(uint32_t aMinStringLength)
 {
     mMinStringLength = aMinStringLength;
 
@@ -1123,7 +1067,7 @@ nsLDAPAutoCompleteSession::SetMinStringLength(PRUint32 aMinStringLength)
 
 // attribute unsigned long cjkMinStringLength
 NS_IMETHODIMP
-nsLDAPAutoCompleteSession::GetCjkMinStringLength(PRUint32 *aCjkMinStringLength)
+nsLDAPAutoCompleteSession::GetCjkMinStringLength(uint32_t *aCjkMinStringLength)
 {
     if (!aCjkMinStringLength) {
         return NS_ERROR_NULL_POINTER;
@@ -1133,7 +1077,7 @@ nsLDAPAutoCompleteSession::GetCjkMinStringLength(PRUint32 *aCjkMinStringLength)
     return NS_OK;
 }
 NS_IMETHODIMP
-nsLDAPAutoCompleteSession::SetCjkMinStringLength(PRUint32 aCjkMinStringLength)
+nsLDAPAutoCompleteSession::SetCjkMinStringLength(uint32_t aCjkMinStringLength)
 {
     mCjkMinStringLength = aCjkMinStringLength;
 
@@ -1144,16 +1088,16 @@ nsLDAPAutoCompleteSession::SetCjkMinStringLength(PRUint32 aCjkMinStringLength)
 // if there is no current operation, it's not. :-)
 nsresult 
 nsLDAPAutoCompleteSession::IsMessageCurrent(nsILDAPMessage *aMessage, 
-                                            PRBool *aIsCurrent)
+                                            bool *aIsCurrent)
 {
     // If there's no operation, this message must be stale (ie non-current).
     if ( !mOperation ) {
-        *aIsCurrent = PR_FALSE;
+        *aIsCurrent = false;
         return NS_OK;
     }
 
     // Get the message id from the current operation.
-    PRInt32 currentId;
+    int32_t currentId;
     nsresult rv = mOperation->GetMessageID(&currentId);
     if (NS_FAILED(rv)) {
         PR_LOG(sLDAPAutoCompleteLogModule, PR_LOG_DEBUG, 
@@ -1173,7 +1117,7 @@ nsLDAPAutoCompleteSession::IsMessageCurrent(nsILDAPMessage *aMessage,
     }
 
     // Get the message operation id from the message operation.
-    PRInt32 msgOpId;
+    int32_t msgOpId;
     rv = msgOp->GetMessageID(&msgOpId);
     if (NS_FAILED(rv)) {
         PR_LOG(sLDAPAutoCompleteLogModule, PR_LOG_DEBUG, 
@@ -1253,7 +1197,7 @@ nsLDAPAutoCompleteSession::GetSaslMechanism(nsACString & aSaslMechanism)
 
 // attribute unsigned long version;
 NS_IMETHODIMP 
-nsLDAPAutoCompleteSession::GetVersion(PRUint32 *aVersion)
+nsLDAPAutoCompleteSession::GetVersion(uint32_t *aVersion)
 {
     if (!aVersion) {
         return NS_ERROR_NULL_POINTER;
@@ -1263,7 +1207,7 @@ nsLDAPAutoCompleteSession::GetVersion(PRUint32 *aVersion)
     return NS_OK;
 }
 NS_IMETHODIMP 
-nsLDAPAutoCompleteSession::SetVersion(PRUint32 aVersion)
+nsLDAPAutoCompleteSession::SetVersion(uint32_t aVersion)
 {
     if ( mVersion != nsILDAPConnection::VERSION2 && 
          mVersion != nsILDAPConnection::VERSION3) {

@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Mark Banner <bugzilla@standard8.demon.co.uk>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #include "nsIAddrDatabase.h"
 #include "nsStringGlue.h"
 #include "nsAbLDIFService.h"
@@ -58,7 +25,7 @@ NS_IMPL_ISUPPORTS1(nsAbLDIFService, nsIAbLDIFService)
 
 nsAbLDIFService::nsAbLDIFService()
 {
-  mStoreLocAsHome = PR_FALSE;
+  mStoreLocAsHome = false;
   mLFCount = 0;
   mCRCount = 0;
 }
@@ -93,7 +60,7 @@ static unsigned char b642nib[0x80] = {
     0x31, 0x32, 0x33, 0xff, 0xff, 0xff, 0xff, 0xff
 };
 
-NS_IMETHODIMP nsAbLDIFService::ImportLDIFFile(nsIAddrDatabase *aDb, nsIFile *aSrc, PRBool aStoreLocAsHome, PRUint32 *aProgress)
+NS_IMETHODIMP nsAbLDIFService::ImportLDIFFile(nsIAddrDatabase *aDb, nsIFile *aSrc, bool aStoreLocAsHome, uint32_t *aProgress)
 {
   NS_ENSURE_ARG_POINTER(aSrc);
   NS_ENSURE_ARG_POINTER(aDb);
@@ -102,13 +69,13 @@ NS_IMETHODIMP nsAbLDIFService::ImportLDIFFile(nsIAddrDatabase *aDb, nsIFile *aSr
 
   char buf[1024];
   char* pBuf = &buf[0];
-  PRInt32 startPos = 0;
-  PRUint32 len = 0;
+  int32_t startPos = 0;
+  uint32_t len = 0;
   nsVoidArray listPosArray;   // where each list/group starts in ldif file
   nsVoidArray listSizeArray;  // size of the list/group info
-  PRInt32 savedStartPos = 0;
-  PRInt32 filePos = 0;
-  PRUint32 bytesLeft = 0;
+  int32_t savedStartPos = 0;
+  int32_t filePos = 0;
+  uint64_t bytesLeft = 0;
 
   nsCOMPtr<nsIInputStream> inputStream;
   nsresult rv = NS_NewLocalFileInputStream(getter_AddRefs(inputStream), aSrc);
@@ -126,7 +93,7 @@ NS_IMETHODIMP nsAbLDIFService::ImportLDIFFile(nsIAddrDatabase *aDb, nsIFile *aSr
       while (NS_SUCCEEDED(GetLdifStringRecord(buf, len, startPos)))
       {
         if (mLdifLine.Find("groupOfNames") == -1)
-          AddLdifRowToDatabase(aDb, PR_FALSE);
+          AddLdifRowToDatabase(aDb, false);
         else
         {
           //keep file position for mailing list
@@ -138,17 +105,17 @@ NS_IMETHODIMP nsAbLDIFService::ImportLDIFFile(nsIAddrDatabase *aDb, nsIFile *aSr
       }
       filePos += len;
       if (aProgress)
-        *aProgress = (PRUint32)filePos;
+        *aProgress = (uint32_t)filePos;
     }
   }
   //last row
   if (!mLdifLine.IsEmpty() && mLdifLine.Find("groupOfNames") == -1)
-    AddLdifRowToDatabase(aDb, PR_FALSE); 
+    AddLdifRowToDatabase(aDb, false); 
 
   // mail Lists
-  PRInt32 i, pos;
-  PRUint32 size;
-  PRInt32 listTotal = listPosArray.Count();
+  int32_t i, pos;
+  uint32_t size;
+  int32_t listTotal = listPosArray.Count();
   char *listBuf;
   ClearLdifRecordBuffer();  // make sure the buffer is clean
 
@@ -173,7 +140,7 @@ NS_IMETHODIMP nsAbLDIFService::ImportLDIFFile(nsIAddrDatabase *aDb, nsIFile *aSr
         {
           if (mLdifLine.Find("groupOfNames") != -1)
           {
-            AddLdifRowToDatabase(aDb, PR_TRUE);
+            AddLdifRowToDatabase(aDb, true);
             if (NS_SUCCEEDED(seekableStream->Seek(nsISeekableStream::NS_SEEK_SET, 0)))
               break;
           }
@@ -311,8 +278,8 @@ char* nsAbLDIFService::str_getline(char **next) const
   char    *lineStr;
   char    c;
 
-  if ( *next == nsnull || **next == '\n' || **next == '\0' ) {
-    return( nsnull);
+  if ( *next == nullptr || **next == '\n' || **next == '\0' ) {
+    return( nullptr);
   }
 
   lineStr = *next;
@@ -330,7 +297,7 @@ char* nsAbLDIFService::str_getline(char **next) const
   return( lineStr );
 }
 
-nsresult nsAbLDIFService::GetLdifStringRecord(char* buf, PRInt32 len, PRInt32& stopPos)
+nsresult nsAbLDIFService::GetLdifStringRecord(char* buf, int32_t len, int32_t& stopPos)
 {
   for (; stopPos < len; stopPos++) 
   {
@@ -371,7 +338,7 @@ nsresult nsAbLDIFService::GetLdifStringRecord(char* buf, PRInt32 len, PRInt32& s
 }
 
 void nsAbLDIFService::AddLdifRowToDatabase(nsIAddrDatabase *aDatabase,
-                                           PRBool bIsList)
+                                           bool bIsList)
 {
   // If no data to process then reset CR/LF counters and return.
   if (mLdifLine.IsEmpty())
@@ -401,7 +368,7 @@ void nsAbLDIFService::AddLdifRowToDatabase(nsIAddrDatabase *aDatabase,
   char* typeSlot = 0; 
   char* valueSlot = 0; 
   int length = 0;  // the length  of an ldif attribute
-  while ( (line = str_getline(&cursor)) != nsnull)
+  while ( (line = str_getline(&cursor)) != nullptr)
   {
     if ( str_parse_line(line, &typeSlot, &valueSlot, &length) == 0) {
       AddLdifColToDatabase(aDatabase, newRow, typeSlot, valueSlot, bIsList);
@@ -421,7 +388,7 @@ void nsAbLDIFService::AddLdifRowToDatabase(nsIAddrDatabase *aDatabase,
 
 void nsAbLDIFService::AddLdifColToDatabase(nsIAddrDatabase *aDatabase,
                                            nsIMdbRow* newRow, char* typeSlot,
-                                           char* valueSlot, PRBool bIsList)
+                                           char* valueSlot, bool bIsList)
 {
   nsCAutoString colType(typeSlot);
   nsCAutoString column(valueSlot);
@@ -537,7 +504,7 @@ void nsAbLDIFService::AddLdifColToDatabase(nsIAddrDatabase *aDatabase,
     // This will remove the label and place the URI as the work URL
     else if (colType.EqualsLiteral("labeleduri"))
     {
-      PRInt32 index = column.FindChar(' ');
+      int32_t index = column.FindChar(' ');
       if (index != -1)
         column.SetLength(index);
 
@@ -789,18 +756,18 @@ static const char *const sLDIFFields[] = {
     "cn",
     "givenName",
     "mail",
-    nsnull
+    nullptr
 };
 #define kMaxLDIFLen        14
 
 // Count total number of legal ldif fields and records in the first 100 lines of the 
 // file and if the average legal ldif field is 3 or higher than it's a valid ldif file.
-NS_IMETHODIMP nsAbLDIFService::IsLDIFFile(nsIFile *pSrc, PRBool *_retval)
+NS_IMETHODIMP nsAbLDIFService::IsLDIFFile(nsIFile *pSrc, bool *_retval)
 {
   NS_ENSURE_ARG_POINTER(pSrc);
   NS_ENSURE_ARG_POINTER(_retval);
 
-  *_retval = PR_FALSE;
+  *_retval = false;
 
   nsresult rv = NS_OK;
 
@@ -811,16 +778,16 @@ NS_IMETHODIMP nsAbLDIFService::IsLDIFFile(nsIFile *pSrc, PRBool *_retval)
   nsCOMPtr<nsILineInputStream> lineInputStream(do_QueryInterface(fileStream, &rv));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRInt32 lineLen = 0;
-  PRInt32 lineCount = 0;
-  PRInt32 ldifFields = 0;  // total number of legal ldif fields.
+  int32_t lineLen = 0;
+  int32_t lineCount = 0;
+  int32_t ldifFields = 0;  // total number of legal ldif fields.
   char field[kMaxLDIFLen];
-  PRInt32 fLen = 0;
+  int32_t fLen = 0;
   const char *pChar;
-  PRInt32 recCount = 0;  // total number of records.
-  PRInt32 i;
-  PRBool gotLDIF = PR_FALSE;
-  PRBool more = PR_TRUE;
+  int32_t recCount = 0;  // total number of records.
+  int32_t i;
+  bool gotLDIF = false;
+  bool more = true;
   nsCString line;
 
   while (more && NS_SUCCEEDED(rv) && (lineCount < 100))
@@ -834,10 +801,10 @@ NS_IMETHODIMP nsAbLDIFService::IsLDIFFile(nsIFile *pSrc, PRBool *_retval)
       if (!lineLen && gotLDIF)
       {
         recCount++;
-        gotLDIF = PR_FALSE;
+        gotLDIF = false;
       }
                    
-      if (lineLen && (*pChar != ' ') && (*pChar != 9))
+      if (lineLen && (*pChar != ' ') && (*pChar != '\t'))
       {
         fLen = 0;
 
@@ -860,7 +827,7 @@ NS_IMETHODIMP nsAbLDIFService::IsLDIFFile(nsIFile *pSrc, PRBool *_retval)
             if (!PL_strcasecmp( sLDIFFields[i], field))
             {
               ldifFields++;
-              gotLDIF = PR_TRUE;
+              gotLDIF = true;
               break;
             }
             i++;
@@ -883,7 +850,7 @@ NS_IMETHODIMP nsAbLDIFService::IsLDIFFile(nsIFile *pSrc, PRBool *_retval)
   // If the average field number >= 3 then it's a good ldif file.
   if (ldifFields >= 3)
   {
-    *_retval = PR_TRUE;
+    *_retval = true;
   }
 
   return rv;
@@ -891,7 +858,7 @@ NS_IMETHODIMP nsAbLDIFService::IsLDIFFile(nsIFile *pSrc, PRBool *_retval)
 
 void nsAbLDIFService::SplitCRLFAddressField(nsCString &inputAddress, nsCString &outputLine1, nsCString &outputLine2) const
 {
-  PRInt32 crlfPos = inputAddress.Find("\r\n");
+  int32_t crlfPos = inputAddress.Find("\r\n");
   if (crlfPos != -1)
   {
     outputLine1 = Substring(inputAddress, 0, crlfPos);

@@ -1,47 +1,14 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim:set ts=2 sw=2 sts=2 et cindent: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla code.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  David Humphrey <david.humphrey@senecac.on.ca>
- *  Yury Delendik
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsTArray.h"
 #include "nsAudioAvailableEventManager.h"
 #include "VideoUtils.h"
 
-#define MAX_PENDING_EVENTS 100
+static const nsTArray< nsCOMPtr<nsIRunnable> >::size_type MAX_PENDING_EVENTS = 100;
 
 using namespace mozilla;
 
@@ -52,7 +19,7 @@ private:
   nsAutoArrayPtr<float> mFrameBuffer;
 public:
   nsAudioAvailableEventRunner(nsBuiltinDecoder* aDecoder, float* aFrameBuffer,
-                              PRUint32 aFrameBufferLength, float aTime) :
+                              uint32_t aFrameBufferLength, float aTime) :
     mDecoder(aDecoder),
     mFrameBuffer(aFrameBuffer),
     mFrameBufferLength(aFrameBufferLength),
@@ -71,7 +38,7 @@ public:
     return NS_OK;
   }
 
-  const PRUint32 mFrameBufferLength;
+  const uint32_t mFrameBufferLength;
 
   // Start time of the buffer data (in seconds).
   const float mTime;
@@ -84,7 +51,8 @@ nsAudioAvailableEventManager::nsAudioAvailableEventManager(nsBuiltinDecoder* aDe
   mSignalBufferLength(mDecoder->GetFrameBufferLength()),
   mNewSignalBufferLength(mSignalBufferLength),
   mSignalBufferPosition(0),
-  mReentrantMonitor("media.audioavailableeventmanager")
+  mReentrantMonitor("media.audioavailableeventmanager"),
+  mHasListener(false)
 {
   MOZ_COUNT_CTOR(nsAudioAvailableEventManager);
 }
@@ -94,15 +62,19 @@ nsAudioAvailableEventManager::~nsAudioAvailableEventManager()
   MOZ_COUNT_DTOR(nsAudioAvailableEventManager);
 }
 
-void nsAudioAvailableEventManager::Init(PRUint32 aChannels, PRUint32 aRate)
+void nsAudioAvailableEventManager::Init(uint32_t aChannels, uint32_t aRate)
 {
   NS_ASSERTION(aChannels != 0 && aRate != 0, "Audio metadata not known.");
   mSamplesPerSecond = static_cast<float>(aChannels * aRate);
 }
 
-void nsAudioAvailableEventManager::DispatchPendingEvents(PRUint64 aCurrentTime)
+void nsAudioAvailableEventManager::DispatchPendingEvents(uint64_t aCurrentTime)
 {
   ReentrantMonitorAutoEnter mon(mReentrantMonitor);
+
+  if (!mHasListener) {
+    return;
+  }
 
   while (mPendingEvents.Length() > 0) {
     nsAudioAvailableEventRunner* e =
@@ -116,13 +88,17 @@ void nsAudioAvailableEventManager::DispatchPendingEvents(PRUint64 aCurrentTime)
   }
 }
 
-void nsAudioAvailableEventManager::QueueWrittenAudioData(SoundDataValue* aAudioData,
-                                                         PRUint32 aAudioDataLength,
-                                                         PRUint64 aEndTimeSampleOffset)
+void nsAudioAvailableEventManager::QueueWrittenAudioData(AudioDataValue* aAudioData,
+                                                         uint32_t aAudioDataLength,
+                                                         uint64_t aEndTimeSampleOffset)
 {
   ReentrantMonitorAutoEnter mon(mReentrantMonitor);
 
-  PRUint32 currentBufferSize = mNewSignalBufferLength;
+  if (!mHasListener) {
+    return;
+  }
+
+  uint32_t currentBufferSize = mNewSignalBufferLength;
   if (currentBufferSize == 0) {
     NS_WARNING("Decoder framebuffer length not set.");
     return;
@@ -136,9 +112,9 @@ void nsAudioAvailableEventManager::QueueWrittenAudioData(SoundDataValue* aAudioD
     }
     mSignalBufferLength = currentBufferSize;
   }
-  SoundDataValue* audioData = aAudioData;
-  PRUint32 audioDataLength = aAudioDataLength;
-  PRUint32 signalBufferTail = mSignalBufferLength - mSignalBufferPosition;
+  AudioDataValue* audioData = aAudioData;
+  uint32_t audioDataLength = aAudioDataLength;
+  uint32_t signalBufferTail = mSignalBufferLength - mSignalBufferPosition;
 
   // Group audio samples into optimal size for event dispatch, and queue.
   while (signalBufferTail <= audioDataLength) {
@@ -150,12 +126,21 @@ void nsAudioAvailableEventManager::QueueWrittenAudioData(SoundDataValue* aAudioD
     }
 
     // Fill the signalBuffer.
-    PRUint32 i;
+    uint32_t i;
     float *signalBuffer = mSignalBuffer.get() + mSignalBufferPosition;
-    for (i = 0; i < signalBufferTail; ++i) {
-      signalBuffer[i] = MOZ_CONVERT_SOUND_SAMPLE(audioData[i]);
+    if (audioData) {
+      for (i = 0; i < signalBufferTail; ++i) {
+        signalBuffer[i] = MOZ_CONVERT_AUDIO_SAMPLE(audioData[i]);
+      }
+    } else {
+      memset(signalBuffer, 0, signalBufferTail*sizeof(signalBuffer[0]));
     }
-    audioData += signalBufferTail;
+    if (audioData) {
+      audioData += signalBufferTail;
+    }
+
+    NS_ASSERTION(audioDataLength >= signalBufferTail,
+                 "audioDataLength about to wrap past zero to +infinity!");
     audioDataLength -= signalBufferTail;
 
     if (mPendingEvents.Length() > 0) {
@@ -172,7 +157,7 @@ void nsAudioAvailableEventManager::QueueWrittenAudioData(SoundDataValue* aAudioD
       }
     }
 
-    // Inform the element that we've written sound data.
+    // Inform the element that we've written audio data.
     nsCOMPtr<nsIRunnable> event =
       new nsAudioAvailableEventRunner(mDecoder, mSignalBuffer.forget(),
                                       mSignalBufferLength, time);
@@ -183,7 +168,6 @@ void nsAudioAvailableEventManager::QueueWrittenAudioData(SoundDataValue* aAudioD
     mSignalBuffer = new float[currentBufferSize];
     mSignalBufferPosition = 0;
     signalBufferTail = currentBufferSize;
-    NS_ASSERTION(audioDataLength >= 0, "Past new signal data length.");
   }
 
   NS_ASSERTION(mSignalBufferPosition + audioDataLength < mSignalBufferLength,
@@ -191,10 +175,14 @@ void nsAudioAvailableEventManager::QueueWrittenAudioData(SoundDataValue* aAudioD
 
   if (audioDataLength > 0) {
     // Add data to the signalBuffer.
-    PRUint32 i;
+    uint32_t i;
     float *signalBuffer = mSignalBuffer.get() + mSignalBufferPosition;
-    for (i = 0; i < audioDataLength; ++i) {
-      signalBuffer[i] = MOZ_CONVERT_SOUND_SAMPLE(audioData[i]);
+    if (audioData) {
+      for (i = 0; i < audioDataLength; ++i) {
+        signalBuffer[i] = MOZ_CONVERT_AUDIO_SAMPLE(audioData[i]);
+      }
+    } else {
+      memset(signalBuffer, 0, audioDataLength*sizeof(signalBuffer[0]));
     }
     mSignalBufferPosition += audioDataLength;
   }
@@ -208,12 +196,16 @@ void nsAudioAvailableEventManager::Clear()
   mSignalBufferPosition = 0;
 }
 
-void nsAudioAvailableEventManager::Drain(PRUint64 aEndTime)
+void nsAudioAvailableEventManager::Drain(uint64_t aEndTime)
 {
   ReentrantMonitorAutoEnter mon(mReentrantMonitor);
 
+  if (!mHasListener) {
+    return;
+  }
+
   // Force all pending events to go now.
-  for (PRUint32 i = 0; i < mPendingEvents.Length(); ++i) {
+  for (uint32_t i = 0; i < mPendingEvents.Length(); ++i) {
     nsCOMPtr<nsIRunnable> event = mPendingEvents[i];
     NS_DispatchToMainThread(event, NS_DISPATCH_NORMAL);
   }
@@ -238,10 +230,16 @@ void nsAudioAvailableEventManager::Drain(PRUint64 aEndTime)
   mSignalBufferPosition = 0;
 }
 
-void nsAudioAvailableEventManager::SetSignalBufferLength(PRUint32 aLength)
+void nsAudioAvailableEventManager::SetSignalBufferLength(uint32_t aLength)
 {
   ReentrantMonitorAutoEnter mon(mReentrantMonitor);
 
   mNewSignalBufferLength = aLength;
 }
 
+void nsAudioAvailableEventManager::NotifyAudioAvailableListener()
+{
+  ReentrantMonitorAutoEnter mon(mReentrantMonitor);
+
+  mHasListener = true;
+}

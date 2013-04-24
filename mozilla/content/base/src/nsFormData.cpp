@@ -1,38 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsFormData.h"
 #include "nsIVariant.h"
@@ -42,7 +10,7 @@
 #include "nsHTMLFormElement.h"
 
 nsFormData::nsFormData()
-  : nsFormSubmission(NS_LITERAL_CSTRING("UTF-8"), nsnull)
+  : nsFormSubmission(NS_LITERAL_CSTRING("UTF-8"), nullptr)
 {
 }
 
@@ -78,7 +46,7 @@ nsFormData::AddNameValuePair(const nsAString& aName,
   FormDataTuple* data = mFormData.AppendElement();
   data->name = aName;
   data->stringValue = aValue;
-  data->valueIsFile = PR_FALSE;
+  data->valueIsFile = false;
 
   return NS_OK;
 }
@@ -90,7 +58,7 @@ nsFormData::AddNameFilePair(const nsAString& aName,
   FormDataTuple* data = mFormData.AppendElement();
   data->name = aName;
   data->fileValue = aBlob;
-  data->valueIsFile = PR_TRUE;
+  data->valueIsFile = true;
 
   return NS_OK;
 }
@@ -101,7 +69,7 @@ nsFormData::AddNameFilePair(const nsAString& aName,
 NS_IMETHODIMP
 nsFormData::Append(const nsAString& aName, nsIVariant* aValue)
 {
-  PRUint16 dataType;
+  uint16_t dataType;
   nsresult rv = aValue->GetDataType(&dataType);
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -120,8 +88,8 @@ nsFormData::Append(const nsAString& aName, nsIVariant* aValue)
     }
   }
 
-  PRUnichar* stringData = nsnull;
-  PRUint32 stringLen = 0;
+  PRUnichar* stringData = nullptr;
+  uint32_t stringLen = 0;
   rv = aValue->GetAsWStringWithSize(&stringLen, &stringData);
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -138,9 +106,9 @@ NS_IMETHODIMP
 nsFormData::GetSendInfo(nsIInputStream** aBody, nsACString& aContentType,
                         nsACString& aCharset)
 {
-  nsFSMultipartFormData fs(NS_LITERAL_CSTRING("UTF-8"), nsnull);
+  nsFSMultipartFormData fs(NS_LITERAL_CSTRING("UTF-8"), nullptr);
   
-  for (PRUint32 i = 0; i < mFormData.Length(); ++i) {
+  for (uint32_t i = 0; i < mFormData.Length(); ++i) {
     if (mFormData[i].valueIsFile) {
       fs.AddNameFilePair(mFormData[i].name, mFormData[i].fileValue);
     }
@@ -164,7 +132,7 @@ NS_IMETHODIMP
 nsFormData::Initialize(nsISupports* aOwner,
                        JSContext* aCx,
                        JSObject* aObj,
-                       PRUint32 aArgc,
+                       uint32_t aArgc,
                        jsval* aArgv)
 {
   if (aArgc > 0) {

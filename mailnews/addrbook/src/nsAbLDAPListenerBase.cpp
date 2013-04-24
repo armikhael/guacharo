@@ -1,67 +1,30 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Sun Microsystems, Inc.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Paul Sandoz <paul.sandoz@sun.com>
- *   Dan Mosedale <dmose@mozilla.org>
- *   Mark Banner <mark@standard8.demon.co.uk>
- *   Simon Wilkinson <simon@sxw.org.uk>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsAbLDAPListenerBase.h"
 #include "nsIWindowWatcher.h"
 #include "nsIDOMWindow.h"
 #include "nsIAuthPrompt.h"
 #include "nsIStringBundle.h"
-#include "nsIProxyObjectManager.h"
 #include "nsILDAPMessage.h"
 #include "nsILDAPErrors.h"
 #include "nsILoginManager.h"
 #include "nsILoginInfo.h"
 #include "nsServiceManagerUtils.h"
-#include "nsXPCOMCIDInternal.h"
 #include "nsComponentManagerUtils.h"
 #include "nsMemory.h"
+#include "mozilla/Services.h"
 
 using namespace mozilla;
 
 nsAbLDAPListenerBase::nsAbLDAPListenerBase(nsILDAPURL* url,
                                            nsILDAPConnection* connection,
                                            const nsACString &login,
-                                           const PRInt32 timeOut) :
+                                           const int32_t timeOut) :
   mDirectoryUrl(url), mConnection(connection), mLogin(login),
-  mTimeOut(timeOut), mBound(PR_FALSE), mInitialized(PR_FALSE),
+  mTimeOut(timeOut), mBound(false), mInitialized(false),
   mLock("nsAbLDAPListenerBase.mLock")
 {
 }
@@ -78,7 +41,7 @@ nsresult nsAbLDAPListenerBase::Initiate()
   if (mInitialized)
     return NS_OK;
 
-  mInitialized = PR_TRUE;
+  mInitialized = true;
 
   return NS_OK;
 }
@@ -106,18 +69,18 @@ NS_IMETHODIMP nsAbLDAPListenerBase::OnLDAPInit(nsILDAPConnection *aConn, nsresul
 
   // If mLogin is set, we're expected to use it to get a password.
   //
-  if (!mLogin.IsEmpty() && !mSaslMechanism.Equals(NS_LITERAL_CSTRING("GSSAPI")))
+  if (!mLogin.IsEmpty() && !mSaslMechanism.EqualsLiteral("GSSAPI"))
   {
     // get the string bundle service
     //
     nsCOMPtr<nsIStringBundleService> stringBundleSvc = 
-      do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-    if (NS_FAILED(rv))
+      mozilla::services::GetStringBundleService();
+    if (!stringBundleSvc)
     {
       NS_ERROR("nsAbLDAPListenerBase::OnLDAPInit():"
                " error getting string bundle service");
       InitFailed();
-      return rv;
+      return NS_ERROR_UNEXPECTED;
     }
 
     // get the LDAP string bundle
@@ -199,7 +162,7 @@ NS_IMETHODIMP nsAbLDAPListenerBase::OnLDAPInit(nsILDAPConnection *aConn, nsresul
     //
     nsCOMPtr<nsIDOMWindow> abDOMWindow;
     rv = windowWatcherSvc->GetWindowByName(NS_LITERAL_STRING("addressbookWindow").get(),
-                                           nsnull,
+                                           nullptr,
                                            getter_AddRefs(abDOMWindow));
     if (NS_FAILED(rv))
     {
@@ -238,7 +201,7 @@ NS_IMETHODIMP nsAbLDAPListenerBase::OnLDAPInit(nsILDAPConnection *aConn, nsresul
       return rv;
     }
 
-    PRBool status;
+    bool status;
     rv = authPrompter->PromptPassword(authPromptTitle.get(),
                                       authPromptText.get(),
                                       NS_ConvertUTF8toUTF16(spec).get(),
@@ -254,7 +217,7 @@ NS_IMETHODIMP nsAbLDAPListenerBase::OnLDAPInit(nsILDAPConnection *aConn, nsresul
     }
     else if (!status)
     {
-      InitFailed(PR_TRUE);
+      InitFailed(true);
       return NS_OK;
     }
   }
@@ -268,24 +231,7 @@ NS_IMETHODIMP nsAbLDAPListenerBase::OnLDAPInit(nsILDAPConnection *aConn, nsresul
     return rv;
   }
 
-  nsCOMPtr<nsIProxyObjectManager> proxyObjMgr = do_GetService(NS_XPCOMPROXY_CONTRACTID, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  nsCOMPtr<nsILDAPMessageListener> proxyListener;
-  rv = proxyObjMgr->GetProxyForObject(NS_PROXY_TO_MAIN_THREAD,
-                          NS_GET_IID(nsILDAPMessageListener),
-                            static_cast<nsILDAPMessageListener *>(this),
-                            NS_PROXY_SYNC | NS_PROXY_ALWAYS,
-                            getter_AddRefs(proxyListener));
-  if (NS_FAILED(rv))
-  {
-    NS_ERROR("nsAbLDAPMessageBase::OnLDAPInit(): failed to create proxy for"
-             " listener");
-    InitFailed();
-    return rv;
-  }
-
-  rv = mOperation->Init(mConnection, proxyListener, nsnull);
+  rv = mOperation->Init(mConnection, this, nullptr);
   if (NS_FAILED(rv))
   {
     NS_ERROR("nsAbLDAPMessageBase::OnLDAPInit(): failed to Initialise operation");
@@ -294,7 +240,7 @@ NS_IMETHODIMP nsAbLDAPListenerBase::OnLDAPInit(nsILDAPConnection *aConn, nsresul
   }
 
   // Try non-password mechanisms first
-  if (mSaslMechanism.Equals(NS_LITERAL_CSTRING("GSSAPI")))
+  if (mSaslMechanism.EqualsLiteral("GSSAPI"))
   {
     nsCAutoString service;
     rv = mDirectoryUrl->GetAsciiHost(service);
@@ -335,7 +281,7 @@ nsresult nsAbLDAPListenerBase::OnLDAPMessageBind(nsILDAPMessage *aMessage)
 
   // see whether the bind actually succeeded
   //
-  PRInt32 errCode;
+  int32_t errCode;
   nsresult rv = aMessage->GetErrorCode(&errCode);
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -362,7 +308,7 @@ nsresult nsAbLDAPListenerBase::OnLDAPMessageBind(nsILDAPMessage *aMessage)
       rv = mDirectoryUrl->GetPrePath(prePath);
       NS_ENSURE_SUCCESS(rv, rv);
 
-      PRUint32 count;
+      uint32_t count;
       nsILoginInfo** logins;
 
       rv = loginMgr->FindLogins(&count, NS_ConvertUTF8toUTF16(prePath),
@@ -372,7 +318,7 @@ nsresult nsAbLDAPListenerBase::OnLDAPMessageBind(nsILDAPMessage *aMessage)
 
       // Typically there should only be one-login stored for this url, however,
       // just in case there isn't.
-      for (PRUint32 i = 0; i < count; ++i)
+      for (uint32_t i = 0; i < count; ++i)
       {
         rv = loginMgr->RemoveLogin(logins[i]);
         if (NS_FAILED(rv))
@@ -387,7 +333,7 @@ nsresult nsAbLDAPListenerBase::OnLDAPMessageBind(nsILDAPMessage *aMessage)
       // the user that the login failed here, rather than just bringing 
       // up the password dialog again, which is what calling OnLDAPInit()
       // does.
-      return OnLDAPInit(nsnull, NS_OK);
+      return OnLDAPInit(nullptr, NS_OK);
     }
 
     // Don't know how to handle this, so use the message error code in
@@ -395,6 +341,6 @@ nsresult nsAbLDAPListenerBase::OnLDAPMessageBind(nsILDAPMessage *aMessage)
     return NS_ERROR_GENERATE_FAILURE(NS_ERROR_MODULE_LDAP, errCode);
   }
 
-  mBound = PR_TRUE;
+  mBound = true;
   return DoTask();
 }

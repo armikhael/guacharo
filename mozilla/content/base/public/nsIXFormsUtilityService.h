@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla XForms support.
- *
- * The Initial Developer of the Original Code is
- * IBM Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Aaron Reed <aaronr@us.ibm.com>
- *  Alexander Surkov <surkov.alexander@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsIXFormsUtilityService_h
 #define nsIXFormsUtilityService_h
@@ -82,22 +48,22 @@ public:
   /**
    * Return true if instance node that element is bound to is readonly.
    */
-  NS_IMETHOD IsReadonly(nsIDOMNode *aElement, PRBool *aState) = 0;
+  NS_IMETHOD IsReadonly(nsIDOMNode *aElement, bool *aState) = 0;
 
   /**
    * Return true if instance node that element is bound to is relevant.
    */
-  NS_IMETHOD IsRelevant(nsIDOMNode *aElement, PRBool *aState) = 0;
+  NS_IMETHOD IsRelevant(nsIDOMNode *aElement, bool *aState) = 0;
 
   /**
    * Return true if instance node that element is bound to is required.
    */
-  NS_IMETHOD IsRequired(nsIDOMNode *aElement, PRBool *aState) = 0;
+  NS_IMETHOD IsRequired(nsIDOMNode *aElement, bool *aState) = 0;
 
   /**
    * Return true if instance node that element is bound to is valid.
    */
-  NS_IMETHOD IsValid(nsIDOMNode *aElement, PRBool *aState) = 0;
+  NS_IMETHOD IsValid(nsIDOMNode *aElement, bool *aState) = 0;
 
   /**
    * Return constant declared above that indicates whether instance node that
@@ -105,7 +71,7 @@ public:
    * is used if element can't have in-range or out-of-range state, for exmple,
    * xforms:input.
    */
-  NS_IMETHOD IsInRange(nsIDOMNode *aElement, PRUint32 *aState) = 0;
+  NS_IMETHOD IsInRange(nsIDOMNode *aElement, uint32_t *aState) = 0;
 
   /**
    * Return value of instance node that given node is bound to. If given node is
@@ -147,7 +113,7 @@ public:
    * otherwise false. Failure if given 'aElement' node is not direct child of
    * combobox element or is not combobox itself.
    */
-  NS_IMETHOD IsDropmarkerOpen(nsIDOMNode *aElement, PRBool* aIsOpen) = 0;
+  NS_IMETHOD IsDropmarkerOpen(nsIDOMNode *aElement, bool* aIsOpen) = 0;
 
   /**
    * Toggles dropmarker state (close/open combobox popup). Failure if given
@@ -209,7 +175,7 @@ public:
    * xforms:select.
    */
   NS_IMETHOD IsSelectItemSelected(nsIDOMNode *aElement, nsIDOMNode *aItem,
-                                  PRBool *aIsSelected) = 0;
+                                  bool *aIsSelected) = 0;
 
   /**
    * Return the list of xforms:item or xforms:choices elements that are children

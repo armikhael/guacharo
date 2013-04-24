@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the SeaMonkey internet suite code.
- *
- * The Initial Developer of the Original Code is
- * the SeaMonkey project at mozilla.org.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Robert Kaiser <kairo@kairo.at>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://gre/modules/XPCOMUtils.jsm");
 Components.utils.import("resource://gre/modules/DownloadUtils.jsm");
@@ -114,12 +81,8 @@ DownloadTreeView.prototype = {
   },
 
   getProgressMode: function(aRow, aColumn) {
-    if (aColumn.id == "Progress") {
-      var dl = this._dlList[aRow];
-      if (dl.isActive)
-        return (dl.maxBytes >= 0) ? nsITreeView.PROGRESS_NORMAL :
-                                    nsITreeView.PROGRESS_UNDETERMINED;
-    }
+    if (aColumn.id == "Progress")
+      return this._dlList[aRow].progressMode;
     return nsITreeView.PROGRESS_NONE;
   },
 
@@ -278,6 +241,7 @@ DownloadTreeView.prototype = {
       uri: aDownload.source.spec,
       state: aDownload.state,
       progress: aDownload.percentComplete,
+      progressMode: nsITreeView.PROGRESS_NONE,
       resumable: aDownload.resumable,
       startTime: Math.round(aDownload.startTime / 1000),
       endTime: Date.now(),
@@ -287,8 +251,16 @@ DownloadTreeView.prototype = {
       lastSec: Infinity, // For calculations of remaining time
     };
     switch (attrs.state) {
-      case nsIDownloadManager.DOWNLOAD_NOTSTARTED:
       case nsIDownloadManager.DOWNLOAD_DOWNLOADING:
+        // At this point, we know if we are an indeterminate download or not.
+        attrs.progressMode = attrs.progress == -1 ?
+                                               nsITreeView.PROGRESS_UNDETERMINED :
+                                               nsITreeView.PROGRESS_NORMAL;
+        // We also know the referrer at this point.
+        var referrer = aDownload.referrer;
+        if (referrer)
+            attrs.referrer = referrer.spec;
+      case nsIDownloadManager.DOWNLOAD_NOTSTARTED:
       case nsIDownloadManager.DOWNLOAD_PAUSED:
       case nsIDownloadManager.DOWNLOAD_QUEUED:
       case nsIDownloadManager.DOWNLOAD_SCANNING:
@@ -333,8 +305,16 @@ DownloadTreeView.prototype = {
       dl.state = aDownload.state;
       dl.resumable = aDownload.resumable;
       switch (dl.state) {
-        case nsIDownloadManager.DOWNLOAD_NOTSTARTED:
         case nsIDownloadManager.DOWNLOAD_DOWNLOADING:
+          // At this point, we know if we are an indeterminate download or not.
+          dl.progressMode = dl.progress == -1 ?
+                                           nsITreeView.PROGRESS_UNDETERMINED :
+                                           nsITreeView.PROGRESS_NORMAL;
+          // We also know the referrer at this point.
+          var referrer = aDownload.referrer;
+          if (referrer)
+            dl.referrer = referrer.spec;
+        case nsIDownloadManager.DOWNLOAD_NOTSTARTED:
         case nsIDownloadManager.DOWNLOAD_PAUSED:
         case nsIDownloadManager.DOWNLOAD_QUEUED:
         case nsIDownloadManager.DOWNLOAD_SCANNING:
@@ -342,13 +322,10 @@ DownloadTreeView.prototype = {
           break;
         default:
           dl.isActive = 0;
+          dl.progressMode = nsITreeView.PROGRESS_NONE;
           gDMUI.getAttention();
           break;
       }
-      // We should eventually know the referrer at some point
-      var referrer = aDownload.referrer;
-      if (referrer)
-        dl.referrer = referrer.spec;
     }
 
     // Repaint the tree row
@@ -397,43 +374,47 @@ DownloadTreeView.prototype = {
 
     // sort in reverse and prepend to the list to get continuous list indexes
     // with increasing negative numbers for default-sort in ascending order
-    this._statement = this._dm.DBConnection.createStatement(
+    var statement = this._dm.DBConnection.createStatement(
       "SELECT id, target, name, source, state, startTime, endTime, referrer, " +
             "currBytes, maxBytes, state IN (?1, ?2, ?3, ?4, ?5) AS isActive " +
       "FROM moz_downloads " +
       "ORDER BY isActive ASC, endTime ASC, startTime ASC, id DESC");
 
-    this._statement.bindByIndex(0, nsIDownloadManager.DOWNLOAD_NOTSTARTED);
-    this._statement.bindByIndex(1, nsIDownloadManager.DOWNLOAD_DOWNLOADING);
-    this._statement.bindByIndex(2, nsIDownloadManager.DOWNLOAD_PAUSED);
-    this._statement.bindByIndex(3, nsIDownloadManager.DOWNLOAD_QUEUED);
-    this._statement.bindByIndex(4, nsIDownloadManager.DOWNLOAD_SCANNING);
+    statement.bindByIndex(0, nsIDownloadManager.DOWNLOAD_NOTSTARTED);
+    statement.bindByIndex(1, nsIDownloadManager.DOWNLOAD_DOWNLOADING);
+    statement.bindByIndex(2, nsIDownloadManager.DOWNLOAD_PAUSED);
+    statement.bindByIndex(3, nsIDownloadManager.DOWNLOAD_QUEUED);
+    statement.bindByIndex(4, nsIDownloadManager.DOWNLOAD_SCANNING);
 
-    while (this._statement.executeStep()) {
+    while (statement.executeStep()) {
       // Try to get the attribute values from the statement
       let attrs = {
-        dlid: this._statement.getInt64(0),
-        file: this._statement.getString(1),
-        target: this._statement.getString(2),
-        uri: this._statement.getString(3),
-        state: this._statement.getInt32(4),
-        startTime: Math.round(this._statement.getInt64(5) / 1000),
-        endTime: Math.round(this._statement.getInt64(6) / 1000),
-        referrer: this._statement.getString(7),
-        currBytes: this._statement.getInt64(8),
-        maxBytes: this._statement.getInt64(9),
+        dlid: statement.getInt64(0),
+        file: statement.getString(1),
+        target: statement.getString(2),
+        uri: statement.getString(3),
+        state: statement.getInt32(4),
+        startTime: Math.round(statement.getInt64(5) / 1000),
+        endTime: Math.round(statement.getInt64(6) / 1000),
+        referrer: statement.getString(7),
+        currBytes: statement.getInt64(8),
+        maxBytes: statement.getInt64(9),
         lastSec: Infinity, // For calculations of remaining time
       };
 
       // If the download is active, grab the real progress, otherwise default 100
-      attrs.isActive = this._statement.getInt32(10);
+      attrs.isActive = statement.getInt32(10);
       if (attrs.isActive) {
         let dld = this._dm.getDownload(attrs.dlid);
         attrs.progress = dld.percentComplete;
+        attrs.progressMode = attrs.progress == -1 ?
+                             nsITreeView.PROGRESS_UNDETERMINED :
+                             nsITreeView.PROGRESS_NORMAL;
         attrs.resumable = dld.resumable;
       }
       else {
         attrs.progress = 100;
+        attrs.progressMode = nsITreeView.PROGRESS_NONE;
         attrs.resumable = false;
       }
 
@@ -460,7 +441,7 @@ DownloadTreeView.prototype = {
         this._dlList.unshift(attrs);
       }
     }
-    this._statement.reset();
+    statement.finalize();
     // find sorted column and sort the tree
     var sortedColumn = this._tree.columns.getSortedColumn();
     if (sortedColumn) {
@@ -613,7 +594,6 @@ DownloadTreeView.prototype = {
 
   _tree: null,
   _dlBundle: null,
-  _statement: null,
   _lastListIndex: 0,
   _selectionCache: null,
   __dateService: null,

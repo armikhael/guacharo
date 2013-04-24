@@ -1,43 +1,11 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * RSA key generation, public key op, private key op.
  *
- * $Id: rsa.c,v 1.39.22.2 2011/03/30 18:39:44 rrelyea%redhat.com Exp $
+ * $Id: rsa.c,v 1.44 2012/04/25 14:49:43 gerv%gerv.net Exp $
  */
 #ifdef FREEBL_NO_DEPEND
 #include "stubs.h"
@@ -1096,8 +1064,6 @@ init_blinding_params(RSABlindingParams *rsabp, RSAPrivateKey *key,
                      mp_int *n, unsigned int modLen)
 {
     blindingParams * bp = rsabp->array;
-    SECStatus rv = SECSuccess;
-    mp_err err = MP_OKAY;
     int i = 0;
 
     /* Initialize the list pointer for the element */
@@ -1217,7 +1183,7 @@ get_blinding_params(RSAPrivateKey *key, mp_int *n, unsigned int modLen,
 	    PZ_Unlock(blindingParamsList.lock); 
 	    return SECSuccess;
 	}
-	/* We did not find a usable set of blinding params.  Can we make one?
+	/* We did not find a usable set of blinding params.  Can we make one? */
 	/* Find a free bp struct. */
 	prevbp = NULL;
 	if ((bp = rsabp->free) != NULL) {
@@ -1420,6 +1386,8 @@ RSA_PrivateKeyCheck(RSAPrivateKey *key)
     mp_int p, q, n, psub1, qsub1, e, d, d_p, d_q, qInv, res;
     mp_err   err = MP_OKAY;
     SECStatus rv = SECSuccess;
+    MP_DIGITS(&p)    = 0;
+    MP_DIGITS(&q)    = 0;
     MP_DIGITS(&n)    = 0;
     MP_DIGITS(&psub1)= 0;
     MP_DIGITS(&qsub1)= 0;
@@ -1429,9 +1397,9 @@ RSA_PrivateKeyCheck(RSAPrivateKey *key)
     MP_DIGITS(&d_q)  = 0;
     MP_DIGITS(&qInv) = 0;
     MP_DIGITS(&res)  = 0;
-    CHECK_MPI_OK( mp_init(&n)    );
     CHECK_MPI_OK( mp_init(&p)    );
     CHECK_MPI_OK( mp_init(&q)    );
+    CHECK_MPI_OK( mp_init(&n)    );
     CHECK_MPI_OK( mp_init(&psub1));
     CHECK_MPI_OK( mp_init(&qsub1));
     CHECK_MPI_OK( mp_init(&e)    );
@@ -1593,13 +1561,13 @@ void BL_Cleanup(void)
     RSA_Cleanup();
 }
 
-PRBool parentForkedAfterC_Initialize;
+PRBool bl_parentForkedAfterC_Initialize;
 
 /*
  * Set fork flag so it can be tested in SKIP_AFTER_FORK on relevant platforms.
  */
 void BL_SetForkState(PRBool forked)
 {
-    parentForkedAfterC_Initialize = forked;
+    bl_parentForkedAfterC_Initialize = forked;
 }
 

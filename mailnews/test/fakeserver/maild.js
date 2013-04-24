@@ -1,40 +1,8 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim:set ts=2 sw=2 sts=2 et: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the fakeserver.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Joshua Cranmer <Pidgeot18@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Much of the original code is taken from netwerk's httpserver implementation
 
@@ -72,15 +40,26 @@ const BinaryInputStream = CC("@mozilla.org/binaryinputstream;1",
 const TIMEOUT = 3*60*1000;
 
 /******************************************************************************
- * The main server handling class. The handler parameter is to be handed to the
- * reading object. Currently, concurrent socket connections should probably be
- * avoided, because transactioning information will be overwritten.
+ * The main server handling class. A fake server consists of three parts, this
+ * server implementation (which handles the network communication), the handler
+ * (which handles the state for a connection), and the daemon (which handles
+ * the state for the logical server). To make a new server, one needs to pass
+ * in a function to create handlers--not the handlers themselves--and the
+ * backend daemon. Since each handler presumably needs access to the logical
+ * server daemon, that is passed into the handler creation function. A new
+ * handler will be constructed for every connection made.
+ *
+ * As the core code is inherently single-threaded, it is guaranteed that all of
+ * the calls to the daemon will be made on the same thread, so you do not have
+ * to worry about reentrancy in daemon calls.  
  *
  ******************************************************************************
  * Typical usage:
- * var handler = <get handler from somewhere>
+ * function createHandler(daemon) {
+ *   return new handler(daemon);
+ * }
  * do_test_pending();
- * var server = new nsMailServer(handler);
+ * var server = new nsMailServer(createHandler, serverDaemon);
  * // Port to use. I tend to like using 1024 + default port number myself.
  * server.start(port);
  *
@@ -103,7 +82,7 @@ const TIMEOUT = 3*60*1000;
  *
  * do_test_finished();
  *****************************************************************************/
-function nsMailServer(handler) {
+function nsMailServer(handlerCreator, daemon) {
   if (!gThreadManager)
     gThreadManager = Cc["@mozilla.org/thread-manager;1"].getService();
 
@@ -128,7 +107,8 @@ function nsMailServer(handler) {
    */
   this._logTransactions = true;
 
-  this._handler = handler;
+  this._handlerCreator = handlerCreator;
+  this._daemon = daemon;
   this._readers = [];
   this._test = false;
   this._watchWord = undefined;
@@ -150,7 +130,8 @@ nsMailServer.prototype = {
                      .QueryInterface(Ci.nsIAsyncInputStream);
     this._inputStreams.push(input);
 
-    var reader = new nsMailReader(this, this._handler, trans, this._debug,
+    var handler = this._handlerCreator(this._daemon);
+    var reader = new nsMailReader(this, handler, trans, this._debug,
                                   this._logTransactions);
     this._readers.push(reader);
 
@@ -168,7 +149,10 @@ nsMailServer.prototype = {
     this._socketClosed = true;
     // We've been killed or we've stopped, reset the handler to the original
     // state (e.g. to require authentication again).
-    this._handler.resetTest();
+    for (var i = 0; i < this._readers.length; i++) {
+      this._readers[i]._handler.resetTest();
+      this._readers[i]._realCloseSocket();
+    }
   },
 
   setDebugLevel : function (debug) {
@@ -198,6 +182,9 @@ nsMailServer.prototype = {
 
     this._socket.close();
     this._socket = null;
+
+    for each (let reader in this._readers)
+      reader._realCloseSocket();
 
     if (this._readers.some(function (e) { return e.observer.forced }))
       return;
@@ -277,7 +264,8 @@ nsMailServer.prototype = {
       return reader._isRunning;
     });
     this._test = true;
-    this._handler.resetTest();
+    for (var i = 0; i < this._readers.length; i++)
+      this._readers[i]._handler.resetTest();
   }
 };
 
@@ -541,9 +529,12 @@ nsMailReader.prototype = {
  * @param handler
  *   the handler (as defined in the documentation comment above nsMailReader) to
  *   use on the server
+ * @param daemon
+ *   the daemon (as defined in the documentation comment above nsMailReader) to
+ *   use on the server
  */
-function server(port, handler) {
-  var srv = new nsMailServer(handler);
+function server(port, handler, daemon) {
+  var srv = new nsMailServer(handler, daemon);
   srv.start(port);
   srv.performTest();
   return srv.playTransaction();

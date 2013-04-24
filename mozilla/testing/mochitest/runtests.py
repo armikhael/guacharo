@@ -1,42 +1,7 @@
 #
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
-# The Original Code is mozilla.org code.
-#
-# The Initial Developer of the Original Code is
-# the Mozilla Foundation.
-# Portions created by the Initial Developer are Copyright (C) 1998
-# the Initial Developer. All Rights Reserved.
-#
-# Contributor(s):
-#   Robert Sayre <sayrer@gmail.com>
-#   Jeff Walden <jwalden+bmo@mit.edu>
-#   Serge Gautherie <sgautherie.bz@free.fr>
-#
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 """
 Runs the Mochitest test harness.
@@ -174,6 +139,16 @@ class MochitestOptions(optparse.OptionParser):
                     help = "run browser chrome Mochitests")
     defaults["browserChrome"] = False
 
+    self.add_option("--webapprt-content",
+                    action = "store_true", dest = "webapprtContent",
+                    help = "run WebappRT content tests")
+    defaults["webapprtContent"] = False
+
+    self.add_option("--webapprt-chrome",
+                    action = "store_true", dest = "webapprtChrome",
+                    help = "run WebappRT chrome tests")
+    defaults["webapprtChrome"] = False
+
     self.add_option("--a11y",
                     action = "store_true", dest = "a11y",
                     help = "run accessibility Mochitests");
@@ -185,7 +160,14 @@ class MochitestOptions(optparse.OptionParser):
                     help = "sets the given variable in the application's "
                            "environment")
     defaults["environment"] = []
-    
+
+    self.add_option("--exclude-extension",
+                    action = "append", type = "string",
+                    dest = "extensionsToExclude",
+                    help = "excludes the given extension from being installed "
+                           "in the test profile")
+    defaults["extensionsToExclude"] = []
+
     self.add_option("--browser-arg",
                     action = "append", type = "string",
                     dest = "browserArgs", metavar = "ARG",
@@ -226,18 +208,43 @@ class MochitestOptions(optparse.OptionParser):
                            "This directory will be deleted after the tests are finished")
     defaults["profilePath"] = tempfile.mkdtemp()
 
+    self.add_option("--testing-modules-dir", action = "store",
+                    type = "string", dest = "testingModulesDir",
+                    help = "Directory where testing-only JS modules are "
+                           "located.")
+    defaults["testingModulesDir"] = None
+
     self.add_option("--use-vmware-recording",
                     action = "store_true", dest = "vmwareRecording",
                     help = "enables recording while the application is running "
                            "inside a VMware Workstation 7.0 or later VM")
     defaults["vmwareRecording"] = False
 
-    self.add_option("--loops",
+    self.add_option("--repeat",
                     action = "store", type = "int",
-                    dest = "loops", metavar = "LOOPS",
-                    help = "repeats the test or set of tests the given number of times "
-                           "without restarting the browser (given number > 0)")
-    defaults["loops"] = 0
+                    dest = "repeat", metavar = "REPEAT",
+                    help = "repeats the test or set of tests the given number of times, ie: repeat=1 will run the test twice.")                   
+    defaults["repeat"] = 0
+
+    self.add_option("--run-only-tests",
+                    action = "store", type="string", dest = "runOnlyTests",
+                    help = "JSON list of tests that we only want to run, cannot be specified with --exclude-tests. [DEPRECATED- please use --test-manifest]")
+    defaults["runOnlyTests"] = None
+
+    self.add_option("--exclude-tests",
+                    action = "store", type="string", dest = "excludeTests",
+                    help = "JSON list of tests that we want to not run, cannot be specified with --run-only-tests. [DEPRECATED- please use --test-manifest]")
+    defaults["excludeTests"] = None
+
+    self.add_option("--test-manifest",
+                    action = "store", type="string", dest = "testManifest",
+                    help = "JSON list of tests to specify 'runtests' and 'excludetests'.")
+    defaults["testManifest"] = None
+
+    self.add_option("--failure-file",
+                    action = "store", type="string", dest = "failureFile",
+                    help = "Filename of the output file where we can store a .json list of failures to be run in the future with --run-only-tests.")
+    defaults["failureFile"] = None
 
     # -h, --help are automatically handled by OptionParser
 
@@ -302,6 +309,55 @@ See <http://mochikit.com/doc/html/MochiKit/Logging.html> for details on the logg
         self.error("%s not found, cannot automate VMware recording." %
                    mochitest.vmwareHelperPath)
 
+    if options.runOnlyTests != None and options.excludeTests != None:
+      self.error("We can only support --run-only-tests OR --exclude-tests, not both.  Please consider using --test-manifest instead.")
+
+    if options.testManifest != None and (options.runOnlyTests != None or options.excludeTests != None):
+      self.error("Please use --test-manifest only and not --run-only-tests or --exclude-tests.")
+      
+    if options.runOnlyTests:
+      if not os.path.exists(os.path.abspath(options.runOnlyTests)):
+        self.error("unable to find --run-only-tests file '%s'" % options.runOnlyTests);
+      options.testManifest = options.runOnlyTests
+      options.runOnly = True
+        
+    if options.excludeTests:
+      if not os.path.exists(os.path.abspath(options.excludeTests)):
+        self.error("unable to find --exclude-tests file '%s'" % options.excludeTests);
+      options.testManifest = options.excludeTests
+      options.runOnly = False
+
+    if options.webapprtContent and options.webapprtChrome:
+      self.error("Only one of --webapprt-content and --webapprt-chrome may be given.")
+
+    # Try to guess the testing modules directory.
+    # This somewhat grotesque hack allows the buildbot machines to find the
+    # modules directory without having to configure the buildbot hosts. This
+    # code should never be executed in local runs because the build system
+    # should always set the flag that populates this variable. If buildbot ever
+    # passes this argument, this code can be deleted.
+    if options.testingModulesDir is None:
+      possible = os.path.join(os.getcwd(), os.path.pardir, 'modules')
+
+      if os.path.isdir(possible):
+        options.testingModulesDir = possible
+
+    # Even if buildbot is updated, we still want this, as the path we pass in
+    # to the app must be absolute and have proper slashes.
+    if options.testingModulesDir is not None:
+      options.testingModulesDir = os.path.normpath(options.testingModulesDir)
+
+      if not os.path.isabs(options.testingModulesDir):
+        options.testingModulesDir = os.path.abspath(testingModulesDir)
+
+      if not os.path.isdir(options.testingModulesDir):
+        self.error('--testing-modules-dir not a directory: %s' %
+          options.testingModulesDir)
+
+      options.testingModulesDir = options.testingModulesDir.replace('\\', '/')
+      if options.testingModulesDir[-1] != '/':
+        options.testingModulesDir += '/'
+
     return options
 
 
@@ -321,6 +377,7 @@ class MochitestServer:
     self.webServer = options.webServer
     self.httpPort = options.httpPort
     self.shutdownURL = "http://%(server)s:%(port)s/server/shutdown" % { "server" : self.webServer, "port" : self.httpPort }
+    self.testPrefix = "'webapprt_'" if options.webapprtContent else "undefined"
 
   def start(self):
     "Run the Mochitest server, returning the process ID of the server."
@@ -333,8 +390,8 @@ class MochitestServer:
     args = ["-g", self._xrePath,
             "-v", "170",
             "-f", "./" + "httpd.js",
-            "-e", "const _PROFILE_PATH = '%(profile)s';const _SERVER_PORT = '%(port)s'; const _SERVER_ADDR ='%(server)s';" % 
-                   {"profile" : self._profileDir.replace('\\', '\\\\'), "port" : self.httpPort, "server" : self.webServer },
+            "-e", "const _PROFILE_PATH = '%(profile)s';const _SERVER_PORT = '%(port)s'; const _SERVER_ADDR = '%(server)s'; const _TEST_PREFIX = %(testPrefix)s;" %
+                   {"profile" : self._profileDir.replace('\\', '\\\\'), "port" : self.httpPort, "server" : self.webServer, "testPrefix" : self.testPrefix },
             "-f", "./" + "server.js"]
 
     xpcshell = os.path.join(self._utilityPath,
@@ -396,7 +453,9 @@ class WebSocketServer(object):
     cmd = [sys.executable, script]
     if self.debuggerInfo and self.debuggerInfo['interactive']:
         cmd += ['--interactive']
-    cmd += ['-p', str(self.port), '-w', self._scriptdir, '-l', os.path.join(self._scriptdir, "websock.log"), '--log-level=debug']
+    cmd += ['-p', str(self.port), '-w', self._scriptdir, '-l',      \
+           os.path.join(self._scriptdir, "websock.log"),            \
+           '--log-level=debug', '--allow-handlers-outside-root-dir']
 
     self._process = self._automation.Process(cmd)
     pid = self._process.pid
@@ -410,9 +469,9 @@ class WebSocketServer(object):
 
 class Mochitest(object):
   # Path to the test script on the server
-  TEST_PATH = "/tests/"
-  CHROME_PATH = "/redirect.html";
-  PLAIN_LOOP_PATH = "/plain-loop.html";
+  TEST_PATH = "tests"
+  CHROME_PATH = "redirect.html"
+  PLAIN_LOOP_PATH = "plain-loop.html"
   urlOpts = []
   runSSLTunnel = True
   vmwareHelper = None
@@ -440,15 +499,15 @@ class Mochitest(object):
   def buildTestPath(self, options):
     """ Build the url path to the specific test harness and test file or directory """
     testHost = "http://mochi.test:8888"
-    testURL = testHost + self.TEST_PATH + options.testPath
-    if os.path.isfile(self.oldcwd + self.TEST_PATH + options.testPath) and options.loops > 0:
-       testURL = testHost + self.PLAIN_LOOP_PATH
+    testURL = ("/").join([testHost, self.TEST_PATH, options.testPath])
+    if os.path.isfile(os.path.join(self.oldcwd, os.path.dirname(__file__), self.TEST_PATH, options.testPath)) and options.repeat > 0:
+       testURL = ("/").join([testHost, self.PLAIN_LOOP_PATH])
     if options.chrome or options.a11y:
-       testURL = testHost + self.CHROME_PATH
+       testURL = ("/").join([testHost, self.CHROME_PATH])
     elif options.browserChrome:
       testURL = "about:blank"
     elif options.ipcplugins:
-      testURL = testHost + self.TEST_PATH + "dom/plugins/test"
+      testURL = ("/").join([testHost, self.TEST_PATH, "dom/plugins/test"])
     return testURL
 
   def startWebSocketServer(self, options, debuggerInfo):
@@ -495,22 +554,11 @@ class Mochitest(object):
     """
     return self.getFullPath(logFile)
 
-  def installSpecialPowersExtension(self, options):
-    """ install the Special Powers extension for special testing capabilities """
-    extensionSource = os.path.normpath(os.path.join(self.SCRIPT_DIRECTORY, "specialpowers"))
-    self.automation.log.info("INFO | runtests.py | Installing extension at %s to %s." % 
-                             (extensionSource, options.profilePath))
-
-    self.automation.installExtension(extensionSource, options.profilePath, "special-powers@mozilla.org")
-    self.automation.log.info("INFO | runtests.py | Done installing extension.")
-
   def buildProfile(self, options):
     """ create the profile and add optional chrome bits and files if requested """
     self.automation.initializeProfile(options.profilePath, options.extraPrefs, useServerLocations = True)
     manifest = self.addChromeToProfile(options)
     self.copyExtraFilesToProfile(options)
-
-    self.installSpecialPowersExtension(options)
     self.installExtensionsToProfile(options)
     return manifest
 
@@ -542,19 +590,19 @@ class Mochitest(object):
         URL parameters to test URL:
 
         autorun -- kick off tests automatically
-        closeWhenDone -- runs quit.js after tests
+        closeWhenDone -- closes the browser after the tests
         hideResultsTable -- hides the table of individual test results
         logFile -- logs test run to an absolute path
         totalChunks -- how many chunks to split tests into
         thisChunk -- which chunk to run
         timeout -- per-test timeout in seconds
-        loops -- How many times to run the test
+        repeat -- How many times to repeat the test, ie: repeat=1 will run the test twice.
     """
   
     # allow relative paths for logFile
     if options.logFile:
       options.logFile = self.getLogFilePath(options.logFile)
-    if options.browserChrome or options.chrome or options.a11y:
+    if options.browserChrome or options.chrome or options.a11y or options.webapprtChrome:
       self.makeTestConfig(options)
     else:
       if options.autorun:
@@ -577,10 +625,18 @@ class Mochitest(object):
         self.urlOpts.append("shuffle=1")
       if "MOZ_HIDE_RESULTS_TABLE" in env and env["MOZ_HIDE_RESULTS_TABLE"] == "1":
         self.urlOpts.append("hideResultsTable=1")
-      if options.loops:
-        self.urlOpts.append("loops=%d" % options.loops)
-      if os.path.isfile(self.oldcwd + self.TEST_PATH + options.testPath) and options.loops > 0:
-        self.urlOpts.append("testname=%s" % (self.TEST_PATH + options.testPath))
+      if options.repeat:
+        self.urlOpts.append("repeat=%d" % options.repeat)
+      if os.path.isfile(os.path.join(self.oldcwd, os.path.dirname(__file__), self.TEST_PATH, options.testPath)) and options.repeat > 0:
+        self.urlOpts.append("testname=%s" % ("/").join([self.TEST_PATH, options.testPath]))
+      if options.testManifest:
+        self.urlOpts.append("testManifest=%s" % options.testManifest)
+        if hasattr(options, 'runOnly') and options.runOnly:
+          self.urlOpts.append("runOnly=true")
+        else:
+          self.urlOpts.append("runOnly=false")
+      if options.failureFile:
+        self.urlOpts.append("failureFile=%s" % self.getFullPath(options.failureFile))
 
   def cleanup(self, manifest, options):
     """ remove temporary files and profile """
@@ -640,6 +696,10 @@ class Mochitest(object):
     if len(self.urlOpts) > 0:
       testURL += "?" + "&".join(self.urlOpts)
 
+    if options.webapprtContent:
+      options.browserArgs.extend(('-test-mode', testURL))
+      testURL = None
+
     # Remove the leak detection file so it can't "leak" to the tests run.
     # The file is not there if leak logging was not enabled in the application build.
     if os.path.exists(self.leak_report_file):
@@ -670,6 +730,9 @@ class Mochitest(object):
     except KeyboardInterrupt:
       self.automation.log.info("INFO | runtests.py | Received keyboard interrupt.\n");
       status = -1
+    except:
+      self.automation.log.exception("INFO | runtests.py | Received unexpected exception while running application\n")
+      status = 1
 
     if options.vmwareRecording:
       self.stopVMwareRecording();
@@ -677,6 +740,7 @@ class Mochitest(object):
     self.stopWebServer(options)
     self.stopWebSocketServer(options)
     processLeakLog(self.leak_report_file, options.leakThreshold)
+
     self.automation.log.info("\nINFO | runtests.py | Running tests: end.")
 
     if manifest is not None:
@@ -718,7 +782,9 @@ class Mochitest(object):
       testRoot = 'browser'
     elif (options.a11y):
       testRoot = 'a11y'
- 
+    elif (options.webapprtChrome):
+      testRoot = 'webapprtChrome'
+
     if "MOZ_HIDE_RESULTS_TABLE" in os.environ and os.environ["MOZ_HIDE_RESULTS_TABLE"] == "1":
       options.hideResultsTable = True
 
@@ -774,29 +840,28 @@ toolbar#nav-bar {
           chrometestDir = "file:///" + chrometestDir.replace("\\", "/")
         manifestFile.write("content mochitests %s contentaccessible=yes\n" % chrometestDir)
 
+      if options.testingModulesDir is not None:
+        manifestFile.write("resource testing-common file:///%s\n" %
+          options.testingModulesDir)
+
     # Call installChromeJar().
     jarDir = "mochijar"
     if not os.path.isdir(os.path.join(self.SCRIPT_DIRECTORY, jarDir)):
       self.automation.log.warning("TEST-UNEXPECTED-FAIL | invalid setup: missing mochikit extension")
       return None
 
-    # Support Firefox (browser) and SeaMonkey (navigator).
+    # Support Firefox (browser), B2G (shell), SeaMonkey (navigator), and Webapp
+    # Runtime (webapp).
     chrome = ""
-    if options.browserChrome or options.chrome or options.a11y:
+    if options.browserChrome or options.chrome or options.a11y or options.webapprtChrome:
       chrome += """
 overlay chrome://browser/content/browser.xul chrome://mochikit/content/browser-test-overlay.xul
+overlay chrome://browser/content/shell.xul chrome://mochikit/content/browser-test-overlay.xul
 overlay chrome://navigator/content/navigator.xul chrome://mochikit/content/browser-test-overlay.xul
-"""
-    else:
-      #only do the ipc-overlay.xul for mochitest-plain.  
-      #Currently there are focus issues in chrome tests and issues with new windows and dialogs when using ipc
-      chrome += """
-overlay chrome://browser/content/browser.xul chrome://mochikit/content/ipc-overlay.xul
-overlay chrome://navigator/content/navigator.xul chrome://mochikit/content/ipc-overlay.xul
+overlay chrome://webapprt/content/webapp.xul chrome://mochikit/content/browser-test-overlay.xul
 """
 
     self.installChromeJar(jarDir, chrome, options)
-
     return manifest
 
   def installChromeJar(self, jarDirName, chrome, options):
@@ -832,17 +897,34 @@ overlay chrome://navigator/content/navigator.xul chrome://mochikit/content/ipc-o
         self.automation.log.warning("WARNING | runtests.py | Failed to copy %s to profile", abspath)
         continue
 
-  def installExtensionsToProfile(self, options):
-    "Install application distributed extensions and specified on the command line ones to testing profile."
-    # Install distributed extensions, if application has any.
-    distExtDir = os.path.join(options.app[ : options.app.rfind(os.sep)], "distribution", "extensions")
-    if os.path.isdir(distExtDir):
-      for f in os.listdir(distExtDir):
-        self.automation.installExtension(os.path.join(distExtDir, f), options.profilePath)
+  def installExtensionFromPath(self, options, path, extensionID = None):
+    extensionPath = self.getFullPath(path)
 
-    # Install custom extensions.
-    for f in options.extensionsToInstall:
-      self.automation.installExtension(self.getFullPath(f), options.profilePath)
+    self.automation.log.info("INFO | runtests.py | Installing extension at %s to %s." %
+                            (extensionPath, options.profilePath))
+    self.automation.installExtension(extensionPath, options.profilePath,
+                                     extensionID)
+
+  def installExtensionsToProfile(self, options):
+    "Install special testing extensions, application distributed extensions, and specified on the command line ones to testing profile."
+    extensionDirs = [
+      # Extensions distributed with the test harness.
+      os.path.normpath(os.path.join(self.SCRIPT_DIRECTORY, "extensions")),
+      # Extensions distributed with the application.
+      os.path.join(options.app[ : options.app.rfind(os.sep)], "distribution", "extensions")
+    ]
+
+    for extensionDir in extensionDirs:
+      if os.path.isdir(extensionDir):
+        for dirEntry in os.listdir(extensionDir):
+          if dirEntry not in options.extensionsToExclude:
+            path = os.path.join(extensionDir, dirEntry)
+            if os.path.isdir(path) or (os.path.isfile(path) and path.endswith(".xpi")):
+              self.installExtensionFromPath(options, path)
+
+    # Install custom extensions passed on the command line.
+    for path in options.extensionsToInstall:
+      self.installExtensionFromPath(options, path)
 
 def main():
   automation = Automation()

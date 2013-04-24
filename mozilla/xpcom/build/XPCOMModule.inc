@@ -24,8 +24,6 @@
     COMPONENT(ATOMSERVICE, nsAtomServiceConstructor)
     COMPONENT(OBSERVERSERVICE, nsObserverService::Create)
 
-    COMPONENT(XPCOMPROXY, nsProxyObjectManager::Create)
-
     COMPONENT(TIMER, nsTimerImplConstructor)
 
 #define COMPONENT_SUPPORTS(TYPE, Type)                                         \
@@ -64,8 +62,6 @@
     COMPONENT(VARIANT, nsVariantConstructor)
     COMPONENT(INTERFACEINFOMANAGER_SERVICE, nsXPTIInterfaceInfoManagerGetSingleton)
 
-    COMPONENT(RECYCLINGALLOCATOR, nsRecyclingAllocatorImplConstructor)
-
     COMPONENT(HASH_PROPERTY_BAG, nsHashPropertyBagConstructor)
 
     COMPONENT(UUID_GENERATOR, nsUUIDGeneratorConstructor)
@@ -74,7 +70,7 @@
     COMPONENT(WINDOWSREGKEY, nsWindowsRegKeyConstructor)
 #endif
 
-#ifdef XP_MACOSX
+#if defined(MOZ_WIDGET_COCOA)
     COMPONENT(MACUTILSIMPL, nsMacUtilsImplConstructor)
 #endif
 

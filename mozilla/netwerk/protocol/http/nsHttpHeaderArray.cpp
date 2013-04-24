@@ -1,43 +1,8 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* vim:set ts=4 sw=4 sts=4 ci et: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Darin Fisher <darin@netscape.com> (original author)
- *   Patrick McManus <mcmanus@ducksong.com>
- *   Jason Duell <jduell.mcbugs@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsHttpHeaderArray.h"
 #include "nsHttp.h"
@@ -48,10 +13,10 @@
 nsresult
 nsHttpHeaderArray::SetHeader(nsHttpAtom header,
                              const nsACString &value,
-                             PRBool merge)
+                             bool merge)
 {
-    nsEntry *entry = nsnull;
-    PRInt32 index;
+    nsEntry *entry = nullptr;
+    int32_t index;
 
     index = LookupEntry(header, &entry);
 
@@ -82,14 +47,18 @@ nsHttpHeaderArray::SetHeader(nsHttpAtom header,
 nsresult
 nsHttpHeaderArray::SetHeaderFromNet(nsHttpAtom header, const nsACString &value)
 {
-    nsEntry *entry = nsnull;
-    PRInt32 index;
+    nsEntry *entry = nullptr;
+    int32_t index;
 
     index = LookupEntry(header, &entry);
 
     if (!entry) {
-        if (value.IsEmpty())
-            return NS_OK; // ignore empty headers
+        if (value.IsEmpty()) {
+            if (!TrackEmptyHeader(header)) {
+                LOG(("Ignoring Empty Header: %s\n", header.get()));
+                return NS_OK; // ignore empty headers by default
+            }
+        }
         entry = mHeaders.AppendElement(); //new nsEntry(header, value);
         if (!entry)
             return NS_ERROR_OUT_OF_MEMORY;
@@ -105,6 +74,8 @@ nsHttpHeaderArray::SetHeaderFromNet(nsHttpAtom header, const nsACString &value)
                 // reply may be corrupt/hacked (ex: CLRF injection attacks)
                 return NS_ERROR_CORRUPTED_CONTENT;
             } // else silently drop value: keep value from 1st header seen
+            LOG(("Header %s silently dropped as non mergeable header\n",
+                 header.get()));
         }
     }
 
@@ -118,17 +89,17 @@ nsHttpHeaderArray::ClearHeader(nsHttpAtom header)
 }
 
 const char *
-nsHttpHeaderArray::PeekHeader(nsHttpAtom header)
+nsHttpHeaderArray::PeekHeader(nsHttpAtom header) const
 {
-    nsEntry *entry = nsnull;
+    const nsEntry *entry = nullptr;
     LookupEntry(header, &entry);
-    return entry ? entry->value.get() : nsnull;
+    return entry ? entry->value.get() : nullptr;
 }
 
 nsresult
-nsHttpHeaderArray::GetHeader(nsHttpAtom header, nsACString &result)
+nsHttpHeaderArray::GetHeader(nsHttpAtom header, nsACString &result) const
 {
-    nsEntry *entry = nsnull;
+    const nsEntry *entry = nullptr;
     LookupEntry(header, &entry);
     if (!entry)
         return NS_ERROR_NOT_AVAILABLE;
@@ -140,7 +111,7 @@ nsresult
 nsHttpHeaderArray::VisitHeaders(nsIHttpHeaderVisitor *visitor)
 {
     NS_ENSURE_ARG_POINTER(visitor);
-    PRUint32 i, count = mHeaders.Length();
+    uint32_t i, count = mHeaders.Length();
     for (i = 0; i < count; ++i) {
         const nsEntry &entry = mHeaders[i];
         if (NS_FAILED(visitor->VisitHeader(nsDependentCString(entry.header),
@@ -208,9 +179,9 @@ nsHttpHeaderArray::ParseHeaderLine(const char *line,
 }
 
 void
-nsHttpHeaderArray::Flatten(nsACString &buf, PRBool pruneProxyHeaders)
+nsHttpHeaderArray::Flatten(nsACString &buf, bool pruneProxyHeaders)
 {
-    PRUint32 i, count = mHeaders.Length();
+    uint32_t i, count = mHeaders.Length();
     for (i = 0; i < count; ++i) {
         const nsEntry &entry = mHeaders[i];
         // prune proxy headers if requested
@@ -225,7 +196,7 @@ nsHttpHeaderArray::Flatten(nsACString &buf, PRBool pruneProxyHeaders)
 }
 
 const char *
-nsHttpHeaderArray::PeekHeaderAt(PRUint32 index, nsHttpAtom &header)
+nsHttpHeaderArray::PeekHeaderAt(uint32_t index, nsHttpAtom &header) const
 {
     const nsEntry &entry = mHeaders[index];
 

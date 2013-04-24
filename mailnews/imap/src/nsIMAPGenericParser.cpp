@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Hans-Andreas Engel <engel@physics.harvard.edu>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"  // for pre-compiled headers
 
@@ -47,12 +14,12 @@
 
 
 nsIMAPGenericParser::nsIMAPGenericParser() :
-fNextToken(nsnull),
-fCurrentLine(nsnull),
-fLineOfTokens(nsnull),
-fStartOfLineOfTokens(nsnull),
-fCurrentTokenPlaceHolder(nsnull),
-fAtEndOfLine(PR_FALSE),
+fNextToken(nullptr),
+fCurrentLine(nullptr),
+fLineOfTokens(nullptr),
+fStartOfLineOfTokens(nullptr),
+fCurrentTokenPlaceHolder(nullptr),
+fAtEndOfLine(false),
 fParserState(stateOK)
 {
 }
@@ -65,7 +32,7 @@ nsIMAPGenericParser::~nsIMAPGenericParser()
 
 void nsIMAPGenericParser::HandleMemoryFailure()
 {
-  SetConnected(PR_FALSE);
+  SetConnected(false);
 }
 
 void nsIMAPGenericParser::ResetLexAnalyzer()
@@ -73,16 +40,16 @@ void nsIMAPGenericParser::ResetLexAnalyzer()
   PR_FREEIF( fCurrentLine );
   PR_FREEIF( fStartOfLineOfTokens );
   
-  fNextToken = fCurrentLine = fLineOfTokens = fStartOfLineOfTokens = fCurrentTokenPlaceHolder = nsnull;
-  fAtEndOfLine = PR_FALSE;
+  fNextToken = fCurrentLine = fLineOfTokens = fStartOfLineOfTokens = fCurrentTokenPlaceHolder = nullptr;
+  fAtEndOfLine = false;
 }
 
-PRBool nsIMAPGenericParser::LastCommandSuccessful()
+bool nsIMAPGenericParser::LastCommandSuccessful()
 {
   return fParserState == stateOK;
 }
 
-void nsIMAPGenericParser::SetSyntaxError(PRBool error, const char *msg)
+void nsIMAPGenericParser::SetSyntaxError(bool error, const char *msg)
 {
   if (error)
       fParserState |= stateSyntaxErrorFlag;
@@ -91,7 +58,7 @@ void nsIMAPGenericParser::SetSyntaxError(PRBool error, const char *msg)
   NS_ASSERTION(!error, "syntax error in generic parser");	
 }
 
-void nsIMAPGenericParser::SetConnected(PRBool connected)
+void nsIMAPGenericParser::SetConnected(bool connected)
 {
   if (connected)
       fParserState &= ~stateDisconnectedFlag;
@@ -167,7 +134,7 @@ void nsIMAPGenericParser::AdvanceToNextToken()
     fNextToken = NS_strtok(WHITESPACE, &fCurrentTokenPlaceHolder);
     if (!fNextToken)
     {
-      fAtEndOfLine = PR_TRUE;
+      fAtEndOfLine = true;
       fNextToken = CRLF;
     }
   }
@@ -178,14 +145,14 @@ void nsIMAPGenericParser::AdvanceToNextLine()
   PR_FREEIF( fCurrentLine );
   PR_FREEIF( fStartOfLineOfTokens);
   
-  PRBool ok = GetNextLineForParser(&fCurrentLine);
+  bool ok = GetNextLineForParser(&fCurrentLine);
   if (!ok)
   {
-    SetConnected(PR_FALSE);
-    fStartOfLineOfTokens = nsnull;
-    fLineOfTokens = nsnull;
-    fCurrentTokenPlaceHolder = nsnull;
-    fAtEndOfLine = PR_TRUE;
+    SetConnected(false);
+    fStartOfLineOfTokens = nullptr;
+    fLineOfTokens = nullptr;
+    fCurrentTokenPlaceHolder = nullptr;
+    fAtEndOfLine = true;
     fNextToken = CRLF;
   }
   else if (!fCurrentLine)
@@ -194,8 +161,7 @@ void nsIMAPGenericParser::AdvanceToNextLine()
   }
   else
   {
-     NS_ASSERTION(PL_strstr(fCurrentLine, CRLF) == fCurrentLine + strlen(fCurrentLine) - 2, "need exacly one CRLF, which must be at end of line");
-     fNextToken = nsnull;
+     fNextToken = nullptr;
      // determine if there are any tokens (without calling AdvanceToNextToken);
      // otherwise we are already at end of line
      NS_ASSERTION(strlen(WHITESPACE) == 3, "assume 3 chars of whitespace");
@@ -246,7 +212,7 @@ char *nsIMAPGenericParser::CreateAstring()
   else if (*fNextToken == '"')
     return CreateQuoted();		// quoted
   else
-    return CreateAtom(PR_TRUE); // atom
+    return CreateAtom(true); // atom
 }
 
 // Create an atom
@@ -261,13 +227,13 @@ char *nsIMAPGenericParser::CreateAstring()
 //           quoted-specials = DQUOTE / "\"
 //           resp-specials   = "]"
 // "Characters are 7-bit US-ASCII unless otherwise specified." [RFC3501, 1.2.]
-char *nsIMAPGenericParser::CreateAtom(PRBool isAstring)
+char *nsIMAPGenericParser::CreateAtom(bool isAstring)
 {
   char *rv = PL_strdup(fNextToken);
   if (!rv)
   {
     HandleMemoryFailure();
-    return nsnull;
+    return nullptr;
   }
   // We wish to stop at the following characters (in decimal ascii)
   // 1-31 (CTL), 32 (SP), 34 '"', 37 '%', 40-42 "()*", 92 '\\', 123 '{'
@@ -278,9 +244,9 @@ char *nsIMAPGenericParser::CreateAtom(PRBool isAstring)
          && c != '\\' && c != '{' && (isAstring || c != ']'))
      c = *++last;
   if (rv == last) {
-     SetSyntaxError(PR_TRUE, "no atom characters found");
+     SetSyntaxError(true, "no atom characters found");
      PL_strfree(rv);
-     return nsnull;
+     return nullptr;
   }
   if (*last)
   {
@@ -331,7 +297,7 @@ char *nsIMAPGenericParser::CreateString()
   }
   else
   {
-    SetSyntaxError(PR_TRUE, "string does not start with '{' or '\"'");
+    SetSyntaxError(true, "string does not start with '{' or '\"'");
     return NULL;
   }
 }
@@ -344,7 +310,7 @@ char *nsIMAPGenericParser::CreateString()
 // quoted_specials ::= <"> / "\"
 // Note that according to RFC 1064 and RFC 2060, CRs and LFs are not allowed 
 // inside a quoted string.  It is sufficient to read from the current line only.
-char *nsIMAPGenericParser::CreateQuoted(PRBool /*skipToEnd*/)
+char *nsIMAPGenericParser::CreateQuoted(bool /*skipToEnd*/)
 {
   // one char past opening '"'
   char *currentChar = fCurrentLine + (fNextToken - fStartOfLineOfTokens) + 1;
@@ -356,8 +322,8 @@ char *nsIMAPGenericParser::CreateQuoted(PRBool /*skipToEnd*/)
   {
     if (!returnString.CharAt(charIndex))
     {
-      SetSyntaxError(PR_TRUE, "no closing '\"' found in quoted");
-      return nsnull;
+      SetSyntaxError(true, "no closing '\"' found in quoted");
+      return nullptr;
     }
     else if (returnString.CharAt(charIndex) == '\\')
     {
@@ -388,12 +354,12 @@ char *nsIMAPGenericParser::CreateLiteral()
   uint32 numBytes = numberOfCharsInMessage + 1;
   NS_ASSERTION(numBytes, "overflow!");
   if (!numBytes)
-    return nsnull;
+    return nullptr;
   char *returnString = (char *)PR_Malloc(numBytes);
   if (!returnString)
   {
     HandleMemoryFailure();
-    return nsnull;
+    return nullptr;
   }
 
   int32 currentLineLength = 0;
@@ -507,8 +473,8 @@ char *nsIMAPGenericParser::CreateParenGroup()
   
   if (numOpenParens != 0 || !ContinueParse())
   {
-    SetSyntaxError(PR_TRUE, "closing ')' not found in paren group");
-    return nsnull;
+    SetSyntaxError(true, "closing ')' not found in paren group");
+    return nullptr;
   }
 
   returnString.Append(parenGroupStart, fCurrentTokenPlaceHolder - parenGroupStart);

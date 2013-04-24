@@ -5,10 +5,12 @@
 // These are small test files, good for just seeing if something loads. We
 // really only need one test file per backend here.
 var gSmallTests = [
-  { name:"r11025_s16_c1.wav", type:"audio/x-wav", duration:1.0 },
-  { name:"320x240.ogv", type:"video/ogg", width:320, height:240, duration:0.233 },
   { name:"small-shot.ogg", type:"audio/ogg", duration:0.276 },
-  { name:"seek.webm", type:"video/webm", duration:3.966 },
+  { name:"r11025_s16_c1.wav", type:"audio/x-wav", duration:1.0 },
+  { name:"320x240.ogv", type:"video/ogg", width:320, height:240, duration:0.266 },
+  { name:"seek.webm", type:"video/webm", width:320, height:240, duration:3.966 },
+  { name:"detodos.opus", type:"audio/ogg; codecs=opus", duration:2.9135 },
+  { name:"gizmo.mp4", type:"video/mp4", duration:5.0 },
   { name:"bogus.duh", type:"bogus/duh" }
 ];
 
@@ -16,18 +18,32 @@ var gSmallTests = [
 // during resource download.
 var gProgressTests = [
   { name:"r11025_u8_c1.wav", type:"audio/x-wav", duration:1.0, size:11069 },
-  { name:"big.wav", type:"audio/x-wav", duration:9.0, size:102444 },
+  { name:"big.wav", type:"audio/x-wav", duration:9.278981, size:102444 },
   { name:"seek.ogv", type:"video/ogg", duration:3.966, size:285310 },
-  { name:"320x240.ogv", type:"video/ogg", width:320, height:240, duration:0.233, size:28942 },
+  { name:"320x240.ogv", type:"video/ogg", width:320, height:240, duration:0.266, size:28942 },
   { name:"seek.webm", type:"video/webm", duration:3.966, size:215529 },
+  { name:"gizmo.mp4", type:"video/mp4", duration:5.0, size:383631 },
   { name:"bogus.duh", type:"bogus/duh" }
+];
+
+// Used by test_played.html
+var gPlayedTests = [
+  { name:"big.wav", type:"audio/x-wav", duration:9.0 },
+  { name:"sound.ogg", type:"audio/ogg", duration:4.0 },
+  { name:"seek.ogv", type:"video/ogg", duration:3.966 },
+  { name:"seek.webm", type:"video/webm", duration:3.966 },
+  { name:"gizmo.mp4", type:"video/mp4", duration:5.0 },
 ];
 
 // Used by test_mozLoadFrom.  Need one test file per decoder backend, plus
 // anything for testing clone-specific bugs.
+var cloneKey = Math.floor(Math.random()*100000000);
 var gCloneTests = gSmallTests.concat([
   // Actual duration is ~200ms, we have Content-Duration lie about it.
   { name:"bug520908.ogv", type:"video/ogg", duration:9000 },
+  // short-video is more like 1s, so if you load this twice you'll get an unexpected duration
+  { name:"dynamic_resource.sjs?key=" + cloneKey + "&res1=320x240.ogv&res2=short-video.ogv",
+    type:"video/ogg", duration:0.266 },
 ]);
 
 // Used by test_play_twice.  Need one test file per decoder backend, plus
@@ -42,6 +58,15 @@ var gPausedAfterEndedTests = gSmallTests.concat([
   { name:"r11025_u8_c1.wav", type:"audio/x-wav", duration:1.0 },
   { name:"small-shot.ogg", type:"video/ogg", duration:0.276 }
 ]);
+
+// Test the mozHasAudio property
+var gMozHasAudioTests = [
+  { name:"big.wav", type:"audio/x-wav", duration:9.278981, size:102444, hasAudio:undefined },
+  { name:"320x240.ogv", type:"video/ogg", width:320, height:240, duration:0.266, size:28942, hasAudio:false },
+  { name:"short-video.ogv", type:"video/ogg", duration:1.081, hasAudio:true },
+  { name:"seek.webm", type:"video/webm", duration:3.966, size:215529, hasAudio:false },
+  { name:"bogus.duh", type:"bogus/duh" }
+];
 
 // These are files that we want to make sure we can play through.  We can
 // also check metadata.  Put files of the same type together in this list so if
@@ -106,7 +131,7 @@ var gPlayTests = [
 
   // Test playback/metadata work after a redirect
   { name:"redirect.sjs?domain=mochi.test:8888&file=320x240.ogv",
-    type:"video/ogg", duration:0.233 },
+    type:"video/ogg", duration:0.266 },
 
   // Test playback of a webm file
   { name:"seek.webm", type:"video/webm", duration:3.966 },
@@ -122,6 +147,12 @@ var gPlayTests = [
   // hardware.
   { name:"spacestorm-1000Hz-100ms.ogg", type:"audio/ogg", duration:0.099 },
 
+  // Opus data in an ogg container
+  { name:"detodos.opus", type:"audio/ogg; codecs=opus", duration:2.9135 },
+
+  { name:"gizmo.mp4", type:"video/mp4", duration:5.0 },
+
+  // Invalid file
   { name:"bogus.duh", type:"bogus/duh", duration:Number.NaN }
 ];
 
@@ -129,10 +160,13 @@ var gPlayTests = [
 // Optionally checks whether the file actually exists on disk at the location
 // we've specified.
 function fileUriToSrc(path, mustExist) {
-  netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
+  // android mochitest doesn't support file://
+  if (navigator.appVersion.indexOf("Android") != -1)
+    return path;
+
   const Ci = Components.interfaces;
-  const Cc = Components.classes;
-  const Cr = Components.results;
+  const Cc = SpecialPowers.wrap(Components).classes;
+  const Cr = SpecialPowers.wrap(Components).results;
   var dirSvc = Cc["@mozilla.org/file/directory_service;1"].
                getService(Ci.nsIProperties);
   var f = dirSvc.get("CurWorkD", Ci.nsILocalFile);
@@ -228,10 +262,11 @@ var gSeekTests = [
   { name:"r11025_s16_c1.wav", type:"audio/x-wav", duration:1.0 },
   { name:"audio.wav", type:"audio/x-wav", duration:0.031247 },
   { name:"seek.ogv", type:"video/ogg", duration:3.966 },
-  { name:"320x240.ogv", type:"video/ogg", duration:0.233 },
+  { name:"320x240.ogv", type:"video/ogg", duration:0.266 },
   { name:"seek.webm", type:"video/webm", duration:3.966 },
   { name:"bug516323.indexed.ogv", type:"video/ogg", duration:4.208 },
   { name:"split.webm", type:"video/webm", duration:1.967 },
+  { name:"detodos.opus", type:"audio/ogg; codecs=opus", duration:2.9135 },
   { name:"bogus.duh", type:"bogus/duh", duration:123 }
 ];
 
@@ -266,6 +301,43 @@ var gDecodeErrorTests = [
   { name:"bogus.duh", type:"bogus/duh" }
 ];
 
+// These are files that are used for media fragments tests
+var gFragmentTests = [
+  { name:"big.wav", type:"audio/x-wav", duration:9.278981, size:102444 }
+];
+
+
+// These are files with non-trivial tag sets.
+// Used by test_metadata.html.
+var gMetadataTests = [
+  // Ogg Vorbis files
+  { name:"short-video.ogv", tags: {
+      TITLE:"Lepidoptera",
+      ARTIST:"Epoq",
+      ALBUM:"Kahvi Collective",
+      DATE:"2002",
+      COMMENT:"http://www.kahvi.org",
+    }
+  },
+  { name:"bug516323.ogv", tags: {
+      GENRE:"Open Movie",
+      ENCODER:"Audacity",
+      TITLE:"Elephants Dream",
+      ARTIST:"Silvia Pfeiffer",
+      COMMENTS:"Audio Description"
+    }
+  },
+  { name:"bug516323.indexed.ogv", tags: {
+      GENRE:"Open Movie",
+      ENCODER:"Audacity",
+      TITLE:"Elephants Dream",
+      ARTIST:"Silvia Pfeiffer",
+      COMMENTS:"Audio Description"
+    }
+  },
+  { name:"sound.ogg", tags: { } }
+];
+
 function checkMetadata(msg, e, test) {
   if (test.width) {
     is(e.videoWidth, test.width, msg + " video width");
@@ -284,6 +356,14 @@ function checkMetadata(msg, e, test) {
 function getPlayableVideo(candidates) {
   var v = document.createElement("video");
   var resources = candidates.filter(function(x){return /^video/.test(x.type) && v.canPlayType(x.type);});
+  if (resources.length > 0)
+    return resources[0];
+  return null;
+}
+
+function getPlayableAudio(candidates) {
+  var v = document.createElement("audio");
+  var resources = candidates.filter(function(x){return /^audio/.test(x.type) && v.canPlayType(x.type);});
   if (resources.length > 0)
     return resources[0];
   return null;
@@ -324,10 +404,14 @@ function MediaTestManager() {
   // to start every test, but if you call started() you *must* call finish()
   // else you'll timeout. 
   this.runTests = function(tests, startTest) {
+    this.startTime = new Date();
+    SimpleTest.info("Started " + this.startTime + " (" + this.startTime.getTime()/1000 + "s)");
     this.testNum = 0;
     this.tests = tests;
     this.startTest = startTest;
     this.tokens = [];
+    this.isShutdown = false;
+    this.numTestsRunning = 0;
     // Always wait for explicit finish.
     SimpleTest.waitForExplicitFinish();
     this.nextTest();
@@ -337,6 +421,8 @@ function MediaTestManager() {
   // Don't call more than once per token.
   this.started = function(token) {
     this.tokens.push(token);
+    this.numTestsRunning++;
+    is(this.numTestsRunning, this.tokens.length, "[started " + token + "] Length of array should match number of running tests");
   }
   
   // Registers that the test corresponding to 'token' has finished. Call when
@@ -349,27 +435,21 @@ function MediaTestManager() {
       // Remove the element from the list of running tests.
       this.tokens.splice(i, 1);
     }
-    if (this.tokens.length == 0) {
+    this.numTestsRunning--;
+    is(this.numTestsRunning, this.tokens.length, "[finished " + token + "] Length of array should match number of running tests");
+    if (this.tokens.length < PARALLEL_TESTS) {
       this.nextTest();
     }
   }
-  
+
   // Starts the next batch of tests, or finishes if they're all done.
   // Don't call this directly, call finished(token) when you're done.
   this.nextTest = function() {
     // Force a GC after every completed testcase. This ensures that any decoders
     // with live threads waiting for the GC are killed promptly, to free up the
     // thread stacks' address space.
-    netscape.security.PrivilegeManager.enablePrivilege('UniversalXPConnect');
-    Components.utils.forceGC();
-    if (this.testNum == this.tests.length && !DEBUG_TEST_LOOP_FOREVER) {
-      if (this.onFinished) {
-        this.onFinished();
-      }
-      mediaTestCleanup();
-      SimpleTest.finish();
-      return;
-    }
+    SpecialPowers.forceGC();
+    
     while (this.testNum < this.tests.length && this.tokens.length < PARALLEL_TESTS) {
       var test = this.tests[this.testNum];
       var token = (test.name ? (test.name + "-"): "") + this.testNum;
@@ -385,11 +465,23 @@ function MediaTestManager() {
       
       // Do the init. This should start the test.
       this.startTest(test, token);
-      
     }
-    if (this.tokens.length == 0) {
-      // No tests were added, we must have tried everything, exit.
+
+    if (this.testNum == this.tests.length &&
+        !DEBUG_TEST_LOOP_FOREVER &&
+        this.tokens.length == 0 &&
+        !this.isShutdown)
+    {
+      this.isShutdown = true;
+      if (this.onFinished) {
+        this.onFinished();
+      }
+      mediaTestCleanup();
+      var end = new Date();
+      SimpleTest.info("Finished at " + end + " (" + (end.getTime() / 1000) + "s)");
+      SimpleTest.info("Running time: " + (end.getTime() - this.startTime.getTime())/1000 + "s");
       SimpleTest.finish();
+      return;
     }
   }
 }
@@ -408,28 +500,33 @@ function mediaTestCleanup() {
       A[i].parentNode.removeChild(A[i]);
       A[i] = null;
     }
-    netscape.security.PrivilegeManager.enablePrivilege('UniversalXPConnect');
-    Components.utils.forceGC();
+    SpecialPowers.forceGC();
 }
 
 (function() {
-  netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
   // Ensure that preload preferences are comsistent
-  var prefService = Components.classes["@mozilla.org/preferences-service;1"]
-                               .getService(Components.interfaces.nsIPrefService);
+  var prefService = SpecialPowers.wrap(Components)
+                                 .classes["@mozilla.org/preferences-service;1"]
+                                 .getService(Components.interfaces.nsIPrefService);
   var branch = prefService.getBranch("media.");
   var oldDefault = 2;
   var oldAuto = 3;
+  var oldOpus = undefined;
   try {
     oldDefault = branch.getIntPref("preload.default");
     oldAuto    = branch.getIntPref("preload.auto");
+    oldOpus    = branch.getBoolPref("opus.enabled");
   } catch(ex) { }
   branch.setIntPref("preload.default", 2); // preload_metadata
   branch.setIntPref("preload.auto", 3); // preload_enough
+  // test opus playback iff the pref exists
+  if (oldOpus !== undefined)
+    branch.setBoolPref("opus.enabled", true);
 
   window.addEventListener("unload", function() {
-    netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
     branch.setIntPref("preload.default", oldDefault);
     branch.setIntPref("preload.auto", oldAuto);
+    if (oldOpus !== undefined)
+      branch.setBoolPref("opus.enabled", oldOpus);
   }, false);
  })();

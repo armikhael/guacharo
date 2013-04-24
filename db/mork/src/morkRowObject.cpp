@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-  */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef _MDB_
 #include "mdb.h"
@@ -125,7 +93,7 @@ NS_IMETHODIMP
 morkRowObject::GetSeed(nsIMdbEnv* mev,
   mdb_seed* outSeed)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -138,7 +106,7 @@ NS_IMETHODIMP
 morkRowObject::GetCount(nsIMdbEnv* mev,
   mdb_count* outCount)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -152,7 +120,7 @@ NS_IMETHODIMP
 morkRowObject::GetPort(nsIMdbEnv* mev,
   nsIMdbPort** acqPort)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbPort* outPort = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -202,7 +170,7 @@ NS_IMETHODIMP
 morkRowObject::BecomeContent(nsIMdbEnv* mev,
   const mdbOid* inOid)
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
   // remember row->MaybeDirtySpaceStoreAndRow();
 }
@@ -213,7 +181,7 @@ NS_IMETHODIMP
 morkRowObject::DropActivity( // tell collection usage no longer expected
   nsIMdbEnv* mev)
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 // } ----- end activity dropping methods -----
@@ -229,7 +197,7 @@ morkRowObject::GetRowCellCursor( // make a cursor starting iteration at inCellPo
   mdb_pos inPos, // zero-based ordinal position of cell in row
   nsIMdbRowCellCursor** acqCursor)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   nsIMdbRowCellCursor* outCursor = 0;
   if ( ev )
@@ -290,7 +258,7 @@ NS_IMETHODIMP
 morkRowObject::CutAllColumns( // remove all columns from the row
   nsIMdbEnv* mev)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -308,7 +276,7 @@ morkRowObject::NewCell( // get cell for specified column, or add new one
   mdb_column inColumn, // column to add
   nsIMdbCell** acqCell)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -339,7 +307,7 @@ morkRowObject::AddCell( // copy a cell from another row to this row
   nsIMdbEnv* mev, // context
   const nsIMdbCell* inCell)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -386,7 +354,7 @@ morkRowObject::GetCell( // find a cell in this row
   mdb_column inColumn, // column to find
   nsIMdbCell** acqCell)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbCell* outCell = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
 
@@ -415,7 +383,7 @@ NS_IMETHODIMP
 morkRowObject::EmptyAllCells( // make all cells in row empty of content
   nsIMdbEnv* mev)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -432,7 +400,7 @@ morkRowObject::AddRow( // add all cells in another row to this one
   nsIMdbEnv* mev, // context
   nsIMdbRow* ioSourceRow)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -451,7 +419,7 @@ morkRowObject::SetRow( // make exact duplicate of another row
   nsIMdbEnv* mev, // context
   nsIMdbRow* ioSourceRow)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -474,7 +442,7 @@ morkRowObject::SetCellYarn( // synonym for AddColumn()
   mdb_column inColumn, // column to add
   const mdbYarn* inYarn)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -492,7 +460,7 @@ morkRowObject::GetCellYarn(
   mdbYarn* outYarn)  // writes some yarn slots 
 // copy content into the yarn buffer, and update mYarn_Fill and mYarn_Form
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -514,7 +482,7 @@ morkRowObject::AliasCellYarn(
     mdb_column inColumn, // column to alias
     mdbYarn* outYarn) // writes ALL yarn slots
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -546,7 +514,7 @@ morkRowObject::NextCellYarn(nsIMdbEnv* mev, // iterative version of GetCellYarn(
 // and the iteration has ended, ioColumn will return a zero token again.
 // So iterating over cells starts and ends with a zero column token.
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {
@@ -570,7 +538,7 @@ morkRowObject::SeekCellYarn( // resembles nsIMdbRowCellCursor::SeekCell()
 // able to ignore outYarn when the pointer is nil; please do not crash.
 
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
   {

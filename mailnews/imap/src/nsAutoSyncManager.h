@@ -1,38 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Emre Birol  <ebirol@gmail.com> (Original Author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsAutoSyncManager_h__
 #define nsAutoSyncManager_h__
@@ -119,7 +87,7 @@ class nsIMsgFolder;
  */
 class nsDefaultAutoSyncMsgStrategy : public nsIAutoSyncMsgStrategy
 {
-  static const PRUint32 kFirstPassMessageSize = 60U*1024U; // 60K
+  static const uint32_t kFirstPassMessageSize = 60U*1024U; // 60K
 
   public:
     NS_DECL_ISUPPORTS
@@ -156,13 +124,13 @@ class nsAutoSyncManager : public nsIObserver,
                           public nsIAutoSyncManager
 {
   static const PRTime kAutoSyncFreq = 60UL * (PR_USEC_PER_SEC * 60UL);  // 1hr
-  static const PRUint32 kDefaultUpdateInterval = 10UL;                  // 10min
-  static const PRInt32 kTimerIntervalInMs = 400;
-  static const PRUint32 kNumberOfHeadersToProcess = 250U;
+  static const uint32_t kDefaultUpdateInterval = 10UL;                  // 10min
+  static const int32_t kTimerIntervalInMs = 400;
+  static const uint32_t kNumberOfHeadersToProcess = 250U;
   // enforced size of the first group that will be downloaded before idle time
-  static const PRUint32 kFirstGroupSizeLimit = 60U*1024U /* 60K */; 
-  static const PRInt32 kIdleTimeInSec = 10;
-  static const PRUint32 kGroupRetryCount = 3;
+  static const uint32_t kFirstGroupSizeLimit = 60U*1024U /* 60K */; 
+  static const int32_t kIdleTimeInSec = 10;
+  static const uint32_t kGroupRetryCount = 3;
 
   enum IdleState { systemIdle, appIdle, notIdle };
   enum UpdateState { initiated, completed };
@@ -183,7 +151,7 @@ class nsAutoSyncManager : public nsIObserver,
     nsresult StartIdleProcessing();
     nsresult AutoUpdateFolders(); 
     void ScheduleFolderForOfflineDownload(nsIAutoSyncState *aAutoSyncStateObj);
-    nsresult DownloadMessagesForOffline(nsIAutoSyncState *aAutoSyncStateObj, PRUint32 aSizeLimit = 0);
+    nsresult DownloadMessagesForOffline(nsIAutoSyncState *aAutoSyncStateObj, uint32_t aSizeLimit = 0);
     nsresult HandleDownloadErrorFor(nsIAutoSyncState *aAutoSyncStateObj, const nsresult error);
 
     // Helper methods for priority Q operations
@@ -192,17 +160,17 @@ class nsAutoSyncManager : public nsIObserver,
                           nsCOMArray<nsIAutoSyncState> &aChainedQ);
     static
     nsIAutoSyncState* SearchQForSibling(const nsCOMArray<nsIAutoSyncState> &aQueue,
-                          nsIAutoSyncState *aAutoSyncStateObj, PRInt32 aStartIdx, PRInt32 *aIndex = nsnull);
+                          nsIAutoSyncState *aAutoSyncStateObj, int32_t aStartIdx, int32_t *aIndex = nullptr);
     static
-    PRBool DoesQContainAnySiblingOf(const nsCOMArray<nsIAutoSyncState> &aQueue, 
-                          nsIAutoSyncState *aAutoSyncStateObj, const PRInt32 aState, 
-                          PRInt32 *aIndex = nsnull);
+    bool DoesQContainAnySiblingOf(const nsCOMArray<nsIAutoSyncState> &aQueue, 
+                          nsIAutoSyncState *aAutoSyncStateObj, const int32_t aState, 
+                          int32_t *aIndex = nullptr);
     static 
     nsIAutoSyncState* GetNextSibling(const nsCOMArray<nsIAutoSyncState> &aQueue, 
-                          nsIAutoSyncState *aAutoSyncStateObj, PRInt32 *aIndex = nsnull);
+                          nsIAutoSyncState *aAutoSyncStateObj, int32_t *aIndex = nullptr);
     static 
     nsIAutoSyncState* GetHighestPrioSibling(const nsCOMArray<nsIAutoSyncState> &aQueue, 
-                          nsIAutoSyncState *aAutoSyncStateObj, PRInt32 *aIndex = nsnull);
+                          nsIAutoSyncState *aAutoSyncStateObj, int32_t *aIndex = nullptr);
 
     /// timer to process existing keys and updates
     void InitTimer();
@@ -211,7 +179,7 @@ class nsAutoSyncManager : public nsIObserver,
     void StartTimerIfNeeded();
 
     /// pref helpers
-    PRUint32 GetUpdateIntervalFor(nsIAutoSyncState *aAutoSyncStateObj);
+    uint32_t GetUpdateIntervalFor(nsIAutoSyncState *aAutoSyncStateObj);
 
   protected:
     nsCOMPtr<nsIAutoSyncMsgStrategy> mMsgStrategyImpl;
@@ -229,15 +197,15 @@ class nsAutoSyncManager : public nsIObserver,
     UpdateState mUpdateState;
 
     // This is set if auto sync has been completely paused.
-    PRBool mPaused;
+    bool mPaused;
     // This is set if we've finished startup and should start
     // paying attention to idle notifications.
-    PRBool mStartupDone;
+    bool mStartupDone;
 
   private:
-    PRUint32 mGroupSize;
+    uint32_t mGroupSize;
     IdleState mIdleState;
-    PRInt32 mDownloadModel;
+    int32_t mDownloadModel;
     nsCOMPtr<nsIIdleService> mIdleService;
     nsCOMPtr<nsITimer> mTimer;
     nsTObserverArray<nsCOMPtr<nsIAutoSyncMgrListener> > mListeners;

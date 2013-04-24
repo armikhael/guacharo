@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 20; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Oracle Corporation code.
- *
- * The Initial Developer of the Original Code is Oracle Corporation
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Stuart Parmenter <stuart.parmenter@oracle.com>
- *   Dan Mosedale <dan.mosedale@oracle.com>
- *   Philipp Kewisch <mozilla@kewis.ch>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "calDuration.h"
 #include "calBaseCID.h"
@@ -56,7 +22,7 @@ NS_IMPL_CLASSINFO(calDuration, NULL, 0, CAL_DURATION_CID)
 NS_IMPL_ISUPPORTS1_CI(calDuration, calIDuration)
 
 calDuration::calDuration()
-    : mImmutable(PR_FALSE)
+    : mImmutable(false)
 {
     Reset();
 }
@@ -71,17 +37,17 @@ calDuration::calDuration(const calDuration& cdt)
     mDuration.seconds = cdt.mDuration.seconds;
 
     // copies are always mutable
-    mImmutable = PR_FALSE;
+    mImmutable = false;
 }
 
 calDuration::calDuration(const struct icaldurationtype * const aDurationPtr)
-    : mImmutable(PR_FALSE)
+    : mImmutable(false)
 {
     FromIcalDuration(aDurationPtr);
 }
 
 NS_IMETHODIMP
-calDuration::GetIsMutable(PRBool *aResult)
+calDuration::GetIsMutable(bool *aResult)
 {
     NS_ENSURE_ARG_POINTER(aResult);
 
@@ -92,7 +58,7 @@ calDuration::GetIsMutable(PRBool *aResult)
 NS_IMETHODIMP
 calDuration::MakeImmutable()
 {
-    mImmutable = PR_TRUE;
+    mImmutable = true;
     return NS_OK;
 }
 
@@ -123,72 +89,72 @@ calDuration::Reset()
     return NS_OK;
 }
 
-NS_IMETHODIMP calDuration::GetIsNegative(PRBool *_retval)
+NS_IMETHODIMP calDuration::GetIsNegative(bool *_retval)
 {
     *_retval = mDuration.is_neg;
     return NS_OK;
 }
-NS_IMETHODIMP calDuration::SetIsNegative(PRBool aValue)
+NS_IMETHODIMP calDuration::SetIsNegative(bool aValue)
 {
     if (mImmutable) return NS_ERROR_CALENDAR_IMMUTABLE;
     mDuration.is_neg = aValue;
     return NS_OK;
 }
 
-NS_IMETHODIMP calDuration::GetWeeks(PRInt16 *_retval)
+NS_IMETHODIMP calDuration::GetWeeks(int16_t *_retval)
 {
-    *_retval = (PRInt16)mDuration.weeks;
+    *_retval = (int16_t)mDuration.weeks;
     return NS_OK;
 }
-NS_IMETHODIMP calDuration::SetWeeks(PRInt16 aValue)
+NS_IMETHODIMP calDuration::SetWeeks(int16_t aValue)
 {
     if (mImmutable) return NS_ERROR_CALENDAR_IMMUTABLE;
     mDuration.weeks = aValue;
     return NS_OK;
 }
 
-NS_IMETHODIMP calDuration::GetDays(PRInt16 *_retval)
+NS_IMETHODIMP calDuration::GetDays(int16_t *_retval)
 {
-    *_retval = (PRInt16)mDuration.days;
+    *_retval = (int16_t)mDuration.days;
     return NS_OK;
 }
-NS_IMETHODIMP calDuration::SetDays(PRInt16 aValue)
+NS_IMETHODIMP calDuration::SetDays(int16_t aValue)
 {
     if (mImmutable) return NS_ERROR_CALENDAR_IMMUTABLE;
     mDuration.days = aValue;
     return NS_OK;
 }
 
-NS_IMETHODIMP calDuration::GetHours(PRInt16 *_retval)
+NS_IMETHODIMP calDuration::GetHours(int16_t *_retval)
 {
-    *_retval = (PRInt16)mDuration.hours;
+    *_retval = (int16_t)mDuration.hours;
     return NS_OK;
 }
-NS_IMETHODIMP calDuration::SetHours(PRInt16 aValue)
+NS_IMETHODIMP calDuration::SetHours(int16_t aValue)
 {
     if (mImmutable) return NS_ERROR_CALENDAR_IMMUTABLE;
     mDuration.hours = aValue;
     return NS_OK;
 }
 
-NS_IMETHODIMP calDuration::GetMinutes(PRInt16 *_retval)
+NS_IMETHODIMP calDuration::GetMinutes(int16_t *_retval)
 {
-    *_retval = (PRInt16)mDuration.minutes;
+    *_retval = (int16_t)mDuration.minutes;
     return NS_OK;
 }
-NS_IMETHODIMP calDuration::SetMinutes(PRInt16 aValue)
+NS_IMETHODIMP calDuration::SetMinutes(int16_t aValue)
 {
     if (mImmutable) return NS_ERROR_CALENDAR_IMMUTABLE;
     mDuration.minutes = aValue;
     return NS_OK;
 }
 
-NS_IMETHODIMP calDuration::GetSeconds(PRInt16 *_retval)
+NS_IMETHODIMP calDuration::GetSeconds(int16_t *_retval)
 {
-    *_retval = (PRInt16)mDuration.seconds;
+    *_retval = (int16_t)mDuration.seconds;
     return NS_OK;
 }
-NS_IMETHODIMP calDuration::SetSeconds(PRInt16 aValue)
+NS_IMETHODIMP calDuration::SetSeconds(int16_t aValue)
 {
     if (mImmutable) return NS_ERROR_CALENDAR_IMMUTABLE;
     mDuration.seconds = aValue;
@@ -196,21 +162,21 @@ NS_IMETHODIMP calDuration::SetSeconds(PRInt16 aValue)
 }
 
 
-NS_IMETHODIMP calDuration::GetInSeconds(PRInt32 *_retval)
+NS_IMETHODIMP calDuration::GetInSeconds(int32_t *_retval)
 {
-	PRInt32 retval =
-        (((PRInt32)((PRInt16)mDuration.weeks   * SECONDS_PER_WEEK)) + 
-         ((PRInt32)((PRInt16)mDuration.days    * SECONDS_PER_DAY)) +
-         ((PRInt32)((PRInt16)mDuration.hours   * SECONDS_PER_HOUR)) +
-         ((PRInt32)((PRInt16)mDuration.minutes * SECONDS_PER_MINUTE)) +
-         ((PRInt32)((PRInt16)mDuration.seconds)));
+	int32_t retval =
+        (((int32_t)((int16_t)mDuration.weeks   * SECONDS_PER_WEEK)) + 
+         ((int32_t)((int16_t)mDuration.days    * SECONDS_PER_DAY)) +
+         ((int32_t)((int16_t)mDuration.hours   * SECONDS_PER_HOUR)) +
+         ((int32_t)((int16_t)mDuration.minutes * SECONDS_PER_MINUTE)) +
+         ((int32_t)((int16_t)mDuration.seconds)));
     if (mDuration.is_neg)
 		retval=-retval;
     *_retval = retval;
 
     return NS_OK;
 }
-NS_IMETHODIMP calDuration::SetInSeconds(PRInt32 aValue)
+NS_IMETHODIMP calDuration::SetInSeconds(int32_t aValue)
 {
     if (mImmutable) return NS_ERROR_CALENDAR_IMMUTABLE;
 
@@ -273,7 +239,7 @@ calDuration::Normalize()
     if (mImmutable)
         return NS_ERROR_CALENDAR_IMMUTABLE;
 
-    PRInt32 totalInSeconds;
+    int32_t totalInSeconds;
     GetInSeconds(&totalInSeconds);
     SetInSeconds(totalInSeconds);
 
@@ -332,9 +298,9 @@ calDuration::SetIcalString(const nsACString& aIcalString)
 }
 
 NS_IMETHODIMP
-calDuration::Compare(calIDuration *aOther, PRInt32 *aResult)
+calDuration::Compare(calIDuration *aOther, int32_t *aResult)
 {
-    PRInt32 thisInSeconds, otherInSeconds;
+    int32_t thisInSeconds, otherInSeconds;
 
     // cast to void because these calls can't fail
     (void)GetInSeconds(&thisInSeconds);

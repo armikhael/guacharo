@@ -13,6 +13,9 @@
 #else
 #include <time.h>
 #endif
+#if defined(ANDROID) || defined(OS_POSIX)
+#include <unistd.h>
+#endif
 
 #include <limits>
 
@@ -164,7 +167,7 @@ TimeTicks TimeTicks::Now() {
   // With numer and denom = 1 (the expected case), the 64-bit absolute time
   // reported in nanoseconds is enough to last nearly 585 years.
 
-#elif defined(OS_POSIX) && \
+#elif defined(__OpenBSD__) || defined(OS_POSIX) && \
       defined(_POSIX_MONOTONIC_CLOCK) && _POSIX_MONOTONIC_CLOCK >= 0
 
   struct timespec ts;

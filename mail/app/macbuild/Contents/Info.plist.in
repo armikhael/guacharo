@@ -5,17 +5,17 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleExecutable</key>
-	<string>thunderbird-bin</string>
+	<string>thunderbird</string>
 	<key>CFBundleGetInfoString</key>
-	<string>%APP_NAME% %APP_VERSION%</string>
+	<string>%MAC_APP_NAME% %APP_VERSION%</string>
 	<key>CFBundleIconFile</key>
 	<string>thunderbird</string>
 	<key>CFBundleIdentifier</key>
-	<string>org.mozilla.%LOWER_APP_NAME%</string>
+	<string>org.mozilla.%LOWER_MAC_APP_NAME%</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>%APP_NAME%</string>
+	<string>%MAC_APP_NAME%</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -53,17 +53,19 @@
 	</array>
 	<key>NSAppleScriptEnabled</key>
 	<true/>
-	<key>CGDisableCoalescedUpdates</key>
-	<true/>
         <key>LSMinimumSystemVersion</key>
-        <string>10.5.0</string>
+        <string>10.6.0</string>
 	<key>LSMinimumSystemVersionByArchitecture</key>
 	<dict>
 		<key>i386</key>
-		<string>10.5.0</string>
+		<string>10.6.0</string>
 		<key>x86_64</key>
 		<string>10.6.0</string>
         </dict>
+        <key>NSSupportsAutomaticGraphicsSwitching</key>
+        <true/>
+        <key>NSPrincipalClass</key>
+        <string>GeckoNSApplication</string>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>

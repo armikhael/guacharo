@@ -1,40 +1,6 @@
-/* -*- indent-tabs-mode: nil; js-indent-level: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mail folder tree code.
- *
- * The Initial Developer of the Original Code is
- *   Joey Minta <jminta@gmail.com>
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Siddharth Agarwal <sid.bugzilla@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource:///modules/folderUtils.jsm");
 Components.utils.import("resource:///modules/iteratorUtils.jsm");
@@ -193,7 +159,13 @@ let gFolderTreeView = {
 
         sstream.close();
         fstream.close();
-        this._persistOpenMap = JSON.parse(data);
+        try {
+          this._persistOpenMap = JSON.parse(data);
+        } catch (x) {
+          Components.utils.reportError(
+            document.getElementById("bundle_messenger")
+                    .getFormattedString("failedToReadFile", [aJSONFile, x]));
+        }
       }
     }
 
@@ -227,11 +199,14 @@ let gFolderTreeView = {
       let file = Cc["@mozilla.org/file/directory_service;1"]
                     .getService(Ci.nsIProperties).get("ProfD", Ci.nsIFile);
       file.append(aJSONFile);
-      let foStream = Cc["@mozilla.org/network/file-output-stream;1"]
+      let foStream = Cc["@mozilla.org/network/safe-file-output-stream;1"]
                         .createInstance(Ci.nsIFileOutputStream);
 
-      foStream.init(file, 0x02 | 0x08 | 0x20, 0666, 0);
+      foStream.init(file, 0x02 | 0x08 | 0x20, parseInt("0666", 8), 0);
+      // safe-file-output-stream appears to throw an error if it doesn't write everything at once
+      // so we won't worry about looping to deal with partial writes
       foStream.write(data, data.length);
+      foStream.QueryInterface(Ci.nsISafeOutputStream).finish();
       foStream.close();
     }
   },
@@ -600,10 +575,9 @@ let gFolderTreeView = {
       }
       return true;
     }
-    // allow subscribing to feeds by dragging an url to a feed account
-    else if (Array.indexOf(types, "text/x-moz-url") != -1 &&
-             targetFolder.server.type == "rss")
-      return true;
+    // Allow subscribing to feeds by dragging an url to a feed account.
+    else if (targetFolder.server.type == "rss" && dt.mozItemCount == 1)
+      return FeedUtils.getFeedUriFromDataTransfer(dt) ? true : false;
     else if (Array.indexOf(types, "application/x-moz-file") != -1) {
       if (aOrientation != Ci.nsITreeView.DROP_ON)
         return false;
@@ -703,19 +677,16 @@ let gFolderTreeView = {
         }
       }
     }
-    else if (Array.indexOf(types, "text/x-moz-url") != -1) {
-      // This is a potential rss feed to subscribe to
-      // and there's only one, so just get the 0th element.
-      let url = dt.mozGetDataAt("text/x-moz-url", 0);
-      let uri = Cc["@mozilla.org/network/io-service;1"]
-                   .getService(Ci.nsIIOService).newURI(url, null, null);
-      if (!(uri.schemeIs("http") || uri.schemeIs("https")) ||
-             targetFolder.server.type != "rss")
-        return;
 
-      Cc["@mozilla.org/newsblog-feed-downloader;1"]
-         .getService(Ci.nsINewsBlogFeedDownloader)
-         .subscribeToFeed(url, targetFolder, msgWindow);
+    if (targetFolder.server.type == "rss" && count == 1) {
+      // This is a potential rss feed.  A link image as well as link text url
+      // should be handled; try to extract a url from non moz apps as well.
+      let validUri = FeedUtils.getFeedUriFromDataTransfer(dt);
+
+      if (validUri)
+        Cc["@mozilla.org/newsblog-feed-downloader;1"]
+           .getService(Ci.nsINewsBlogFeedDownloader)
+           .subscribeToFeed(validUri.spec, targetFolder, msgWindow);
     }
   },
 
@@ -756,6 +727,7 @@ let gFolderTreeView = {
   getCellText: function ftv_getCellText(aRow, aCol) {
     if (aCol.id == "folderNameCol")
       return this._rowMap[aRow].text;
+    return "";
   },
 
   /**
@@ -921,7 +893,7 @@ let gFolderTreeView = {
 
   _subFoldersWithStringProperty: function ftv_subFoldersWithStringProperty(folder, folders, aFolderName, deep)
   {
-    for each (child in fixIterator(folder.subFolders, Components.interfaces.nsIMsgFolder)) {
+    for each (let child in fixIterator(folder.subFolders, Components.interfaces.nsIMsgFolder)) {
       // if the folder selection is based on a string propery, use that
       if (aFolderName == getSmartFolderName(child)) {
         folders.push(child);
@@ -938,7 +910,7 @@ let gFolderTreeView = {
   _allFoldersWithStringProperty: function ftv_getAllFoldersWithProperty(accounts, aFolderName, deep)
   {
     let folders = [];
-    for each (acct in accounts) {
+    for each (let acct in accounts) {
       let folder = acct.incomingServer.rootFolder;
       this._subFoldersWithStringProperty(folder, folders, aFolderName, deep);
     }
@@ -948,10 +920,10 @@ let gFolderTreeView = {
   _allFoldersWithFlag: function ftv_getAllFolders(accounts, aFolderFlag, deep)
   {
     let folders = [];
-    for each (acct in accounts) {
+    for each (let acct in accounts) {
       let foldersWithFlag = acct.incomingServer.rootFolder.getFoldersWithFlags(aFolderFlag);
       if (foldersWithFlag.length > 0) {
-        for each (folderWithFlag in fixIterator(foldersWithFlag.enumerate(),
+        for each (let folderWithFlag in fixIterator(foldersWithFlag.enumerate(),
                                                 Components.interfaces.nsIMsgFolder)) {
           folders.push(folderWithFlag);
           // Add sub-folders of Sent and Archive to the result.
@@ -1013,13 +985,13 @@ let gFolderTreeView = {
     if (!smartFolder) {
       let searchFolders = gFolderTreeView._allSmartFolders(accounts, flag, folderName, true);
       let searchFolderURIs = "";
-      for each (searchFolder in searchFolders) {
+      for each (let searchFolder in searchFolders) {
         if (searchFolderURIs.length)
           searchFolderURIs += '|';
         searchFolderURIs +=  searchFolder.URI;
       }
       if (!searchFolderURIs.length)
-        return;
+        return null;
       smartFolder = gFolderTreeView._createVFFolder(folderName, smartRootFolder,
                                                     searchFolderURIs, flag);
     }
@@ -1067,7 +1039,10 @@ let gFolderTreeView = {
   {
     let newFolder;
     try {
-      newFolder = parentFolder.addSubfolder(newName);
+      if (parentFolder instanceof(Components.interfaces.nsIMsgLocalMailFolder))
+        newFolder = parentFolder.createLocalSubfolder(newName);
+      else
+        newFolder = parentFolder.addSubfolder(newName);
       newFolder.setFlag(nsMsgFolderFlags.Virtual);
       // provide a way to make the top level folder just a container, not
       // a search folder
@@ -1228,6 +1203,9 @@ let gFolderTreeView = {
         return !(server instanceof Ci.nsIPop3IncomingServer &&
                  server.deferredToAccount);
       });
+
+      // Don't show IM accounts
+      accounts = accounts.filter(function(a) a.incomingServer.type != "im");
 
       function sortAccounts(a, b) {
         if (a.key == acctMgr.defaultAccount.key)
@@ -1576,12 +1554,12 @@ let gFolderTreeView = {
         }
 
         sortFolderItems(smartChildren);
-        for each (smartChild in smartChildren)
+        for each (let smartChild in smartChildren)
           map.push(smartChild);
 
         MailUtils.discoverFolders();
 
-        for each (acct in accounts)
+        for each (let acct in accounts)
           map.push(new ftv_SmartItem(acct.incomingServer.rootFolder));
 
         return map;
@@ -1701,13 +1679,15 @@ let gFolderTreeView = {
 
     let acctMgr = Cc["@mozilla.org/messenger/account-manager;1"]
                      .getService(Ci.nsIMsgAccountManager);
-    for each (let acct in fixIterator(acctMgr.accounts, Ci.nsIMsgAccount)) {
+    for each (let server in fixIterator(acctMgr.allServers, Ci.nsIMsgIncomingServer)) {
       // Skip deferred accounts
-      if (acct.incomingServer instanceof Ci.nsIPop3IncomingServer &&
-          acct.incomingServer.deferredToAccount)
+      if (server instanceof Ci.nsIPop3IncomingServer &&
+          server.deferredToAccount)
         continue;
-      folders.push(acct.incomingServer.rootFolder);
-      this.addSubFolders(acct.incomingServer.rootFolder, folders);
+
+      let rootFolder = server.rootFolder;
+      folders.push(rootFolder);
+      this.addSubFolders(rootFolder, folders);
     }
     return folders;
   },
@@ -2193,32 +2173,17 @@ let gFolderTreeController = {
       return;
     }
 
-    if (folder.flags & nsMsgFolderFlags.Inbox || folder.flags & nsMsgFolderFlags.Trash)
-      return;
+    var canDelete = (folder.isSpecialFolder(nsMsgFolderFlags.Junk, false)) ?
+      CanRenameDeleteJunkMail(folder.URI) : folder.deletable;
 
-    let prefix = "@mozilla.org/messenger/protocol/info;1?type=";
-    let info = Components.classes[prefix + folder.server.type]
-                          .getService(Ci.nsIMsgProtocolInfo);
-
-    // do not allow deletion of special folders on imap accounts
-    let bundle = document.getElementById("bundle_messenger");
-    if ((folder.flags & nsMsgFolderFlags.SentMail || folder.flags & nsMsgFolderFlags.Drafts ||
-         folder.flags & nsMsgFolderFlags.Templates ||
-         ((folder.flags & nsMsgFolderFlags.Junk) && CanRenameDeleteJunkMail(folder))) &&
-        !info.specialFoldersDeletionAllowed) {
-      let specialFolderString = getSpecialFolderString(folder);
-      let errorMessage = bundle.getFormattedString("specialFolderDeletionErr",
-                                                    [specialFolderString]);
-      let errorTitle = bundle.getString("specialFolderDeletionErrTitle");
-      Components.classes["@mozilla.org/embedcomp/prompt-service;1"]
-                         .getService(Ci.nsIPromptService)
-                         .alert(window, errorTitle, errorMessage);
-      return;
-    }
+    if (!canDelete)
+      throw new Error("Can't delete folder: " + folder.name);
 
     if (folder.flags & nsMsgFolderFlags.Virtual) {
-      let confirmation = bundle.getString("confirmSavedSearchDeleteMessage");
-      let title = bundle.getString("confirmSavedSearchTitle");
+      let confirmation = document.getElementById("bundle_messenger")
+                                 .getString("confirmSavedSearchDeleteMessage");
+      let title = document.getElementById("bundle_messenger")
+                          .getString("confirmSavedSearchTitle");
       let IPS = Components.interfaces.nsIPromptService;
       if (Components.classes["@mozilla.org/embedcomp/prompt-service;1"]
             .getService(IPS)
@@ -2312,9 +2277,6 @@ let gFolderTreeController = {
     for (let i = 0; i < folders.length; i++) {
       folders[i].compactAll(null, msgWindow, folders[i].server.type == "imap" ||
                                              folders[i].server.type == "nntp");
-      // Reset thread pane for non-imap folders.
-      if (gDBView && folders[i].server.type != "imap")
-        this._resetThreadPane();
     }
   },
 
@@ -2327,6 +2289,9 @@ let gFolderTreeController = {
    */
   newVirtualFolder: function ftc_newVFolder(aName, aSearchTerms, aParent) {
     let folder = aParent || gFolderTreeView.getSelectedFolders()[0];
+    if (!folder)
+      folder = GetDefaultAccountRootFolder();
+
     let name = folder.prettyName;
     if (aName)
       name += "-" + aName;

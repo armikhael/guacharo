@@ -1,48 +1,15 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* rendering object that goes directly inside the document's scrollbars */
 
 #ifndef nsCanvasFrame_h___
 #define nsCanvasFrame_h___
 
-#include "nsHTMLContainerFrame.h"
+#include "nsContainerFrame.h"
 #include "nsIScrollPositionListener.h"
-#include "nsAbsoluteContainingBlock.h"
 #include "nsDisplayList.h"
 #include "nsGkAtoms.h"
 
@@ -57,15 +24,14 @@ class nsEvent;
  * It only supports having a single child frame which must be an area
  * frame
  */
-class nsCanvasFrame : public nsHTMLContainerFrame,
+class nsCanvasFrame : public nsContainerFrame,
                       public nsIScrollPositionListener
 {
 public:
   nsCanvasFrame(nsStyleContext* aContext)
-  : nsHTMLContainerFrame(aContext),
-    mDoPaintFocus(PR_FALSE),
-    mAddedScrollPositionListener(PR_FALSE),
-    mAbsoluteContainer(nsGkAtoms::absoluteList) {}
+  : nsContainerFrame(aContext),
+    mDoPaintFocus(false),
+    mAddedScrollPositionListener(false) {}
 
   NS_DECL_QUERYFRAME_TARGET(nsCanvasFrame)
   NS_DECL_QUERYFRAME
@@ -74,18 +40,15 @@ public:
 
   virtual void DestroyFrom(nsIFrame* aDestructRoot);
 
-  NS_IMETHOD SetInitialChildList(nsIAtom*        aListName,
+  NS_IMETHOD SetInitialChildList(ChildListID     aListID,
                                  nsFrameList&    aChildList);
-  NS_IMETHOD AppendFrames(nsIAtom*        aListName,
+  NS_IMETHOD AppendFrames(ChildListID     aListID,
                           nsFrameList&    aFrameList);
-  NS_IMETHOD InsertFrames(nsIAtom*        aListName,
+  NS_IMETHOD InsertFrames(ChildListID     aListID,
                           nsIFrame*       aPrevFrame,
                           nsFrameList&    aFrameList);
-  NS_IMETHOD RemoveFrame(nsIAtom*        aListName,
+  NS_IMETHOD RemoveFrame(ChildListID     aListID,
                          nsIFrame*       aOldFrame);
-
-  virtual nsIAtom* GetAdditionalChildListName(PRInt32 aIndex) const;
-  virtual nsFrameList GetChildList(nsIAtom* aListName) const;
 
   virtual nscoord GetMinWidth(nsRenderingContext *aRenderingContext);
   virtual nscoord GetPrefWidth(nsRenderingContext *aRenderingContext);
@@ -93,17 +56,16 @@ public:
                     nsHTMLReflowMetrics&     aDesiredSize,
                     const nsHTMLReflowState& aReflowState,
                     nsReflowStatus&          aStatus);
-  virtual PRBool IsContainingBlock() const { return PR_TRUE; }
-  virtual PRBool IsFrameOfType(PRUint32 aFlags) const
+  virtual bool IsFrameOfType(uint32_t aFlags) const
   {
-    return nsHTMLContainerFrame::IsFrameOfType(aFlags &
+    return nsContainerFrame::IsFrameOfType(aFlags &
              ~(nsIFrame::eCanContainOverflowContainers));
   }
 
   /** SetHasFocus tells the CanvasFrame to draw with focus ring
-   *  @param aHasFocus PR_TRUE to show focus ring, PR_FALSE to hide it
+   *  @param aHasFocus true to show focus ring, false to hide it
    */
-  NS_IMETHOD SetHasFocus(PRBool aHasFocus);
+  NS_IMETHOD SetHasFocus(bool aHasFocus);
 
   NS_IMETHOD BuildDisplayList(nsDisplayListBuilder*   aBuilder,
                               const nsRect&           aDirtyRect,
@@ -124,13 +86,13 @@ public:
 
   virtual nsresult StealFrame(nsPresContext* aPresContext,
                               nsIFrame*      aChild,
-                              PRBool         aForceNormal)
+                              bool           aForceNormal)
   {
     NS_ASSERTION(!aForceNormal, "No-one should be passing this in here");
 
     // nsCanvasFrame keeps overflow container continuations of its child
     // frame in main child list
-    nsresult rv = nsContainerFrame::StealFrame(aPresContext, aChild, PR_TRUE);
+    nsresult rv = nsContainerFrame::StealFrame(aPresContext, aChild, true);
     if (NS_FAILED(rv)) {
       rv = nsContainerFrame::StealFrame(aPresContext, aChild);
     }
@@ -140,19 +102,17 @@ public:
 #ifdef DEBUG
   NS_IMETHOD GetFrameName(nsAString& aResult) const;
 #endif
-  NS_IMETHOD GetContentForEvent(nsPresContext* aPresContext,
-                                nsEvent* aEvent,
+  NS_IMETHOD GetContentForEvent(nsEvent* aEvent,
                                 nsIContent** aContent);
 
   nsRect CanvasArea() const;
 
 protected:
-  virtual PRIntn GetSkipSides() const;
+  virtual int GetSkipSides() const;
 
   // Data members
-  PRPackedBool              mDoPaintFocus;
-  PRPackedBool              mAddedScrollPositionListener;
-  nsAbsoluteContainingBlock mAbsoluteContainer;
+  bool                      mDoPaintFocus;
+  bool                      mAddedScrollPositionListener;
 };
 
 /**
@@ -169,44 +129,38 @@ public:
     mExtraBackgroundColor = NS_RGBA(0,0,0,0);
   }
 
-  virtual PRBool ComputeVisibility(nsDisplayListBuilder* aBuilder,
-                                   nsRegion* aVisibleRegion,
-                                   const nsRect& aAllowVisibleRegionExpansion)
+  virtual bool ComputeVisibility(nsDisplayListBuilder* aBuilder,
+                                 nsRegion* aVisibleRegion,
+                                 const nsRect& aAllowVisibleRegionExpansion)
   {
     return NS_GET_A(mExtraBackgroundColor) > 0 ||
       nsDisplayBackground::ComputeVisibility(aBuilder, aVisibleRegion,
                                              aAllowVisibleRegionExpansion);
   }
   virtual nsRegion GetOpaqueRegion(nsDisplayListBuilder* aBuilder,
-                                   PRBool* aForceTransparentSurface = nsnull)
+                                   bool* aSnap)
   {
-    if (aForceTransparentSurface) {
-      *aForceTransparentSurface = PR_FALSE;
+    if (NS_GET_A(mExtraBackgroundColor) == 255) {
+      return nsRegion(GetBounds(aBuilder, aSnap));
     }
-    if (NS_GET_A(mExtraBackgroundColor) == 255)
-      return nsRegion(GetBounds(aBuilder));
-    return nsDisplayBackground::GetOpaqueRegion(aBuilder);
+    return nsDisplayBackground::GetOpaqueRegion(aBuilder, aSnap);
   }
-  virtual PRBool IsUniform(nsDisplayListBuilder* aBuilder, nscolor* aColor)
+  virtual bool IsUniform(nsDisplayListBuilder* aBuilder, nscolor* aColor)
   {
     nscolor background;
     if (!nsDisplayBackground::IsUniform(aBuilder, &background))
-      return PR_FALSE;
+      return false;
     NS_ASSERTION(background == NS_RGBA(0,0,0,0),
                  "The nsDisplayBackground for a canvas frame doesn't paint "
                  "its background color normally");
     *aColor = mExtraBackgroundColor;
-    return PR_TRUE;
+    return true;
   }
-  virtual nsRect GetBounds(nsDisplayListBuilder* aBuilder)
+  virtual nsRect GetBounds(nsDisplayListBuilder* aBuilder, bool* aSnap)
   {
     nsCanvasFrame* frame = static_cast<nsCanvasFrame*>(mFrame);
-    nsRect r = frame->CanvasArea() + ToReferenceFrame();
-    if (mSnappingEnabled) {
-      nscoord appUnitsPerDevPixel = frame->PresContext()->AppUnitsPerDevPixel();
-      r = r.ToNearestPixels(appUnitsPerDevPixel).ToAppUnits(appUnitsPerDevPixel);
-    }
-    return r;
+    *aSnap = true;
+    return frame->CanvasArea() + ToReferenceFrame();
   }
   virtual void HitTest(nsDisplayListBuilder* aBuilder, const nsRect& aRect,
                        HitTestState* aState, nsTArray<nsIFrame*> *aOutFrames)

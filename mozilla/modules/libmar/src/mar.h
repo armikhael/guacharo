@@ -1,61 +1,42 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim:set ts=2 sw=2 sts=2 et cindent: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Archive code.
- *
- * The Initial Developer of the Original Code is Google Inc.
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Darin Fisher <darin@meer.net>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef MAR_H__
 #define MAR_H__
 
-/* We use NSPR here just to import the definition of PRUint32 */
+/* We use NSPR here just to import the definition of uint32_t */
 #include "prtypes.h"
+#include "mozilla/StandardInteger.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+struct ProductInformationBlock {
+  const char *MARChannelID;
+  const char *productVersion;
+};
 
 /**
  * The MAR item data structure.
  */
 typedef struct MarItem_ {
   struct MarItem_ *next;  /* private field */
-  PRUint32 offset;        /* offset into archive */
-  PRUint32 length;        /* length of data in bytes */
-  PRUint32 flags;         /* contains file mode bits */
+  uint32_t offset;        /* offset into archive */
+  uint32_t length;        /* length of data in bytes */
+  uint32_t flags;         /* contains file mode bits */
   char name[1];           /* file path */
 } MarItem;
+
+#define TABLESIZE 256
+
+struct MarFile_ {
+  FILE *fp;
+  MarItem *item_table[TABLESIZE];
+};
 
 typedef struct MarFile_ MarFile;
 
@@ -64,7 +45,7 @@ typedef struct MarFile_ MarFile;
  * @param mar       The MAR file being visited.
  * @param item      The MAR item being visited.
  * @param data      The data parameter passed by the caller of mar_enum_items.
- * @returns         A non-zero value to stop enumerating.
+ * @return          A non-zero value to stop enumerating.
  */
 typedef int (* MarItemCallback)(MarFile *mar, const MarItem *item, void *data);
 
@@ -72,7 +53,7 @@ typedef int (* MarItemCallback)(MarFile *mar, const MarItem *item, void *data);
  * Open a MAR file for reading.
  * @param path      Specifies the path to the MAR file to open.  This path must
  *                  be compatible with fopen.
- * @returns         NULL if an error occurs.
+ * @return          NULL if an error occurs.
  */
 MarFile *mar_open(const char *path);
 
@@ -90,7 +71,7 @@ void mar_close(MarFile *mar);
  * Find an item in the MAR file by name.
  * @param mar       The MarFile object to query.
  * @param item      The name of the item to query.
- * @returns         A const reference to a MAR item or NULL if not found.
+ * @return          A const reference to a MAR item or NULL if not found.
  */
 const MarItem *mar_find_item(MarFile *mar, const char *item);
 
@@ -100,7 +81,7 @@ const MarItem *mar_find_item(MarFile *mar, const char *item);
  * @param callback  The function to call for each MAR item.
  * @param data      A caller specified value that is passed along to the
  *                  callback function.
- * @returns         Zero if the enumeration ran to completion.  Otherwise, any
+ * @return          0 if the enumeration ran to completion.  Otherwise, any
  *                  non-zero return value from the callback is returned.
  */
 int mar_enum_items(MarFile *mar, MarItemCallback callback, void *data);
@@ -112,7 +93,7 @@ int mar_enum_items(MarFile *mar, MarItemCallback callback, void *data);
  * @param offset    The byte offset relative to the start of the item.
  * @param buf       A pointer to a buffer to copy the data into.
  * @param bufsize   The length of the buffer to copy the data into.
- * @returns         The number of bytes written or a negative value if an
+ * @return          The number of bytes written or a negative value if an
  *                  error occurs.
  */
 int mar_read(MarFile *mar, const MarItem *item, int offset, char *buf,
@@ -125,17 +106,52 @@ int mar_read(MarFile *mar, const MarItem *item, int offset, char *buf,
  * @param numfiles  The number of files to store in the archive.
  * @param files     The list of null-terminated file paths.  Each file
  *                  path must be compatible with fopen.
- * @returns         A non-zero value if an error occurs.
+ * @param infoBlock The information to store in the product information block.
+ * @return          A non-zero value if an error occurs.
  */
-int mar_create(const char *dest, int numfiles, char **files);
+int mar_create(const char *dest, 
+               int numfiles, 
+               char **files, 
+               struct ProductInformationBlock *infoBlock);
 
 /**
  * Extract a MAR file to the current working directory.
  * @param path      The path to the MAR file to extract.  This path must be
  *                  compatible with fopen.
- * @returns         A non-zero value if an error occurs.
+ * @return          A non-zero value if an error occurs.
  */
 int mar_extract(const char *path);
+
+/**
+ * Verifies the embedded signature for the specified mar file.
+ * We do not check that the certificate was issued by any trusted authority. 
+ * We assume it to be self-signed.  We do not check whether the certificate 
+ * is valid for this usage.
+ * 
+ * @param mar            The already opened MAR file.
+ * @param certData       The certificate file data.
+ * @param sizeOfCertData The size of the cert data.
+ * @return 0 on success
+ *         a negative number if there was an error
+ *         a positive number if the signature does not verify
+ */
+#ifdef XP_WIN
+int mar_verify_signatureW(MarFile *mar, 
+                          const char *certData,
+                          uint32_t sizeOfCertData);
+#endif
+
+/** 
+ * Reads the product info block from the MAR file's additional block section.
+ * The caller is responsible for freeing the fields in infoBlock
+ * if the return is successful.
+ *
+ * @param infoBlock Out parameter for where to store the result to
+ * @return 0 on success, -1 on failure
+*/
+int
+mar_read_product_info_block(MarFile *mar, 
+                            struct ProductInformationBlock *infoBlock);
 
 #ifdef __cplusplus
 }

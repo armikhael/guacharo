@@ -1,40 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Sun Microsystems code.
- *
- * The Initial Developer of the Original Code is Sun Microsystems.
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Michael Buettner <michael.buettner@sun.com>
- *   Philipp Kewisch <mozilla@kewis.ch>
- *   Gianfranco Balza <bv1578@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var gStartDate = null;
 var gEndDate = null;
@@ -73,24 +39,6 @@ function onLoad() {
 
     onChangeCalendar(calendar);
 
-    // we need to enforce several layout constraints which can't be modelled
-    // with plain xul and css, at least as far as i know.
-    const kStylesheet = "chrome://calendar/skin/calendar-event-dialog.css";
-    for each (var stylesheet in document.styleSheets) {
-        if (stylesheet.href == kStylesheet) {
-            // make the dummy-spacer #1 [top] the same height as the timebar
-            var timebar = document.getElementById("timebar");
-            stylesheet.insertRule(
-                ".attendee-spacer-top { height: "
-                    + timebar.boxObject.height+"px; }", 0);
-            // make the dummy-spacer #2 [bottom] the same height as the scrollbar
-            var scrollbar = document.getElementById("horizontal-scrollbar");
-            stylesheet.insertRule(
-                ".attendee-spacer-bottom { height: "
-                    + scrollbar.boxObject.height+"px; }", 0);
-            break;
-        }
-    }
 
     let zoom = document.getElementById("zoom-menulist");
     let zoomOut = document.getElementById("zoom-out-button");
@@ -123,6 +71,25 @@ function onLoad() {
 
     updateButtons();
 
+    // we need to enforce several layout constraints which can't be modelled
+    // with plain xul and css, at least as far as i know.
+    const kStylesheet = "chrome://calendar/skin/calendar-event-dialog.css";
+    for each (var stylesheet in document.styleSheets) {
+        if (stylesheet.href == kStylesheet) {
+            // make the dummy-spacer #1 [top] the same height as the timebar
+            var timebar = document.getElementById("timebar");
+            stylesheet.insertRule(
+                ".attendee-spacer-top { height: "
+                    + timebar.boxObject.height+"px; }", 0);
+            // make the dummy-spacer #2 [bottom] the same height as the scrollbar
+            var scrollbar = document.getElementById("horizontal-scrollbar");
+            stylesheet.insertRule(
+                ".attendee-spacer-bottom { height: "
+                    + scrollbar.boxObject.height+"px; }", 0);
+            break;
+        }
+    }
+
     // attach an observer to get notified of changes
     // that are relevant to this dialog.
     var prefObserver = {
@@ -137,7 +104,7 @@ function onLoad() {
         }
     }
     var pb2 = Components.classes["@mozilla.org/preferences-service;1"].
-              getService(Components.interfaces.nsIPrefBranch2);
+              getService(Components.interfaces.nsIPrefBranch);
     pb2.addObserver("calendar.", prefObserver, false);
     window.addEventListener("unload",
         function() {
@@ -364,23 +331,24 @@ function updateStartTime() {
         return;
     }
 
-    var startWidgetId = "event-starttime";
-    var endWidgetId = "event-endtime";
+    let startWidgetId = "event-starttime";
+    let endWidgetId = "event-endtime";
 
-    var startWidget = document.getElementById(startWidgetId);
-    var endWidget = document.getElementById(endWidgetId);
+    let startWidget = document.getElementById(startWidgetId);
+    let endWidget = document.getElementById(endWidgetId);
 
     // jsDate is always in OS timezone, thus we create a calIDateTime
     // object from the jsDate representation and simply set the new
     // timezone instead of converting.
-    var start = jsDateToDateTime(startWidget.value,
-                                 gDisplayTimezone ? gStartTimezone : calendarDefaultTimezone());
+    let timezone = gDisplayTimezone ? gStartTimezone : calendarDefaultTimezone();
+    let start = cal.jsDateToDateTime(startWidget.value, timezone);
+                                    
     gStartDate = start.clone();
     start.addDuration(gDuration);
     gEndDate = start.getInTimezone(gEndTimezone);
 
-    var allDayElement = document.getElementById("all-day");
-    var allDay = allDayElement.getAttribute("checked") == "true";
+    let allDayElement = document.getElementById("all-day");
+    let allDay = allDayElement.getAttribute("checked") == "true";
     if (allDay) {
         gStartDate.isDate = true;
         gEndDate.isDate = true;
@@ -407,7 +375,7 @@ function updateEndTime() {
     var saveEndTime = gEndDate;
     var kDefaultTimezone = calendarDefaultTimezone();
 
-    gStartDate = jsDateToDateTime(startWidget.value,
+    gStartDate = cal.jsDateToDateTime(startWidget.value,
                                   gDisplayTimezone ? gStartTimezone : calendarDefaultTimezone());
 
     var timezone = gEndTimezone;
@@ -416,8 +384,8 @@ function updateEndTime() {
         !compareObjects(gStartTimezone, gEndTimezone)) {
         timezone = gStartTimezone;
     }
-    gEndDate = jsDateToDateTime(endWidget.value,
-                                gDisplayTimezone ? timezone : kDefaultTimezone);
+    gEndDate = cal.jsDateToDateTime(endWidget.value,
+                                    gDisplayTimezone ? timezone : kDefaultTimezone);
 
     var allDayElement = document.getElementById("all-day");
     var allDay = allDayElement.getAttribute("checked") == "true";
@@ -744,36 +712,6 @@ function onPreviousSlot() {
         var grid = document.getElementById("freebusy-grid");
         grid.forceRefresh();
     }
-}
-
-/**
- * Handler function called to zoom out (minus button)
- */
-function onMinus() {
-    var timebar = document.getElementById("timebar");
-    var ratio = timebar.scroll;
-    ratio -= timebar.step;
-    if (ratio <= 0.0) {
-        ratio = 0.0;
-    }
-    var scrollbar = document.getElementById("horizontal-scrollbar");
-    var maxpos = scrollbar.getAttribute("maxpos");
-    scrollbar.setAttribute("curpos", ratio * maxpos);
-}
-
-/**
- * Handler function called to zoom in (plus button)
- */
-function onPlus() {
-    var timebar = document.getElementById("timebar");
-    var ratio = timebar.scroll;
-    ratio += timebar.step;
-    if (ratio >= 1.0) {
-        ratio = 1.0;
-    }
-    var scrollbar = document.getElementById("horizontal-scrollbar");
-    var maxpos = scrollbar.getAttribute("maxpos");
-    scrollbar.setAttribute("curpos", ratio * maxpos);
 }
 
 /**

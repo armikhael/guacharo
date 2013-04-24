@@ -1,42 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * vim: sw=4 ts=4 sts=4 et filetype=javascript
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla code.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *    Boris Zbarsky <bzbarsky@mit.edu> (original author)
- *    Shawn Wilsher <me@shawnwilsher.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 let EXPORTED_SYMBOLS = [
   "NetUtil",
@@ -274,6 +240,12 @@ const NetUtil = {
      *        The input stream to read from.
      * @param aCount
      *        The number of bytes to read from the stream.
+     * @param aOptions [optional]
+     *        charset
+     *          The character encoding of stream data.
+     *        replacement
+     *          The character to replace unknown byte sequences.
+     *          If unset, it causes an exceptions to be thrown.
      *
      * @return the bytes from the input stream in string form.
      *
@@ -282,9 +254,11 @@ const NetUtil = {
      *         block the calling thread (non-blocking mode only).
      * @throws NS_ERROR_FAILURE if there are not enough bytes available to read
      *         aCount amount of data.
+     * @throws NS_ERROR_ILLEGAL_INPUT if aInputStream has invalid sequences
      */
     readInputStreamToString: function NetUtil_readInputStreamToString(aInputStream,
-                                                                      aCount)
+                                                                      aCount,
+                                                                      aOptions)
     {
         if (!(aInputStream instanceof Ci.nsIInputStream)) {
             let exception = new Components.Exception(
@@ -302,6 +276,33 @@ const NetUtil = {
                 Components.stack.caller
             );
             throw exception;
+        }
+
+        if (aOptions && "charset" in aOptions) {
+          let cis = Cc["@mozilla.org/intl/converter-input-stream;1"].
+                    createInstance(Ci.nsIConverterInputStream);
+          try {
+            // When replacement is set, the character that is unknown sequence 
+            // replaces with aOptions.replacement character.
+            if (!("replacement" in aOptions)) {
+              // aOptions.replacement isn't set.
+              // If input stream has unknown sequences for aOptions.charset,
+              // throw NS_ERROR_ILLEGAL_INPUT.
+              aOptions.replacement = 0;
+            }
+
+            cis.init(aInputStream, aOptions.charset, aCount,
+                     aOptions.replacement);
+            let str = {};
+            cis.readString(-1, str);
+            cis.close();
+            return str.value;
+          }
+          catch (e) {
+            // Adjust the stack so it throws at the caller's location.
+            throw new Components.Exception(e.message, e.result,
+                                           Components.stack.caller, e.data);
+          }
         }
 
         let sis = Cc["@mozilla.org/scriptableinputstream;1"].

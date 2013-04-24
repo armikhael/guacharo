@@ -1,46 +1,12 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Olli Pettay.
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Olli Pettay <Olli.Pettay@helsinki.fi> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsIDOMMutationEvent.h"
 #include "nsXMLEventsManager.h"
 #include "nsGkAtoms.h"
 #include "nsIDOMElement.h"
-#include "nsIDOMDocument.h"
 #include "nsIDOMEventTarget.h"
 #include "nsNetUtil.h"
 #include "nsIURL.h"
@@ -51,14 +17,14 @@
 
 using namespace mozilla::dom;
 
-PRBool nsXMLEventsListener::InitXMLEventsListener(nsIDocument * aDocument,
+bool nsXMLEventsListener::InitXMLEventsListener(nsIDocument * aDocument,
                                                   nsXMLEventsManager * aManager,
                                                   nsIContent * aContent)
 {
   nsresult rv;
-  PRInt32 nameSpaceID;
+  int32_t nameSpaceID;
   if (aContent->GetDocument() != aDocument)
-    return PR_FALSE;
+    return false;
   if (aContent->NodeInfo()->Equals(nsGkAtoms::listener,
                                    kNameSpaceID_XMLEvents))
     nameSpaceID = kNameSpaceID_None;
@@ -67,21 +33,21 @@ PRBool nsXMLEventsListener::InitXMLEventsListener(nsIDocument * aDocument,
   nsAutoString eventType;
   aContent->GetAttr(nameSpaceID, nsGkAtoms::event, eventType);
   if (eventType.IsEmpty())
-    return PR_FALSE;
+    return false;
   nsAutoString handlerURIStr;
-  PRBool hasHandlerURI = PR_FALSE;
-  nsIContent *handler = nsnull;
+  bool hasHandlerURI = false;
+  nsIContent *handler = nullptr;
   nsAutoString observerID;
   nsAutoString targetIdref;
   
   if (aContent->GetAttr(nameSpaceID, nsGkAtoms::handler, handlerURIStr)) {
-    hasHandlerURI = PR_TRUE;
+    hasHandlerURI = true;
     nsCAutoString handlerRef;
     nsCOMPtr<nsIURI> handlerURI;
-    PRBool equals = PR_FALSE;
+    bool equals = false;
     nsIURI *docURI = aDocument->GetDocumentURI();
     nsIURI *baseURI = aDocument->GetDocBaseURI();
-    rv = NS_NewURI( getter_AddRefs(handlerURI), handlerURIStr, nsnull, baseURI);
+    rv = NS_NewURI( getter_AddRefs(handlerURI), handlerURIStr, nullptr, baseURI);
     if (NS_SUCCEEDED(rv)) {
       handlerURI->GetRef(handlerRef);
       // We support only XML Events Basic.
@@ -94,26 +60,26 @@ PRBool nsXMLEventsListener::InitXMLEventsListener(nsIDocument * aDocument,
   else
     handler = aContent;
   if (!handler)
-    return PR_FALSE;
+    return false;
 
   aContent->GetAttr(nameSpaceID, nsGkAtoms::target, targetIdref);
 
-  PRBool hasObserver = 
+  bool hasObserver = 
     aContent->GetAttr(nameSpaceID, nsGkAtoms::observer, observerID);
 
-  PRBool capture =
+  bool capture =
     aContent->AttrValueIs(nameSpaceID, nsGkAtoms::phase,
                           nsGkAtoms::capture, eCaseMatters);
 
-  PRBool stopPropagation = 
+  bool stopPropagation = 
     aContent->AttrValueIs(nameSpaceID, nsGkAtoms::propagate,
                           nsGkAtoms::stop, eCaseMatters);
 
-  PRBool cancelDefault = 
+  bool cancelDefault = 
     aContent->AttrValueIs(nameSpaceID, nsGkAtoms::defaultAction,
                           nsGkAtoms::cancel, eCaseMatters);
 
-  nsIContent *observer = nsnull;
+  nsIContent *observer = nullptr;
   if (!hasObserver) {
     if (!hasHandlerURI) //Parent should be the observer
       observer = aContent->GetParent();
@@ -140,13 +106,13 @@ PRBool nsXMLEventsListener::InitXMLEventsListener(nsIDocument * aDocument,
         aManager->RemoveXMLEventsContent(aContent);
         aManager->RemoveListener(aContent);
         aManager->AddListener(aContent, eli);
-        return PR_TRUE;
+        return true;
       }
       else
         delete eli;
     }
   }
-  return PR_FALSE;
+  return false;
 }
 
 nsXMLEventsListener::nsXMLEventsListener(nsXMLEventsManager * aManager,
@@ -154,9 +120,9 @@ nsXMLEventsListener::nsXMLEventsListener(nsXMLEventsManager * aManager,
                                          nsIContent * aObserver,
                                          nsIContent * aHandler,
                                          const nsAString& aEvent,
-                                         PRBool aPhase,
-                                         PRBool aStopPropagation,
-                                         PRBool aCancelDefault,
+                                         bool aPhase,
+                                         bool aStopPropagation,
+                                         bool aCancelDefault,
                                          const nsAString& aTarget)
  : mManager(aManager),
    mElement(aElement),
@@ -181,23 +147,23 @@ void nsXMLEventsListener::Unregister()
   if (target) {
     target->RemoveEventListener(mEvent, this, mPhase);
   }
-  mObserver = nsnull;
-  mHandler = nsnull;
+  mObserver = nullptr;
+  mHandler = nullptr;
 }
 
 void nsXMLEventsListener::SetIncomplete()
 {
   Unregister();
   mManager->AddXMLEventsContent(mElement);
-  mElement = nsnull;
+  mElement = nullptr;
 }
 
-PRBool nsXMLEventsListener::ObserverEquals(nsIContent * aTarget)
+bool nsXMLEventsListener::ObserverEquals(nsIContent * aTarget)
 {
   return aTarget == mObserver;
 }
 
-PRBool nsXMLEventsListener::HandlerEquals(nsIContent * aTarget)
+bool nsXMLEventsListener::HandlerEquals(nsIContent * aTarget)
 {
   return aTarget == mHandler;
 }
@@ -208,15 +174,15 @@ nsXMLEventsListener::HandleEvent(nsIDOMEvent* aEvent)
 {
   if (!aEvent) 
     return NS_ERROR_INVALID_ARG;
-  PRBool targetMatched = PR_TRUE;
+  bool targetMatched = true;
   nsCOMPtr<nsIDOMEvent> event(aEvent);
   if (mTarget) {
-    targetMatched = PR_FALSE;
+    targetMatched = false;
     nsCOMPtr<nsIDOMEventTarget> target;
     aEvent->GetTarget(getter_AddRefs(target));
     nsCOMPtr<nsIContent> targetEl(do_QueryInterface(target));
     if (targetEl && targetEl->GetID() == mTarget) 
-        targetMatched = PR_TRUE;
+        targetMatched = true;
   }
   if (!targetMatched)
     return NS_OK;
@@ -289,16 +255,16 @@ void nsXMLEventsManager::AddListener(nsIContent * aContent,
   mListeners.Put(aContent, aListener);
 }
 
-PRBool nsXMLEventsManager::RemoveListener(nsIContent * aContent)
+bool nsXMLEventsManager::RemoveListener(nsIContent * aContent)
 {
   nsCOMPtr<nsXMLEventsListener> listener;
   mListeners.Get(aContent, getter_AddRefs(listener));
   if (listener) {
     listener->Unregister();
     mListeners.Remove(aContent);
-    return PR_TRUE;
+    return true;
   }
-  return PR_FALSE;
+  return false;
 }
 
 void nsXMLEventsManager::AddListeners(nsIDocument* aDocument)
@@ -332,9 +298,9 @@ nsXMLEventsManager::EndLoad(nsIDocument* aDocument)
 void
 nsXMLEventsManager::AttributeChanged(nsIDocument* aDocument,
                                      Element* aElement,
-                                     PRInt32 aNameSpaceID,
+                                     int32_t aNameSpaceID,
                                      nsIAtom* aAttribute,
-                                     PRInt32 aModType)
+                                     int32_t aModType)
 {
   nsCOMPtr<nsIMutationObserver> kungFuDeathGrip(this);
 
@@ -378,7 +344,7 @@ void
 nsXMLEventsManager::ContentAppended(nsIDocument* aDocument,
                                     nsIContent* aContainer,
                                     nsIContent* aFirstNewContent,
-                                    PRInt32 aNewIndexInContainer)
+                                    int32_t aNewIndexInContainer)
 {
   AddListeners(aDocument);
 }
@@ -387,7 +353,7 @@ void
 nsXMLEventsManager::ContentInserted(nsIDocument* aDocument,
                                     nsIContent* aContainer,
                                     nsIContent* aChild,
-                                    PRInt32 aIndexInContainer)
+                                    int32_t aIndexInContainer)
 {
   AddListeners(aDocument);
 }
@@ -396,7 +362,7 @@ void
 nsXMLEventsManager::ContentRemoved(nsIDocument* aDocument,
                                    nsIContent* aContainer,
                                    nsIContent* aChild,
-                                   PRInt32 aIndexInContainer,
+                                   int32_t aIndexInContainer,
                                    nsIContent* aPreviousSibling)
 {
   if (!aChild || !aChild->IsElement())
@@ -416,8 +382,8 @@ nsXMLEventsManager::ContentRemoved(nsIDocument* aDocument,
     AddXMLEventsContent(aChild);
   }
 
-  PRUint32 count = aChild->GetChildCount();
-  for (PRUint32 i = 0; i < count; ++i) {
+  uint32_t count = aChild->GetChildCount();
+  for (uint32_t i = 0; i < count; ++i) {
     ContentRemoved(aDocument, aChild, aChild->GetChildAt(i), i, aChild->GetPreviousSibling());
   }
 }

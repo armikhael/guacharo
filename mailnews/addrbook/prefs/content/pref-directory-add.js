@@ -1,7 +1,12 @@
 /* -*- Mode: Java; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+Components.utils.import("resource://gre/modules/Services.jsm");
 Components.utils.import("resource:///modules/mailServices.js");
 
-var gPrefInt = null;
 var gCurrentDirectory = null;
 var gReplicationBundle = null;
 var gReplicationService =
@@ -28,8 +33,6 @@ var ldapOfflineObserver = {
 
 function Startup()
 {
-  gPrefInt = Components.classes["@mozilla.org/preferences-service;1"]
-    .getService(Components.interfaces.nsIPrefBranch);
   gReplicationBundle = document.getElementById("bundle_replication");
 
   document.getElementById("download").label =
@@ -48,19 +51,14 @@ function Startup()
 
     // Only set up the download button for online/offline status toggling
     // if the pref isn't locked to disable the button.
-    if (!gPrefInt.prefIsLocked(gCurrentDirectory.dirPrefId +
-                               ".disable_button_download")) {
+    if (!Services.prefs.prefIsLocked(gCurrentDirectory.dirPrefId +
+                                     ".disable_button_download")) {
       // Now connect to the offline/online observer
-      var observerService = Components.classes["@mozilla.org/observer-service;1"]
-                                      .getService(Components.interfaces.nsIObserverService);
-      observerService.addObserver(ldapOfflineObserver,
-                                  "network:offline-status-changed", false);
+      Services.obs.addObserver(ldapOfflineObserver,
+                               "network:offline-status-changed", false);
 
-      // Now set the initial offline/online state.
-      var ioService = Components.classes["@mozilla.org/network/io-service;1"]
-                                .getService(Components.interfaces.nsIIOService);
-      // And update the state
-      setDownloadOfflineOnlineState(ioService.offline);
+      // Now set the initial offline/online state and update the state
+      setDownloadOfflineOnlineState(Services.io.offline);
     }
   } else {
     fillDefaultSettings();
@@ -72,13 +70,11 @@ function onUnload()
 {
   if ("arguments" in window && 
       window.arguments[0] &&
-      !gPrefInt.prefIsLocked(gCurrentDirectory.dirPrefId +
-                             ".disable_button_download")) {
+      !Services.prefs.prefIsLocked(gCurrentDirectory.dirPrefId +
+                                   ".disable_button_download")) {
     // Remove the observer that we put in on dialog startup
-    var observerService = Components.classes["@mozilla.org/observer-service;1"]
-                                    .getService(Components.interfaces.nsIObserverService);
-    observerService.removeObserver(ldapOfflineObserver,
-                                   "network:offline-status-changed");
+    Services.obs.removeObserver(ldapOfflineObserver,
+                                "network:offline-status-changed");
   }
 }
 
@@ -107,7 +103,7 @@ var progressListener = {
     gProgressText.value = gReplicationBundle.getFormattedString("currentCount",
                                                                 [aCurSelfProgress]);
   },
-  onLocationChange: function(aWebProgress, aRequest, aLocation)
+  onLocationChange: function(aWebProgress, aRequest, aLocation, aFlags)
   {
   },
   onStatusChange: function(aWebProgress, aRequest, aStatus, aMessage)
@@ -235,14 +231,14 @@ function fillSettings()
 
 function DisableElementIfPrefIsLocked(aPrefName, aElementId)
 {
-  if (gPrefInt.prefIsLocked(aPrefName))
+  if (Services.prefs.prefIsLocked(aPrefName))
     document.getElementById(aElementId).setAttribute('disabled', true);
 }
 
 // disables all the text fields corresponding to the .uri pref.
 function DisableUriFields(aPrefName)
 {
-  if (gPrefInt.prefIsLocked(aPrefName)) {
+  if (Services.prefs.prefIsLocked(aPrefName)) {
     var lockedElements = document.getElementsByAttribute("disableiflocked", "true");
     for (var i=0; i<lockedElements.length; i++)
       lockedElements[i].setAttribute('disabled', 'true');
@@ -319,12 +315,10 @@ function onAccept()
     if (!errorValue) {
       // XXX Due to the LDAP c-sdk pass a dummy url to the IO service, then
       // update the parts (bug 473351).
-      var ldapUrl = Components.classes["@mozilla.org/network/io-service;1"]
-        .getService(Components.interfaces.nsIIOService)
-        .newURI((secure.checked ? "ldaps://" : "ldap://") + "localhost/dc=???",
-                null, null)
+      let ldapUrl = Services.io.newURI(
+        (secure.checked ? "ldaps://" : "ldap://") + "localhost/dc=???", null, null)
         .QueryInterface(Components.interfaces.nsILDAPURL);
-      
+
       ldapUrl.host = hostname;
       ldapUrl.port = port ? port :
                             (secure.checked ? kDefaultSecureLDAPPort :
@@ -369,13 +363,9 @@ function onAccept()
     } else {
       var addressBookBundle = document.getElementById("bundle_addressBook");
 
-      var promptService = Components.
-                          classes["@mozilla.org/embedcomp/prompt-service;1"].
-                          getService(Components.interfaces.nsIPromptService);
-
-      promptService.alert(window,
-                          document.title,
-                          addressBookBundle.getString(errorValue));
+      Services.prompt.alert(window,
+                            document.title,
+                            addressBookBundle.getString(errorValue));
       return false;
     }
   } catch (outer) {

@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Eric Ballet Baz BT Global Services / Etat francais Ministere de la Defense
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"
 
@@ -231,7 +198,7 @@ nsresult nsMailtoUrl::ParseMailtoUrl(char * searchPart)
     if (mimeConverter)
     {
       if (NS_SUCCEEDED(mimeConverter->DecodeMimeHeaderToCharPtr(
-                           m_toPart.get(), "UTF-8", PR_FALSE, PR_TRUE,
+                           m_toPart.get(), "UTF-8", false, true,
                            &decodedString)) && decodedString)
         m_toPart.Adopt(decodedString);
     }
@@ -242,7 +209,7 @@ nsresult nsMailtoUrl::ParseMailtoUrl(char * searchPart)
     if (mimeConverter)
     {
       if (NS_SUCCEEDED(mimeConverter->DecodeMimeHeaderToCharPtr(
-                           m_ccPart.get(), "UTF-8", PR_FALSE, PR_TRUE,
+                           m_ccPart.get(), "UTF-8", false, true,
                            &decodedString)) && decodedString)
         m_ccPart.Adopt(decodedString);
     }
@@ -253,7 +220,7 @@ nsresult nsMailtoUrl::ParseMailtoUrl(char * searchPart)
     if (mimeConverter)
     {
       if (NS_SUCCEEDED(mimeConverter->DecodeMimeHeaderToCharPtr(
-                           m_bccPart.get(),"UTF-8", PR_FALSE, PR_TRUE,
+                           m_bccPart.get(),"UTF-8", false, true,
                            &decodedString)) && decodedString)
         m_bccPart.Adopt(decodedString);
     }
@@ -264,7 +231,7 @@ nsresult nsMailtoUrl::ParseMailtoUrl(char * searchPart)
     if (mimeConverter)
     {
       if (NS_SUCCEEDED(mimeConverter->DecodeMimeHeaderToCharPtr(
-                           m_subjectPart.get(),"UTF-8", PR_FALSE, PR_TRUE,
+                           m_subjectPart.get(),"UTF-8", false, true,
                            &decodedString)) && decodedString)
         m_subjectPart.Adopt(decodedString);
     }
@@ -275,7 +242,7 @@ nsresult nsMailtoUrl::ParseMailtoUrl(char * searchPart)
     if (mimeConverter)
     {
       if (NS_SUCCEEDED(mimeConverter->DecodeMimeHeaderToCharPtr(
-                         m_newsgroupPart.get(), "UTF-8", PR_FALSE, PR_TRUE,
+                         m_newsgroupPart.get(), "UTF-8", false, true,
                          &decodedString)) && decodedString)
         m_newsgroupPart.Adopt(decodedString);
     }
@@ -287,7 +254,7 @@ nsresult nsMailtoUrl::ParseMailtoUrl(char * searchPart)
     if (mimeConverter)
     {
       if (NS_SUCCEEDED(mimeConverter->DecodeMimeHeaderToCharPtr(
-                         m_referencePart.get(), "UTF-8", PR_FALSE, PR_TRUE,
+                         m_referencePart.get(), "UTF-8", false, true,
                          &decodedString)) && decodedString)
         m_referencePart.Adopt(decodedString);
     }
@@ -302,7 +269,7 @@ nsresult nsMailtoUrl::ParseMailtoUrl(char * searchPart)
     if (mimeConverter)
     {
       if (NS_SUCCEEDED(mimeConverter->DecodeMimeHeaderToCharPtr(
-                         m_newsHostPart.get(), "UTF-8", PR_FALSE, PR_TRUE,
+                         m_newsHostPart.get(), "UTF-8", false, true,
                          &decodedString)) && decodedString)
         m_newsHostPart.Adopt(decodedString);
     }
@@ -313,7 +280,7 @@ nsresult nsMailtoUrl::ParseMailtoUrl(char * searchPart)
     if (mimeConverter)
     {
       if (NS_SUCCEEDED(mimeConverter->DecodeMimeHeaderToCharPtr(
-                         m_followUpToPart.get(), "UTF-8", PR_FALSE, PR_TRUE,
+                         m_followUpToPart.get(), "UTF-8", false, true,
                          &decodedString)) && decodedString)
         m_followUpToPart.Adopt(decodedString);
     }
@@ -324,7 +291,7 @@ nsresult nsMailtoUrl::ParseMailtoUrl(char * searchPart)
     if (mimeConverter)
     {
       if (NS_SUCCEEDED(mimeConverter->DecodeMimeHeaderToCharPtr(
-                         m_fromPart.get(), "UTF-8", PR_FALSE, PR_TRUE,
+                         m_fromPart.get(), "UTF-8", false, true,
                          &decodedString)) && decodedString)
         m_fromPart.Adopt(decodedString);
     }
@@ -335,7 +302,7 @@ nsresult nsMailtoUrl::ParseMailtoUrl(char * searchPart)
     if (mimeConverter)
     {
       if (NS_SUCCEEDED(mimeConverter->DecodeMimeHeaderToCharPtr(
-                         m_organizationPart.get(), "UTF-8", PR_FALSE, PR_TRUE,
+                         m_organizationPart.get(), "UTF-8", false, true,
                          &decodedString)) && decodedString)
         m_organizationPart.Adopt(decodedString);
     }
@@ -346,7 +313,7 @@ nsresult nsMailtoUrl::ParseMailtoUrl(char * searchPart)
     if (mimeConverter)
     {
       if (NS_SUCCEEDED(mimeConverter->DecodeMimeHeaderToCharPtr(
-                         m_replyToPart.get(), "UTF-8", PR_FALSE, PR_TRUE,
+                         m_replyToPart.get(), "UTF-8", false, true,
                          &decodedString)) && decodedString)
         m_replyToPart.Adopt(decodedString);
     }
@@ -357,7 +324,7 @@ nsresult nsMailtoUrl::ParseMailtoUrl(char * searchPart)
     if (mimeConverter)
     {
       if (NS_SUCCEEDED(mimeConverter->DecodeMimeHeaderToCharPtr(
-                         m_priorityPart.get(), "UTF-8", PR_FALSE, PR_TRUE,
+                         m_priorityPart.get(), "UTF-8", false, true,
                          &decodedString)) && decodedString)
         m_priorityPart.Adopt(decodedString);
     }
@@ -371,7 +338,7 @@ nsresult nsMailtoUrl::ParseMailtoUrl(char * searchPart)
     if (mimeConverter)
     {
       if (NS_SUCCEEDED(mimeConverter->DecodeMimeHeaderToCharPtr(
-                         inReplyToPart.get(), "UTF-8", PR_FALSE, PR_TRUE,
+                         inReplyToPart.get(), "UTF-8", false, true,
                          &decodedString)) && decodedString)
         inReplyToPart.Adopt(decodedString);
     }
@@ -390,7 +357,7 @@ nsresult nsMailtoUrl::ParseMailtoUrl(char * searchPart)
     {
       // References is set. Add the In-Reply-To as last header unless it's
       // set as last reference already.
-      PRInt32 lastRefStart = m_referencePart.RFindChar('<');
+      int32_t lastRefStart = m_referencePart.RFindChar('<');
       nsCAutoString lastReference;
       if (lastRefStart != -1)
         lastReference = StringTail(m_referencePart, lastRefStart);
@@ -409,7 +376,8 @@ nsresult nsMailtoUrl::ParseMailtoUrl(char * searchPart)
 
 NS_IMETHODIMP nsMailtoUrl::SetSpec(const nsACString &aSpec)
 {
-  m_baseURL->SetSpec(aSpec);
+  nsresult rv = m_baseURL->SetSpec(aSpec);
+  NS_ENSURE_SUCCESS(rv, rv);
   return ParseUrl();
 }
 
@@ -428,18 +396,16 @@ nsresult nsMailtoUrl::CleanupMailtoState()
     m_organizationPart = "";
     m_replyToPart = "";
     m_priorityPart = "";
-	return NS_OK;
+    return NS_OK;
 }
 
 nsresult nsMailtoUrl::ParseUrl()
 {
-  nsresult rv = NS_OK;
-
   // we can get the path from the simple url.....
   nsCString escapedPath;
   m_baseURL->GetPath(escapedPath);
 
-  PRInt32 startOfSearchPart = escapedPath.FindChar('?');
+  int32_t startOfSearchPart = escapedPath.FindChar('?');
   if (startOfSearchPart >= 0)
   {
     // now parse out the search field...
@@ -459,7 +425,7 @@ nsresult nsMailtoUrl::ParseUrl()
     MsgUnescapeString(escapedPath, 0, m_toPart);
   }
 
-  return rv;
+  return NS_OK;
 }
 
 NS_IMETHODIMP
@@ -606,12 +572,12 @@ NS_IMETHODIMP nsMailtoUrl::SetHost(const nsACString &aHost)
 	return ParseUrl();
 }
 
-NS_IMETHODIMP nsMailtoUrl::GetPort(PRInt32 *aPort)
+NS_IMETHODIMP nsMailtoUrl::GetPort(int32_t *aPort)
 {
 	return m_baseURL->GetPort(aPort);
 }
 
-NS_IMETHODIMP nsMailtoUrl::SetPort(PRInt32 aPort)
+NS_IMETHODIMP nsMailtoUrl::SetPort(int32_t aPort)
 {
 	m_baseURL->SetPort(aPort);
 	return ParseUrl();
@@ -643,12 +609,12 @@ NS_IMETHODIMP nsMailtoUrl::GetOriginCharset(nsACString &aOriginCharset)
     return m_baseURL->GetOriginCharset(aOriginCharset);
 }
 
-NS_IMETHODIMP nsMailtoUrl::SchemeIs(const char *aScheme, PRBool *_retval)
+NS_IMETHODIMP nsMailtoUrl::SchemeIs(const char *aScheme, bool *_retval)
 {
 	return m_baseURL->SchemeIs(aScheme, _retval);
 }
 
-NS_IMETHODIMP nsMailtoUrl::Equals(nsIURI *other, PRBool *_retval)
+NS_IMETHODIMP nsMailtoUrl::Equals(nsIURI *other, bool *_retval)
 {
   // The passed-in URI might be an nsMailtoUrl. Pass our inner URL to its
   // Equals method. The other nsMailtoUrl will then pass its inner URL to
@@ -665,8 +631,7 @@ NS_IMETHODIMP nsMailtoUrl::Clone(nsIURI **_retval)
 
   nsRefPtr<nsMailtoUrl> clone = new nsMailtoUrl();
 
-  if (!clone)
-    return NS_ERROR_OUT_OF_MEMORY;
+  NS_ENSURE_TRUE(clone, NS_ERROR_OUT_OF_MEMORY);
 
   nsresult rv = m_baseURL->Clone(getter_AddRefs(clone->m_baseURL));
   NS_ENSURE_SUCCESS(rv, rv);
@@ -674,11 +639,11 @@ NS_IMETHODIMP nsMailtoUrl::Clone(nsIURI **_retval)
   clone->ParseUrl();
   *_retval = clone.forget().get();
   return NS_OK;
-}	
+}
 
-NS_IMETHODIMP nsMailtoUrl::Resolve(const nsACString &relativePath, nsACString &result) 
+NS_IMETHODIMP nsMailtoUrl::Resolve(const nsACString &relativePath, nsACString &result)
 {
-	return m_baseURL->Resolve(relativePath, result);
+  return m_baseURL->Resolve(relativePath, result);
 }
 
 NS_IMETHODIMP nsMailtoUrl::SetRef(const nsACString &aRef)
@@ -692,7 +657,7 @@ nsMailtoUrl::GetRef(nsACString &result)
   return m_baseURL->GetRef(result);
 }
 
-NS_IMETHODIMP nsMailtoUrl::EqualsExceptRef(nsIURI *other, PRBool *result)
+NS_IMETHODIMP nsMailtoUrl::EqualsExceptRef(nsIURI *other, bool *result)
 {
   // The passed-in URI might be an nsMailtoUrl. Pass our inner URL to its
   // Equals method. The other nsMailtoUrl will then pass its inner URL to
@@ -724,7 +689,7 @@ nsMailtoUrl::GetSpecIgnoringRef(nsACString &result)
 }
 
 NS_IMETHODIMP
-nsMailtoUrl::GetHasRef(PRBool *result)
+nsMailtoUrl::GetHasRef(bool *result)
 {
   return m_baseURL->GetHasRef(result);
 }
@@ -737,9 +702,9 @@ nsSmtpUrl::nsSmtpUrl() : nsMsgMailNewsUrl()
 {
   // nsISmtpUrl specific state...
 
-  m_isPostMessage = PR_TRUE;
-  m_requestDSN = PR_FALSE;
-  m_verifyLogon = PR_FALSE;
+  m_isPostMessage = true;
+  m_requestDSN = false;
+  m_verifyLogon = false;
 }
  
 nsSmtpUrl::~nsSmtpUrl()
@@ -770,9 +735,9 @@ nsSmtpUrl::GetRecipients(char ** aRecipientsList)
   return NS_OK;
 }
 
-NS_IMPL_GETSET(nsSmtpUrl, PostMessage, PRBool, m_isPostMessage)
+NS_IMPL_GETSET(nsSmtpUrl, PostMessage, bool, m_isPostMessage)
 
-NS_IMPL_GETSET(nsSmtpUrl, VerifyLogon, PRBool, m_verifyLogon)
+NS_IMPL_GETSET(nsSmtpUrl, VerifyLogon, bool, m_verifyLogon)
 
 // the message can be stored in a file....allow accessors for getting and setting
 // the file name to post...
@@ -796,7 +761,7 @@ NS_IMETHODIMP nsSmtpUrl::GetPostMessageFile(nsIFile ** aFile)
   return NS_ERROR_NULL_POINTER;
 }
 
-NS_IMPL_GETSET(nsSmtpUrl, RequestDSN, PRBool, m_requestDSN)
+NS_IMPL_GETSET(nsSmtpUrl, RequestDSN, bool, m_requestDSN)
 
 NS_IMETHODIMP 
 nsSmtpUrl::SetDsnEnvid(const nsACString &aDsnEnvid)
@@ -813,20 +778,18 @@ nsSmtpUrl::GetDsnEnvid(nsACString &aDsnEnvid)
 }
 
 NS_IMETHODIMP
-nsSmtpUrl::GetSenderIdentity(nsIMsgIdentity * *aSenderIdentity)
+nsSmtpUrl::GetSenderIdentity(nsIMsgIdentity **aSenderIdentity)
 {
-  NS_ENSURE_ARG_POINTER(aSenderIdentity); 
-  
+  NS_ENSURE_ARG_POINTER(aSenderIdentity);
   *aSenderIdentity = m_senderIdentity;
   NS_ADDREF(*aSenderIdentity);
   return NS_OK;
 }
 
-NS_IMETHODIMP 
-nsSmtpUrl::SetSenderIdentity(nsIMsgIdentity * aSenderIdentity) 
+NS_IMETHODIMP
+nsSmtpUrl::SetSenderIdentity(nsIMsgIdentity *aSenderIdentity)
 {
   NS_ENSURE_ARG_POINTER(aSenderIdentity);
-  
   m_senderIdentity = aSenderIdentity;
   return NS_OK;
 }
@@ -843,7 +806,7 @@ NS_IMETHODIMP
 nsSmtpUrl::GetPrompt(nsIPrompt **aNetPrompt)
 {
     NS_ENSURE_ARG_POINTER(aNetPrompt);
-    if (!m_netPrompt) return NS_ERROR_NULL_POINTER;
+    NS_ENSURE_TRUE(m_netPrompt, NS_ERROR_NULL_POINTER);
     *aNetPrompt = m_netPrompt;
     NS_ADDREF(*aNetPrompt);
     return NS_OK;
@@ -861,7 +824,7 @@ NS_IMETHODIMP
 nsSmtpUrl::GetAuthPrompt(nsIAuthPrompt **aNetAuthPrompt)
 {
     NS_ENSURE_ARG_POINTER(aNetAuthPrompt);
-    if (!m_netAuthPrompt) return NS_ERROR_NULL_POINTER;
+    NS_ENSURE_TRUE(m_netAuthPrompt, NS_ERROR_NULL_POINTER);
     *aNetAuthPrompt = m_netAuthPrompt;
     NS_ADDREF(*aNetAuthPrompt);
     return NS_OK;
@@ -879,7 +842,7 @@ NS_IMETHODIMP
 nsSmtpUrl::GetNotificationCallbacks(nsIInterfaceRequestor** aCallbacks)
 {
     NS_ENSURE_ARG_POINTER(aCallbacks);
-    if (!m_callbacks) return NS_ERROR_NULL_POINTER;
+    NS_ENSURE_TRUE(m_callbacks, NS_ERROR_NULL_POINTER);
     *aCallbacks = m_callbacks;
     NS_ADDREF(*aCallbacks);
     return NS_OK;
@@ -897,7 +860,7 @@ NS_IMETHODIMP
 nsSmtpUrl::GetSmtpServer(nsISmtpServer ** aSmtpServer)
 {
     NS_ENSURE_ARG_POINTER(aSmtpServer);
-    if (!m_smtpServer) return NS_ERROR_NULL_POINTER;
+    NS_ENSURE_TRUE(m_smtpServer, NS_ERROR_NULL_POINTER);
     *aSmtpServer = m_smtpServer;
     NS_ADDREF(*aSmtpServer);
     return NS_OK;

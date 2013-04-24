@@ -1,43 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Terry Hayes <thayes@netscape.com>
- *   Javier Delgadillo <javi@netscape.com>
- *   Petr Kostka <petr.kostka@st.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * Dialog services for PIP.
@@ -46,7 +11,6 @@
 #include "nsString.h"
 #include "nsXPIDLString.h"
 #include "nsReadableUtils.h"
-#include "nsIPrompt.h"
 #include "nsIDOMWindow.h"
 #include "nsIDialogParamBlock.h"
 #include "nsIComponentManager.h"
@@ -106,11 +70,11 @@ nsNSSDialogs::Init()
 
 nsresult
 nsNSSDialogs::SetPassword(nsIInterfaceRequestor *ctx,
-                          const PRUnichar *tokenName, PRBool* _canceled)
+                          const PRUnichar *tokenName, bool* _canceled)
 {
   nsresult rv;
 
-  *_canceled = PR_FALSE;
+  *_canceled = false;
 
   // Get the parent window for the dialog
   nsCOMPtr<nsIDOMWindow> parent = do_GetInterface(ctx);
@@ -129,12 +93,12 @@ nsNSSDialogs::SetPassword(nsIInterfaceRequestor *ctx,
 
   if (NS_FAILED(rv)) return rv;
 
-  PRInt32 status;
+  int32_t status;
 
   rv = block->GetInt(1, &status);
   if (NS_FAILED(rv)) return rv;
 
-  *_canceled = (status == 0)?PR_TRUE:PR_FALSE;
+  *_canceled = (status == 0)?true:false;
 
   return rv;
 }
@@ -143,10 +107,10 @@ nsresult
 nsNSSDialogs::GetPassword(nsIInterfaceRequestor *ctx,
                           const PRUnichar *tokenName, 
                           PRUnichar **_password,
-                          PRBool* _canceled)
+                          bool* _canceled)
 {
   nsresult rv;
-  *_canceled = PR_FALSE;
+  *_canceled = false;
   // Get the parent window for the dialog
   nsCOMPtr<nsIDOMWindow> parent = do_GetInterface(ctx);
   nsCOMPtr<nsIDialogParamBlock> block = 
@@ -161,10 +125,10 @@ nsNSSDialogs::GetPassword(nsIInterfaceRequestor *ctx,
                                      block);
   if (NS_FAILED(rv)) return rv;
   // see if user canceled
-  PRInt32 status;
+  int32_t status;
   rv = block->GetInt(1, &status);
   if (NS_FAILED(rv)) return rv;
-  *_canceled = (status == 0) ? PR_TRUE : PR_FALSE;
+  *_canceled = (status == 0) ? true : false;
   if (!*_canceled) {
     // retrieve the password
     rv = block->GetString(2, _password);
@@ -186,22 +150,22 @@ nsNSSDialogs::CrlImportStatusDialog(nsIInterfaceRequestor *ctx, nsICRLInfo *crl)
   if (NS_FAILED(rv))
     return rv;
 
-  rv = nsNSSDialogHelper::openDialog(nsnull,
+  rv = nsNSSDialogHelper::openDialog(nullptr,
                              "chrome://pippki/content/crlImportDialog.xul",
                              block,
-                             PR_FALSE);
+                             false);
   return NS_OK;
 }
 
 NS_IMETHODIMP 
 nsNSSDialogs::ConfirmDownloadCACert(nsIInterfaceRequestor *ctx, 
                                     nsIX509Cert *cert,
-                                    PRUint32 *_trust,
-                                    PRBool *_retval)
+                                    uint32_t *_trust,
+                                    bool *_retval)
 {
   nsresult rv;
 
-  *_retval = PR_TRUE;
+  *_retval = true;
 
   // Get the parent window for the dialog
   nsCOMPtr<nsIDOMWindow> parent = do_GetInterface(ctx);
@@ -220,8 +184,8 @@ nsNSSDialogs::ConfirmDownloadCACert(nsIInterfaceRequestor *ctx,
                                      block);
   if (NS_FAILED(rv)) return rv;
 
-  PRInt32 status;
-  PRInt32 ssl, email, objsign;
+  int32_t status;
+  int32_t ssl, email, objsign;
 
   nsCOMPtr<nsIDialogParamBlock> dlgParamBlock = do_QueryInterface(block);
   
@@ -239,7 +203,7 @@ nsNSSDialogs::ConfirmDownloadCACert(nsIInterfaceRequestor *ctx,
   *_trust |= (email) ? nsIX509CertDB::TRUSTED_EMAIL : 0;
   *_trust |= (objsign) ? nsIX509CertDB::TRUSTED_OBJSIGN : 0;
 
-  *_retval = (status == 0)?PR_FALSE:PR_TRUE;
+  *_retval = (status == 0)?false:true;
 
   return rv;
 }
@@ -267,12 +231,12 @@ nsNSSDialogs::NotifyCACertExists(nsIInterfaceRequestor *ctx)
 
 
 NS_IMETHODIMP
-nsNSSDialogs::ChooseCertificate(nsIInterfaceRequestor *ctx, const PRUnichar *cn, const PRUnichar *organization, const PRUnichar *issuer, const PRUnichar **certNickList, const PRUnichar **certDetailsList, PRUint32 count, PRInt32 *selectedIndex, PRBool *canceled) 
+nsNSSDialogs::ChooseCertificate(nsIInterfaceRequestor *ctx, const PRUnichar *cn, const PRUnichar *organization, const PRUnichar *issuer, const PRUnichar **certNickList, const PRUnichar **certDetailsList, uint32_t count, int32_t *selectedIndex, bool *canceled) 
 {
   nsresult rv;
-  PRUint32 i;
+  uint32_t i;
 
-  *canceled = PR_FALSE;
+  *canceled = false;
 
   // Get the parent window for the dialog
   nsCOMPtr<nsIDOMWindow> parent = do_GetInterface(ctx);
@@ -305,25 +269,25 @@ nsNSSDialogs::ChooseCertificate(nsIInterfaceRequestor *ctx, const PRUnichar *cn,
   rv = block->SetInt(0, count);
   if (NS_FAILED(rv)) return rv;
 
-  rv = nsNSSDialogHelper::openDialog(nsnull,
+  rv = nsNSSDialogHelper::openDialog(nullptr,
                                 "chrome://pippki/content/clientauthask.xul",
                                 block);
   if (NS_FAILED(rv)) return rv;
 
-  PRInt32 status;
+  int32_t status;
   rv = block->GetInt(0, &status);
   if (NS_FAILED(rv)) return rv;
 
   nsCOMPtr<nsIClientAuthUserDecision> extraResult = do_QueryInterface(ctx);
   if (extraResult) {
-    PRInt32 rememberSelection;
+    int32_t rememberSelection;
     rv = block->GetInt(2, &rememberSelection);
     if (NS_SUCCEEDED(rv)) {
       extraResult->SetRememberClientAuthCertificate(rememberSelection!=0);
     }
   }
 
-  *canceled = (status == 0)?PR_TRUE:PR_FALSE;
+  *canceled = (status == 0)?true:false;
   if (!*canceled) {
     // retrieve the nickname
     rv = block->GetInt(1, selectedIndex);
@@ -336,14 +300,14 @@ NS_IMETHODIMP
 nsNSSDialogs::PickCertificate(nsIInterfaceRequestor *ctx, 
                               const PRUnichar **certNickList, 
                               const PRUnichar **certDetailsList, 
-                              PRUint32 count, 
-                              PRInt32 *selectedIndex, 
-                              PRBool *canceled) 
+                              uint32_t count, 
+                              int32_t *selectedIndex, 
+                              bool *canceled) 
 {
   nsresult rv;
-  PRUint32 i;
+  uint32_t i;
 
-  *canceled = PR_FALSE;
+  *canceled = false;
 
   // Get the parent window for the dialog
   nsCOMPtr<nsIDOMWindow> parent = do_GetInterface(ctx);
@@ -370,17 +334,17 @@ nsNSSDialogs::PickCertificate(nsIInterfaceRequestor *ctx,
   rv = block->SetInt(1, *selectedIndex);
   if (NS_FAILED(rv)) return rv;
 
-  rv = nsNSSDialogHelper::openDialog(nsnull,
+  rv = nsNSSDialogHelper::openDialog(nullptr,
                                 "chrome://pippki/content/certpicker.xul",
                                 block);
   if (NS_FAILED(rv)) return rv;
 
-  PRInt32 status;
+  int32_t status;
 
   rv = block->GetInt(0, &status);
   if (NS_FAILED(rv)) return rv;
 
-  *canceled = (status == 0)?PR_TRUE:PR_FALSE;
+  *canceled = (status == 0)?true:false;
   if (!*canceled) {
     rv = block->GetInt(1, selectedIndex);
   }
@@ -391,10 +355,10 @@ nsNSSDialogs::PickCertificate(nsIInterfaceRequestor *ctx,
 NS_IMETHODIMP 
 nsNSSDialogs::SetPKCS12FilePassword(nsIInterfaceRequestor *ctx, 
                                     nsAString &_password,
-                                    PRBool *_retval)
+                                    bool *_retval)
 {
   nsresult rv;
-  *_retval = PR_TRUE;
+  *_retval = true;
   // Get the parent window for the dialog
   nsCOMPtr<nsIDOMWindow> parent = do_GetInterface(ctx);
   nsCOMPtr<nsIDialogParamBlock> block =
@@ -406,10 +370,10 @@ nsNSSDialogs::SetPKCS12FilePassword(nsIInterfaceRequestor *ctx,
                                   block);
   if (NS_FAILED(rv)) return rv;
   // see if user canceled
-  PRInt32 status;
+  int32_t status;
   rv = block->GetInt(1, &status);
   if (NS_FAILED(rv)) return rv;
-  *_retval = (status == 0) ? PR_FALSE : PR_TRUE;
+  *_retval = (status == 0) ? false : true;
   if (*_retval) {
     // retrieve the password
     PRUnichar *pw;
@@ -425,10 +389,10 @@ nsNSSDialogs::SetPKCS12FilePassword(nsIInterfaceRequestor *ctx,
 NS_IMETHODIMP 
 nsNSSDialogs::GetPKCS12FilePassword(nsIInterfaceRequestor *ctx, 
                                     nsAString &_password,
-                                    PRBool *_retval)
+                                    bool *_retval)
 {
   nsresult rv;
-  *_retval = PR_TRUE;
+  *_retval = true;
   // Get the parent window for the dialog
   nsCOMPtr<nsIDOMWindow> parent = do_GetInterface(ctx);
   nsCOMPtr<nsIDialogParamBlock> block =
@@ -440,10 +404,10 @@ nsNSSDialogs::GetPKCS12FilePassword(nsIInterfaceRequestor *ctx,
                                   block);
   if (NS_FAILED(rv)) return rv;
   // see if user canceled
-  PRInt32 status;
+  int32_t status;
   rv = block->GetInt(1, &status);
   if (NS_FAILED(rv)) return rv;
-  *_retval = (status == 0) ? PR_FALSE : PR_TRUE;
+  *_retval = (status == 0) ? false : true;
   if (*_retval) {
     // retrieve the password
     PRUnichar *pw;
@@ -478,7 +442,7 @@ nsNSSDialogs::ViewCert(nsIInterfaceRequestor *ctx,
   rv = nsNSSDialogHelper::openDialog(parent,
                                      "chrome://pippki/content/certViewer.xul",
                                      block,
-                                     PR_FALSE);
+                                     false);
   return rv;
 }
 
@@ -497,11 +461,11 @@ nsNSSDialogs::DisplayGeneratingKeypairInfo(nsIInterfaceRequestor *aCtx, nsIKeyge
 }
 
 NS_IMETHODIMP
-nsNSSDialogs::ChooseToken(nsIInterfaceRequestor *aCtx, const PRUnichar **aTokenList, PRUint32 aCount, PRUnichar **aTokenChosen, PRBool *aCanceled) {
+nsNSSDialogs::ChooseToken(nsIInterfaceRequestor *aCtx, const PRUnichar **aTokenList, uint32_t aCount, PRUnichar **aTokenChosen, bool *aCanceled) {
   nsresult rv;
-  PRUint32 i;
+  uint32_t i;
 
-  *aCanceled = PR_FALSE;
+  *aCanceled = false;
 
   // Get the parent window for the dialog
   nsCOMPtr<nsIDOMWindow> parent = do_GetInterface(aCtx);
@@ -520,17 +484,17 @@ nsNSSDialogs::ChooseToken(nsIInterfaceRequestor *aCtx, const PRUnichar **aTokenL
   rv = block->SetInt(0, aCount);
   if (NS_FAILED(rv)) return rv;
 
-  rv = nsNSSDialogHelper::openDialog(nsnull,
+  rv = nsNSSDialogHelper::openDialog(nullptr,
                                 "chrome://pippki/content/choosetoken.xul",
                                 block);
   if (NS_FAILED(rv)) return rv;
 
-  PRInt32 status;
+  int32_t status;
 
   rv = block->GetInt(0, &status);
   if (NS_FAILED(rv)) return rv;
 
-  *aCanceled = (status == 0)?PR_TRUE:PR_FALSE;
+  *aCanceled = (status == 0)?true:false;
   if (!*aCanceled) {
     // retrieve the nickname
     rv = block->GetString(0, aTokenChosen);
@@ -540,10 +504,10 @@ nsNSSDialogs::ChooseToken(nsIInterfaceRequestor *aCtx, const PRUnichar **aTokenL
 
 /* boolean ConfirmKeyEscrow (in nsIX509Cert escrowAuthority); */
 NS_IMETHODIMP 
-nsNSSDialogs::ConfirmKeyEscrow(nsIX509Cert *escrowAuthority, PRBool *_retval)
+nsNSSDialogs::ConfirmKeyEscrow(nsIX509Cert *escrowAuthority, bool *_retval)
                                      
 {
-  *_retval = PR_FALSE;
+  *_retval = false;
 
   nsresult rv;
 
@@ -556,19 +520,19 @@ nsNSSDialogs::ConfirmKeyEscrow(nsIX509Cert *escrowAuthority, PRBool *_retval)
   if (NS_FAILED(rv))
     return rv;
 
-  rv = nsNSSDialogHelper::openDialog(nsnull,
+  rv = nsNSSDialogHelper::openDialog(nullptr,
                                      "chrome://pippki/content/escrowWarn.xul",
                                      block);
 
   if (NS_FAILED(rv))
     return rv;
 
-  PRInt32 status=0;
+  int32_t status=0;
   nsCOMPtr<nsIDialogParamBlock> dlgParamBlock = do_QueryInterface(block);
   rv = dlgParamBlock->GetInt(1, &status);
  
   if (status) {
-    *_retval = PR_TRUE;
+    *_retval = true;
   } 
   return rv;
 }
@@ -613,7 +577,7 @@ nsNSSDialogs::ShowCertError(nsIInterfaceRequestor *ctx,
                             const nsAString & textErrorMessage, 
                             const nsAString & htmlErrorMessage, 
                             const nsACString & hostName, 
-                            PRUint32 portNumber)
+                            uint32_t portNumber)
 {
   nsCOMPtr<nsIPKIParamBlock> block =
            do_CreateInstance(NS_PKIPARAMBLOCK_CONTRACTID);
@@ -639,7 +603,7 @@ nsNSSDialogs::ShowCertError(nsIInterfaceRequestor *ctx,
   if (NS_FAILED(rv))
     return rv;
 
-  rv = nsNSSDialogHelper::openDialog(nsnull, 
+  rv = nsNSSDialogHelper::openDialog(nullptr, 
                                      "chrome://pippki/content/certerror.xul",
                                      block);
   return rv;

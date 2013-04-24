@@ -1,64 +1,23 @@
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
-# The Original Code is the Mozilla Browser code.
-#
-# The Initial Developer of the Original Code is
-# Benjamin Smedberg <bsmedberg@covad.net>
-# Portions created by the Initial Developer are Copyright (C) 2004
-# the Initial Developer. All Rights Reserved.
-#
-# Contributor(s):
-#
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-DEPTH          = ../..
+DEPTH          = @DEPTH@
 topsrcdir      = @top_srcdir@
 srcdir         = @srcdir@
 VPATH          = @srcdir@
-relativesrcdir = suite/locales
+relativesrcdir = @relativesrcdir@
 
 include $(DEPTH)/config/autoconf.mk
 
 include $(topsrcdir)/config/config.mk
 
+DEFINES += -DMOZ_APP_MAXVERSION=$(MOZ_APP_MAXVERSION)
+
 _ABS_SRCDIR := $(call core_abspath,$(topsrcdir))
 
 vpath %.xml @srcdir@/en-US/searchplugins
 vpath %.xml $(LOCALE_SRCDIR)/searchplugins
-
-ifdef LOCALE_MERGEDIR
-LOCALE_SEARCH_DIRS += $(LOCALE_MERGEDIR)/suite
-endif
-LOCALE_SEARCH_DIRS += $(LOCALE_SRCDIR)
-ifdef LOCALE_MERGEDIR
-LOCALE_SEARCH_DIRS += @srcdir@/en-US
-endif
-
-find_locale_file = $(firstword $(foreach dir, $(LOCALE_SEARCH_DIRS), \
-                      $(wildcard $(dir)/$(1))))
 
 SUBMAKEFILES += \
 	$(DEPTH)/$(MOZ_BRANDING_DIRECTORY)/Makefile \
@@ -83,14 +42,13 @@ DEFINES += \
 	-DMOZ_PSM=$(MOZ_PSM) \
 	$(NULL)
 
-PREF_JS_EXPORTS = $(call find_locale_file,suite-l10n.js)
+PREF_JS_EXPORTS = $(call MERGE_FILE,suite-l10n.js)
 
 ifeq ($(MOZ_WIDGET_TOOLKIT),cocoa)
 MOZ_PKG_MAC_DSSTORE=$(_ABS_DIST)/branding/dsstore
 MOZ_PKG_MAC_BACKGROUND=$(_ABS_DIST)/branding/background.png
 MOZ_PKG_MAC_ICON=$(_ABS_DIST)/branding/disk.icns
-MOZ_PKG_MAC_EXTRA=--symlink "/Applications:/ " \
-                  --copy "$(LOCALE_SRCDIR)/installer/mac/README.txt"
+MOZ_PKG_MAC_EXTRA=--symlink "/Applications:/ "
 endif
 
 ifeq (WINNT,$(OS_ARCH))
@@ -117,22 +75,6 @@ $(STAGEDIST): $(DIST)/branding
 $(DIST)/branding:
 	$(NSINSTALL) -D $@
 
-ifneq (,$(filter cocoa,$(MOZ_WIDGET_TOOLKIT)))
-README_FILES = \
-	installer/mac/README.txt \
-	$(NULL)
-else
-ifeq ($(OS_ARCH),WINNT)
-README_FILES = \
-	installer/windows/README.txt \
-	$(NULL)
-else
-README_FILES = \
-	installer/unix/README \
-	$(NULL)
-endif
-endif
-
 PROFILE_FILES = \
 	localstore.rdf \
 	mimeTypes.rdf \
@@ -140,22 +82,10 @@ PROFILE_FILES = \
 
 PROFILE_CHROME = userChrome-example.css userContent-example.css
 
-libs:: $(addprefix $(LOCALE_SRCDIR)/,$(README_FILES))
-ifeq ($(OS_ARCH),WINNT)
-	$(EXIT_ON_ERROR) \
-	for file in $^; do \
-	  $(PERL) -pe 's/(?<!\r)\n/\r\n/g;' < $$file > $(FINAL_TARGET)/`basename $$file`; \
-	done
-else
-ifneq ($(OS_ARCH),OS2)
-	$(SYSINSTALL) $(IFLAGS1) $^ $(FINAL_TARGET)
-endif
-endif
-
 NO_JA_JP_MAC_AB_CD := $(if $(filter ja-JP-mac, $(AB_CD)),ja,$(AB_CD))
 
-BOOKMARKS_INC_FILE = $(call find_locale_file,profile/bookmarks.inc)
-BOOKMARKS_XTRA_FILE = $(call find_locale_file,profile/bookmarks.extra)
+BOOKMARKS_INC_FILE = $(call MERGE_FILE,profile/bookmarks.inc)
+BOOKMARKS_XTRA_FILE = $(call MERGE_FILE,profile/bookmarks.extra)
 
 # the #include in the .in file requires all to be in the same dir, sadly.
 %/defaults/profile/bookmarks.html: $(BOOKMARKS_INC_FILE) $(BOOKMARKS_XTRA_FILE) generic/profile/bookmarks.html.in 
@@ -168,7 +98,7 @@ BOOKMARKS_XTRA_FILE = $(call find_locale_file,profile/bookmarks.extra)
 	  profile/bookmarks.html.in \
 	  > $@
 
-PANELS_XTRA_FILE = $(call find_locale_file,profile/panels.extra)
+PANELS_XTRA_FILE = $(call MERGE_FILE,profile/panels.extra)
 
 # the #include in the .in file requires all to be in the same dir, sadly.
 %/defaults/profile/panels.rdf: $(PANELS_XTRA_FILE) generic/profile/panels.rdf.in
@@ -188,7 +118,7 @@ libs:: $(FINAL_TARGET)/defaults/profile/panels.rdf ;
 libs:: $(addprefix generic/profile/,$(PROFILE_FILES))
 	$(SYSINSTALL) $(IFLAGS1) $^ $(FINAL_TARGET)/defaults/profile
 
-libs:: $(addprefix $(LOCALE_SRCDIR)/profile/chrome/,$(PROFILE_CHROME))
+libs:: $(call MERGE_FILES,$(addprefix profile/chrome/,$(PROFILE_CHROME)))
 	$(SYSINSTALL) $(IFLAGS1) $^ $(FINAL_TARGET)/defaults/profile/chrome
 
 install:: $(DESTDIR)$(mozappdir)/defaults/profile/bookmarks.html ;
@@ -197,10 +127,10 @@ install:: $(DESTDIR)$(mozappdir)/defaults/profile/panels.rdf ;
 install:: $(addprefix generic/profile/,$(PROFILE_FILES))
 	$(SYSINSTALL) $(IFLAGS1) $^ $(DESTDIR)$(mozappdir)/defaults/profile
 
-install:: $(addprefix $(LOCALE_SRCDIR)/profile/chrome/,$(PROFILE_CHROME))
+install:: $(call MERGE_FILES,$(addprefix profile/chrome/,$(PROFILE_CHROME)))
 	$(SYSINSTALL) $(IFLAGS1) $^ $(DESTDIR)$(mozappdir)/defaults/profile/chrome
 
-SEARCH_PLUGINS = $(shell cat $(call find_locale_file,searchplugins/list.txt))
+SEARCH_PLUGINS = $(shell cat $(call MERGE_FILE,searchplugins/list.txt))
 
 libs:: $(addsuffix .xml,$(SEARCH_PLUGINS))
 	$(SYSINSTALL) $(IFLAGS1) $^ $(FINAL_TARGET)/searchplugins
@@ -309,7 +239,7 @@ endif
 endif
 
 ifdef MOZ_CRASHREPORTER
-libs:: $(call find_locale_file,crashreporter/crashreporter-override.ini)
+libs:: $(call MERGE_FILE,crashreporter/crashreporter-override.ini)
 	$(SYSINSTALL) $(IFLAGS1) $^ $(FINAL_TARGET)
 endif
 

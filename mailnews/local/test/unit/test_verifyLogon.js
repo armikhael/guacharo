@@ -8,6 +8,8 @@
 Components.utils.import("resource://gre/modules/XPCOMUtils.jsm");
 Components.utils.import("resource:///modules/mailServices.js");
 
+load("../../../resources/alertTestUtils.js");
+
 var test = null;
 var server;
 var daemon;
@@ -19,18 +21,10 @@ const kUserName = "testpop3";
 const kInvalidPassword = "pop3test";
 const kValidPassword = "testpop3";
 
-// Dummy message window so we can pass in a non-null msgWindow.
-var dummyMsgWindow =
-{
-  QueryInterface: XPCOMUtils.generateQI([Ci.nsIMsgWindow,
-                                         Ci.nsISupportsWeakReference])
-};
-
-
 function verifyPop3Logon(validPassword) {
   incomingServer.password = (validPassword) ? kValidPassword : kInvalidPassword;
   urlListener.expectSuccess = validPassword;
-  let uri = incomingServer.verifyLogon(urlListener, dummyMsgWindow);
+  let uri = incomingServer.verifyLogon(urlListener, gDummyMsgWindow);
   // clear msgWindow so url won't prompt for passwords.
   uri.QueryInterface(Ci.nsIMsgMailNewsUrl).msgWindow = null;
 
@@ -72,22 +66,22 @@ function verifyGoodLogon() {
 function run_test()
 {
   // Disable new mail notifications
-  var prefSvc = Components.classes["@mozilla.org/preferences-service;1"]
-    .getService(Components.interfaces.nsIPrefBranch);
-
-  prefSvc.setBoolPref("mail.biff.play_sound", false);
-  prefSvc.setBoolPref("mail.biff.show_alert", false);
-  prefSvc.setBoolPref("mail.biff.show_tray_icon", false);
-  prefSvc.setBoolPref("mail.biff.animate_dock_icon", false);
+  Services.prefs.setBoolPref("mail.biff.play_sound", false);
+  Services.prefs.setBoolPref("mail.biff.show_alert", false);
+  Services.prefs.setBoolPref("mail.biff.show_tray_icon", false);
+  Services.prefs.setBoolPref("mail.biff.animate_dock_icon", false);
   // Set up the Server
   daemon = new pop3Daemon();
-  var handler = new POP3_RFC1939_handler(daemon);
-  server = new nsMailServer(handler);
+  function createHandler(d) {
+    var handler = new POP3_RFC1939_handler(d);
+    // Set the server expected username & password to what we have in signons.txt
+    handler.kUsername = kUserName;
+    handler.kPassword = kValidPassword;
+    handler.dropOnAuthFailure = true;
+    return handler;
+  }
+  server = new nsMailServer(createHandler, daemon);
 
-  // Set the server expected username & password to what we have in signons.txt
-  handler.kUsername = kUserName;
-  handler.kPassword = kValidPassword;
-  handler.dropOnAuthFailure = true;
   // Set up the basic accounts and folders.
   // We would use createPop3ServerAndLocalFolders() however we want to have
   // a different username and NO password for this test (as we expect to load

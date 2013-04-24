@@ -1,50 +1,17 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is TransforMiiX XSLT processor code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Peter Van der Beken <peterv@propagandism.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "txUnknownHandler.h"
 #include "txExecutionState.h"
 #include "txStringUtils.h"
 #include "txStylesheet.h"
-#include "txAtoms.h"
+#include "nsGkAtoms.h"
 
 txUnknownHandler::txUnknownHandler(txExecutionState* aEs)
     : mEs(aEs),
-      mFlushed(PR_FALSE)
+      mFlushed(false)
 {
     MOZ_COUNT_CTOR_INHERITED(txUnknownHandler, txBufferingHandler);
 }
@@ -56,7 +23,7 @@ txUnknownHandler::~txUnknownHandler()
 
 nsresult
 txUnknownHandler::attribute(nsIAtom* aPrefix, nsIAtom* aLocalName,
-                            nsIAtom* aLowercaseLocalName, PRInt32 aNsID,
+                            nsIAtom* aLowercaseLocalName, int32_t aNsID,
                             const nsString& aValue)
 {
     return mFlushed ?
@@ -68,7 +35,7 @@ txUnknownHandler::attribute(nsIAtom* aPrefix, nsIAtom* aLocalName,
 
 nsresult
 txUnknownHandler::attribute(nsIAtom* aPrefix, const nsSubstring& aLocalName,
-                            const PRInt32 aNsID, const nsString& aValue)
+                            const int32_t aNsID, const nsString& aValue)
 {
     return mFlushed ?
            mEs->mResultHandler->attribute(aPrefix, aLocalName, aNsID, aValue) :
@@ -76,7 +43,7 @@ txUnknownHandler::attribute(nsIAtom* aPrefix, const nsSubstring& aLocalName,
 }
 
 nsresult
-txUnknownHandler::characters(const nsSubstring& aData, PRBool aDOE)
+txUnknownHandler::characters(const nsSubstring& aData, bool aDOE)
 {
     return mFlushed ?
            mEs->mResultHandler->characters(aData, aDOE) :
@@ -108,7 +75,7 @@ txUnknownHandler::endDocument(nsresult aResult)
         NS_ASSERTION(mEs->mResultHandler == this,
                      "We're leaking mEs->mResultHandler.");
 
-        nsresult rv = createHandlerAndFlush(PR_FALSE, EmptyString(),
+        nsresult rv = createHandlerAndFlush(false, EmptyString(),
                                             kNameSpaceID_None);
         NS_ENSURE_SUCCESS(rv, rv);
     }
@@ -143,7 +110,7 @@ txUnknownHandler::startDocument()
 
 nsresult
 txUnknownHandler::startElement(nsIAtom* aPrefix, nsIAtom* aLocalName,
-                               nsIAtom* aLowercaseLocalName, PRInt32 aNsID)
+                               nsIAtom* aLowercaseLocalName, int32_t aNsID)
 {
     if (!mFlushed) {
         // Make sure that mEs->mResultHandler == this is true, otherwise we'll
@@ -159,8 +126,8 @@ txUnknownHandler::startElement(nsIAtom* aPrefix, nsIAtom* aLocalName,
             aLowercaseLocalName = owner;
         }
 
-        PRBool htmlRoot = aNsID == kNameSpaceID_None && !aPrefix &&
-                          aLowercaseLocalName == txHTMLAtoms::html;
+        bool htmlRoot = aNsID == kNameSpaceID_None && !aPrefix &&
+                          aLowercaseLocalName == nsGkAtoms::html;
 
         // Use aLocalName and not aLowercaseLocalName in case the output
         // handler cares about case. For eHTMLOutput the handler will hardcode
@@ -177,7 +144,7 @@ txUnknownHandler::startElement(nsIAtom* aPrefix, nsIAtom* aLocalName,
 
 nsresult
 txUnknownHandler::startElement(nsIAtom* aPrefix, const nsSubstring& aLocalName,
-                               const PRInt32 aNsID)
+                               const int32_t aNsID)
 {
     if (!mFlushed) {
         // Make sure that mEs->mResultHandler == this is true, otherwise we'll
@@ -185,7 +152,7 @@ txUnknownHandler::startElement(nsIAtom* aPrefix, const nsSubstring& aLocalName,
         NS_ASSERTION(mEs->mResultHandler == this,
                      "We're leaking mEs->mResultHandler.");
 
-        PRBool htmlRoot = aNsID == kNameSpaceID_None && !aPrefix &&
+        bool htmlRoot = aNsID == kNameSpaceID_None && !aPrefix &&
                           aLocalName.Equals(NS_LITERAL_STRING("html"),
                                             txCaseInsensitiveStringComparator());
         nsresult rv = createHandlerAndFlush(htmlRoot, aLocalName, aNsID);
@@ -195,9 +162,9 @@ txUnknownHandler::startElement(nsIAtom* aPrefix, const nsSubstring& aLocalName,
     return mEs->mResultHandler->startElement(aPrefix, aLocalName, aNsID);
 }
 
-nsresult txUnknownHandler::createHandlerAndFlush(PRBool aHTMLRoot,
+nsresult txUnknownHandler::createHandlerAndFlush(bool aHTMLRoot,
                                                  const nsSubstring& aName,
-                                                 const PRInt32 aNsID)
+                                                 const int32_t aNsID)
 {
     NS_ENSURE_TRUE(mBuffer, NS_ERROR_NOT_INITIALIZED);
 
@@ -220,7 +187,7 @@ nsresult txUnknownHandler::createHandlerAndFlush(PRBool aHTMLRoot,
     // flushing a buffer to mEs->mResultHandler.
     mEs->mObsoleteHandler = this;
 
-    mFlushed = PR_TRUE;
+    mFlushed = true;
 
     // Let go of out buffer as soon as we're done flushing it, we're not going
     // to need it anymore from this point on (all hooks get forwarded to

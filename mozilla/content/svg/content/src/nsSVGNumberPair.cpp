@@ -1,49 +1,16 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Mozilla SVG project.
- *
- * The Initial Developer of the Original Code is Robert Longson.
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsSVGNumberPair.h"
 #include "nsSVGUtils.h"
 #include "nsCharSeparatedTokenizer.h"
 #include "prdtoa.h"
-#include "nsDOMError.h"
+#include "nsError.h"
 #include "nsMathUtils.h"
-#ifdef MOZ_SMIL
 #include "nsSMILValue.h"
 #include "SVGNumberPairSMILType.h"
-#endif // MOZ_SMIL
 
 using namespace mozilla;
 
@@ -73,7 +40,7 @@ ParseNumberOptionalNumber(const nsAString& aValue,
     return NS_ERROR_DOM_SYNTAX_ERR;
   }
 
-  PRUint32 i;
+  uint32_t i;
   for (i = 0; i < 2 && tokenizer.hasMoreTokens(); ++i) {
     NS_ConvertUTF16toUTF8 utf8Token(tokenizer.nextToken());
     const char *token = utf8Token.get();
@@ -103,8 +70,7 @@ ParseNumberOptionalNumber(const nsAString& aValue,
 
 nsresult
 nsSVGNumberPair::SetBaseValueString(const nsAString &aValueAsString,
-                                    nsSVGElement *aSVGElement,
-                                    PRBool aDoSetAttr)
+                                    nsSVGElement *aSVGElement)
 {
   float val[2];
 
@@ -115,25 +81,23 @@ nsSVGNumberPair::SetBaseValueString(const nsAString &aValueAsString,
 
   mBaseVal[0] = val[0];
   mBaseVal[1] = val[1];
-  mIsBaseSet = PR_TRUE;
+  mIsBaseSet = true;
   if (!mIsAnimated) {
     mAnimVal[0] = mBaseVal[0];
     mAnimVal[1] = mBaseVal[1];
   }
-#ifdef MOZ_SMIL
   else {
     aSVGElement->AnimationNeedsResample();
   }
-#endif
 
-  // We don't need to call DidChange* here - we're only called by
+  // We don't need to call Will/DidChange* here - we're only called by
   // nsSVGElement::ParseAttribute under nsGenericElement::SetAttr,
   // which takes care of notifying.
   return NS_OK;
 }
 
 void
-nsSVGNumberPair::GetBaseValueString(nsAString &aValueAsString)
+nsSVGNumberPair::GetBaseValueString(nsAString &aValueAsString) const
 {
   aValueAsString.Truncate();
   aValueAsString.AppendFloat(mBaseVal[0]);
@@ -145,49 +109,54 @@ nsSVGNumberPair::GetBaseValueString(nsAString &aValueAsString)
 
 void
 nsSVGNumberPair::SetBaseValue(float aValue, PairIndex aPairIndex,
-                              nsSVGElement *aSVGElement,
-                              PRBool aDoSetAttr)
+                              nsSVGElement *aSVGElement)
 {
-  PRUint32 index = (aPairIndex == eFirst ? 0 : 1);
+  uint32_t index = (aPairIndex == eFirst ? 0 : 1);
+  if (mIsBaseSet && mBaseVal[index] == aValue) {
+    return;
+  }
+  nsAttrValue emptyOrOldValue = aSVGElement->WillChangeNumberPair(mAttrEnum);
   mBaseVal[index] = aValue;
-  mIsBaseSet = PR_TRUE;
+  mIsBaseSet = true;
   if (!mIsAnimated) {
     mAnimVal[index] = aValue;
   }
-#ifdef MOZ_SMIL
   else {
     aSVGElement->AnimationNeedsResample();
   }
-#endif
-  aSVGElement->DidChangeNumberPair(mAttrEnum, aDoSetAttr);
+  aSVGElement->DidChangeNumberPair(mAttrEnum, emptyOrOldValue);
 }
 
 void
 nsSVGNumberPair::SetBaseValues(float aValue1, float aValue2,
-                               nsSVGElement *aSVGElement,
-                               PRBool aDoSetAttr)
+                               nsSVGElement *aSVGElement)
 {
+  if (mIsBaseSet && mBaseVal[0] == aValue1 && mBaseVal[1] == aValue2) {
+    return;
+  }
+  nsAttrValue emptyOrOldValue = aSVGElement->WillChangeNumberPair(mAttrEnum);
   mBaseVal[0] = aValue1;
   mBaseVal[1] = aValue2;
-  mIsBaseSet = PR_TRUE;
+  mIsBaseSet = true;
   if (!mIsAnimated) {
     mAnimVal[0] = aValue1;
     mAnimVal[1] = aValue2;
   }
-#ifdef MOZ_SMIL
   else {
     aSVGElement->AnimationNeedsResample();
   }
-#endif
-  aSVGElement->DidChangeNumberPair(mAttrEnum, aDoSetAttr);
+  aSVGElement->DidChangeNumberPair(mAttrEnum, emptyOrOldValue);
 }
 
 void
 nsSVGNumberPair::SetAnimValue(const float aValue[2], nsSVGElement *aSVGElement)
 {
+  if (mIsAnimated && mAnimVal[0] == aValue[0] && mAnimVal[1] == aValue[1]) {
+    return;
+  }
   mAnimVal[0] = aValue[0];
   mAnimVal[1] = aValue[1];
-  mIsAnimated = PR_TRUE;
+  mIsAnimated = true;
   aSVGElement->DidAnimateNumberPair(mAttrEnum);
 }
 
@@ -201,7 +170,6 @@ nsSVGNumberPair::ToDOMAnimatedNumber(nsIDOMSVGAnimatedNumber **aResult,
   return NS_OK;
 }
 
-#ifdef MOZ_SMIL
 nsISMILAttr*
 nsSVGNumberPair::ToSMILAttr(nsSVGElement *aSVGElement)
 {
@@ -212,7 +180,7 @@ nsresult
 nsSVGNumberPair::SMILNumberPair::ValueFromString(const nsAString& aStr,
                                                  const nsISMILAnimationElement* /*aSrcElement*/,
                                                  nsSMILValue& aValue,
-                                                 PRBool& aPreventCachingOfSandwich) const
+                                                 bool& aPreventCachingOfSandwich) const
 {
   float values[2];
 
@@ -225,7 +193,7 @@ nsSVGNumberPair::SMILNumberPair::ValueFromString(const nsAString& aStr,
   val.mU.mNumberPair[0] = values[0];
   val.mU.mNumberPair[1] = values[1];
   aValue = val;
-  aPreventCachingOfSandwich = PR_FALSE;
+  aPreventCachingOfSandwich = false;
 
   return NS_OK;
 }
@@ -243,8 +211,10 @@ void
 nsSVGNumberPair::SMILNumberPair::ClearAnimValue()
 {
   if (mVal->mIsAnimated) {
-    mVal->SetAnimValue(mVal->mBaseVal, mSVGElement);
-    mVal->mIsAnimated = PR_FALSE;
+    mVal->mIsAnimated = false;
+    mVal->mAnimVal[0] = mVal->mBaseVal[0];
+    mVal->mAnimVal[1] = mVal->mBaseVal[1];
+    mSVGElement->DidAnimateNumberPair(mVal->mAttrEnum);
   }
 }
 
@@ -258,4 +228,3 @@ nsSVGNumberPair::SMILNumberPair::SetAnimValue(const nsSMILValue& aValue)
   }
   return NS_OK;
 }
-#endif // MOZ_SMIL

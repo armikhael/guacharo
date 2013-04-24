@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsISupports.idl"
 #include "nsIMsgFolder.idl"
@@ -47,11 +15,8 @@ interface nsINntpIncomingServer;
 
 [ref] native nsMsgKeyArrayRef(nsTArray<nsMsgKey>);
 
-[scriptable, uuid(86a38356-6ab0-4117-8269-674cbb4f264f)]
+[scriptable, uuid(3bf5c65d-71bd-4560-a337-435797d249a6)]
 interface nsIMsgNewsFolder : nsISupports {
-  attribute ACString groupUsername;
-  attribute ACString groupPassword;
-
   readonly attribute AString unicodeName;
   /**|rawName| is an 8-bit string to represent the name of a newsgroup used by 
    * a news server. It's offered for the convenience of callers so that they 
@@ -66,14 +31,80 @@ interface nsIMsgNewsFolder : nsISupports {
   [noscript] readonly attribute ACString rawName;
   readonly attribute nsINntpIncomingServer nntpServer;
   attribute boolean saveArticleOffline;
-   
-  ACString getGroupPasswordWithUI(in AString aPromptString, in AString aPromptTitle, in nsIMsgWindow aMsgWindow);
-  ACString getGroupUsernameWithUI(in AString aPromptString, in AString aPromptTitle, in nsIMsgWindow aMsgWindow);
 
-  void forgetGroupUsername();
-  void forgetGroupPassword();
+  /**
+   * @name Authentication methods
+   * NNTP authentication is slightly wonky, due to edge cases that are not seen
+   * in other protocols. Authentication is not necessary; if authentication is
+   * used, it could be configured on a per-group basis or even require only a
+   * username and not a password.
+   *
+   * Since passwords could be per-group, it is necessary to refer to passwords
+   * using the methods on this interface and not nsIMsgIncomingServer. Passwords
+   * for the server as a whole are found via the root folder. If the server is
+   * configured to use single sign-on (the default), asking any group for its
+   * password will result in the server's password, otherwise, each group stores
+   * its password individually.
+   *
+   * Due to this setup, most of the password management functions on
+   * nsIMsgIncomingServer do not correctly work. The only one that would affect
+   * the passwords stored on folders correctly is forgetPassword; using any
+   * other on a news server would result in inconsistent state.
+   *
+   * Before requesting either the username or password for authentication, it is
+   * first necessary to call getAuthenticationCredentials. If the method returns
+   * true, then groupUsername and groupPassword are appropriately set up for
+   * necessary authentication; if not, then authentication must be stopped.
+   */
+  /// @{
+
+  /**
+   * Gets the authentication credentials, returning if the results are valid.
+   *
+   * If mustPrompt is true, then the user will always be asked for the
+   * credentials. Otherwise, if mayPrompt is true, then the user will be asked
+   * for credentials if there are no saved credentials. If mayPrompt is false,
+   * then no prompt will be shown, even if there are no saved credentials.
+   *
+   * If this method returns true, then groupUsername and groupPassword will
+   * contain non-empty results that could be used for authentication. If this
+   * method returns false, then the values of groupUsername and groupPassword
+   * will be cleared if they had previously been set. This could happen if
+   * mustPrompt were true and the user decided to cancel the authentication
+   * prompt.
+   *
+   * Note that this method will be executed synchronously; if an async prompt
+   * is wanted, it is the responsibility of the caller to manage it explicitly
+   * with nsIMsgAsyncPrompter.
+   */
+  bool getAuthenticationCredentials(in nsIMsgWindow aMsgWindow,
+    in bool mayPrompt, in bool mustPrompt);
+
+  /**
+   * Force migration of credentials from older versions of this codebase.
+   *
+   * This method is normally called during the creation of newsgroup folders,
+   * and it should not be necessary to call this method. This method also
+   * forcibly deletes the old credentials, so that passwords would not be
+   * leaked.
+   *
+   * It is expected that this method will be removed once it is decided that
+   * supporting migration from old versions of Thunderbird and SeaMonkey should
+   * not be supported.
+   */
+  void migrateLegacyCredentials();
+
+  /// The username that should be used for this group
+  attribute ACString groupUsername;
+
+  /// The password that should be used for this group
+  attribute ACString groupPassword;
+
+  /// Forgets saved authentication credentials permanently.
+  void forgetAuthenticationCredentials();
+  /// @}
   
-  void moveFolder(in nsIMsgFolder aNewsgroupToMove, in nsIMsgFolder aRefNewsgroup, in PRInt32 aOrientation);
+  void moveFolder(in nsIMsgFolder aNewsgroupToMove, in nsIMsgFolder aRefNewsgroup, in int32_t aOrientation);
 
   nsIMsgFolder addNewsgroup(in AUTF8String newsgroupName, in ACString setStr);
 

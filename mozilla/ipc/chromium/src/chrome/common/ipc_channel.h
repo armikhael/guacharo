@@ -5,6 +5,7 @@
 #ifndef CHROME_COMMON_IPC_CHANNEL_H_
 #define CHROME_COMMON_IPC_CHANNEL_H_
 
+#include <queue>
 #include "chrome/common/ipc_message.h"
 
 namespace IPC {
@@ -31,6 +32,10 @@ class Channel : public Message::Sender {
     // Called when an error is detected that causes the channel to close.
     // This method is not called when a channel is closed normally.
     virtual void OnChannelError() {}
+
+    // If the listener has queued messages, swap them for |queue| like so
+    //   swap(impl->my_queued_messages, queue);
+    virtual void GetQueuedMessages(std::queue<Message>& queue) {}
   };
 
   enum Mode {
@@ -59,7 +64,6 @@ class Channel : public Message::Sender {
   //
   Channel(const std::wstring& channel_id, Mode mode, Listener* listener);
 
-#if defined(CHROMIUM_MOZILLA_BUILD)
   // XXX it would nice not to have yet more platform-specific code in
   // here but it's just not worth the trouble.
 # if defined(OS_POSIX)
@@ -71,7 +75,6 @@ class Channel : public Message::Sender {
   Channel(const std::wstring& channel_id, void* server_pipe,
 	  Mode mode, Listener* listener);
 # endif
-#endif
 
   ~Channel();
 
@@ -86,11 +89,7 @@ class Channel : public Message::Sender {
   void Close();
 
   // Modify the Channel's listener.
-#ifdef CHROMIUM_MOZILLA_BUILD
   Listener* set_listener(Listener* listener);
-#else
-  void set_listener(Listener* listener);
-#endif
 
   // Send a message over the Channel to the listener on the other end.
   //
@@ -114,15 +113,11 @@ class Channel : public Message::Sender {
   // socketpair() in which case this method returns -1 for both parameters.
   void GetClientFileDescriptorMapping(int *src_fd, int *dest_fd) const;
 
-# if defined(CHROMIUM_MOZILLA_BUILD)
   // Return the server side of the socketpair.
   int GetServerFileDescriptor() const;
-# endif
 #elif defined(OS_WIN)
-# if defined(CHROMIUM_MOZILLA_BUILD)
   // Return the server pipe handle.
   void* GetServerPipeHandle() const;
-# endif
 #endif  // defined(OS_POSIX)
 
  private:

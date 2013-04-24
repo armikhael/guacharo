@@ -1,6 +1,4 @@
-DoUpdate: changing update channel
 UPDATE TYPE partial
-DoUpdate: unable to change channel with a partial update
 PREPARE ADD precomplete
 PREPARE ADD a/b/searchplugins/searchpluginstext0
 PREPARE PATCH a/b/searchplugins/searchpluginspng1.png
@@ -184,5 +182,5 @@ FINISH REMOVEFILE a/b/3/3text1
 backup_restore: backup file doesn't exist: a/b/3/3text1.moz-backup
 FINISH REMOVEFILE a/b/3/3text0
 backup_restore: backup file doesn't exist: a/b/3/3text0.moz-backup
-failed: 8
+failed: 42
 calling QuitProgressUI

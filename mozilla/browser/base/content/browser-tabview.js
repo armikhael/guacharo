@@ -1,40 +1,6 @@
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
-# The Original Code is the Tab View
-#
-# The Initial Developer of the Original Code is Mozilla Foundation.
-# Portions created by the Initial Developer are Copyright (C) 2010
-# the Initial Developer. All Rights Reserved.
-#
-# Contributor(s):
-#   Raymond Lee <raymond@appcoast.com>
-#   Ian Gilman <ian@iangilman.com>
-#   Tim Taubert <tim.taubert@gmx.de>
-#
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 let TabView = {
   _deck: null,
@@ -42,6 +8,7 @@ let TabView = {
   _window: null,
   _initialized: false,
   _browserKeyHandlerInitialized: false,
+  _closedLastVisibleTabBeforeFrameInitialized: false,
   _isFrameLoading: false,
   _initFrameCallbacks: [],
   _lastSessionGroupName: null,
@@ -51,14 +18,13 @@ let TabView = {
   PREF_RESTORE_ENABLED_ONCE: "browser.panorama.session_restore_enabled_once",
   GROUPS_IDENTIFIER: "tabview-groups",
   VISIBILITY_IDENTIFIER: "tabview-visibility",
-  LAST_SESSION_GROUP_NAME_IDENTIFIER: "tabview-last-session-group-name",
 
   // ----------
   get windowTitle() {
     delete this.windowTitle;
     let brandBundle = document.getElementById("bundle_brand");
     let brandShortName = brandBundle.getString("brandShortName");
-    let title = gNavigatorBundle.getFormattedString("tabView2.title", [brandShortName]);
+    let title = gNavigatorBundle.getFormattedString("tabview.title", [brandShortName]);
     return this.windowTitle = title;
   },
 
@@ -92,13 +58,15 @@ let TabView = {
 
   // ----------
   init: function TabView_init() {
+    // disable the ToggleTabView command for popup windows
+    goSetCommandEnabled("Browser:ToggleTabView", window.toolbar.visible);
+    if (!window.toolbar.visible)
+      return;
+
     if (this._initialized)
       return;
 
     if (this.firstUseExperienced) {
-      if ((gBrowser.tabs.length - gBrowser.visibleTabs.length) > 0)
-        this._setBrowserKeyHandlers();
-
       // ___ visibility
       let sessionstore =
         Cc["@mozilla.org/browser/sessionstore;1"].getService(Ci.nsISessionStore);
@@ -118,18 +86,36 @@ let TabView = {
         let self = this;
         // if a tab is changed from hidden to unhidden and the iframe is not
         // initialized, load the iframe and setup the tab.
-        this._tabShowEventListener = function (event) {
+        this._tabShowEventListener = function(event) {
           if (!self._window)
             self._initFrame(function() {
               self._window.UI.onTabSelect(gBrowser.selectedTab);
+              if (self._closedLastVisibleTabBeforeFrameInitialized) {
+                self._closedLastVisibleTabBeforeFrameInitialized = false;
+                self._window.UI.showTabView(false);
+              }
             });
         };
+        this._tabCloseEventListener = function(event) {
+          if (!self._window && gBrowser.visibleTabs.length == 0)
+            self._closedLastVisibleTabBeforeFrameInitialized = true;
+        };
         gBrowser.tabContainer.addEventListener(
-          "TabShow", this._tabShowEventListener, true);
+          "TabShow", this._tabShowEventListener, false);
+        gBrowser.tabContainer.addEventListener(
+          "TabClose", this._tabCloseEventListener, false);
 
-       // grab the last used group title
-       this._lastSessionGroupName = sessionstore.getWindowValue(window,
-         this.LAST_SESSION_GROUP_NAME_IDENTIFIER);
+       if (this._tabBrowserHasHiddenTabs()) {
+         this._setBrowserKeyHandlers();
+       } else {
+         // for restoring last session and undoing recently closed window
+         this._SSWindowStateReadyListener = function (event) {
+           if (this._tabBrowserHasHiddenTabs())
+             this._setBrowserKeyHandlers();
+         }.bind(this);
+         window.addEventListener(
+           "SSWindowStateReady", this._SSWindowStateReadyListener, false);
+        }
       }
     }
 
@@ -155,10 +141,17 @@ let TabView = {
 
     Services.prefs.removeObserver(this.PREF_BRANCH, this);
 
-    if (this._tabShowEventListener) {
+    if (this._tabShowEventListener)
       gBrowser.tabContainer.removeEventListener(
-        "TabShow", this._tabShowEventListener, true);
-    }
+        "TabShow", this._tabShowEventListener, false);
+
+    if (this._tabCloseEventListener)
+      gBrowser.tabContainer.removeEventListener(
+        "TabClose", this._tabCloseEventListener, false);
+
+    if (this._SSWindowStateReadyListener)
+      window.removeEventListener(
+        "SSWindowStateReady", this._SSWindowStateReadyListener, false);
 
     this._initialized = false;
   },
@@ -168,6 +161,10 @@ let TabView = {
   // If the frame already exists, calls the callback immediately. 
   _initFrame: function TabView__initFrame(callback) {
     let hasCallback = typeof callback == "function";
+
+    // prevent frame to be initialized for popup windows
+    if (!window.toolbar.visible)
+      return;
 
     if (this._window) {
       if (hasCallback)
@@ -183,6 +180,8 @@ let TabView = {
 
     this._isFrameLoading = true;
 
+    TelemetryStopwatch.start("PANORAMA_INITIALIZATION_TIME_MS");
+
     // ___ find the deck
     this._deck = document.getElementById("tab-view-deck");
 
@@ -190,6 +189,7 @@ let TabView = {
     this._iframe = document.createElement("iframe");
     this._iframe.id = "tab-view";
     this._iframe.setAttribute("transparent", "true");
+    this._iframe.setAttribute("tooltip", "tab-view-tooltip");
     this._iframe.flex = 1;
 
     let self = this;
@@ -197,14 +197,26 @@ let TabView = {
     window.addEventListener("tabviewframeinitialized", function onInit() {
       window.removeEventListener("tabviewframeinitialized", onInit, false);
 
+      TelemetryStopwatch.finish("PANORAMA_INITIALIZATION_TIME_MS");
+
       self._isFrameLoading = false;
       self._window = self._iframe.contentWindow;
       self._setBrowserKeyHandlers();
 
       if (self._tabShowEventListener) {
         gBrowser.tabContainer.removeEventListener(
-          "TabShow", self._tabShowEventListener, true);
+          "TabShow", self._tabShowEventListener, false);
         self._tabShowEventListener = null;
+      }
+      if (self._tabCloseEventListener) {
+        gBrowser.tabContainer.removeEventListener(
+          "TabClose", self._tabCloseEventListener, false);
+        self._tabCloseEventListener = null;
+      }
+      if (self._SSWindowStateReadyListener) {
+        window.removeEventListener(
+          "SSWindowStateReady", self._SSWindowStateReadyListener, false);
+        self._SSWindowStateReadyListener = null;
       }
 
       self._initFrameCallbacks.forEach(function (cb) cb());
@@ -213,6 +225,12 @@ let TabView = {
 
     this._iframe.setAttribute("src", "chrome://browser/content/tabview.html");
     this._deck.appendChild(this._iframe);
+
+    // ___ create tooltip
+    let tooltip = document.createElement("tooltip");
+    tooltip.id = "tab-view-tooltip";
+    tooltip.setAttribute("onpopupshowing", "return TabView.fillInTooltip(document.tooltipNode);");
+    document.getElementById("mainPopupSet").appendChild(tooltip);
   },
 
   // ----------
@@ -226,7 +244,7 @@ let TabView = {
   },
 
   // ----------
-  show: function() {
+  show: function TabView_show() {
     if (this.isVisible())
       return;
 
@@ -237,7 +255,7 @@ let TabView = {
   },
 
   // ----------
-  hide: function() {
+  hide: function TabView_hide() {
     if (!this.isVisible())
       return;
 
@@ -245,39 +263,20 @@ let TabView = {
   },
 
   // ----------
-  toggle: function() {
+  toggle: function TabView_toggle() {
     if (this.isVisible())
       this.hide();
     else 
       this.show();
   },
-  
-  getActiveGroupName: function TabView_getActiveGroupName() {
-    if (!this._window)
-      return this._lastSessionGroupName;
 
-    // We get the active group this way, instead of querying
-    // GroupItems.getActiveGroupItem() because the tabSelect event
-    // will not have happened by the time the browser tries to
-    // update the title.
-    let groupItem = null;
-    let activeTab = window.gBrowser.selectedTab;
-    let activeTabItem = activeTab._tabViewTabItem;
-
-    if (activeTab.pinned) {
-      // It's an app tab, so it won't have a .tabItem. However, its .parent
-      // will already be set as the active group. 
-      groupItem = this._window.GroupItems.getActiveGroupItem();
-    } else if (activeTabItem) {
-      groupItem = activeTabItem.parent;
-    }
-
-    // groupItem may still be null, if the active tab is an orphan.
-    return groupItem ? groupItem.getTitle() : "";
+  // ----------
+  _tabBrowserHasHiddenTabs: function TabView_tabBrowserHasHiddenTabs() {
+    return (gBrowser.tabs.length - gBrowser.visibleTabs.length) > 0;
   },
 
   // ----------
-  updateContextMenu: function(tab, popup) {
+  updateContextMenu: function TabView_updateContextMenu(tab, popup) {
     let separator = document.getElementById("context_tabViewNamedGroups");
     let isEmpty = true;
 
@@ -293,7 +292,8 @@ let TabView = {
         // if group has title, it's not hidden and there is no active group or
         // the active group id doesn't match the group id, a group menu item
         // would be added.
-        if (groupItem.getTitle().length > 0 && !groupItem.hidden &&
+        if (!groupItem.hidden &&
+            (groupItem.getTitle().trim() || groupItem.getChildren().length) &&
             (!activeGroup || activeGroup.id != groupItem.id)) {
           let menuItem = self._createGroupMenuItem(groupItem);
           popup.insertBefore(menuItem, separator);
@@ -306,10 +306,29 @@ let TabView = {
 
   // ----------
   _createGroupMenuItem: function TabView__createGroupMenuItem(groupItem) {
-    let menuItem = document.createElement("menuitem")
-    menuItem.setAttribute("label", groupItem.getTitle());
+    let menuItem = document.createElement("menuitem");
+    let title = groupItem.getTitle();
+
+    if (!title.trim()) {
+      let topChildLabel = groupItem.getTopChild().tab.label;
+      let childNum = groupItem.getChildren().length;
+
+      if (childNum > 1) {
+        let num = childNum - 1;
+        title =
+          gNavigatorBundle.getString("tabview.moveToUnnamedGroup.label");
+        title = PluralForm.get(num, title).replace("#1", topChildLabel).replace("#2", num);
+      } else {
+        title = topChildLabel;
+      }
+    }
+
+    menuItem.setAttribute("label", title);
+    menuItem.setAttribute("tooltiptext", title);
+    menuItem.setAttribute("crop", "center");
+    menuItem.setAttribute("class", "tabview-menuitem");
     menuItem.setAttribute(
-      "oncommand", 
+      "oncommand",
       "TabView.moveTabTo(TabContextMenu.contextTab,'" + groupItem.id + "')");
 
     return menuItem;
@@ -338,8 +357,7 @@ let TabView = {
 
     let self = this;
     window.addEventListener("keypress", function(event) {
-      if (self.isVisible() ||
-          (gBrowser.tabs.length - gBrowser.visibleTabs.length) == 0)
+      if (self.isVisible() || !self._tabBrowserHasHiddenTabs())
         return;
 
       let charCode = event.charCode;
@@ -355,8 +373,10 @@ let TabView = {
           if (!tabItem)
             return;
 
-          // Switch to the new tab
-          window.gBrowser.selectedTab = tabItem.tab;
+          if (gBrowser.selectedTab.pinned)
+            groupItems.updateActiveGroupItemAndTabBar(tabItem, {dontSetActiveTabInGroup: true});
+          else
+            gBrowser.selectedTab = tabItem.tab;
         });
       }
     }, true);
@@ -364,7 +384,7 @@ let TabView = {
 
   // ----------
   // Prepares the tab view for undo close tab.
-  prepareUndoCloseTab: function(blankTabToRemove) {
+  prepareUndoCloseTab: function TabView_prepareUndoCloseTab(blankTabToRemove) {
     if (this._window) {
       this._window.UI.restoredClosedTab = true;
 
@@ -375,7 +395,7 @@ let TabView = {
 
   // ----------
   // Cleans up the tab view after undo close tab.
-  afterUndoCloseTab: function () {
+  afterUndoCloseTab: function TabView_afterUndoCloseTab() {
     if (this._window)
       this._window.UI.restoredClosedTab = false;
   },
@@ -425,7 +445,7 @@ let TabView = {
   // Function: enableSessionRestore
   // Enables automatic session restore when the browser is started. Does
   // nothing if we already did that once in the past.
-  enableSessionRestore: function UI_enableSessionRestore() {
+  enableSessionRestore: function TabView_enableSessionRestore() {
     if (!this._window || !this.firstUseExperienced)
       return;
 
@@ -442,5 +462,29 @@ let TabView = {
       // show banner
       this._window.UI.notifySessionRestoreEnabled();
     }
+  },
+
+  // ----------
+  // Function: fillInTooltip
+  // Fills in the tooltip text.
+  fillInTooltip: function fillInTooltip(tipElement) {
+    let retVal = false;
+    let titleText = null;
+    let direction = tipElement.ownerDocument.dir;
+
+    while (!titleText && tipElement) {
+      if (tipElement.nodeType == Node.ELEMENT_NODE)
+        titleText = tipElement.getAttribute("title");
+      tipElement = tipElement.parentNode;
+    }
+    let tipNode = document.getElementById("tab-view-tooltip");
+    tipNode.style.direction = direction;
+
+    if (titleText) {
+      tipNode.setAttribute("label", titleText);
+      retVal = true;
+    }
+
+    return retVal;
   }
 };

@@ -1,40 +1,6 @@
-/* -*- Mode: JavaScript; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Joachim Herb <herb@leo.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #filter substitution
 
@@ -43,8 +9,6 @@
 #define UNIX_BUT_NOT_MAC
 #endif
 #endif
-
-pref("general.useragent.extra.thunderbird", "@APP_UA_NAME@/@APP_VERSION@");
 
 pref("general.useragent.locale", "@AB_CD@");
 pref("general.skins.selectedSkin", "classic/1.0");
@@ -60,7 +24,7 @@ pref("mail.rights.version", 0);
 #ifdef DEBUG
 pref("mail.rights.override", true);
 #endif
-#ifndef OFFICIAL_BUILD
+#ifndef MOZILLA_OFFICIAL
 pref("mail.rights.override", true);
 #endif
 
@@ -71,7 +35,52 @@ pref("mail.rights.override", true);
 pref("nglayout.enable_drag_images", false);
 #endif
 
+// The minimum delay in seconds for the timer to fire.
+// default=2 minutes
+pref("app.update.timerMinimumDelay", 120);
+
 // App-specific update preferences
+
+// The interval to check for updates (app.update.interval) is defined in
+// the branding files.
+
+// Enables some extra Application Update Logging (can reduce performance)
+pref("app.update.log", false);
+
+// When |app.update.cert.requireBuiltIn| is true or not specified the
+// final certificate and all certificates the connection is redirected to before
+// the final certificate for the url specified in the |app.update.url|
+// preference must be built-in.
+pref("app.update.cert.requireBuiltIn", true);
+
+// When |app.update.cert.checkAttributes| is true or not specified the
+// certificate attributes specified in the |app.update.certs.| preference branch
+// are checked against the certificate for the url specified by the
+// |app.update.url| preference.
+pref("app.update.cert.checkAttributes", true);
+
+// The number of certificate attribute check failures to allow for background
+// update checks before notifying the user of the failure. User initiated update
+// checks always notify the user of the certificate attribute check failure.
+pref("app.update.cert.maxErrors", 5);
+
+// The |app.update.certs.| preference branch contains branches that are
+// sequentially numbered starting at 1 that contain attribute name / value
+// pairs for the certificate used by the server that hosts the update xml file
+// as specified in the |app.update.url| preference. When these preferences are
+// present the following conditions apply for a successful update check:
+// 1. the uri scheme must be https
+// 2. the preference name must exist as an attribute name on the certificate and
+//    the value for the name must be the same as the value for the attribute name
+//    on the certificate.
+// If these conditions aren't met it will be treated the same as when there is
+// no update available. This validation will not be performed when using the
+// |app.update.url.override| preference for update checking.
+pref("app.update.certs.1.issuerName", "OU=Equifax Secure Certificate Authority,O=Equifax,C=US");
+pref("app.update.certs.1.commonName", "aus3.mozilla.org");
+
+pref("app.update.certs.2.issuerName", "CN=Thawte SSL CA,O=\"Thawte, Inc.\",C=US");
+pref("app.update.certs.2.commonName", "aus3.mozilla.org");
 
 // Whether or not app updates are enabled
 pref("app.update.enabled", true);               
@@ -91,29 +100,28 @@ pref("app.update.auto", true);
 // See chart in nsUpdateService.js.in for more details
 //
 pref("app.update.mode", 1);
+
 // If set to true, the Update Service will present no UI for any event.
 pref("app.update.silent", false);
 
+// If set to true, the Update Service will apply updates in the background
+// when it finishes downloading them.
+pref("app.update.staging.enabled", true);
+
 // Update service URL:
-pref("app.update.url", "https://aus2.mozillamessaging.com/update/3/%PRODUCT%/%VERSION%/%BUILD_ID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/%OS_VERSION%/%DISTRIBUTION%/%DISTRIBUTION_VERSION%/update.xml");
+pref("app.update.url", "https://aus3.mozilla.org/update/3/%PRODUCT%/%VERSION%/%BUILD_ID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/%OS_VERSION%/%DISTRIBUTION%/%DISTRIBUTION_VERSION%/update.xml");
 
 // URL user can browse to manually if for some reason all update installation
 // attempts fail.
 pref("app.update.url.manual", "http://www.getthunderbird.com");
 // A default value for the "More information about this update" link
 // supplied in the "An update is available" page of the update wizard. 
-pref("app.update.url.details", "http://www.mozillamessaging.com/%LOCALE%/%APP%/releases/");
+pref("app.update.url.details", "http://www.mozilla.org/%LOCALE%/thunderbird/releases/");
 // User-settable override to app.update.url for testing purposes.
 //pref("app.update.url.override", "");
 
-// Interval: Time before prompting the user again to restart to install the
-//           latest download (in seconds) default=1 day
-pref("app.update.nagTimer.restart", 86400);
-// Interval: When all registered timers should be checked (in milliseconds)
-//           default=10 minutes
-pref("app.update.timer", 600000);
-// Give the user x seconds to react before showing the big UI. default=12 hrs
-pref("app.update.promptWaitTime", 43200);
+// app.update.promptWaitTime is in branding section
+
 // Show the Update Checking/Ready UI when the user was idle for x seconds
 pref("app.update.idletime", 60);
 
@@ -124,36 +132,46 @@ pref("app.update.idletime", 60);
 // which tells users what's new in this new update.
 pref("app.update.showInstalledUI", false);
 
-// Release notes URL
-pref("app.releaseNotesURL", "http://live.mozillamessaging.com/%APP%/releasenotes?locale=%LOCALE%&version=%VERSION%&os=%OS%&buildid=%APPBUILDID%");
+// Whether or not to attempt using the service for updates.
+#ifdef MOZ_MAINTENANCE_SERVICE
+pref("app.update.service.enabled", true);
+#endif
 
 // Base URL for web-based support pages.
-pref("app.support.baseURL", "http://support.live.mozillamessaging.com/%LOCALE%/%APP%/%APPBUILDID%/");
+pref("app.support.baseURL", "http://support.live.mozillamessaging.com/%LOCALE%/thunderbird/%APPBUILDID%/");
 
 // Controls enabling of the extension system logging (can reduce performance)
 pref("extensions.logging.enabled", false);
+
+// Disables strict compatibility, making addons compatible-by-default.
+pref("extensions.strictCompatibility", false);
+
+// Specifies a minimum maxVersion an addon needs to say it's compatible with
+// for it to be compatible by default.
+pref("extensions.minCompatibleAppVersion", "5.0");
 
 pref("extensions.update.autoUpdateDefault", true);
 
 // Disable add-ons installed into the shared user and shared system areas by
 // default. This does not include the application directory. See the SCOPE
 // constants in AddonManager.jsm for values to use here
-pref("extensions.autoDisableScopes", 15);
+pref("extensions.autoDisableScopes", 3);
 
 // Preferences for AMO integration
 pref("extensions.getAddons.cache.enabled", true);
 pref("extensions.getAddons.maxResults", 15);
-pref("extensions.getAddons.get.url", "https://services.addons.mozilla.org/%LOCALE%/%APP%/api/%API_VERSION%/search/guid:%IDS%?src=thunderbird&appOS=%OS%&appVersion=%VERSION%&tMain=%TIME_MAIN%&tFirstPaint=%TIME_FIRST_PAINT%&tSessionRestored=%TIME_SESSION_RESTORED%");
-pref("extensions.getAddons.search.browseURL", "https://addons.mozilla.org/%LOCALE%/%APP%/search?q=%TERMS%");
-pref("extensions.getAddons.search.url", "https://services.addons.mozilla.org/%LOCALE%/%APP%/api/%API_VERSION%/search/%TERMS%/all/%MAX_RESULTS%/%OS%/%VERSION%?src=thunderbird");
-pref("extensions.webservice.discoverURL", "https://services.addons.mozilla.org/%LOCALE%/%APP%/discovery/pane/%VERSION%/%OS%");
+pref("extensions.getAddons.get.url", "https://services.addons.mozilla.org/%LOCALE%/thunderbird/api/%API_VERSION%/search/guid:%IDS%?src=thunderbird&appOS=%OS%&appVersion=%VERSION%");
+pref("extensions.getAddons.getWithPerformance.url", "https://services.addons.mozilla.org/%LOCALE%/thunderbird/api/%API_VERSION%/search/guid:%IDS%?src=thunderbird&appOS=%OS%&appVersion=%VERSION%&tMain=%TIME_MAIN%&tFirstPaint=%TIME_FIRST_PAINT%&tSessionRestored=%TIME_SESSION_RESTORED%");
+pref("extensions.getAddons.search.browseURL", "https://addons.mozilla.org/%LOCALE%/thunderbird/search?q=%TERMS%");
+pref("extensions.getAddons.search.url", "https://services.addons.mozilla.org/%LOCALE%/thunderbird/api/%API_VERSION%/search/%TERMS%/all/%MAX_RESULTS%/%OS%/%VERSION%/%COMPATIBILITY_MODE%?src=thunderbird");
+pref("extensions.webservice.discoverURL", "https://services.addons.mozilla.org/%LOCALE%/thunderbird/discovery/pane/%VERSION%/%OS%");
 
 // Blocklist preferences
 pref("extensions.blocklist.enabled", true);
 pref("extensions.blocklist.interval", 86400);
 pref("extensions.blocklist.url", "https://addons.mozilla.org/blocklist/3/%APP_ID%/%APP_VERSION%/%PRODUCT%/%BUILD_ID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/%OS_VERSION%/%DISTRIBUTION%/%DISTRIBUTION_VERSION%/%PING_COUNT%/%TOTAL_PING_COUNT%/%DAYS_SINCE_LAST_PING%/");
-pref("extensions.blocklist.detailsURL", "https://addons.mozilla.org/%LOCALE%/%APP%/blocked/");
-pref("extensions.blocklist.itemURL", "https://addons.mozilla.org/%LOCALE%/%APP%/blocked/%blockID%");
+pref("extensions.blocklist.detailsURL", "https://addons.mozilla.org/%LOCALE%/thunderbird/blocked/");
+pref("extensions.blocklist.itemURL", "https://addons.mozilla.org/%LOCALE%/thunderbird/blocked/%blockID%");
 
 // Enables some extra Extension System Logging (can reduce performance) 
 pref("extensions.logging.enabled", false); 
@@ -166,12 +184,12 @@ pref("extensions.logging.enabled", false);
 //  .. etc ..
 //
 pref("extensions.update.enabled", true);
-pref("extensions.update.url", "https://versioncheck.addons.mozilla.org/update/VersionCheck.php?reqVersion=%REQ_VERSION%&id=%ITEM_ID%&version=%ITEM_VERSION%&maxAppVersion=%ITEM_MAXAPPVERSION%&status=%ITEM_STATUS%&appID=%APP_ID%&appVersion=%APP_VERSION%&appOS=%APP_OS%&appABI=%APP_ABI%&locale=%APP_LOCALE%&currentAppVersion=%CURRENT_APP_VERSION%&updateType=%UPDATE_TYPE%");
+pref("extensions.update.url", "https://versioncheck.addons.mozilla.org/update/VersionCheck.php?reqVersion=%REQ_VERSION%&id=%ITEM_ID%&version=%ITEM_VERSION%&maxAppVersion=%ITEM_MAXAPPVERSION%&status=%ITEM_STATUS%&appID=%APP_ID%&appVersion=%APP_VERSION%&appOS=%APP_OS%&appABI=%APP_ABI%&locale=%APP_LOCALE%&currentAppVersion=%CURRENT_APP_VERSION%&updateType=%UPDATE_TYPE%&compatMode=%COMPATIBILITY_MODE%");
 
 pref("extensions.update.interval", 86400);  // Check for updates to Extensions and 
                                             // Themes every day
 
-pref("extensions.getMoreThemesURL", "https://addons.mozilla.org/%LOCALE%/%APP%/themes/");
+pref("extensions.getMoreThemesURL", "https://addons.mozilla.org/%LOCALE%/thunderbird/themes/");
 pref("extensions.dss.enabled", false);          // Dynamic Skin Switching                                               
 pref("extensions.dss.switchPending", false);    // Non-dynamic switch pending after next
 
@@ -182,6 +200,13 @@ pref("lightweightThemes.update.enabled", true);
 
 pref("xpinstall.whitelist.add", "addons.mozilla.org");
 pref("xpinstall.whitelist.add.36", "getpersonas.com");
+
+pref("general.smoothScroll", true);
+#ifdef UNIX_BUT_NOT_MAC
+pref("general.autoScroll", false);
+#else
+pref("general.autoScroll", true);
+#endif
 
 pref("mail.shell.checkDefaultClient", true);
 pref("mail.spellcheck.inline", true);
@@ -223,14 +248,17 @@ pref("mail.close_message_window.on_delete", false);
 // truncates the list.
 pref("mailnews.headers.show_n_lines_before_more", 1);
 
-// Thunderbird wants to show the migration assistant on upgrade by default.
-pref("mail.ui.show.migration.on.upgrade", true);
+// We want to keep track of what items are appropriate in
+// localstore.rdf.  We use versioning to scrub out the things
+// that have become obsolete.
+pref("mail.ui-rdf.version", 0);
 
 /////////////////////////////////////////////////////////////////
 // Overrides of the core mailnews.js prefs
 /////////////////////////////////////////////////////////////////
 pref("mail.showCondensedAddresses", true); // show the friendly display name for people I know
 
+pref("mailnews.attachments.display.start_expanded", false);
 // hidden pref for changing how we present attachments in the message pane
 pref("mailnews.attachments.display.view", 0);
 pref("mail.pane_config.dynamic",            0);
@@ -328,6 +356,10 @@ pref("general.config.obscure_value", 0); // for MCD .cfg files
 pref("browser.display.auto_quality_min_font_size", 0);
 
 pref("view_source.syntax_highlight", false);
+
+pref("toolkit.telemetry.infoURL", "http://www.mozilla.org/thunderbird/legal/privacy/#telemetry");
+
+pref("mousewheel.withcontrolkey.action", 3);
 /////////////////////////////////////////////////////////////////
 // End core all.js pref overrides
 ///////////////////////////////////////////////////////////////// 
@@ -358,7 +390,7 @@ pref("javascript.options.showInConsole",    true);
 
 pref("spellchecker.dictionary", "");
 // Dictionary download preference
-pref("spellchecker.dictionaries.download.url", "https://addons.mozilla.org/%LOCALE%/%APP%/dictionaries/");
+pref("spellchecker.dictionaries.download.url", "https://addons.mozilla.com/%LOCALE%/thunderbird/dictionaries/");
 
 // profile.force.migration can be used to bypass the migration wizard, forcing migration from a particular
 // mail application without any user intervention. Possible values are: 
@@ -416,7 +448,7 @@ pref("mail.tabs.loadInBackground", true);
 
 // Tabs
 pref("mail.tabs.tabMinWidth", 100);
-pref("mail.tabs.tabMaxWidth", 250);
+pref("mail.tabs.tabMaxWidth", 210);
 pref("mail.tabs.tabClipWidth", 140);
 pref("mail.tabs.autoHide", false);
 pref("mail.tabs.closeWindowWithLastTab", true);
@@ -427,6 +459,9 @@ pref("mail.tabs.closeWindowWithLastTab", true);
 // 2 - no close buttons
 // 3 - at the end of the tabstrip
 pref("mail.tabs.closeButtons", 1);
+
+// Allow the tabs to be in the titlebar on supported systems
+pref("mail.tabs.drawInTitlebar", true);
 
 // The breakpad report server to link to in about:crashes
 pref("breakpad.reportURL", "http://crash-stats.mozilla.com/report/index/");
@@ -472,11 +507,20 @@ pref("mail.compose.attachment_reminder_keywords", "chrome://messenger/locale/mes
 // show an alert on send?
 pref("mail.compose.attachment_reminder_aggressive", true);
 
+// True if the user should be notified when attaching big files
+pref("mail.compose.big_attachments.notify", true);
+// Size (in kB) to automatically prompt for conversion of attachments to
+// cloud links
+pref("mail.compose.big_attachments.threshold_kb", 5120);
+// True if the user should be notified that links will be inserted into
+// their message when the upload is completed
+pref("mail.compose.big_attachments.insert_notification", true);
+
 // Set this to false to prevent instrumentation from happening, e.g., user
 // has opted out, or an enterprise wants to disable it from the git go.
 pref("mail.instrumentation.askUser", true);
 pref("mail.instrumentation.userOptedIn", false);
-pref("mail.instrumentation.postUrl", "https://www.mozillamessaging.com/instrumentation");
+pref("mail.instrumentation.postUrl", "https://www.mozilla.org/instrumentation");
 // not sure how this will be formatted - would be nice to make it extensible.
 pref("mail.instrumentation.lastNotificationSent", "");
 
@@ -495,7 +539,7 @@ pref("mailnews.database.global.indexer.enabled", true);
 pref("mailnews.database.global.logging.console", true);
 
 // page to load to find good header add-ons
-pref("mailnews.migration.header_addons_url","http://live.mozillamessaging.com/%APP%/addons/search?q=header&locale=%LOCALE%&lver=%VERSION%&hver=%VERSION%&os=%OS%");
+pref("mailnews.migration.header_addons_url","http://live.mozillamessaging.com/thunderbird/addons/search?q=header&locale=%LOCALE%&lver=%VERSION%&hver=%VERSION%&os=%OS%");
 
 // Serif fonts look dated.  Switching those language families to sans-serif
 // where we think it makes sense.  Worth investigating for other font families
@@ -638,7 +682,10 @@ pref("places.history.enabled", false);
 // allowed cache size it will at most use the size of the database file.
 // Changes to this value are effective after an application restart.
 // Acceptable values are between 0 and 50.
-pref("places.database.cache_to_memory_percentage", 6);
+// In Thunderbird, we're not exercising places much, so it makes sense to make
+// it use a lower percentage of the cache. Plus, we have another more important
+// sqlite database (gloda) that deserves to use cache.
+pref("places.database.cache_to_memory_percentage", 1);
 
 // the (maximum) number of the recent visits to sample
 // when calculating frecency
@@ -699,8 +746,87 @@ pref("dom.ipc.plugins.enabled", true);
 pref("dom.ipc.plugins.nativeCursorSupport", true);
 #endif
 
+// plugin finder service url
+pref("pfs.datasource.url", "https://pfs.mozilla.org/plugins/PluginFinderService.
+php?mimetype=%PLUGIN_MIMETYPE%&appID=%APP_ID%&appVersion=%APP_VERSION%&clientOS=
+%CLIENT_OS%&chromeLocale=%CHROME_LOCALE%&appRelease=%APP_RELEASE%");
+
+// By default we show an infobar message when pages require plugins the user has
+// not installed, or are outdated.
+pref("plugins.hide_infobar_for_missing_plugin", false);
+pref("plugins.hide_infobar_for_outdated_plugin", false);
+
+#ifdef XP_MACOSX
+pref("plugins.use_layers", false);
+pref("plugins.hide_infobar_for_carbon_failure_plugin", false);
+#endif
+
+pref("plugins.update.url", "https://www.mozilla.com/%LOCALE%/plugincheck/");
+pref("plugins.update.notifyUser", false);
+pref("plugins.crash.supportUrl", "https://live.mozillamessaging.com/thunderbird/plugin-crashed?locale=%LOCALE%&version=%VERSION%&os=%OS%&buildid=%APPBUILDID%");
+
 // Windows taskbar support
 #ifdef XP_WIN
 pref("mail.taskbar.lists.enabled", true);
 pref("mail.taskbar.lists.tasks.enabled", true);
 #endif
+
+// Disable hardware accelerated layers
+pref("layers.acceleration.disabled", true);
+#ifdef XP_WIN
+// and direct2d support on Windows
+pref("gfx.direct2d.disabled", true);
+#endif
+
+// Account provisioner.
+pref("mail.provider.providerList", "https://broker-live.mozillamessaging.com/provider/list");
+pref("mail.provider.suggestFromName", "https://broker-live.mozillamessaging.com/provider/suggest");
+pref("mail.provider.enabled", true);
+
+pref("mail.websearch.open_externally", false);
+
+// Pointer to the default engine name.
+pref("browser.search.defaultenginename", "chrome://messenger-region/locale/region.properties");
+
+// Ordering of search engines in the engine list.
+pref("browser.search.order.1", "chrome://messenger-region/locale/region.properties");
+pref("browser.search.order.2", "chrome://messenger-region/locale/region.properties");
+pref("browser.search.order.3", "chrome://messenger-region/locale/region.properties");
+
+// XXX Don't update yet, until we've verified how that affects us.
+pref("browser.search.update", false);
+
+// Check whether we need to perform engine updates every 6 hours
+pref("browser.search.update.interval", 21600);
+
+// Disable remote debugging protocol logging
+pref("devtools.debugger.log", false);
+
+pref("mail.chat.enabled", true);
+pref("mail.chat.play_notification_sound", true);
+// Send typing notification in private conversations
+pref("purple.conversations.im.send_typing", true);
+
+// BigFiles
+pref("mail.cloud_files.enabled", true);
+pref("mail.cloud_files.inserted_urls.footer.link", "http://www.getthunderbird.com");
+pref("mail.cloud_files.learn_more_url", "https://support.mozillamessaging.com/kb/filelink-large-attachments");
+
+// Sanitize dialog window
+pref("privacy.cpd.cookies", true);
+pref("privacy.cpd.cache", true);
+
+// What default should we use for the time span in the sanitizer:
+// 0 - Clear everything
+// 1 - Last Hour
+// 2 - Last 2 Hours
+// 3 - Last 4 Hours
+// 4 - Today
+pref("privacy.sanitize.timeSpan", 1);
+
+// PgpMime Proxy
+pref("mail.pgpmime.addon_url", "https://addons.mozilla.org/thunderbird/addon/enigmail/");
+
+// If set to true, Thunderbird will collapse the main menu for new profiles
+// (or, more precisely, profiles that start with no accounts created).
+pref("mail.main_menu.collapse_by_default", true);

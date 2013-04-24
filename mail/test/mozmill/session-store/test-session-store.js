@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Mail Client.
- *
- * The Initial Developer of the Original Code is
- * The Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Wei Xian Woo <wei0@gmx.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * Session Storage Tests. Session Restoration Tests are currently implemented in
@@ -233,6 +200,167 @@ function test_restore_single_3pane_persistence_again() {
   test_restore_single_3pane_persistence();
 }
 
+function test_message_pane_height_persistence() {
+  be_in_folder(folderA);
+  assert_message_pane_visible();
+  assert_pane_layout(kClassicMailLayout);
+
+  // Get the state object. This assumes there is one and only one
+  // 3pane window.
+  let windowWatcher = Cc["@mozilla.org/embedcomp/window-watcher;1"].
+                      getService(Ci.nsIWindowWatcher);
+  let windowMediator = Cc["@mozilla.org/appshell/window-mediator;1"].
+                       getService(Ci.nsIWindowMediator);
+  let mail3PaneWindow = windowMediator.getMostRecentWindow("mail:3pane");
+
+  let oldHeight = mc.e("messagepaneboxwrapper").boxObject.height;
+  let minHeight = Math.floor(mc.e("messagepaneboxwrapper").getAttribute("minheight"));
+  let newHeight = Math.floor((minHeight + oldHeight) / 2);
+  let diffHeight = oldHeight - newHeight;
+
+  assert_not_equals(oldHeight, newHeight,
+    "To really perform a test the new message pane height should be " +
+    "should be different from the old one but they are the same: " +
+    newHeight);
+
+  _move_splitter(mc.e("threadpane-splitter"), 0, diffHeight);
+
+  // Check that the moving of the threadpane-splitter resulted in the correct height.
+  let actualHeight = mc.e("messagepaneboxwrapper").boxObject.height;
+
+  assert_equals(newHeight, actualHeight,
+    "The message pane height should be " + newHeight + ", but is actually " +
+    actualHeight + ". The oldHeight was: " + oldHeight);
+
+  // Make sure we have a different window open, so that we don't start shutting
+  // down just because the last window was closed.
+  let abwc = openAddressBook(windowWatcher);
+
+  // The 3pane window is closed.
+  mail3PaneWindow.close();
+
+  mc = open3PaneWindow(windowWatcher);
+  be_in_folder(folderA);
+  assert_message_pane_visible();
+
+  let actualHeight = mc.e("messagepaneboxwrapper").boxObject.height;
+
+  assert_equals(newHeight, actualHeight,
+    "The message pane height should be " + newHeight + ", but is actually " +
+    actualHeight + ". The oldHeight was: " + oldHeight);
+
+  // The old height is restored.
+  _move_splitter(mc.e("threadpane-splitter"), 0, -diffHeight);
+
+  // The 3pane window is closed.
+  mail3PaneWindow.close();
+
+  mc = open3PaneWindow(windowWatcher);
+  be_in_folder(folderA);
+  assert_message_pane_visible();
+
+  let actualHeight = mc.e("messagepaneboxwrapper").boxObject.height;
+  assert_equals(oldHeight, actualHeight,
+    "The message pane height should be " + oldHeight + ", but is actually " +
+    actualHeight);
+
+  // We don't need the address book window any more.
+  plan_for_window_close(abwc);
+  abwc.window.close();
+  wait_for_window_close();
+}
+
+function test_message_pane_width_persistence() {
+  be_in_folder(folderA);
+  assert_message_pane_visible();
+
+  // At the beginning we are in classic layout.  We will switch to
+  // vertical layout to test the width, and then back to classic layout.
+  assert_pane_layout(kClassicMailLayout);
+  set_pane_layout(kVerticalMailLayout);
+  assert_pane_layout(kVerticalMailLayout);
+
+  // Get the state object. This assumes there is one and only one
+  // 3pane window.
+  let windowWatcher = Cc["@mozilla.org/embedcomp/window-watcher;1"].
+                      getService(Ci.nsIWindowWatcher);
+  let windowMediator = Cc["@mozilla.org/appshell/window-mediator;1"].
+                       getService(Ci.nsIWindowMediator);
+  let mail3PaneWindow = windowMediator.getMostRecentWindow("mail:3pane");
+
+  let oldWidth = mc.e("messagepaneboxwrapper").boxObject.width;
+  let minWidth = Math.floor(mc.e("messagepaneboxwrapper").getAttribute("minwidth"));
+  let newWidth = Math.floor((minWidth + oldWidth) / 2);
+  let diffWidth = oldWidth - newWidth;
+
+  assert_not_equals(newWidth, oldWidth,
+    "To really perform a test the new message pane width should be " +
+    "should be different from the old one but they are the same: " + newWidth);
+
+  _move_splitter(mc.e("threadpane-splitter"), diffWidth, 0);
+  // Check that the moving of the folderpane_splitter resulted in the correct width.
+  let actualWidth = mc.e("messagepaneboxwrapper").boxObject.width;
+
+  // FIXME: For whatever reasons the new width is off by one pixel on Mac OSX
+  // But this test case is not for testing moving around a splitter but for
+  // persistency. Therefore it is enough if the actual width is equal to the
+  // the requested width plus/minus one pixel.
+  assert_equals_fuzzy(newWidth, actualWidth, 1,
+    "The message pane width should be " + newWidth + ", but is actually " +
+    actualWidth + ". The oldWidth was: " + oldWidth);
+  newWidth = actualWidth;
+
+  // Make sure we have a different window open, so that we don't start shutting
+  // down just because the last window was closed
+  let abwc = openAddressBook(windowWatcher);
+
+  // The 3pane window is closed.
+  mail3PaneWindow.close();
+
+  mc = open3PaneWindow(windowWatcher);
+  be_in_folder(folderA);
+  assert_message_pane_visible();
+  assert_pane_layout(kVerticalMailLayout);
+
+  let actualWidth = mc.e("messagepaneboxwrapper").boxObject.width;
+  assert_equals(newWidth, actualWidth, "The message pane width should be " +
+    newWidth + ", but is actually " + actualWidth);
+
+  // The old width is restored.
+  _move_splitter(mc.e("threadpane-splitter"), -diffWidth, 0);
+  let actualWidth = mc.e("messagepaneboxwrapper").boxObject.width;
+
+  // FIXME: For whatever reasons the new width is off by two pixels on Mac OSX
+  // But this test case is not for testing moving around a splitter but for
+  // persistency. Therefore it is enough if the actual width is equal to the
+  // the requested width plus/minus two pixels.
+  assert_equals_fuzzy(oldWidth, actualWidth, 2,
+    "The message pane width should be " + oldWidth + ", but is actually " +
+    actualWidth);
+  oldWidth = actualWidth;
+
+  // The 3pane window is closed.
+  mail3PaneWindow.close();
+
+  mc = open3PaneWindow(windowWatcher);
+  be_in_folder(folderA);
+  assert_message_pane_visible();
+  assert_pane_layout(kVerticalMailLayout);
+
+  let actualWidth = mc.e("messagepaneboxwrapper").boxObject.width;
+  assert_equals(oldWidth, actualWidth, "The message pane width should be " +
+    oldWidth + ", but is actually " + actualWidth);
+
+  // The layout is reset to classical mail layout.
+  set_pane_layout(kClassicMailLayout);
+  assert_pane_layout(kClassicMailLayout);
+
+  // We don't need the address book window any more.
+  plan_for_window_close(abwc);
+  abwc.window.close();
+  wait_for_window_close();
+}
+
 function test_multiple_3pane_periodic_session_persistence() {
   // open a few more 3pane windows
   let windowWatcher = Cc["@mozilla.org/embedcomp/window-watcher;1"].
@@ -341,6 +469,35 @@ function test_clean_shutdown_session_persistence_simple() {
   plan_for_window_close(abwc);
   abwc.window.close();
   wait_for_window_close();
+}
+
+/*
+ * A set of private helper functions for drag'n'drop
+ * These functions are inspired by tabmail/test-tabmail-dragndrop.js
+ */
+
+function _move_splitter(aSplitter, aDiffX, aDiffY) {
+
+  // catch the splitter in the middle
+  EventUtils.synthesizeMouse(aSplitter, 1, 0, {type:"mousedown"}, mc.window);
+  EventUtils.synthesizeMouse(aSplitter, aDiffX, aDiffY, {type:"mousemove"},
+                             mc.window);
+  // release the splitter in the middle
+  EventUtils.synthesizeMouse(aSplitter, 0, 0, {type:"mouseup"}, mc.window);
+
+}
+
+/**
+ * Helper function that checks the fuzzy equivalence of two numeric
+ * values against some given tolerance.
+ *
+ * @param aLeft one value to check equivalence with
+ * @param aRight the other value to check equivalence with
+ * @param aTolerance how fuzzy can our equivalence be?
+ * @param aMessage the message to give off if we're outside of tolerance.
+ */
+function assert_equals_fuzzy(aLeft, aRight, aTolerance, aMessage) {
+  assert_true(Math.abs(aLeft - aRight) <= aTolerance, aMessage);
 }
 
 // XXX todo

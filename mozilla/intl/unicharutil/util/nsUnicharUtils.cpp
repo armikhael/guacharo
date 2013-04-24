@@ -1,42 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Unicode case conversion helpers.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corp..
- * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Alec Flett <alecf@netscape.com>
- *   Benjamin Smedberg <benjamin@smedbergs.us>
- *   Ben Turner <mozilla@songbirdnest.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsUnicharUtils.h"
 #include "nsUnicharUtilCIID.h"
@@ -45,169 +10,49 @@
 #include "nsICaseConversion.h"
 #include "nsServiceManagerUtils.h"
 #include "nsXPCOMStrings.h"
-#include "casetable.h"
 #include "nsUTF8Utils.h"
+#include "nsUnicodeProperties.h"
+#include "nsHashKeys.h"
 
-#include <ctype.h>
-
-// For gUpperToTitle
-enum {
-  kUpperIdx =0,
-  kTitleIdx
-};
-
-// For gUpperToTitle
-enum {
-  kLowIdx =0,
-  kSizeEveryIdx,
-  kDiffIdx
+// We map x -> x, except for upper-case letters,
+// which we map to their lower-case equivalents.
+static const uint8_t gASCIIToLower [128] = {
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+    0x40, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f,
+    0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
+    0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f,
+    0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
 };
 
 #define IS_ASCII(u)       ((u) < 0x80)
-#define IS_ASCII_UPPER(u) (('A' <= (u)) && ( (u) <= 'Z' ))
-#define IS_ASCII_LOWER(u) (('a' <= (u)) && ( (u) <= 'z'))
+#define IS_ASCII_UPPER(u) (('A' <= (u)) && ((u) <= 'Z'))
+#define IS_ASCII_LOWER(u) (('a' <= (u)) && ((u) <= 'z'))
 #define IS_ASCII_ALPHA(u) (IS_ASCII_UPPER(u) || IS_ASCII_LOWER(u))
-#define IS_ASCII_SPACE(u) ( ' ' == (u) )
+#define IS_ASCII_SPACE(u) (' ' == (u))
 
-#define IS_NOCASE_CHAR(u)  (0==(1&(gCaseBlocks[(u)>>13]>>(0x001F&((u)>>8)))))
-
-// Size of Tables
-
-// Changing these numbers may break UTF-8 caching.  Be careful!
-#define CASE_MAP_CACHE_SIZE 0x100
-#define CASE_MAP_CACHE_MASK 0xFF
-
-struct nsCompressedMap {
-  const PRUnichar *mTable;
-  PRUint32 mSize;
-  PRUint32 mCache[CASE_MAP_CACHE_SIZE];
-  PRUint32 mLastBase;
-
-  PRUnichar Map(PRUnichar aChar)
-  {
-    // We don't need explicit locking here since the cached values are int32s,
-    // which are read and written atomically.  The following code is threadsafe
-    // because we never access bits from mCache directly -- we always first
-    // read the entire entry into a local variable and then mask off the bits
-    // we're interested in.
-
-    // Check the 256-byte cache first and bail with our answer if we can.
-    PRUint32 cachedData = mCache[aChar & CASE_MAP_CACHE_MASK];
-    if (aChar == ((cachedData >> 16) & 0x0000FFFF))
-      return cachedData & 0x0000FFFF;
-
-    // Now try the last index we looked up, storing it into a local variable
-    // for thread-safety.
-    PRUint32 base = mLastBase;
-    PRUnichar res = 0;
-
-    // Does this character fit in the slot?
-    if ((aChar <= ((mTable[base+kSizeEveryIdx] >> 8) +
-                   mTable[base+kLowIdx])) &&
-        (mTable[base+kLowIdx] <= aChar)) {
-
-      // This character uses the same base as our last lookup, so the
-      // conversion is easy.
-      if (((mTable[base+kSizeEveryIdx] & 0x00FF) > 0) &&
-          (0 != ((aChar - mTable[base+kLowIdx]) % 
-                 (mTable[base+kSizeEveryIdx] & 0x00FF))))
-      {
-        res = aChar;
-      } else {
-        res = aChar + mTable[base+kDiffIdx];
-      }
-
-    } else {
-      // Do the full lookup.
-      res = this->Lookup(0, mSize/2, mSize-1, aChar);
-    }
-
-    // Cache the result and return.
-    mCache[aChar & CASE_MAP_CACHE_MASK] =
-        ((aChar << 16) & 0xFFFF0000) | (0x0000FFFF & res);
-    return res;
-  }
-
-  // Takes as arguments the left bound, middle, right bound, and character to
-  // search for.  Executes a binary search.
-  PRUnichar Lookup(PRUint32 l,
-                   PRUint32 m,
-                   PRUint32 r,
-                   PRUnichar aChar)
-  {
-    PRUint32 base = m*3; // Every line in the table is 3 units wide.
-
-    // Is aChar past the top of the current table entry?  (The upper byte of
-    // the 'every' entry contains the offset to the end of this entry.)
-    if (aChar > ((mTable[base+kSizeEveryIdx] >> 8) + 
-                  mTable[base+kLowIdx])) 
-    {
-      if (l > m || l == r)
-        return aChar;
-      // Advance one round.
-      PRUint32 newm = (m+r+1)/2;
-      if (newm == m)
-        newm++;
-      return this->Lookup(m+1, newm, r, aChar);
-
-    // Is aChar below the bottom of the current table entry?
-    } else if (mTable[base+kLowIdx] > aChar) {
-      if (r < m || l == r)
-        return aChar;
-      // Advance one round
-      PRUint32 newm = (l+m-1)/2;
-      if(newm == m)
-        newm++;
-      return this->Lookup(l, newm, m-1, aChar);
-
-    // We've found the entry aChar should live in.
-    } else {
-      // Determine if aChar falls in a gap.  (The lower byte of the 'every'
-      // entry contains n for which every nth character from the base is a
-      // character of interest.)
-      if (((mTable[base+kSizeEveryIdx] & 0x00FF) > 0) && 
-          (0 != ((aChar - mTable[base+kLowIdx]) % 
-                 (mTable[base+kSizeEveryIdx] & 0x00FF))))
-      {
-        return aChar;
-      }
-      // If aChar doesn't fall in the gap, cache and convert.
-      mLastBase = base;
-      return aChar + mTable[base+kDiffIdx];
-    }
-  }
-};
-
-static nsCompressedMap gUpperMap = {
-  reinterpret_cast<const PRUnichar*>(&gToUpper[0]),
-  gToUpperItems
-};
-
-static nsCompressedMap gLowerMap = {
-  reinterpret_cast<const PRUnichar*>(&gToLower[0]),
-  gToLowerItems
-};
-
-// We want ToLowerCase(PRUnichar) and ToLowerCaseASCII(PRUnichar) to be fast
+// We want ToLowerCase(uint32_t) and ToLowerCaseASCII(uint32_t) to be fast
 // when they're called from within the case-insensitive comparators, so we
 // define inlined versions.
-static NS_ALWAYS_INLINE PRUnichar
-ToLowerCase_inline(PRUnichar aChar)
+static NS_ALWAYS_INLINE uint32_t
+ToLowerCase_inline(uint32_t aChar)
 {
   if (IS_ASCII(aChar)) {
     return gASCIIToLower[aChar];
-  } else if (IS_NOCASE_CHAR(aChar)) {
-     return aChar;
   }
 
-  return gLowerMap.Map(aChar);
+  return mozilla::unicode::GetLowercase(aChar);
 }
 
-static NS_ALWAYS_INLINE PRUnichar
-ToLowerCaseASCII_inline(const PRUnichar aChar)
+static NS_ALWAYS_INLINE uint32_t
+ToLowerCaseASCII_inline(const uint32_t aChar)
 {
-  if (IS_ASCII(aChar))
+  if (IS_ASCII(aChar)) {
     return gASCIIToLower[aChar];
+  }
+
   return aChar;
 }
 
@@ -224,14 +69,14 @@ ToLowerCase(const nsAString& aSource,
 {
   const PRUnichar *in;
   PRUnichar *out;
-  PRUint32 len = NS_StringGetData(aSource, &in);
+  uint32_t len = NS_StringGetData(aSource, &in);
   NS_StringGetMutableData(aDest, len, &out);
   NS_ASSERTION(out, "Uh...");
   ToLowerCase(in, out, len);
 }
 
-PRUnichar
-ToLowerCaseASCII(const PRUnichar aChar)
+uint32_t
+ToLowerCaseASCII(const uint32_t aChar)
 {
   return ToLowerCaseASCII_inline(aChar);
 }
@@ -249,7 +94,7 @@ ToUpperCase(const nsAString& aSource,
 {
   const PRUnichar *in;
   PRUnichar *out;
-  PRUint32 len = NS_StringGetData(aSource, &in);
+  uint32_t len = NS_StringGetData(aSource, &in);
   NS_StringGetMutableData(aDest, len, &out);
   NS_ASSERTION(out, "Uh...");
   ToUpperCase(in, out, len);
@@ -257,30 +102,30 @@ ToUpperCase(const nsAString& aSource,
 
 #ifdef MOZILLA_INTERNAL_API
 
-PRInt32
+int32_t
 nsCaseInsensitiveStringComparator::operator()(const PRUnichar* lhs,
                                               const PRUnichar* rhs,
-                                              PRUint32 lLength,
-                                              PRUint32 rLength) const
+                                              uint32_t lLength,
+                                              uint32_t rLength) const
 {
   return (lLength == rLength) ? CaseInsensitiveCompare(lhs, rhs, lLength) :
          (lLength > rLength) ? 1 : -1;
 }
 
-PRInt32
+int32_t
 nsCaseInsensitiveUTF8StringComparator::operator()(const char* lhs,
                                                   const char* rhs,
-                                                  PRUint32 lLength,
-                                                  PRUint32 rLength) const
+                                                  uint32_t lLength,
+                                                  uint32_t rLength) const
 {
   return CaseInsensitiveCompare(lhs, rhs, lLength, rLength);
 }
 
-PRInt32
+int32_t
 nsASCIICaseInsensitiveStringComparator::operator()(const PRUnichar* lhs,
                                                    const PRUnichar* rhs,
-                                                   PRUint32 lLength,
-                                                   PRUint32 rLength) const
+                                                   uint32_t lLength,
+                                                   uint32_t rLength) const
 {
   if (lLength != rLength) {
     if (lLength > rLength)
@@ -289,6 +134,8 @@ nsASCIICaseInsensitiveStringComparator::operator()(const PRUnichar* lhs,
   }
 
   while (rLength) {
+    // we don't care about surrogates here, because we're only
+    // lowercasing the ASCII range
     PRUnichar l = *lhs++;
     PRUnichar r = *rhs++;
     if (l != r) {
@@ -308,86 +155,99 @@ nsASCIICaseInsensitiveStringComparator::operator()(const PRUnichar* lhs,
 
 #endif // MOZILLA_INTERNAL_API
 
-PRUnichar
-ToLowerCase(PRUnichar aChar)
+uint32_t
+ToLowerCase(uint32_t aChar)
 {
   return ToLowerCase_inline(aChar);
 }
 
 void
-ToLowerCase(const PRUnichar *aIn, PRUnichar *aOut, PRUint32 aLen)
+ToLowerCase(const PRUnichar *aIn, PRUnichar *aOut, uint32_t aLen)
 {
-  for (PRUint32 i = 0; i < aLen; i++) {
-    aOut[i] = ToLowerCase(aIn[i]);
+  for (uint32_t i = 0; i < aLen; i++) {
+    uint32_t ch = aIn[i];
+    if (NS_IS_HIGH_SURROGATE(ch) && i < aLen - 1 &&
+        NS_IS_LOW_SURROGATE(aIn[i + 1])) {
+      ch = mozilla::unicode::GetLowercase(SURROGATE_TO_UCS4(ch, aIn[i + 1]));
+      NS_ASSERTION(!IS_IN_BMP(ch), "case mapping crossed BMP/SMP boundary!");
+      aOut[i++] = H_SURROGATE(ch);
+      aOut[i] = L_SURROGATE(ch);
+      continue;
+    }
+    aOut[i] = ToLowerCase(ch);
   }
 }
 
-PRUnichar
-ToUpperCase(PRUnichar aChar)
+uint32_t
+ToUpperCase(uint32_t aChar)
 {
   if (IS_ASCII(aChar)) {
-    if (IS_ASCII_LOWER(aChar))
+    if (IS_ASCII_LOWER(aChar)) {
       return aChar - 0x20;
-    else
-      return aChar;
-  } else if (IS_NOCASE_CHAR(aChar)) {
+    }
     return aChar;
   }
 
-  return gUpperMap.Map(aChar);
+  return mozilla::unicode::GetUppercase(aChar);
 }
 
 void
-ToUpperCase(const PRUnichar *aIn, PRUnichar *aOut, PRUint32 aLen)
+ToUpperCase(const PRUnichar *aIn, PRUnichar *aOut, uint32_t aLen)
 {
-  for (PRUint32 i = 0; i < aLen; i++) {
-    aOut[i] = ToUpperCase(aIn[i]);
+  for (uint32_t i = 0; i < aLen; i++) {
+    uint32_t ch = aIn[i];
+    if (NS_IS_HIGH_SURROGATE(ch) && i < aLen - 1 &&
+        NS_IS_LOW_SURROGATE(aIn[i + 1])) {
+      ch = mozilla::unicode::GetUppercase(SURROGATE_TO_UCS4(ch, aIn[i + 1]));
+      NS_ASSERTION(!IS_IN_BMP(ch), "case mapping crossed BMP/SMP boundary!");
+      aOut[i++] = H_SURROGATE(ch);
+      aOut[i] = L_SURROGATE(ch);
+      continue;
+    }
+    aOut[i] = ToUpperCase(ch);
   }
 }
 
-PRUnichar
-ToTitleCase(PRUnichar aChar)
+uint32_t
+ToTitleCase(uint32_t aChar)
 {
   if (IS_ASCII(aChar)) {
     return ToUpperCase(aChar);
-  } else if (IS_NOCASE_CHAR(aChar)) {
-    return aChar;
   }
 
-  // First check for uppercase characters whose titlecase mapping is
-  // different, like U+01F1 DZ: they must remain unchanged.
-  if (0x01C0 == (aChar & 0xFFC0)) {
-    for (PRUint32 i = 0; i < gUpperToTitleItems; i++) {
-      if (aChar == gUpperToTitle[(i*2)+kUpperIdx]) {
-        return aChar;
-      }
-    }
-  }
-
-  PRUnichar upper = gUpperMap.Map(aChar);
-
-  if (0x01C0 == ( upper & 0xFFC0)) {
-    for (PRUint32 i = 0 ; i < gUpperToTitleItems; i++) {
-      if (upper == gUpperToTitle[(i*2)+kUpperIdx]) {
-         return gUpperToTitle[(i*2)+kTitleIdx];
-      }
-    }
-  }
-
-  return upper;
+  return mozilla::unicode::GetTitlecaseForLower(aChar);
 }
 
-PRInt32
+int32_t
 CaseInsensitiveCompare(const PRUnichar *a,
                        const PRUnichar *b,
-                       PRUint32 len)
+                       uint32_t len)
 {
   NS_ASSERTION(a && b, "Do not pass in invalid pointers!");
 
   if (len) {
     do {
-      PRUnichar c1 = *a++;
-      PRUnichar c2 = *b++;
+      uint32_t c1 = *a++;
+      uint32_t c2 = *b++;
+
+      // Unfortunately, we need to check for surrogates BEFORE we check
+      // for equality, because we could have identical high surrogates
+      // but non-identical characters, so we can't just skip them
+
+      // If c1 isn't a surrogate, we don't bother to check c2;
+      // in the case where it _is_ a surrogate, we're definitely going to get
+      // a mismatch, and don't need to interpret and lowercase it
+
+      if (NS_IS_HIGH_SURROGATE(c1) && len > 1 && NS_IS_LOW_SURROGATE(*a)) {
+        c1 = SURROGATE_TO_UCS4(c1, *a++);
+        if (NS_IS_HIGH_SURROGATE(c2) && NS_IS_LOW_SURROGATE(*b)) {
+          c2 = SURROGATE_TO_UCS4(c2, *b++);
+        }
+        // If c2 wasn't a surrogate, decrementing len means we'd stop
+        // short of the end of string b, but that doesn't actually matter
+        // because we're going to find a mismatch and return early
+        --len;
+      }
 
       if (c1 != c2) {
         c1 = ToLowerCase_inline(c1);
@@ -411,7 +271,7 @@ CaseInsensitiveCompare(const PRUnichar *a,
 // the end of the string (as marked by aEnd), returns -1 and does not set
 // aNext.  Note that this function doesn't check that aStr < aEnd -- it assumes
 // you've done that already.
-static NS_ALWAYS_INLINE PRUint32
+static NS_ALWAYS_INLINE uint32_t
 GetLowerUTF8Codepoint(const char* aStr, const char* aEnd, const char **aNext)
 {
   // Convert to unsigned char so that stuffing chars into PRUint32s doesn't
@@ -427,14 +287,15 @@ GetLowerUTF8Codepoint(const char* aStr, const char* aEnd, const char **aNext)
     // It's a two-byte sequence, so it looks like
     //  110XXXXX 10XXXXXX.
     // This is definitely in the BMP, so we can store straightaway into a
-    // PRUint16.
+    // uint16_t.
 
-    PRUint16 c;
+    uint16_t c;
     c  = (str[0] & 0x1F) << 6;
     c += (str[1] & 0x3F);
 
-    if (!IS_NOCASE_CHAR(c))
-      c = gLowerMap.Map(c);
+    // we don't go through ToLowerCase here, because we know this isn't
+    // an ASCII character so the ASCII fast-path there is useless
+    c = mozilla::unicode::GetLowercase(c);
 
     *aNext = aStr + 2;
     return c;
@@ -442,15 +303,14 @@ GetLowerUTF8Codepoint(const char* aStr, const char* aEnd, const char **aNext)
   if (UTF8traits::is3byte(str[0]) && NS_LIKELY(aStr + 2 < aEnd)) {
     // It's a three-byte sequence, so it looks like
     //  1110XXXX 10XXXXXX 10XXXXXX.
-    // This will just barely fit into 16-bits, so store into a PRUint16.
+    // This will just barely fit into 16-bits, so store into a uint16_t.
 
-    PRUint16 c;
+    uint16_t c;
     c  = (str[0] & 0x0F) << 12;
     c += (str[1] & 0x3F) << 6;
     c += (str[2] & 0x3F);
 
-    if (!IS_NOCASE_CHAR(c))
-      c = gLowerMap.Map(c);
+    c = mozilla::unicode::GetLowercase(c);
 
     *aNext = aStr + 3;
     return c;
@@ -458,14 +318,14 @@ GetLowerUTF8Codepoint(const char* aStr, const char* aEnd, const char **aNext)
   if (UTF8traits::is4byte(str[0]) && NS_LIKELY(aStr + 3 < aEnd)) {
     // It's a four-byte sequence, so it looks like
     //   11110XXX 10XXXXXX 10XXXXXX 10XXXXXX.
-    // Unless this is an overlong sequence, the codepoint it encodes definitely
-    // isn't in the BMP, so we don't bother trying to convert it to lower-case.
 
-    PRUint32 c;
+    uint32_t c;
     c  = (str[0] & 0x07) << 18;
     c += (str[1] & 0x3F) << 12;
     c += (str[2] & 0x3F) << 6;
     c += (str[3] & 0x3F);
+
+    c = mozilla::unicode::GetLowercase(c);
 
     *aNext = aStr + 4;
     return c;
@@ -475,21 +335,21 @@ GetLowerUTF8Codepoint(const char* aStr, const char* aEnd, const char **aNext)
   return -1;
 }
 
-PRInt32 CaseInsensitiveCompare(const char *aLeft,
+int32_t CaseInsensitiveCompare(const char *aLeft,
                                const char *aRight,
-                               PRUint32 aLeftBytes,
-                               PRUint32 aRightBytes)
+                               uint32_t aLeftBytes,
+                               uint32_t aRightBytes)
 {
   const char *leftEnd = aLeft + aLeftBytes;
   const char *rightEnd = aRight + aRightBytes;
 
   while (aLeft < leftEnd && aRight < rightEnd) {
-    PRUint32 leftChar = GetLowerUTF8Codepoint(aLeft, leftEnd, &aLeft);
-    if (NS_UNLIKELY(leftChar == PRUint32(-1)))
+    uint32_t leftChar = GetLowerUTF8Codepoint(aLeft, leftEnd, &aLeft);
+    if (NS_UNLIKELY(leftChar == uint32_t(-1)))
       return -1;
 
-    PRUint32 rightChar = GetLowerUTF8Codepoint(aRight, rightEnd, &aRight);
-    if (NS_UNLIKELY(rightChar == PRUint32(-1)))
+    uint32_t rightChar = GetLowerUTF8Codepoint(aRight, rightEnd, &aRight);
+    if (NS_UNLIKELY(rightChar == uint32_t(-1)))
       return -1;
 
     // Now leftChar and rightChar are lower-case, so we can compare them.
@@ -510,11 +370,11 @@ PRInt32 CaseInsensitiveCompare(const char *aLeft,
   return 0;
 }
 
-PRBool
+bool
 CaseInsensitiveUTF8CharsEqual(const char* aLeft, const char* aRight,
                               const char* aLeftEnd, const char* aRightEnd,
                               const char** aLeftNext, const char** aRightNext,
-                              PRBool* aErr)
+                              bool* aErr)
 {
   NS_ASSERTION(aLeftNext, "Out pointer shouldn't be null.");
   NS_ASSERTION(aRightNext, "Out pointer shouldn't be null.");
@@ -522,21 +382,51 @@ CaseInsensitiveUTF8CharsEqual(const char* aLeft, const char* aRight,
   NS_ASSERTION(aLeft < aLeftEnd, "aLeft must be less than aLeftEnd.");
   NS_ASSERTION(aRight < aRightEnd, "aRight must be less than aRightEnd.");
 
-  PRUint32 leftChar = GetLowerUTF8Codepoint(aLeft, aLeftEnd, aLeftNext);
-  if (NS_UNLIKELY(leftChar == PRUint32(-1))) {
-    *aErr = PR_TRUE;
-    return PR_FALSE;
+  uint32_t leftChar = GetLowerUTF8Codepoint(aLeft, aLeftEnd, aLeftNext);
+  if (NS_UNLIKELY(leftChar == uint32_t(-1))) {
+    *aErr = true;
+    return false;
   }
 
-  PRUint32 rightChar = GetLowerUTF8Codepoint(aRight, aRightEnd, aRightNext);
-  if (NS_UNLIKELY(rightChar == PRUint32(-1))) {
-    *aErr = PR_TRUE;
-    return PR_FALSE;
+  uint32_t rightChar = GetLowerUTF8Codepoint(aRight, aRightEnd, aRightNext);
+  if (NS_UNLIKELY(rightChar == uint32_t(-1))) {
+    *aErr = true;
+    return false;
   }
 
   // Can't have an error past this point.
-  *aErr = PR_FALSE;
+  *aErr = false;
 
   return leftChar == rightChar;
 }
 
+namespace mozilla {
+
+uint32_t
+HashUTF8AsUTF16(const char* aUTF8, uint32_t aLength, bool* aErr)
+{
+  uint32_t hash = 0;
+  const char* s = aUTF8;
+  const char* end = aUTF8 + aLength;
+
+  *aErr = false;
+
+  while (s < end)
+  {
+    uint32_t ucs4 = UTF8CharEnumerator::NextChar(&s, end, aErr);
+    if (*aErr) {
+      return 0;
+    }
+
+    if (ucs4 < PLANE1_BASE) {
+      hash = AddToHash(hash, ucs4);
+    }
+    else {
+      hash = AddToHash(hash, H_SURROGATE(ucs4), L_SURROGATE(ucs4));
+    }
+  }
+
+  return hash;
+}
+
+} // namespace mozilla

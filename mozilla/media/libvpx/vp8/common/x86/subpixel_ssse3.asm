@@ -39,6 +39,7 @@ sym(vp8_filter_block1d8_h6_ssse3):
     push        rbp
     mov         rbp, rsp
     SHADOW_ARGS_TO_STACK 6
+    SAVE_XMM 7
     GET_GOT     rbx
     push        rsi
     push        rdi
@@ -69,7 +70,7 @@ sym(vp8_filter_block1d8_h6_ssse3):
 
     sub         rdi, rdx
 ;xmm3 free
-filter_block1d8_h6_rowloop_ssse3:
+.filter_block1d8_h6_rowloop_ssse3:
     movq        xmm0,   MMWORD PTR [rsi - 2]    ; -2 -1  0  1  2  3  4  5
 
     movq        xmm2,   MMWORD PTR [rsi + 3]    ;  3  4  5  6  7  8  9 10
@@ -101,12 +102,13 @@ filter_block1d8_h6_rowloop_ssse3:
     packuswb    xmm0,   xmm0
 
     movq        MMWORD Ptr [rdi], xmm0
-    jnz         filter_block1d8_h6_rowloop_ssse3
+    jnz         .filter_block1d8_h6_rowloop_ssse3
 
     ; begin epilog
     pop rdi
     pop rsi
     RESTORE_GOT
+    RESTORE_XMM
     UNSHADOW_ARGS
     pop         rbp
     ret
@@ -127,7 +129,7 @@ vp8_filter_block1d8_h4_ssse3:
 
     sub         rdi, rdx
 
-filter_block1d8_h4_rowloop_ssse3:
+.filter_block1d8_h4_rowloop_ssse3:
     movq        xmm0,   MMWORD PTR [rsi - 2]    ; -2 -1  0  1  2  3  4  5
 
     movq        xmm1,   MMWORD PTR [rsi + 3]    ;  3  4  5  6  7  8  9 10
@@ -156,12 +158,13 @@ filter_block1d8_h4_rowloop_ssse3:
 
     movq        MMWORD Ptr [rdi], xmm0
 
-    jnz         filter_block1d8_h4_rowloop_ssse3
+    jnz         .filter_block1d8_h4_rowloop_ssse3
 
     ; begin epilog
     pop rdi
     pop rsi
     RESTORE_GOT
+    RESTORE_XMM
     UNSHADOW_ARGS
     pop         rbp
     ret
@@ -179,7 +182,7 @@ sym(vp8_filter_block1d16_h6_ssse3):
     push        rbp
     mov         rbp, rsp
     SHADOW_ARGS_TO_STACK 6
-    SAVE_XMM
+    SAVE_XMM 7
     GET_GOT     rbx
     push        rsi
     push        rdi
@@ -194,10 +197,6 @@ sym(vp8_filter_block1d16_h6_ssse3):
 
     mov         rdi, arg(2)                     ;output_ptr
 
-;;
-;;    cmp         esi, DWORD PTR [rax]
-;;    je          vp8_filter_block1d16_h4_ssse3
-
     mov         rsi, arg(0)                     ;src_ptr
 
     movdqa      xmm4, XMMWORD PTR [rax]         ;k0_k5
@@ -208,7 +207,7 @@ sym(vp8_filter_block1d16_h6_ssse3):
     movsxd      rcx, dword ptr arg(4)           ;output_height
     movsxd      rdx, dword ptr arg(3)           ;output_pitch
 
-filter_block1d16_h6_rowloop_ssse3:
+.filter_block1d16_h6_rowloop_ssse3:
     movq        xmm0,   MMWORD PTR [rsi - 2]    ; -2 -1  0  1  2  3  4  5
 
     movq        xmm3,   MMWORD PTR [rsi + 3]    ;  3  4  5  6  7  8  9 10
@@ -265,67 +264,13 @@ filter_block1d16_h6_rowloop_ssse3:
 
     lea         rdi,    [rdi + rdx]
     dec         rcx
-    jnz         filter_block1d16_h6_rowloop_ssse3
+    jnz         .filter_block1d16_h6_rowloop_ssse3
 
     ; begin epilog
     pop rdi
     pop rsi
     RESTORE_GOT
-    UNSHADOW_ARGS
-    pop         rbp
-    ret
-
-vp8_filter_block1d16_h4_ssse3:
-    movdqa      xmm5, XMMWORD PTR [rax+256]     ;k2_k4
-    movdqa      xmm6, XMMWORD PTR [rax+128]     ;k1_k3
-
-    mov         rsi, arg(0)             ;src_ptr
-    movsxd      rax, dword ptr arg(1)   ;src_pixels_per_line
-    movsxd      rcx, dword ptr arg(4)   ;output_height
-    movsxd      rdx, dword ptr arg(3)   ;output_pitch
-
-filter_block1d16_h4_rowloop_ssse3:
-    movdqu      xmm1,   XMMWORD PTR [rsi - 2]
-
-    movdqa      xmm2, xmm1
-    pshufb      xmm1, [GLOBAL(shuf2b)]
-    pshufb      xmm2, [GLOBAL(shuf3b)]
-    pmaddubsw   xmm1, xmm5
-
-    movdqu      xmm3,   XMMWORD PTR [rsi + 6]
-
-    pmaddubsw   xmm2, xmm6
-    movdqa      xmm0, xmm3
-    pshufb      xmm3, [GLOBAL(shuf3b)]
-    pshufb      xmm0, [GLOBAL(shuf2b)]
-
-    paddsw      xmm1, [GLOBAL(rd)]
-    paddsw      xmm1, xmm2
-
-    pmaddubsw   xmm0, xmm5
-    pmaddubsw   xmm3, xmm6
-
-    psraw       xmm1, 7
-    packuswb    xmm1, xmm1
-    lea         rsi,    [rsi + rax]
-    paddsw      xmm3, xmm0
-    paddsw      xmm3, [GLOBAL(rd)]
-    psraw       xmm3, 7
-    packuswb    xmm3, xmm3
-
-    punpcklqdq  xmm1, xmm3
-
-    movdqa      XMMWORD Ptr [rdi], xmm1
-
-    add         rdi, rdx
-    dec         rcx
-    jnz         filter_block1d16_h4_rowloop_ssse3
-
-
-    ; begin epilog
-    pop rdi
-    pop rsi
-    RESTORE_GOT
+    RESTORE_XMM
     UNSHADOW_ARGS
     pop         rbp
     ret
@@ -344,6 +289,7 @@ sym(vp8_filter_block1d4_h6_ssse3):
     push        rbp
     mov         rbp, rsp
     SHADOW_ARGS_TO_STACK 6
+    SAVE_XMM 7
     GET_GOT     rbx
     push        rsi
     push        rdi
@@ -358,7 +304,7 @@ sym(vp8_filter_block1d4_h6_ssse3):
     movdqa      xmm7, [GLOBAL(rd)]
 
     cmp         esi, DWORD PTR [rax]
-    je          vp8_filter_block1d4_h4_ssse3
+    je          .vp8_filter_block1d4_h4_ssse3
 
     movdqa      xmm4, XMMWORD PTR [rax]         ;k0_k5
     movdqa      xmm5, XMMWORD PTR [rax+256]     ;k2_k4
@@ -372,7 +318,7 @@ sym(vp8_filter_block1d4_h6_ssse3):
     movsxd      rdx, dword ptr arg(3)   ;output_pitch
 
 ;xmm3 free
-filter_block1d4_h6_rowloop_ssse3:
+.filter_block1d4_h6_rowloop_ssse3:
     movdqu      xmm0,   XMMWORD PTR [rsi - 2]
 
     movdqa      xmm1, xmm0
@@ -400,7 +346,7 @@ filter_block1d4_h6_rowloop_ssse3:
 
     add         rdi, rdx
     dec         rcx
-    jnz         filter_block1d4_h6_rowloop_ssse3
+    jnz         .filter_block1d4_h6_rowloop_ssse3
 
     ; begin epilog
     pop rdi
@@ -410,7 +356,7 @@ filter_block1d4_h6_rowloop_ssse3:
     pop         rbp
     ret
 
-vp8_filter_block1d4_h4_ssse3:
+.vp8_filter_block1d4_h4_ssse3:
     movdqa      xmm5, XMMWORD PTR [rax+256]     ;k2_k4
     movdqa      xmm6, XMMWORD PTR [rax+128]     ;k1_k3
     movdqa      xmm0, XMMWORD PTR [GLOBAL(shuf2b)]
@@ -423,7 +369,7 @@ vp8_filter_block1d4_h4_ssse3:
 
     movsxd      rdx, dword ptr arg(3)   ;output_pitch
 
-filter_block1d4_h4_rowloop_ssse3:
+.filter_block1d4_h4_rowloop_ssse3:
     movdqu      xmm1,   XMMWORD PTR [rsi - 2]
 
     movdqa      xmm2, xmm1
@@ -445,12 +391,13 @@ filter_block1d4_h4_rowloop_ssse3:
 
     add         rdi, rdx
     dec         rcx
-    jnz         filter_block1d4_h4_rowloop_ssse3
+    jnz         .filter_block1d4_h4_rowloop_ssse3
 
     ; begin epilog
     pop rdi
     pop rsi
     RESTORE_GOT
+    RESTORE_XMM
     UNSHADOW_ARGS
     pop         rbp
     ret
@@ -471,6 +418,7 @@ sym(vp8_filter_block1d16_v6_ssse3):
     push        rbp
     mov         rbp, rsp
     SHADOW_ARGS_TO_STACK 6
+    SAVE_XMM 7
     GET_GOT     rbx
     push        rsi
     push        rdi
@@ -484,7 +432,7 @@ sym(vp8_filter_block1d16_v6_ssse3):
     add         rax, rdx
 
     cmp         esi, DWORD PTR [rax]
-    je          vp8_filter_block1d16_v4_ssse3
+    je          .vp8_filter_block1d16_v4_ssse3
 
     movdqa      xmm5, XMMWORD PTR [rax]         ;k0_k5
     movdqa      xmm6, XMMWORD PTR [rax+256]     ;k2_k4
@@ -502,7 +450,7 @@ sym(vp8_filter_block1d16_v6_ssse3):
     add         rax, rdx
 
 
-vp8_filter_block1d16_v6_ssse3_loop:
+.vp8_filter_block1d16_v6_ssse3_loop:
     movq        xmm1, MMWORD PTR [rsi]                  ;A
     movq        xmm2, MMWORD PTR [rsi + rdx]            ;B
     movq        xmm3, MMWORD PTR [rsi + rdx * 2]        ;C
@@ -560,17 +508,18 @@ vp8_filter_block1d16_v6_ssse3_loop:
     add         rdi,        r8
 %endif
     dec         rcx
-    jnz         vp8_filter_block1d16_v6_ssse3_loop
+    jnz         .vp8_filter_block1d16_v6_ssse3_loop
 
     ; begin epilog
     pop rdi
     pop rsi
     RESTORE_GOT
+    RESTORE_XMM
     UNSHADOW_ARGS
     pop         rbp
     ret
 
-vp8_filter_block1d16_v4_ssse3:
+.vp8_filter_block1d16_v4_ssse3:
     movdqa      xmm6, XMMWORD PTR [rax+256]     ;k2_k4
     movdqa      xmm7, XMMWORD PTR [rax+128]     ;k1_k3
 
@@ -585,7 +534,7 @@ vp8_filter_block1d16_v4_ssse3:
     movsxd      rcx, DWORD PTR arg(4)   ;output_height
     add         rax, rdx
 
-vp8_filter_block1d16_v4_ssse3_loop:
+.vp8_filter_block1d16_v4_ssse3_loop:
     movq        xmm2, MMWORD PTR [rsi + rdx]            ;B
     movq        xmm3, MMWORD PTR [rsi + rdx * 2]        ;C
     movq        xmm4, MMWORD PTR [rax + rdx * 2]        ;D
@@ -632,12 +581,13 @@ vp8_filter_block1d16_v4_ssse3_loop:
     add         rdi,        r8
 %endif
     dec         rcx
-    jnz         vp8_filter_block1d16_v4_ssse3_loop
+    jnz         .vp8_filter_block1d16_v4_ssse3_loop
 
     ; begin epilog
     pop rdi
     pop rsi
     RESTORE_GOT
+    RESTORE_XMM
     UNSHADOW_ARGS
     pop         rbp
     ret
@@ -656,6 +606,7 @@ sym(vp8_filter_block1d8_v6_ssse3):
     push        rbp
     mov         rbp, rsp
     SHADOW_ARGS_TO_STACK 6
+    SAVE_XMM 7
     GET_GOT     rbx
     push        rsi
     push        rdi
@@ -676,7 +627,7 @@ sym(vp8_filter_block1d8_v6_ssse3):
     movsxd      rcx, DWORD PTR arg(4)   ;[output_height]
 
     cmp         esi, DWORD PTR [rax]
-    je          vp8_filter_block1d8_v4_ssse3
+    je          .vp8_filter_block1d8_v4_ssse3
 
     movdqa      xmm5, XMMWORD PTR [rax]         ;k0_k5
     movdqa      xmm6, XMMWORD PTR [rax+256]     ;k2_k4
@@ -687,7 +638,7 @@ sym(vp8_filter_block1d8_v6_ssse3):
     mov         rax, rsi
     add         rax, rdx
 
-vp8_filter_block1d8_v6_ssse3_loop:
+.vp8_filter_block1d8_v6_ssse3_loop:
     movq        xmm1, MMWORD PTR [rsi]                  ;A
     movq        xmm2, MMWORD PTR [rsi + rdx]            ;B
     movq        xmm3, MMWORD PTR [rsi + rdx * 2]        ;C
@@ -722,17 +673,18 @@ vp8_filter_block1d8_v6_ssse3_loop:
     add         rdi,        r8
 %endif
     dec         rcx
-    jnz         vp8_filter_block1d8_v6_ssse3_loop
+    jnz         .vp8_filter_block1d8_v6_ssse3_loop
 
     ; begin epilog
     pop rdi
     pop rsi
     RESTORE_GOT
+    RESTORE_XMM
     UNSHADOW_ARGS
     pop         rbp
     ret
 
-vp8_filter_block1d8_v4_ssse3:
+.vp8_filter_block1d8_v4_ssse3:
     movdqa      xmm6, XMMWORD PTR [rax+256]     ;k2_k4
     movdqa      xmm7, XMMWORD PTR [rax+128]     ;k1_k3
     movdqa      xmm5, [GLOBAL(rd)]
@@ -742,7 +694,7 @@ vp8_filter_block1d8_v4_ssse3:
     mov         rax, rsi
     add         rax, rdx
 
-vp8_filter_block1d8_v4_ssse3_loop:
+.vp8_filter_block1d8_v4_ssse3_loop:
     movq        xmm2, MMWORD PTR [rsi + rdx]            ;B
     movq        xmm3, MMWORD PTR [rsi + rdx * 2]        ;C
     movq        xmm4, MMWORD PTR [rax + rdx * 2]        ;D
@@ -770,12 +722,13 @@ vp8_filter_block1d8_v4_ssse3_loop:
     add         rdi,        r8
 %endif
     dec         rcx
-    jnz         vp8_filter_block1d8_v4_ssse3_loop
+    jnz         .vp8_filter_block1d8_v4_ssse3_loop
 
     ; begin epilog
     pop rdi
     pop rsi
     RESTORE_GOT
+    RESTORE_XMM
     UNSHADOW_ARGS
     pop         rbp
     ret
@@ -813,7 +766,7 @@ sym(vp8_filter_block1d4_v6_ssse3):
     movsxd      rcx, DWORD PTR arg(4)   ;[output_height]
 
     cmp         esi, DWORD PTR [rax]
-    je          vp8_filter_block1d4_v4_ssse3
+    je          .vp8_filter_block1d4_v4_ssse3
 
     movq        mm5, MMWORD PTR [rax]         ;k0_k5
     movq        mm6, MMWORD PTR [rax+256]     ;k2_k4
@@ -824,7 +777,7 @@ sym(vp8_filter_block1d4_v6_ssse3):
     mov         rax, rsi
     add         rax, rdx
 
-vp8_filter_block1d4_v6_ssse3_loop:
+.vp8_filter_block1d4_v6_ssse3_loop:
     movd        mm1, DWORD PTR [rsi]                  ;A
     movd        mm2, DWORD PTR [rsi + rdx]            ;B
     movd        mm3, DWORD PTR [rsi + rdx * 2]        ;C
@@ -860,7 +813,7 @@ vp8_filter_block1d4_v6_ssse3_loop:
     add         rdi,        r8
 %endif
     dec         rcx
-    jnz         vp8_filter_block1d4_v6_ssse3_loop
+    jnz         .vp8_filter_block1d4_v6_ssse3_loop
 
     ; begin epilog
     pop rdi
@@ -870,7 +823,7 @@ vp8_filter_block1d4_v6_ssse3_loop:
     pop         rbp
     ret
 
-vp8_filter_block1d4_v4_ssse3:
+.vp8_filter_block1d4_v4_ssse3:
     movq        mm6, MMWORD PTR [rax+256]     ;k2_k4
     movq        mm7, MMWORD PTR [rax+128]     ;k1_k3
     movq        mm5, MMWORD PTR [GLOBAL(rd)]
@@ -880,7 +833,7 @@ vp8_filter_block1d4_v4_ssse3:
     mov         rax, rsi
     add         rax, rdx
 
-vp8_filter_block1d4_v4_ssse3_loop:
+.vp8_filter_block1d4_v4_ssse3_loop:
     movd        mm2, DWORD PTR [rsi + rdx]            ;B
     movd        mm3, DWORD PTR [rsi + rdx * 2]        ;C
     movd        mm4, DWORD PTR [rax + rdx * 2]        ;D
@@ -908,7 +861,7 @@ vp8_filter_block1d4_v4_ssse3_loop:
     add         rdi,        r8
 %endif
     dec         rcx
-    jnz         vp8_filter_block1d4_v4_ssse3_loop
+    jnz         .vp8_filter_block1d4_v4_ssse3_loop
 
     ; begin epilog
     pop rdi
@@ -932,7 +885,7 @@ sym(vp8_bilinear_predict16x16_ssse3):
     push        rbp
     mov         rbp, rsp
     SHADOW_ARGS_TO_STACK 6
-    SAVE_XMM
+    SAVE_XMM 7
     GET_GOT     rbx
     push        rsi
     push        rdi
@@ -942,7 +895,7 @@ sym(vp8_bilinear_predict16x16_ssse3):
         movsxd      rax,        dword ptr arg(2)    ; xoffset
 
         cmp         rax,        0                   ; skip first_pass filter if xoffset=0
-        je          b16x16_sp_only
+        je          .b16x16_sp_only
 
         shl         rax,        4
         lea         rax,        [rax + rcx]         ; HFilter
@@ -956,7 +909,7 @@ sym(vp8_bilinear_predict16x16_ssse3):
         movsxd      rax,        dword ptr arg(3)    ; yoffset
 
         cmp         rax,        0                   ; skip second_pass filter if yoffset=0
-        je          b16x16_fp_only
+        je          .b16x16_fp_only
 
         shl         rax,        4
         lea         rax,        [rax + rcx]         ; VFilter
@@ -1043,9 +996,9 @@ sym(vp8_bilinear_predict16x16_ssse3):
         cmp         rdi,        rcx
         jne         .next_row
 
-        jmp         done
+        jmp         .done
 
-b16x16_sp_only:
+.b16x16_sp_only:
         movsxd      rax,        dword ptr arg(3)    ; yoffset
         shl         rax,        4
         lea         rax,        [rax + rcx]         ; VFilter
@@ -1065,7 +1018,7 @@ b16x16_sp_only:
         movq        xmm2,       [rsi + 8]           ; load row 0
 
         lea         rsi,        [rsi + rax]         ; next line
-.next_row:
+.next_row_sp:
         movq        xmm3,       [rsi]               ; load row + 1
         movq        xmm5,       [rsi + 8]           ; load row + 1
 
@@ -1109,16 +1062,16 @@ b16x16_sp_only:
         lea         rdi,        [rdi + 2*rdx]
 
         cmp         rdi,        rcx
-        jne         .next_row
+        jne         .next_row_sp
 
-        jmp         done
+        jmp         .done
 
-b16x16_fp_only:
+.b16x16_fp_only:
         lea         rcx,        [rdi+rdx*8]
         lea         rcx,        [rcx+rdx*8]
         movsxd      rax,        dword ptr arg(1)    ; src_pixels_per_line
 
-.next_row:
+.next_row_fp:
         movq        xmm2,       [rsi]               ; 00 01 02 03 04 05 06 07
         movq        xmm4,       [rsi+1]             ; 01 02 03 04 05 06 07 08
 
@@ -1169,9 +1122,9 @@ b16x16_fp_only:
 
         cmp         rdi,        rcx
 
-        jne         .next_row
+        jne         .next_row_fp
 
-done:
+.done:
     ; begin epilog
     pop         rdi
     pop         rsi
@@ -1195,7 +1148,7 @@ sym(vp8_bilinear_predict8x8_ssse3):
     push        rbp
     mov         rbp, rsp
     SHADOW_ARGS_TO_STACK 6
-    SAVE_XMM
+    SAVE_XMM 7
     GET_GOT     rbx
     push        rsi
     push        rdi
@@ -1238,7 +1191,7 @@ sym(vp8_bilinear_predict8x8_ssse3):
 
         movsxd      rax,        dword ptr arg(2)    ; xoffset
         cmp         rax,        0                   ; skip first_pass filter if xoffset=0
-        je          b8x8_sp_only
+        je          .b8x8_sp_only
 
         shl         rax,        4
         add         rax,        rcx                 ; HFilter
@@ -1250,7 +1203,7 @@ sym(vp8_bilinear_predict8x8_ssse3):
 
         movsxd      rax,        dword ptr arg(3)    ; yoffset
         cmp         rax,        0                   ; skip second_pass filter if yoffset=0
-        je          b8x8_fp_only
+        je          .b8x8_fp_only
 
         shl         rax,        4
         lea         rax,        [rax + rcx]         ; VFilter
@@ -1307,9 +1260,9 @@ sym(vp8_bilinear_predict8x8_ssse3):
         cmp         rdi,        rcx
         jne         .next_row
 
-        jmp         done8x8
+        jmp         .done8x8
 
-b8x8_sp_only:
+.b8x8_sp_only:
         movsxd      rax,        dword ptr arg(3)    ; yoffset
         shl         rax,        4
         lea         rax,        [rax + rcx]         ; VFilter
@@ -1411,12 +1364,12 @@ b8x8_sp_only:
         movq        [rdi+rdx],  xmm1
         lea         rsp,        [rsp + 144]
 
-        jmp         done8x8
+        jmp         .done8x8
 
-b8x8_fp_only:
+.b8x8_fp_only:
         lea         rcx,        [rdi+rdx*8]
 
-.next_row:
+.next_row_fp:
         movdqa      xmm1,       XMMWORD PTR [rsp]
         movdqa      xmm3,       XMMWORD PTR [rsp+16]
 
@@ -1477,11 +1430,11 @@ b8x8_fp_only:
         lea         rdi,        [rdi + 2*rdx]
         cmp         rdi,        rcx
 
-        jne         .next_row
+        jne         .next_row_fp
 
         lea         rsp,        [rsp + 16]
 
-done8x8:
+.done8x8:
     ;add rsp, 144
     pop         rsp
     ; begin epilog

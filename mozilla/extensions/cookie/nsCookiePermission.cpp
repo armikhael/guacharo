@@ -1,45 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* vim:ts=2:sw=2:et: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is cookie manager code.
- *
- * The Initial Developer of the Original Code is
- * Michiel van Leeuwen (mvl@exedo.nl).
- * Portions created by the Initial Developer are Copyright (C) 2003
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Darin Fisher <darin@meer.net>
- *   Daniel Witte <dwitte@stanford.edu>
- *   Ehsan Akhgari <ehsan.akhgari@gmail.com>
- *   Kathleen Brade <brade@pearlcrescent.com>
- *   Mark Smith <mcs@pearlcrescent.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* vim: set ts=2 sw=2 et: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 
 #include "nsCookiePermission.h"
@@ -51,11 +14,9 @@
 #include "nsIURI.h"
 #include "nsIPrefService.h"
 #include "nsIPrefBranch.h"
-#include "nsIPrefBranch2.h"
 #include "nsIChannel.h"
 #include "nsIHttpChannelInternal.h"
 #include "nsIDOMWindow.h"
-#include "nsIDOMDocument.h"
 #include "nsIPrincipal.h"
 #include "nsString.h"
 #include "nsCRT.h"
@@ -72,12 +33,12 @@
 // 1 == ask before accepting
 // 2 == downgrade to session
 // 3 == limit lifetime to N days
-static const PRUint32 ACCEPT_NORMALLY = 0;
-static const PRUint32 ASK_BEFORE_ACCEPT = 1;
-static const PRUint32 ACCEPT_SESSION = 2;
-static const PRUint32 ACCEPT_FOR_N_DAYS = 3;
+static const uint32_t ACCEPT_NORMALLY = 0;
+static const uint32_t ASK_BEFORE_ACCEPT = 1;
+static const uint32_t ACCEPT_SESSION = 2;
+static const uint32_t ACCEPT_FOR_N_DAYS = 3;
 
-static const PRBool kDefaultPolicy = PR_TRUE;
+static const bool kDefaultPolicy = true;
 static const char kCookiesLifetimePolicy[] = "network.cookie.lifetimePolicy";
 static const char kCookiesLifetimeDays[] = "network.cookie.lifetime.days";
 static const char kCookiesAlwaysAcceptSession[] = "network.cookie.alwaysAcceptSessionCookies";
@@ -89,23 +50,6 @@ static const char kCookiesLifetimeBehavior[] = "network.cookie.lifetime.behavior
 static const char kCookiesAskPermission[] = "network.cookie.warnAboutCookies";
 
 static const char kPermissionType[] = "cookie";
-
-#ifdef MOZ_MAIL_NEWS
-// returns PR_TRUE if URI appears to be the URI of a mailnews protocol
-// XXXbz this should be a protocol flag, not a scheme list, dammit!
-static PRBool
-IsFromMailNews(nsIURI *aURI)
-{
-  static const char *kMailNewsProtocols[] =
-      { "imap", "news", "snews", "mailbox", nsnull };
-  PRBool result;
-  for (const char **p = kMailNewsProtocols; *p; ++p) {
-    if (NS_SUCCEEDED(aURI->SchemeIs(*p, &result)) && result)
-      return PR_TRUE;
-  }
-  return PR_FALSE;
-}
-#endif
 
 NS_IMPL_ISUPPORTS2(nsCookiePermission,
                    nsICookiePermission,
@@ -122,39 +66,39 @@ nsCookiePermission::Init()
   if (NS_FAILED(rv)) return false;
 
   // failure to access the pref service is non-fatal...
-  nsCOMPtr<nsIPrefBranch2> prefBranch =
+  nsCOMPtr<nsIPrefBranch> prefBranch =
       do_GetService(NS_PREFSERVICE_CONTRACTID);
   if (prefBranch) {
-    prefBranch->AddObserver(kCookiesLifetimePolicy, this, PR_FALSE);
-    prefBranch->AddObserver(kCookiesLifetimeDays, this, PR_FALSE);
-    prefBranch->AddObserver(kCookiesAlwaysAcceptSession, this, PR_FALSE);
-    PrefChanged(prefBranch, nsnull);
+    prefBranch->AddObserver(kCookiesLifetimePolicy, this, false);
+    prefBranch->AddObserver(kCookiesLifetimeDays, this, false);
+    prefBranch->AddObserver(kCookiesAlwaysAcceptSession, this, false);
+    PrefChanged(prefBranch, nullptr);
 
     // migration code for original cookie prefs
-    PRBool migrated;
+    bool migrated;
     rv = prefBranch->GetBoolPref(kCookiesPrefsMigrated, &migrated);
     if (NS_FAILED(rv) || !migrated) {
-      PRBool warnAboutCookies = PR_FALSE;
+      bool warnAboutCookies = false;
       prefBranch->GetBoolPref(kCookiesAskPermission, &warnAboutCookies);
 
       // if the user is using ask before accepting, we'll use that
       if (warnAboutCookies)
         prefBranch->SetIntPref(kCookiesLifetimePolicy, ASK_BEFORE_ACCEPT);
         
-      PRBool lifetimeEnabled = PR_FALSE;
+      bool lifetimeEnabled = false;
       prefBranch->GetBoolPref(kCookiesLifetimeEnabled, &lifetimeEnabled);
       
       // if they're limiting lifetime and not using the prompts, use the 
       // appropriate limited lifetime pref
       if (lifetimeEnabled && !warnAboutCookies) {
-        PRInt32 lifetimeBehavior;
+        int32_t lifetimeBehavior;
         prefBranch->GetIntPref(kCookiesLifetimeBehavior, &lifetimeBehavior);
         if (lifetimeBehavior)
           prefBranch->SetIntPref(kCookiesLifetimePolicy, ACCEPT_FOR_N_DAYS);
         else
           prefBranch->SetIntPref(kCookiesLifetimePolicy, ACCEPT_SESSION);
       }
-      prefBranch->SetBoolPref(kCookiesPrefsMigrated, PR_TRUE);
+      prefBranch->SetBoolPref(kCookiesPrefsMigrated, true);
     }
   }
 
@@ -165,7 +109,7 @@ void
 nsCookiePermission::PrefChanged(nsIPrefBranch *aPrefBranch,
                                 const char    *aPref)
 {
-  PRInt32 val;
+  int32_t val;
 
 #define PREF_CHANGED(_P) (!aPref || !strcmp(aPref, _P))
 
@@ -178,7 +122,7 @@ nsCookiePermission::PrefChanged(nsIPrefBranch *aPrefBranch,
     // save cookie lifetime in seconds instead of days
     mCookiesLifetimeSec = val * 24 * 60 * 60;
 
-  PRBool bval;
+  bool bval;
   if (PREF_CHANGED(kCookiesAlwaysAcceptSession) &&
       NS_SUCCEEDED(aPrefBranch->GetBoolPref(kCookiesAlwaysAcceptSession, &bval)))
     mCookiesAlwaysAcceptSession = bval;
@@ -206,21 +150,22 @@ nsCookiePermission::CanAccess(nsIURI         *aURI,
                               nsIChannel     *aChannel,
                               nsCookieAccess *aResult)
 {
-#ifdef MOZ_MAIL_NEWS
-  // If this URI is a mailnews one (e.g. imap etc), don't allow cookies for
-  // it.
-  if (IsFromMailNews(aURI)) {
+  // Check this protocol doesn't allow cookies
+  bool hasFlags;
+  nsresult rv =
+    NS_URIChainHasFlags(aURI, nsIProtocolHandler::URI_FORBIDS_COOKIE_ACCESS,
+                        &hasFlags);
+  if (NS_FAILED(rv) || hasFlags) {
     *aResult = ACCESS_DENY;
     return NS_OK;
   }
-#endif // MOZ_MAIL_NEWS
 
   // Lazily initialize ourselves
   if (!EnsureInitialized())
     return NS_ERROR_UNEXPECTED;
 
   // finally, check with permission manager...
-  nsresult rv = mPermMgr->TestPermission(aURI, kPermissionType, (PRUint32 *) aResult);
+  rv = mPermMgr->TestPermission(aURI, kPermissionType, (uint32_t *) aResult);
   if (NS_SUCCEEDED(rv)) {
     switch (*aResult) {
     // if we have one of the publicly-available values, just return it
@@ -248,9 +193,9 @@ NS_IMETHODIMP
 nsCookiePermission::CanSetCookie(nsIURI     *aURI,
                                  nsIChannel *aChannel,
                                  nsICookie2 *aCookie,
-                                 PRBool     *aIsSession,
-                                 PRInt64    *aExpiry,
-                                 PRBool     *aResult)
+                                 bool       *aIsSession,
+                                 int64_t    *aExpiry,
+                                 bool       *aResult)
 {
   NS_ASSERTION(aURI, "null uri");
 
@@ -260,18 +205,18 @@ nsCookiePermission::CanSetCookie(nsIURI     *aURI,
   if (!EnsureInitialized())
     return NS_ERROR_UNEXPECTED;
 
-  PRUint32 perm;
+  uint32_t perm;
   mPermMgr->TestPermission(aURI, kPermissionType, &perm);
   switch (perm) {
   case nsICookiePermission::ACCESS_SESSION:
-    *aIsSession = PR_TRUE;
+    *aIsSession = true;
 
   case nsIPermissionManager::ALLOW_ACTION: // ACCESS_ALLOW
-    *aResult = PR_TRUE;
+    *aResult = true;
     break;
 
   case nsIPermissionManager::DENY_ACTION:  // ACCESS_DENY
-    *aResult = PR_FALSE;
+    *aResult = false;
     break;
 
   default:
@@ -282,13 +227,13 @@ nsCookiePermission::CanSetCookie(nsIURI     *aURI,
     // now we need to figure out what type of accept policy we're dealing with
     // if we accept cookies normally, just bail and return
     if (mCookiesLifetimePolicy == ACCEPT_NORMALLY) {
-      *aResult = PR_TRUE;
+      *aResult = true;
       return NS_OK;
     }
     
     // declare this here since it'll be used in all of the remaining cases
-    PRInt64 currentTime = PR_Now() / PR_USEC_PER_SEC;
-    PRInt64 delta = *aExpiry - currentTime;
+    int64_t currentTime = PR_Now() / PR_USEC_PER_SEC;
+    int64_t delta = *aExpiry - currentTime;
     
     // check whether the user wants to be prompted
     if (mCookiesLifetimePolicy == ASK_BEFORE_ACCEPT) {
@@ -297,12 +242,12 @@ nsCookiePermission::CanSetCookie(nsIURI     *aURI,
       // accept the cookie and return
       if ((*aIsSession && mCookiesAlwaysAcceptSession) ||
           InPrivateBrowsing()) {
-        *aResult = PR_TRUE;
+        *aResult = true;
         return NS_OK;
       }
       
       // default to rejecting, in case the prompting process fails
-      *aResult = PR_FALSE;
+      *aResult = false;
 
       nsCAutoString hostPort;
       aURI->GetHostPort(hostPort);
@@ -343,8 +288,8 @@ nsCookiePermission::CanSetCookie(nsIURI     *aURI,
       // get some useful information to present to the user:
       // whether a previous cookie already exists, and how many cookies this host
       // has set
-      PRBool foundCookie = PR_FALSE;
-      PRUint32 countFromHost;
+      bool foundCookie = false;
+      uint32_t countFromHost;
       nsCOMPtr<nsICookieManager2> cookieManager = do_GetService(NS_COOKIEMANAGER_CONTRACTID, &rv);
       if (NS_SUCCEEDED(rv)) {
         nsCAutoString rawHost;
@@ -362,27 +307,29 @@ nsCookiePermission::CanSetCookie(nsIURI     *aURI,
       if (!foundCookie && !*aIsSession && delta <= 0) {
         // the cookie has already expired. accept it, and let the backend figure
         // out it's expired, so that we get correct logging & notifications.
-        *aResult = PR_TRUE;
+        *aResult = true;
         return rv;
       }
 
-      PRBool rememberDecision = PR_FALSE;
+      bool rememberDecision = false;
+      int32_t dialogRes = nsICookiePromptService::DENY_COOKIE;
       rv = cookiePromptService->CookieDialog(parent, aCookie, hostPort, 
                                              countFromHost, foundCookie,
-                                             &rememberDecision, aResult);
+                                             &rememberDecision, &dialogRes);
       if (NS_FAILED(rv)) return rv;
-      
-      if (*aResult == nsICookiePromptService::ACCEPT_SESSION_COOKIE)
-        *aIsSession = PR_TRUE;
+
+      *aResult = !!dialogRes;
+      if (dialogRes == nsICookiePromptService::ACCEPT_SESSION_COOKIE)
+        *aIsSession = true;
 
       if (rememberDecision) {
-        switch (*aResult) {
+        switch (dialogRes) {
           case nsICookiePromptService::DENY_COOKIE:
-            mPermMgr->Add(aURI, kPermissionType, (PRUint32) nsIPermissionManager::DENY_ACTION,
+            mPermMgr->Add(aURI, kPermissionType, (uint32_t) nsIPermissionManager::DENY_ACTION,
                           nsIPermissionManager::EXPIRE_NEVER, 0);
             break;
           case nsICookiePromptService::ACCEPT_COOKIE:
-            mPermMgr->Add(aURI, kPermissionType, (PRUint32) nsIPermissionManager::ALLOW_ACTION,
+            mPermMgr->Add(aURI, kPermissionType, (uint32_t) nsIPermissionManager::ALLOW_ACTION,
                           nsIPermissionManager::EXPIRE_NEVER, 0);
             break;
           case nsICookiePromptService::ACCEPT_SESSION_COOKIE:
@@ -399,7 +346,7 @@ nsCookiePermission::CanSetCookie(nsIURI     *aURI,
       if (!*aIsSession && delta > 0) {
         if (mCookiesLifetimePolicy == ACCEPT_SESSION) {
           // limit lifetime to session
-          *aIsSession = PR_TRUE;
+          *aIsSession = true;
         } else if (delta > mCookiesLifetimeSec) {
           // limit lifetime to specified time
           *aExpiry = currentTime + mCookiesLifetimeSec;
@@ -440,7 +387,7 @@ nsCookiePermission::GetOriginatingURI(nsIChannel  *aChannel,
    *    in this case.
    */
 
-  *aURI = nsnull;
+  *aURI = nullptr;
 
   // case 1)
   if (!aChannel)
@@ -450,7 +397,7 @@ nsCookiePermission::GetOriginatingURI(nsIChannel  *aChannel,
   nsCOMPtr<nsIHttpChannelInternal> httpChannelInternal = do_QueryInterface(aChannel);
   if (httpChannelInternal)
   {
-    PRBool doForce = PR_FALSE;
+    bool doForce = false;
     if (NS_SUCCEEDED(httpChannelInternal->GetForceAllowThirdPartyCookie(&doForce)) && doForce)
     {
       // return the channel's URI (we may not have a window)
@@ -526,7 +473,7 @@ nsCookiePermission::Observe(nsISupports     *aSubject,
 bool
 nsCookiePermission::InPrivateBrowsing()
 {
-  PRBool inPrivateBrowsingMode = PR_FALSE;
+  bool inPrivateBrowsingMode = false;
   if (!mPBService)
     mPBService = do_GetService(NS_PRIVATE_BROWSING_SERVICE_CONTRACTID);
   if (mPBService)

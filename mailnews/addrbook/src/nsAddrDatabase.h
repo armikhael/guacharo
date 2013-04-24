@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Seth Spitzer <sspitzer@netscape.com>
- *   Mark Banner <mark@standard8.demon.co.uk>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef _nsAddrDatabase_H_
 #define _nsAddrDatabase_H_
@@ -48,6 +14,7 @@
 #include "nsTObserverArray.h"
 #include "nsIEnumerator.h"
 #include "nsWeakPtr.h"
+#include "nsIWeakReferenceUtils.h"
 
 typedef enum
 {
@@ -66,33 +33,33 @@ public:
 
   NS_IMETHOD GetDbPath(nsIFile * *aDbPath);
   NS_IMETHOD SetDbPath(nsIFile * aDbPath);
-  NS_IMETHOD Open(nsIFile *aMabFile, PRBool aCreate, PRBool upgrading, nsIAddrDatabase **pCardDB);
-  NS_IMETHOD Close(PRBool forceCommit);
-  NS_IMETHOD OpenMDB(nsIFile *dbName, PRBool create);
-  NS_IMETHOD CloseMDB(PRBool commit);
-  NS_IMETHOD Commit(PRUint32 commitType);
+  NS_IMETHOD Open(nsIFile *aMabFile, bool aCreate, bool upgrading, nsIAddrDatabase **pCardDB);
+  NS_IMETHOD Close(bool forceCommit);
+  NS_IMETHOD OpenMDB(nsIFile *dbName, bool create);
+  NS_IMETHOD CloseMDB(bool commit);
+  NS_IMETHOD Commit(uint32_t commitType);
   NS_IMETHOD ForceClosed();
 
-  NS_IMETHOD CreateNewCardAndAddToDB(nsIAbCard *newCard, PRBool notify, nsIAbDirectory *parent);
-  NS_IMETHOD CreateNewListCardAndAddToDB(nsIAbDirectory *list, PRUint32 listRowID, nsIAbCard *newCard, PRBool notify);
-  NS_IMETHOD CreateMailListAndAddToDB(nsIAbDirectory *newList, PRBool notify, nsIAbDirectory *parent);
+  NS_IMETHOD CreateNewCardAndAddToDB(nsIAbCard *newCard, bool notify, nsIAbDirectory *parent);
+  NS_IMETHOD CreateNewListCardAndAddToDB(nsIAbDirectory *list, uint32_t listRowID, nsIAbCard *newCard, bool notify);
+  NS_IMETHOD CreateMailListAndAddToDB(nsIAbDirectory *newList, bool notify, nsIAbDirectory *parent);
   NS_IMETHOD EnumerateCards(nsIAbDirectory *directory, nsISimpleEnumerator **result);
   NS_IMETHOD GetMailingListsFromDB(nsIAbDirectory *parentDir);
   NS_IMETHOD EnumerateListAddresses(nsIAbDirectory *directory, nsISimpleEnumerator **result);
-  NS_IMETHOD DeleteCard(nsIAbCard *newCard, PRBool notify, nsIAbDirectory *parent);
-  NS_IMETHOD EditCard(nsIAbCard *card, PRBool notify, nsIAbDirectory *parent);
-  NS_IMETHOD ContainsCard(nsIAbCard *card, PRBool *hasCard);
+  NS_IMETHOD DeleteCard(nsIAbCard *newCard, bool notify, nsIAbDirectory *parent);
+  NS_IMETHOD EditCard(nsIAbCard *card, bool notify, nsIAbDirectory *parent);
+  NS_IMETHOD ContainsCard(nsIAbCard *card, bool *hasCard);
   NS_IMETHOD DeleteMailList(nsIAbDirectory *aMailList, nsIAbDirectory *aParent);
-  NS_IMETHOD EditMailList(nsIAbDirectory *mailList, nsIAbCard *listCard, PRBool notify);
-  NS_IMETHOD ContainsMailList(nsIAbDirectory *mailList, PRBool *hasCard);
-  NS_IMETHOD DeleteCardFromMailList(nsIAbDirectory *mailList, nsIAbCard *card, PRBool aNotify);
+  NS_IMETHOD EditMailList(nsIAbDirectory *mailList, nsIAbCard *listCard, bool notify);
+  NS_IMETHOD ContainsMailList(nsIAbDirectory *mailList, bool *hasCard);
+  NS_IMETHOD DeleteCardFromMailList(nsIAbDirectory *mailList, nsIAbCard *card, bool aNotify);
   NS_IMETHOD GetCardFromAttribute(nsIAbDirectory *aDirectory, const char *aName,
                                   const nsACString &aValue,
-                                  PRBool aCaseInsensitive, nsIAbCard **card);
+                                  bool aCaseInsensitive, nsIAbCard **card);
   NS_IMETHOD GetCardsFromAttribute(nsIAbDirectory *aDirectory,
                                    const char *aName,
                                    const nsACString & uUTF8Value,
-                                   PRBool aCaseInsensitive,
+                                   bool aCaseInsensitive,
                                    nsISimpleEnumerator **cards);
   NS_IMETHOD GetNewRow(nsIMdbRow * *newRow);
   NS_IMETHOD GetNewListRow(nsIMdbRow * *newRow);
@@ -100,7 +67,7 @@ public:
   NS_IMETHOD AddLdifListMember(nsIMdbRow* row, const char * value);
 
   NS_IMETHOD GetDeletedCardList(nsIArray **aResult);
-  NS_IMETHOD GetDeletedCardCount(PRUint32 *aCount);
+  NS_IMETHOD GetDeletedCardCount(uint32_t *aCount);
   NS_IMETHOD PurgeDeletedCardTable();
 
   NS_IMETHOD AddFirstName(nsIMdbRow * row, const char * value)
@@ -126,13 +93,13 @@ public:
   NS_IMETHOD Add2ndEmail(nsIMdbRow * row, const char * value)
   { return AddCharStringColumn(row, m_2ndEmailColumnToken, value); }
 
-  NS_IMETHOD AddPreferMailFormat(nsIMdbRow * row, PRUint32 value)
+  NS_IMETHOD AddPreferMailFormat(nsIMdbRow * row, uint32_t value)
   { return AddIntColumn(row, m_MailFormatColumnToken, value); }
 
-  NS_IMETHOD AddPopularityIndex(nsIMdbRow * row, PRUint32 value)
+  NS_IMETHOD AddPopularityIndex(nsIMdbRow * row, uint32_t value)
   { return AddIntColumn(row, m_PopularityIndexColumnToken, value); }
 
-  NS_IMETHOD AddAllowRemoteContent(nsIMdbRow * row, PRBool value)
+  NS_IMETHOD AddAllowRemoteContent(nsIMdbRow * row, bool value)
   { return AddBoolColumn(row, m_AllowRemoteContentColumnToken, value); }
 
   NS_IMETHOD AddWorkPhone(nsIMdbRow * row, const char * value)
@@ -275,11 +242,11 @@ public:
 
   NS_IMETHOD AddListDirNode(nsIMdbRow * listRow);
 
-  NS_IMETHOD FindMailListbyUnicodeName(const PRUnichar *listName, PRBool *exist);
+  NS_IMETHOD FindMailListbyUnicodeName(const PRUnichar *listName, bool *exist);
 
-  NS_IMETHOD GetCardCount(PRUint32 *count);
+  NS_IMETHOD GetCardCount(uint32_t *count);
 
-  NS_IMETHOD SetCardValue(nsIAbCard *card, const char *name, const PRUnichar *value, PRBool notify);
+  NS_IMETHOD SetCardValue(nsIAbCard *card, const char *name, const PRUnichar *value, bool notify);
   NS_IMETHOD GetCardValue(nsIAbCard *card, const char *name, PRUnichar **value);
   // nsAddrDatabase methods:
 
@@ -288,7 +255,7 @@ public:
 
   void GetMDBFactory(nsIMdbFactory ** aMdbFactory);
   nsIMdbEnv    *GetEnv() {return m_mdbEnv;}
-  PRUint32    GetCurVersion();
+  uint32_t    GetCurVersion();
   nsIMdbTableRowCursor *GetTableRowCursor();
   nsIMdbTable    *GetPabTable() {return m_mdbPabTable;}
 
@@ -300,37 +267,37 @@ public:
   nsresult CreateABListCard(nsIMdbRow* listRow, nsIAbCard **result);
   nsresult CreateABList(nsIMdbRow* listRow, nsIAbDirectory **result);
 
-  PRBool IsListRowScopeToken(mdb_scope scope) { return (scope == m_ListRowScopeToken) ? PR_TRUE: PR_FALSE; }
-  PRBool IsCardRowScopeToken(mdb_scope scope) { return (scope == m_CardRowScopeToken) ? PR_TRUE: PR_FALSE;  }
-  PRBool IsDataRowScopeToken(mdb_scope scope) { return (scope == m_DataRowScopeToken) ? PR_TRUE: PR_FALSE; }
+  bool IsListRowScopeToken(mdb_scope scope) { return (scope == m_ListRowScopeToken) ? true: false; }
+  bool IsCardRowScopeToken(mdb_scope scope) { return (scope == m_CardRowScopeToken) ? true: false;  }
+  bool IsDataRowScopeToken(mdb_scope scope) { return (scope == m_DataRowScopeToken) ? true: false; }
   nsresult GetCardRowByRowID(mdb_id rowID, nsIMdbRow **dbRow);
   nsresult GetListRowByRowID(mdb_id rowID, nsIMdbRow **dbRow);
 
-  PRUint32 GetListAddressTotal(nsIMdbRow* listRow);
-  nsresult GetAddressRowByPos(nsIMdbRow* listRow, PRUint16 pos, nsIMdbRow** cardRow);
+  uint32_t GetListAddressTotal(nsIMdbRow* listRow);
+  nsresult GetAddressRowByPos(nsIMdbRow* listRow, uint16_t pos, nsIMdbRow** cardRow);
 
-    NS_IMETHOD AddListCardColumnsToRow(nsIAbCard *aPCard, nsIMdbRow *aPListRow, PRUint32 aPos, nsIAbCard** aPNewCard, PRBool aInMailingList, nsIAbDirectory *aParent, nsIAbDirectory *aRoot);
+    NS_IMETHOD AddListCardColumnsToRow(nsIAbCard *aPCard, nsIMdbRow *aPListRow, uint32_t aPos, nsIAbCard** aPNewCard, bool aInMailingList, nsIAbDirectory *aParent, nsIAbDirectory *aRoot);
     NS_IMETHOD InitCardFromRow(nsIAbCard *aNewCard, nsIMdbRow* aCardRow);
-    NS_IMETHOD SetListAddressTotal(nsIMdbRow* aListRow, PRUint32 aTotal);
+    NS_IMETHOD SetListAddressTotal(nsIMdbRow* aListRow, uint32_t aTotal);
     NS_IMETHOD FindRowByCard(nsIAbCard * card,nsIMdbRow **aRow);
 
 protected:
 
   static void RemoveFromCache(nsAddrDatabase* pAddrDB);
-  PRBool MatchDbName(nsIFile *dbName); // returns TRUE if they match
+  bool MatchDbName(nsIFile *dbName); // returns TRUE if they match
 
-  void YarnToUInt32(struct mdbYarn *yarn, PRUint32 *pResult);
+  void YarnToUInt32(struct mdbYarn *yarn, uint32_t *pResult);
   void GetCharStringYarn(char* str, struct mdbYarn* strYarn);
   void GetStringYarn(const nsAString & aStr, struct mdbYarn* strYarn);
-  void GetIntYarn(PRUint32 nValue, struct mdbYarn* intYarn);
+  void GetIntYarn(uint32_t nValue, struct mdbYarn* intYarn);
   nsresult AddCharStringColumn(nsIMdbRow* cardRow, mdb_column inColumn, const char* str);
   nsresult AddStringColumn(nsIMdbRow* aCardRow, mdb_column aInColumn, const nsAString & aStr);
-  nsresult AddIntColumn(nsIMdbRow* cardRow, mdb_column inColumn, PRUint32 nValue);
-  nsresult AddBoolColumn(nsIMdbRow* cardRow, mdb_column inColumn, PRBool bValue);
+  nsresult AddIntColumn(nsIMdbRow* cardRow, mdb_column inColumn, uint32_t nValue);
+  nsresult AddBoolColumn(nsIMdbRow* cardRow, mdb_column inColumn, bool bValue);
   nsresult GetStringColumn(nsIMdbRow *cardRow, mdb_token outToken, nsString& str);
   nsresult GetIntColumn(nsIMdbRow *cardRow, mdb_token outToken,
-              PRUint32* pValue, PRUint32 defaultValue);
-  nsresult GetBoolColumn(nsIMdbRow *cardRow, mdb_token outToken, PRBool* pValue);
+              uint32_t* pValue, uint32_t defaultValue);
+  nsresult GetBoolColumn(nsIMdbRow *cardRow, mdb_token outToken, bool* pValue);
   nsresult GetListCardFromDB(nsIAbCard *listCard, nsIMdbRow* listRow);
   nsresult GetListFromDB(nsIAbDirectory *newCard, nsIMdbRow* listRow);
   nsresult AddRecordKeyColumnToRow(nsIMdbRow *pRow);
@@ -340,11 +307,11 @@ protected:
   nsresult CreateCardFromDeletedCardsTable(nsIMdbRow* cardRow, mdb_id listRowID, nsIAbCard **result);
   nsresult DeleteCardFromListRow(nsIMdbRow* pListRow, mdb_id cardRowID);
   void DeleteCardFromAllMailLists(mdb_id cardRowID);
-  nsresult NotifyListEntryChange(PRUint32 abCode, nsIAbDirectory *dir);
+  nsresult NotifyListEntryChange(uint32_t abCode, nsIAbDirectory *dir);
 
   nsresult AddLowercaseColumn(nsIMdbRow * row, mdb_token columnToken, const char* utf8String);
   nsresult GetRowFromAttribute(const char *aName, const nsACString &aUTF8Value,
-                               PRBool aCaseInsensitive, nsIMdbRow  **aCardRow,
+                               bool aCaseInsensitive, nsIMdbRow  **aCardRow,
                                mdb_pos *aRowPos);
 
   static nsTArray<nsAddrDatabase*>* m_dbCache;
@@ -355,7 +322,7 @@ protected:
   nsresult      InitNewDB();
   nsresult      InitMDBInfo();
   nsresult      InitPabTable();
-  nsresult      InitDeletedCardsTable(PRBool aCreate);
+  nsresult      InitDeletedCardsTable(bool aCreate);
   nsresult      AddRowToDeletedCardsTable(nsIAbCard *card, nsIMdbRow **pCardRow);
   nsresult      DeleteRowFromDeletedCardsTable(nsIMdbRow *pCardRow);
 
@@ -376,7 +343,7 @@ protected:
   nsIMdbTable *m_mdbPabTable;
   nsIMdbTable *m_mdbDeletedCardsTable;
   nsCOMPtr<nsIFile> m_dbName;
-  PRBool        m_mdbTokensInitialized;
+  bool          m_mdbTokensInitialized;
   nsTObserverArray<nsIAddrDBListener*> m_ChangeListeners;
 
   mdb_kind      m_PabTableKind;
@@ -457,21 +424,21 @@ protected:
   mdb_token      m_ListTotalColumnToken;
   mdb_token      m_LowerListNameColumnToken;
 
-  PRUint32      m_LastRecordKey;
+  uint32_t      m_LastRecordKey;
   nsWeakPtr m_dbDirectory;
   nsCOMPtr<nsIMdbFactory> mMdbFactory;
 
 private:
   nsresult GetRowForCharColumn(const PRUnichar *unicodeStr,
-                               mdb_column findColumn, PRBool bIsCard,
-                               PRBool aCaseInsensitive, nsIMdbRow **findRow,
+                               mdb_column findColumn, bool bIsCard,
+                               bool aCaseInsensitive, nsIMdbRow **findRow,
                                mdb_pos *aRowPos);
-  PRBool HasRowButDeletedForCharColumn(const PRUnichar *unicodeStr, mdb_column findColumn, PRBool aIsCard, nsIMdbRow **aFindRow);
-  nsresult OpenInternal(nsIFile *aMabFile, PRBool aCreate, nsIAddrDatabase **pCardDB);
+  bool HasRowButDeletedForCharColumn(const PRUnichar *unicodeStr, mdb_column findColumn, bool aIsCard, nsIMdbRow **aFindRow);
+  nsresult OpenInternal(nsIFile *aMabFile, bool aCreate, nsIAddrDatabase **pCardDB);
   nsresult AlertAboutCorruptMabFile(const PRUnichar *aOldFileName, const PRUnichar *aNewFileName);
   nsresult AlertAboutLockedMabFile(const PRUnichar *aFileName);
   nsresult DisplayAlert(const PRUnichar *titleName, const PRUnichar *alertStringName,
-                        const PRUnichar **formatStrings, PRInt32 numFormatStrings);
+                        const PRUnichar **formatStrings, int32_t numFormatStrings);
 };
 
 #endif

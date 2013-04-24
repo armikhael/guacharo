@@ -1,50 +1,18 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nscore.h"
-#include "nsILocalFile.h"
+#include "nsIFile.h"
 #include "nsImportScanFile.h"
 #include "ImportCharSet.h"
 
 nsImportScanFile::nsImportScanFile()
 {
-  m_allocated = PR_FALSE;
-  m_eof = PR_FALSE;
-  m_pBuf = nsnull;
+  m_allocated = false;
+  m_eof = false;
+  m_pBuf = nullptr;
 }
 
 nsImportScanFile::~nsImportScanFile()
@@ -53,7 +21,7 @@ nsImportScanFile::~nsImportScanFile()
     CleanUpScan();
 }
 
-void nsImportScanFile::InitScan( nsIInputStream *pInputStream, PRUint8 * pBuf, PRUint32 sz)
+void nsImportScanFile::InitScan(nsIInputStream *pInputStream, uint8_t * pBuf, uint32_t sz)
 {
   m_pInputStream = pInputStream;
   m_pBuf = pBuf;
@@ -62,24 +30,24 @@ void nsImportScanFile::InitScan( nsIInputStream *pInputStream, PRUint8 * pBuf, P
   m_pos = 0;
 }
 
-void nsImportScanFile::CleanUpScan( void)
+void nsImportScanFile::CleanUpScan(void)
 {
-  m_pInputStream = nsnull;
+  m_pInputStream = nullptr;
   if (m_allocated) {
     delete [] m_pBuf;
     m_pBuf = NULL;
   }
 }
 
-void nsImportScanFile::ShiftBuffer( void)
+void nsImportScanFile::ShiftBuffer(void)
 {
-  PRUint8 *  pTop;
-  PRUint8 *  pCurrent;
+  uint8_t *  pTop;
+  uint8_t *  pCurrent;
 
   if (m_pos < m_bytesInBuf) {
     pTop = m_pBuf;
     pCurrent = pTop + m_pos;
-    PRUint32    cnt = m_bytesInBuf - m_pos;
+    uint32_t    cnt = m_bytesInBuf - m_pos;
     while (cnt) {
       *pTop = *pCurrent;
       pTop++; pCurrent++;
@@ -91,69 +59,69 @@ void nsImportScanFile::ShiftBuffer( void)
   m_pos = 0;
 }
 
-PRBool nsImportScanFile::FillBufferFromFile( void)
+bool nsImportScanFile::FillBufferFromFile(void)
 {
-  PRUint32 available;
-  nsresult rv = m_pInputStream->Available( &available);
+  uint64_t available;
+  nsresult rv = m_pInputStream->Available(&available);
   if (NS_FAILED(rv))
-    return( PR_FALSE);
+    return false;
 
   // Fill up a buffer and scan it
   ShiftBuffer();
 
   // Read in some more bytes
-  PRUint32  cnt = m_bufSz - m_bytesInBuf;
+  uint32_t  cnt = m_bufSz - m_bytesInBuf;
   // To distinguish from disk errors
   // Check first for end of file?
   // Set a done flag if true...
-  PRUint32 read;
+  uint32_t read;
   char *pBuf = (char *)m_pBuf;
   pBuf += m_bytesInBuf;
-  rv = m_pInputStream->Read(pBuf, (PRInt32) cnt, &read);
+  rv = m_pInputStream->Read(pBuf, (int32_t) cnt, &read);
 
-  if (NS_FAILED( rv))
-    return( PR_FALSE);
-  rv = m_pInputStream->Available( &available);
   if (NS_FAILED(rv))
-          m_eof = PR_TRUE;
+    return false;
+  rv = m_pInputStream->Available(&available);
+  if (NS_FAILED(rv))
+          m_eof = true;
 
   m_bytesInBuf += cnt;
-  return( PR_TRUE);
+  return true;
 }
 
-PRBool nsImportScanFile::Scan( PRBool *pDone)
+bool nsImportScanFile::Scan(bool *pDone)
 {
-  PRUint32 available;
-  nsresult rv = m_pInputStream->Available( &available);
+  uint64_t available;
+  nsresult rv = m_pInputStream->Available(&available);
   if (NS_FAILED(rv))
         {
     if (m_pos < m_bytesInBuf)
-      ScanBuffer( pDone);
-    *pDone = PR_TRUE;
-    return( PR_TRUE);
+      ScanBuffer(pDone);
+    *pDone = true;
+    return true;
   }
 
   // Fill up a buffer and scan it
   if (!FillBufferFromFile())
-    return( PR_FALSE);
+    return false;
 
-  return( ScanBuffer( pDone));
+  return ScanBuffer(pDone);
 }
 
-PRBool nsImportScanFile::ScanBuffer( PRBool *)
+bool nsImportScanFile::ScanBuffer(bool *)
 {
-  return( PR_TRUE);
+  return true;
 }
 
 
-PRBool nsImportScanFileLines::ScanBuffer( PRBool *pDone)
+bool nsImportScanFileLines::ScanBuffer(bool *pDone)
 {
   // m_pos, m_bytesInBuf, m_eof, m_pBuf are relevant
 
-  PRUint32    pos = m_pos;
-  PRUint32    max = m_bytesInBuf;
-  PRUint8 *    pChar = m_pBuf + pos;
-  PRUint32    startPos;
+  uint32_t    pos = m_pos;
+  uint32_t    max = m_bytesInBuf;
+  uint8_t *    pChar = m_pBuf + pos;
+  uint32_t    startPos;
 
   while (pos < max) {
     if (m_needEol) {
@@ -164,7 +132,7 @@ PRBool nsImportScanFileLines::ScanBuffer( PRBool *pDone)
       }
       m_pos = pos;
       if (pos < max)
-        m_needEol = PR_FALSE;
+        m_needEol = false;
       if (pos == max) // need more buffer for an end of line
         break;
     }
@@ -188,17 +156,17 @@ PRBool nsImportScanFileLines::ScanBuffer( PRBool *pDone)
     if ((pos == max) && !m_eof) {
       if (!m_pos) { // line too big for our buffer
         m_pos = pos;
-        m_needEol = PR_TRUE;
+        m_needEol = true;
       }
       break;
     }
 
-    if (!ProcessLine( m_pBuf + startPos, pos - startPos, pDone)) {
-      return( PR_FALSE);
+    if (!ProcessLine(m_pBuf + startPos, pos - startPos, pDone)) {
+      return false;
     }
     m_pos = pos;
   }
 
-  return( PR_TRUE);
+  return true;
 }
 

@@ -1,41 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corp.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *                 Krishna Mohan Khandrika (kkhandrika@netscape.com)
- *                 Rajiv Dayal (rdayal@netscape.com)
- *                 David Bienvenu <bienvenu@nventure.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifdef MOZ_LOGGING
 // this has to be before the pre-compiled header
@@ -67,7 +32,7 @@
 #include "nsIMsgHeaderParser.h"
 #include "nsILineInputStream.h"
 #include "nsISeekableStream.h"
-#include "nsILocalFile.h"
+#include "nsIFile.h"
 #include "nsIFileStreams.h"
 #include "nsNetCID.h"
 #include "nsMsgMessageFlags.h"
@@ -100,7 +65,7 @@ STDMETHODIMP CMapiImp::QueryInterface(const IID& aIid, void** aPpv)
     }
     else
     {
-        *aPpv = nsnull;
+        *aPpv = nullptr;
         return E_NOINTERFACE;
     }
 
@@ -115,7 +80,7 @@ STDMETHODIMP_(ULONG) CMapiImp::AddRef()
 
 STDMETHODIMP_(ULONG) CMapiImp::Release() 
 {
-    PRInt32 temp;
+    int32_t temp;
     temp = PR_ATOMIC_DECREMENT(&m_cRef);
     if (m_cRef == 0)
     {
@@ -152,7 +117,7 @@ STDMETHODIMP CMapiImp::Initialize()
     // Initialize MAPI Configuration
 
     nsMAPIConfiguration *pConfig = nsMAPIConfiguration::GetMAPIConfiguration();
-    if (pConfig != nsnull)
+    if (pConfig != nullptr)
       hr = S_OK;
 
     PR_Unlock(m_Lock);
@@ -164,21 +129,21 @@ STDMETHODIMP CMapiImp::Login(unsigned long aUIArg, LOGIN_PW_TYPE aLogin, LOGIN_P
                 unsigned long aFlags, unsigned long *aSessionId)
 {
     HRESULT hr = E_FAIL;
-     PRBool bNewSession = PR_FALSE;
+     bool bNewSession = false;
     nsCString id_key;
 
     PR_LOG(MAPI, PR_LOG_DEBUG, ("CMapiImp::Login using flags %d\n", aFlags));
     if (aFlags & MAPI_NEW_SESSION)
-        bNewSession = PR_TRUE;
+        bNewSession = true;
 
     // Check For Profile Name
-    if (aLogin != nsnull && aLogin[0] != '\0')
+    if (aLogin != nullptr && aLogin[0] != '\0')
     {
         if (!nsMapiHook::VerifyUserName(nsString(aLogin), id_key))
         {
             *aSessionId = MAPI_E_LOGIN_FAILURE;
             PR_LOG(MAPI, PR_LOG_DEBUG, ("CMapiImp::Login failed for username %s\n", aLogin));
-            NS_ASSERTION(PR_FALSE, "failed verifying user name");
+            NS_ASSERTION(false, "failed verifying user name");
             return hr;
         }
     }
@@ -200,11 +165,11 @@ STDMETHODIMP CMapiImp::Login(unsigned long aUIArg, LOGIN_PW_TYPE aLogin, LOGIN_P
     }
 
     // finally register(create) the session.
-    PRUint32 nSession_Id;
-    PRInt16 nResult = 0;
+    uint32_t nSession_Id;
+    int16_t nResult = 0;
 
     nsMAPIConfiguration *pConfig = nsMAPIConfiguration::GetMAPIConfiguration();
-    if (pConfig != nsnull)
+    if (pConfig != nullptr)
         nResult = pConfig->RegisterSession(aUIArg, aLogin, aPassWord,
                                            (aFlags & MAPI_FORCE_DOWNLOAD), bNewSession,
                                            &nSession_Id, id_key.get());
@@ -347,11 +312,11 @@ public:
   nsresult OpenDatabase (nsIMsgFolder *folder);
   
   nsMsgKey GetNext ();
-  nsresult MarkRead (nsMsgKey key, PRBool read);
+  nsresult MarkRead (nsMsgKey key, bool read);
   
   lpnsMapiMessage GetMessage (nsMsgKey, unsigned long flFlags);
-  PRBool IsIMAPHost(void);
-  PRBool DeleteMessage(nsMsgKey key);
+  bool IsIMAPHost(void);
+  bool DeleteMessage(nsMsgKey key);
   
 protected:
   
@@ -380,7 +345,7 @@ LONG CMapiImp::InitContext(unsigned long session, MsgMapiListContext **listConte
     nsresult rv = GetDefaultInbox(getter_AddRefs(inboxFolder));
     if (NS_FAILED(rv))
     {
-      NS_ASSERTION(PR_FALSE, "in init context, no inbox");
+      NS_ASSERTION(false, "in init context, no inbox");
       return(MAPI_E_NO_MESSAGES);
     }
 
@@ -393,7 +358,7 @@ LONG CMapiImp::InitContext(unsigned long session, MsgMapiListContext **listConte
     {
       pMapiConfig->SetMapiListContext(session, NULL);
       delete *listContext;
-      NS_ASSERTION(PR_FALSE, "in init context, unable to open db");
+      NS_ASSERTION(false, "in init context, unable to open db");
       return MAPI_E_NO_MESSAGES;
     }
     else
@@ -416,20 +381,20 @@ STDMETHODIMP CMapiImp::FindNext(unsigned long aSession, unsigned long ulUIParam,
   nsMAPIConfiguration * pMapiConfig = nsMAPIConfiguration::GetMAPIConfiguration() ;
   if (!pMapiConfig) 
   {
-    NS_ASSERTION(PR_FALSE, "failed to get config in findnext");
+    NS_ASSERTION(false, "failed to get config in findnext");
     return NS_ERROR_FAILURE ;  // get the singelton obj
   }
   MsgMapiListContext *listContext;
   LONG ret = InitContext(aSession, &listContext);
   if (ret != SUCCESS_SUCCESS)
   {
-    NS_ASSERTION(PR_FALSE, "init context failed");
+    NS_ASSERTION(false, "init context failed");
     return ret;
   }
   NS_ASSERTION(listContext, "initContext returned null context");
   if (listContext)
   {
-//    NS_ASSERTION(PR_FALSE, "find next init context succeeded");
+//    NS_ASSERTION(false, "find next init context succeeded");
     nsMsgKey nextKey = listContext->GetNext();
     if (nextKey == nsMsgKey_None)
     {
@@ -450,20 +415,20 @@ STDMETHODIMP CMapiImp::FindNext(unsigned long aSession, unsigned long ulUIParam,
 STDMETHODIMP CMapiImp::ReadMail(unsigned long aSession, unsigned long ulUIParam, LPTSTR lpszMessageID,
                               unsigned long flFlags, unsigned long ulReserved, lpnsMapiMessage *lppMessage)
 {
-  PRInt32 irv;
+  nsresult irv;
   nsCAutoString keyString((char *) lpszMessageID);
   PR_LOG(MAPI, PR_LOG_DEBUG, ("CMapiImp::ReadMail asking for key %s\n", (char *) lpszMessageID));
   nsMsgKey msgKey = keyString.ToInteger(&irv);
-  if (irv)
+  if (NS_FAILED(irv))
   {
-    NS_ASSERTION(PR_FALSE, "invalid lpszMessageID");
+    NS_ASSERTION(false, "invalid lpszMessageID");
     return MAPI_E_INVALID_MESSAGE;
   }
   MsgMapiListContext *listContext;
   LONG ret = InitContext(aSession, &listContext);
   if (ret != SUCCESS_SUCCESS)
   {
-    NS_ASSERTION(PR_FALSE, "init context failed in ReadMail");
+    NS_ASSERTION(false, "init context failed in ReadMail");
     return ret;
   }
   *lppMessage = listContext->GetMessage (msgKey, flFlags);
@@ -476,10 +441,11 @@ STDMETHODIMP CMapiImp::ReadMail(unsigned long aSession, unsigned long ulUIParam,
 STDMETHODIMP CMapiImp::DeleteMail(unsigned long aSession, unsigned long ulUIParam, LPTSTR lpszMessageID,
                               unsigned long flFlags, unsigned long ulReserved)
 {
-  PRInt32 irv;
+  nsresult irv;
   nsCAutoString keyString((char *) lpszMessageID);
   nsMsgKey msgKey = keyString.ToInteger(&irv);
-  if (irv)
+  // XXX Why do we return success on failure?
+  if (NS_FAILED(irv))
     return SUCCESS_SUCCESS;
   MsgMapiListContext *listContext;
   LONG ret = InitContext(aSession, &listContext);
@@ -503,7 +469,7 @@ STDMETHODIMP CMapiImp::Logoff (unsigned long aSession)
 {
     nsMAPIConfiguration *pConfig = nsMAPIConfiguration::GetMAPIConfiguration();
 
-    if (pConfig->UnRegisterSession((PRUint32)aSession))
+    if (pConfig->UnRegisterSession((uint32_t)aSession))
         return S_OK;
 
     return E_FAIL;
@@ -522,7 +488,7 @@ STDMETHODIMP CMapiImp::CleanUp()
 MsgMapiListContext::~MsgMapiListContext ()
 {
   if (m_db)
-    m_db->Close(PR_FALSE);
+    m_db->Close(false);
 }
 
 
@@ -539,20 +505,20 @@ nsresult MsgMapiListContext::OpenDatabase (nsIMsgFolder *folder)
   return dbErr;
 }
 
-PRBool 
+bool 
 MsgMapiListContext::IsIMAPHost(void)
 {
   if (!m_folder) 
     return FALSE;
   nsCOMPtr <nsIMsgImapMailFolder> imapFolder = do_QueryInterface(m_folder);
 
-  return imapFolder != nsnull;
+  return imapFolder != nullptr;
 }
 
 nsMsgKey MsgMapiListContext::GetNext ()
 {
   nsMsgKey key = nsMsgKey_None;
-  PRBool    keepTrying = TRUE;
+  bool      keepTrying = TRUE;
   
 //  NS_ASSERTION (m_msgEnumerator && m_db, "need enumerator and db");
   if (m_msgEnumerator && m_db)
@@ -574,7 +540,7 @@ nsMsgKey MsgMapiListContext::GetNext ()
         
         // If this is an IMAP message, we have to make sure we have a valid
         // body to work with.
-        PRUint32  flags = 0;
+        uint32_t  flags = 0;
         
         (void) msgHdr->GetFlags(&flags);
         if (flags & nsMsgMessageFlags::Offline) 
@@ -591,12 +557,12 @@ nsMsgKey MsgMapiListContext::GetNext ()
 }
 
 
-nsresult MsgMapiListContext::MarkRead (nsMsgKey key, PRBool read)
+nsresult MsgMapiListContext::MarkRead (nsMsgKey key, bool read)
 {
   nsresult err = NS_ERROR_FAILURE;
   NS_ASSERTION(m_db, "no db");
   if (m_db)
-    err = m_db->MarkRead (key, read, nsnull);
+    err = m_db->MarkRead (key, read, nullptr);
   return err;
 }
 
@@ -617,13 +583,13 @@ lpnsMapiMessage MsgMapiListContext::GetMessage (nsMsgKey key, unsigned long flFl
       msgHdr->GetSubject (getter_Copies(subject));
       message->lpszSubject = (char *) CoTaskMemAlloc(subject.Length() + 1);
       strcpy((char *) message->lpszSubject, subject.get());
-      PRUint32 date;
+      uint32_t date;
       (void) msgHdr->GetDateInSeconds(&date);
       message->lpszDateReceived = ConvertDateToMapiFormat (date);
       
       // Pull out the flags info
       // anything to do with MAPI_SENT? Since we're only reading the Inbox, I guess not
-      PRUint32 ourFlags;
+      uint32_t ourFlags;
       (void) msgHdr->GetFlags(&ourFlags);
       if (!(ourFlags & nsMsgMessageFlags::Read))
         message->flFlags |= MAPI_UNREAD;
@@ -632,7 +598,7 @@ lpnsMapiMessage MsgMapiListContext::GetMessage (nsMsgKey key, unsigned long flFl
       
       nsCOMPtr<nsIMsgHeaderParser> parser = do_GetService(NS_MAILNEWS_MIME_HEADER_PARSER_CONTRACTID);
       if (!parser)
-        return nsnull;
+        return nullptr;
       // Pull out the author/originator info
       message->lpOriginator = (lpnsMapiRecipDesc) CoTaskMemAlloc (sizeof(nsMapiRecipDesc));
       memset(message->lpOriginator, 0, sizeof(nsMapiRecipDesc));
@@ -646,11 +612,11 @@ lpnsMapiMessage MsgMapiListContext::GetMessage (nsMsgKey key, unsigned long flFl
       msgHdr->GetRecipients(getter_Copies(recipients));
       msgHdr->GetCcList(getter_Copies(ccList));
 
-      PRUint32 numToRecips;
-      PRUint32 numCCRecips;
-      parser->ParseHeaderAddresses(recipients.get(), nsnull, nsnull,
+      uint32_t numToRecips;
+      uint32_t numCCRecips;
+      parser->ParseHeaderAddresses(recipients.get(), nullptr, nullptr,
 				   &numToRecips);
-      parser->ParseHeaderAddresses(ccList.get(), nsnull, nsnull, &numCCRecips);
+      parser->ParseHeaderAddresses(ccList.get(), nullptr, nullptr, &numCCRecips);
 
       message->lpRecips = (lpnsMapiRecipDesc) CoTaskMemAlloc ((numToRecips + numCCRecips) * sizeof(MapiRecipDesc));
       memset(message->lpRecips, 0, (numToRecips + numCCRecips) * sizeof(MapiRecipDesc));
@@ -669,7 +635,7 @@ lpnsMapiMessage MsgMapiListContext::GetMessage (nsMsgKey key, unsigned long flFl
       
     }
     if (! (flFlags & (MAPI_PEEK | MAPI_ENVELOPE_ONLY)))
-      m_db->MarkRead(key, PR_TRUE, nsnull);
+      m_db->MarkRead(key, true, nullptr);
   }
   return message;
 }
@@ -694,12 +660,12 @@ char *MsgMapiListContext::ConvertDateToMapiFormat (time_t ourTime)
 void MsgMapiListContext::ConvertRecipientsToMapiFormat (nsIMsgHeaderParser *parser, const char *recipients, lpnsMapiRecipDesc mapiRecips,
                                                         int mapiRecipClass)
 {
-  char *names = nsnull;
-  char *addresses = nsnull;
+  char *names = nullptr;
+  char *addresses = nullptr;
   
   if (!parser)
     return ;
-  PRUint32 numAddresses = 0;
+  uint32_t numAddresses = 0;
   parser->ParseHeaderAddresses(recipients, &names, &addresses, &numAddresses);
   
   if (numAddresses > 0)
@@ -748,34 +714,34 @@ char *MsgMapiListContext::ConvertBodyToMapiFormat (nsIMsgDBHdr *hdr)
   nsCOMPtr <nsIMsgFolder> folder;
   hdr->GetFolder(getter_AddRefs(folder));
   if (!folder)
-    return nsnull;
+    return nullptr;
 
   nsCOMPtr <nsIInputStream> inputStream;
-  nsCOMPtr <nsILocalFile> localFile;
+  nsCOMPtr <nsIFile> localFile;
   folder->GetFilePath(getter_AddRefs(localFile));
 
   nsresult rv;
   nsCOMPtr<nsIFileInputStream> fileStream = do_CreateInstance(NS_LOCALFILEINPUTSTREAM_CONTRACTID, &rv);
-  NS_ENSURE_SUCCESS(rv, nsnull);
+  NS_ENSURE_SUCCESS(rv, nullptr);
 
-  rv = fileStream->Init(localFile,  PR_RDONLY, 0664, PR_FALSE);  //just have to read the messages
+  rv = fileStream->Init(localFile,  PR_RDONLY, 0664, false);  //just have to read the messages
   inputStream = do_QueryInterface(fileStream);
 
   if (inputStream)
   {
     nsCOMPtr <nsILineInputStream> fileLineStream = do_QueryInterface(inputStream);
     if (!fileLineStream)
-      return nsnull;
+      return nullptr;
     // ### really want to skip past headers...
-    PRUint64 messageOffset;
-    PRUint32 lineCount;
+    uint64_t messageOffset;
+    uint32_t lineCount;
     hdr->GetMessageOffset(&messageOffset);
     hdr->GetLineCount(&lineCount);
     nsCOMPtr <nsISeekableStream> seekableStream = do_QueryInterface(inputStream);
     seekableStream->Seek(PR_SEEK_SET, messageOffset);
-    PRBool hasMore = PR_TRUE;
+    bool hasMore = true;
     nsCAutoString curLine;
-    PRBool inMessageBody = PR_FALSE;
+    bool inMessageBody = false;
     nsresult rv = NS_OK;
     while (hasMore) // advance past message headers
     {
@@ -783,7 +749,7 @@ char *MsgMapiListContext::ConvertBodyToMapiFormat (nsIMsgDBHdr *hdr)
       if (NS_FAILED(rv) || EMPTY_MESSAGE_LINE(curLine))
         break;
     }
-    PRUint32 msgSize;
+    uint32_t msgSize;
     hdr->GetMessageSize(&msgSize);
     if (msgSize > kBufLen)
       msgSize = kBufLen - 1;
@@ -791,8 +757,8 @@ char *MsgMapiListContext::ConvertBodyToMapiFormat (nsIMsgDBHdr *hdr)
     char *body = (char*) CoTaskMemAlloc (msgSize + 1);
 
     if (!body)
-      return nsnull;
-    PRInt32 bytesCopied = 0;
+      return nullptr;
+    int32_t bytesCopied = 0;
     for (hasMore = TRUE; lineCount > 0 && hasMore && NS_SUCCEEDED(rv); lineCount--)
     {
       rv = fileLineStream->ReadLine(curLine, &hasMore);
@@ -811,7 +777,7 @@ char *MsgMapiListContext::ConvertBodyToMapiFormat (nsIMsgDBHdr *hdr)
     body[bytesCopied] = '\0';   // rhp - fix last line garbage...
     return body;
   }
-  return nsnull;
+  return nullptr;
 }
 
 
@@ -857,13 +823,13 @@ extern "C" void MSG_FreeMapiMessage (lpMapiMessage msg)
       msg_FreeMAPIRecipient(msg->lpOriginator);
     
     for (i=0; i<msg->nRecipCount; i++)
-      if (&(msg->lpRecips[i]) != nsnull)
+      if (&(msg->lpRecips[i]) != nullptr)
         msg_FreeMAPIRecipient(&(msg->lpRecips[i]));
       
       CoTaskMemFree(msg->lpRecips);
       
       for (i=0; i<msg->nFileCount; i++)
-        if (&(msg->lpFiles[i]) != nsnull)
+        if (&(msg->lpFiles[i]) != nullptr)
           msg_FreeMAPIFile(&(msg->lpFiles[i]));
         
       CoTaskMemFree(msg->lpFiles);
@@ -873,9 +839,9 @@ extern "C" void MSG_FreeMapiMessage (lpMapiMessage msg)
 }
 
 
-extern "C" PRBool MsgMarkMapiMessageRead (nsIMsgFolder *folder, nsMsgKey key, PRBool read)
+extern "C" bool MsgMarkMapiMessageRead (nsIMsgFolder *folder, nsMsgKey key, bool read)
 {
-  PRBool success = FALSE;
+  bool success = FALSE;
   MsgMapiListContext *context = new MsgMapiListContext();
   if (context)
   {
@@ -889,7 +855,7 @@ extern "C" PRBool MsgMarkMapiMessageRead (nsIMsgFolder *folder, nsMsgKey key, PR
   return success;
 }
 
-PRBool 
+bool 
 MsgMapiListContext::DeleteMessage(nsMsgKey key)
 {
   if (!m_db)
@@ -897,7 +863,7 @@ MsgMapiListContext::DeleteMessage(nsMsgKey key)
   
   if ( !IsIMAPHost() )
   {
-    return NS_SUCCEEDED((m_db->DeleteMessages(1, &key, nsnull)));
+    return NS_SUCCEEDED((m_db->DeleteMessages(1, &key, nullptr)));
   }
 #if 0 
   else if ( m_folder->GetIMAPFolderInfoMail() )
@@ -906,7 +872,7 @@ MsgMapiListContext::DeleteMessage(nsMsgKey key)
     messageKeys.AppendElement(key);
 
     (m_folder->GetIMAPFolderInfoMail())->DeleteSpecifiedMessages(pane, messageKeys, nsMsgKey_None);
-    m_db->DeleteMessage(key, nsnull, FALSE);
+    m_db->DeleteMessage(key, nullptr, FALSE);
     return TRUE;
   }
 #endif
@@ -917,9 +883,9 @@ MsgMapiListContext::DeleteMessage(nsMsgKey key)
 }
 
 /* Return TRUE on success, FALSE on failure */
-extern "C" PRBool MSG_DeleteMapiMessage(nsIMsgFolder *folder, nsMsgKey key)
+extern "C" bool MSG_DeleteMapiMessage(nsIMsgFolder *folder, nsMsgKey key)
 {
-  PRBool success = FALSE;
+  bool success = FALSE;
   MsgMapiListContext *context = new MsgMapiListContext();
   if (context) 
   {

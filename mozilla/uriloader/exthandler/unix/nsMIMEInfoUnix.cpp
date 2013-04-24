@@ -1,42 +1,8 @@
 /* -*- Mode: C++; tab-width: 3; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Mozilla browser.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Shawn Wilsher <me@shawnwilsher.com> (Original Author)
- *   Wolfgang Rosenauer <wr@rosenauer.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #if (MOZ_PLATFORM_MAEMO == 5) && defined (MOZ_ENABLE_GNOMEVFS)
 #include <glib.h>
@@ -72,11 +38,11 @@ nsMIMEInfoUnix::LoadUriInternal(nsIURI * aURI)
 
 #if (MOZ_PLATFORM_MAEMO == 5) && defined (MOZ_ENABLE_GNOMEVFS)
   if (NS_FAILED(rv)){
-    HildonURIAction *action = hildon_uri_get_default_action(mSchemeOrType.get(), nsnull);
+    HildonURIAction *action = hildon_uri_get_default_action(mSchemeOrType.get(), nullptr);
     if (action) {
       nsCAutoString spec;
       aURI->GetAsciiSpec(spec);
-      if (hildon_uri_open(spec.get(), action, nsnull))
+      if (hildon_uri_open(spec.get(), action, nullptr))
         rv = NS_OK;
       hildon_uri_action_unref(action);
     }
@@ -97,9 +63,15 @@ nsMIMEInfoUnix::LoadUriInternal(nsIURI * aURI)
 }
 
 NS_IMETHODIMP
-nsMIMEInfoUnix::GetHasDefaultHandler(PRBool *_retval)
+nsMIMEInfoUnix::GetHasDefaultHandler(bool *_retval)
 {
-  *_retval = PR_FALSE;
+  // if mDefaultApplication is set, it means the application has been set from
+  // either /etc/mailcap or ${HOME}/.mailcap, in which case we don't want to
+  // give the GNOME answer.
+  if (mDefaultApplication)
+    return nsMIMEInfoImpl::GetHasDefaultHandler(_retval);
+
+  *_retval = false;
   nsRefPtr<nsMIMEInfoBase> mimeInfo = nsGNOMERegistry::GetFromType(mSchemeOrType);
   if (!mimeInfo) {
     nsCAutoString ext;
@@ -109,15 +81,15 @@ nsMIMEInfoUnix::GetHasDefaultHandler(PRBool *_retval)
     }
   }
   if (mimeInfo)
-    *_retval = PR_TRUE;
+    *_retval = true;
 
   if (*_retval)
     return NS_OK;
 
 #if (MOZ_PLATFORM_MAEMO == 5) && defined (MOZ_ENABLE_GNOMEVFS)
-  HildonURIAction *action = hildon_uri_get_default_action(mSchemeOrType.get(), nsnull);
+  HildonURIAction *action = hildon_uri_get_default_action(mSchemeOrType.get(), nullptr);
   if (action) {
-    *_retval = PR_TRUE;
+    *_retval = true;
     hildon_uri_action_unref(action);
     return NS_OK;
   }
@@ -127,7 +99,7 @@ nsMIMEInfoUnix::GetHasDefaultHandler(PRBool *_retval)
   ContentAction::Action action = 
     ContentAction::Action::defaultActionForFile(QUrl(), QString(mSchemeOrType.get()));
   if (action.isValid()) {
-    *_retval = PR_TRUE;
+    *_retval = true;
     return NS_OK;
   }
 #endif
@@ -139,6 +111,12 @@ nsMIMEInfoUnix::GetHasDefaultHandler(PRBool *_retval)
 nsresult
 nsMIMEInfoUnix::LaunchDefaultWithFile(nsIFile *aFile)
 {
+  // if mDefaultApplication is set, it means the application has been set from
+  // either /etc/mailcap or ${HOME}/.mailcap, in which case we don't want to
+  // give the GNOME answer.
+  if (mDefaultApplication)
+    return nsMIMEInfoImpl::LaunchDefaultWithFile(aFile);
+
   nsCAutoString nativePath;
   aFile->GetNativePath(nativePath);
 
@@ -216,8 +194,8 @@ nsMIMEInfoUnix::LaunchDefaultWithFile(nsIFile *aFile)
 nsresult
 nsMIMEInfoUnix::LaunchDefaultWithDBus(const char *aFilePath)
 {
-  const PRInt32 kHILDON_SUCCESS = 1;
-  PRInt32 result = 0;
+  const int32_t kHILDON_SUCCESS = 1;
+  int32_t result = 0;
   DBusError err;
   dbus_error_init(&err);
   
@@ -227,7 +205,7 @@ nsMIMEInfoUnix::LaunchDefaultWithDBus(const char *aFilePath)
     return NS_ERROR_FAILURE;
   }
 
-  if (nsnull == connection)
+  if (nullptr == connection)
     return NS_ERROR_FAILURE;
 
   result = hildon_mime_open_file_with_mime_type(connection,
@@ -240,13 +218,13 @@ nsMIMEInfoUnix::LaunchDefaultWithDBus(const char *aFilePath)
   return NS_OK;
 }
 
-/* static */ PRBool
+/* static */ bool
 nsMIMEInfoUnix::HandlerExists(const char *aProtocolScheme)
 {
-  PRBool isEnabled = PR_FALSE;
-  HildonURIAction *action = hildon_uri_get_default_action(aProtocolScheme, nsnull);
+  bool isEnabled = false;
+  HildonURIAction *action = hildon_uri_get_default_action(aProtocolScheme, nullptr);
   if (action) {
-    isEnabled = PR_TRUE;
+    isEnabled = true;
     hildon_uri_action_unref(action);
   }
   return isEnabled;
@@ -261,7 +239,7 @@ nsMIMEInfoUnix::GetPossibleApplicationHandlers(nsIMutableArray ** aPossibleAppHa
     if (!mPossibleApplications)
       return NS_ERROR_OUT_OF_MEMORY;
 
-    GSList *actions = hildon_uri_get_actions(mSchemeOrType.get(), nsnull);
+    GSList *actions = hildon_uri_get_actions(mSchemeOrType.get(), nullptr);
     GSList *actionsPtr = actions;
     while (actionsPtr) {
       HildonURIAction *action = (HildonURIAction*)actionsPtr->data;
@@ -292,7 +270,7 @@ nsMIMEInfoUnix::GetPossibleApplicationHandlers(nsIMutableArray ** aPossibleAppHa
       app->SetObjectPath(objpath);
       app->SetDBusInterface(interface);
 
-      mPossibleApplications->AppendElement(app, PR_FALSE);
+      mPossibleApplications->AppendElement(app, false);
     }
     hildon_uri_free_actions(actions);
   }
@@ -320,7 +298,7 @@ nsMIMEInfoUnix::GetPossibleApplicationHandlers(nsIMutableArray ** aPossibleAppHa
       nsContentHandlerApp* app =
         new nsContentHandlerApp(nsString((PRUnichar*)actions[i].name().data()), 
                                 mSchemeOrType, actions[i]);
-      mPossibleApplications->AppendElement(app, PR_FALSE);
+      mPossibleApplications->AppendElement(app, false);
     }
   }
 

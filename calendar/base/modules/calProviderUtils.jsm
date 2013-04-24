@@ -1,41 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Sun Microsystems code.
- *
- * The Initial Developer of the Original Code is
- *   Sun Microsystems, Inc.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Daniel Boelzle <daniel.boelzle@sun.com>
- *   Philipp Kewisch <mozilla@kewis.ch>
- *   Bruno Browning <browning@uwalumni.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://calendar/modules/calUtils.jsm");
 Components.utils.import("resource://calendar/modules/calAuthUtils.jsm");
@@ -121,14 +86,6 @@ cal.convertByteArray = function calConvertByteArray(aResult, aResultLength, aCha
     return null;
 };
 
-cal.safeNewXML = function calSafeNewXML(aStr) {
-    // Restore XML global property defaults as a precaution
-    XML.setSettings();
-
-    // Strip <?xml and surrounding whitespaces (bug 336551)
-    return new XML(aStr.trim().replace(/^<\?xml[^>]*>\s*/g, ""));
-};
-
 /**
  * getInterface method for providers. This should be called in the context of
  * the respective provider, i.e
@@ -148,30 +105,30 @@ cal.safeNewXML = function calSafeNewXML(aStr) {
  * @param aIID      The interface ID to return
  */
 cal.InterfaceRequestor_getInterface = function calInterfaceRequestor_getInterface(aIID) {
-    // Support Auth Prompt Interfaces
-    if (aIID.equals(Components.interfaces.nsIAuthPrompt2)) {
-        if (!this.calAuthPrompt) {
-            this.calAuthPrompt = new cal.auth.Prompt();
-        }
-        return this.calAuthPrompt;
-    } else if (aIID.equals(Components.interfaces.nsIAuthPromptProvider) ||
-               aIID.equals(Components.interfaces.nsIPrompt)) {
-        return Components.classes["@mozilla.org/embedcomp/window-watcher;1"]
-                         .getService(Components.interfaces.nsIWindowWatcher)
-                         .getNewPrompter(null);
-    } else if (aIID.equals(Components.interfaces.nsIBadCertListener2)) {
-        if (!this.badCertHandler) {
-            this.badCertHandler = new cal.BadCertHandler(this);
-        }
-        return this.badCertHandler;
-    }
-
     try {
         // Try to query the this object for the requested interface but don't
         // throw if it fails since that borks the network code.
         return this.QueryInterface(aIID);
     } catch (e) {
-        Components.returnCode = e;
+        // Support Auth Prompt Interfaces
+        if (aIID.equals(Components.interfaces.nsIAuthPrompt2)) {
+            if (!this.calAuthPrompt) {
+                this.calAuthPrompt = new cal.auth.Prompt();
+            }
+            return this.calAuthPrompt;
+        } else if (aIID.equals(Components.interfaces.nsIAuthPromptProvider) ||
+                   aIID.equals(Components.interfaces.nsIPrompt)) {
+            return Components.classes["@mozilla.org/embedcomp/window-watcher;1"]
+                             .getService(Components.interfaces.nsIWindowWatcher)
+                             .getNewPrompter(null);
+        } else if (aIID.equals(Components.interfaces.nsIBadCertListener2)) {
+            if (!this.badCertHandler) {
+                this.badCertHandler = new cal.BadCertHandler(this);
+            }
+            return this.badCertHandler;
+        } else {
+            Components.returnCode = e;
+        }
     }
     return null;
 };
@@ -555,6 +512,7 @@ cal.ProviderBase.prototype = {
 
     mID: null,
     mUri: null,
+    mACLEntry: null,
     mObservers: null,
     mProperties: null,
 
@@ -618,6 +576,21 @@ cal.ProviderBase.prototype = {
         return this.setProperty("name", aValue);
     },
 
+    // readonly attribute calICalendarACLManager aclManager;
+    get aclManager() {
+        const defaultACLProviderClass = "@mozilla.org/calendar/acl-manager;1?type=default";
+        let providerClass = this.getProperty("aclManagerClass");
+        if (!providerClass || !Components.classes[providerClass]) {
+            providerClass = defaultACLProviderClass;
+        }
+        return Components.classes[providerClass].getService(Components.interfaces.calICalendarACLManager);
+    },
+
+    // readonly attribute calICalendarACLEntry aclEntry;
+    get aclEntry() {
+        return this.mACLEntry;
+    },
+
     // attribute calICalendar superCalendar;
     get superCalendar() {
         // If we have a superCalendar, check this calendar for a superCalendar.
@@ -667,11 +640,11 @@ cal.ProviderBase.prototype = {
         }
     },
 
-    notifyOperationComplete: function cPB_notifyOperationComplete(aListener,
-                                                                  aStatus,
-                                                                  aOperationType,
-                                                                  aId,
-                                                                  aDetail) {
+    notifyPureOperationComplete: function cPB_notifyPureOperationComplete(aListener,
+                                                                          aStatus,
+                                                                          aOperationType,
+                                                                          aId,
+                                                                          aDetail) {
         if (aListener) {
             try {
                 aListener.onOperationComplete(this.superCalendar, aStatus, aOperationType, aId, aDetail);
@@ -679,6 +652,17 @@ cal.ProviderBase.prototype = {
                 cal.ERROR(exc);
             }
         }
+
+    },
+
+    notifyOperationComplete: function cPB_notifyOperationComplete(aListener,
+                                                                  aStatus,
+                                                                  aOperationType,
+                                                                  aId,
+                                                                  aDetail,
+                                                                  aExtraMessage) {
+        this.notifyPureOperationComplete(aListener, aStatus, aOperationType, aId, aDetail);
+
         if (aStatus == Components.interfaces.calIErrors.OPERATION_CANCELLED) {
             return; // cancellation doesn't change current status, no notification
         }
@@ -693,7 +677,7 @@ cal.ProviderBase.prototype = {
             this.notifyError(aOperationType == Components.interfaces.calIOperationListener.GET
                              ? Components.interfaces.calIErrors.READ_FAILED
                              : Components.interfaces.calIErrors.MODIFICATION_FAILED,
-                             "");
+                             aExtraMessage || "");
         }
     },
 
@@ -832,20 +816,64 @@ cal.ProviderBase.prototype = {
 
     // calISchedulingSupport: Implementation corresponding to our iTIP/iMIP support
     isInvitation: function cPB_isInvitation(aItem) {
-        let id = this.getProperty("organizerId");
-        if (id) {
-            let org = aItem.organizer;
-            if (!org || (org.id.toLowerCase() == id.toLowerCase())) {
+        if (!this.mACLEntry || !this.mACLEntry.hasAccessControl) {
+            // No ACL support - fallback to the old method
+            let id = this.getProperty("organizerId");
+            if (id) {
+                let org = aItem.organizer;
+                if (!org || !org.id || (org.id.toLowerCase() == id.toLowerCase())) {
+                    return false;
+                }
+                return (aItem.getAttendeeById(id) != null);
+            }
+            return false;
+        }
+
+        let org = aItem.organizer;
+        if (!org || !org.id) {
+            // HACK
+            // if we don't have an organizer, this is perhaps because it's an exception
+            // to a recurring event. We check the parent item.
+            if (aItem.parentItem) {
+                org = aItem.parentItem.organizer;
+                if (!org || !org.id) return false;
+            } else {
                 return false;
             }
-            return (aItem.getAttendeeById(id) != null);
         }
+
+        // We check if :
+        // - the organizer of the event is NOT within the owner's identities of this calendar
+        // - if the one of the owner's identities of this calendar is in the attendees
+        let ownerIdentities = this.mACLEntry.getOwnerIdentities({});
+        for (let i = 0; i < ownerIdentities.length; i++) {
+            let identity = "mailto:" + ownerIdentities[i].email.toLowerCase();
+            if (org.id.toLowerCase() == identity)
+                return false;
+
+            if (aItem.getAttendeeById(identity) != null)
+                return true;
+        }
+
         return false;
     },
 
     getInvitedAttendee: function cPB_getInvitedAttendee(aItem) {
         let id = this.getProperty("organizerId");
-        return (id ? aItem.getAttendeeById(id) : null);
+        let attendee = (id ? aItem.getAttendeeById(id) : null);
+
+        if (!attendee && this.mACLEntry && this.mACLEntry.hasAccessControl) {
+            let ownerIdentities = this.mACLEntry.getOwnerIdentities({});
+            if (ownerIdentities.length > 0) {
+                let identity;
+                for (let i = 0; !attendee && i < ownerIdentities.length; i++) {
+                    identity = "mailto:" + ownerIdentities[i].email.toLowerCase();
+                    attendee = aItem.getAttendeeById(identity);
+                }
+            }
+        }
+
+        return attendee;
     },
 
     canNotify: function cPB_canNotify(aMethod, aItem) {

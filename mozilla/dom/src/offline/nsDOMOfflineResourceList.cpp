@@ -1,44 +1,12 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Corporation
- * Portions created by the Initial Developer are Copyright (C) 2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Dave Camp <dcamp@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsDOMOfflineResourceList.h"
-#include "nsDOMClassInfo.h"
-#include "nsDOMError.h"
+#include "nsDOMClassInfoID.h"
+#include "nsIScriptSecurityManager.h"
+#include "nsError.h"
 #include "nsDOMLists.h"
 #include "nsIPrefetchService.h"
 #include "nsCPrefetchService.h"
@@ -52,7 +20,6 @@
 #include "nsContentUtils.h"
 #include "nsIJSContextStack.h"
 #include "nsEventDispatcher.h"
-#include "nsIPrivateDOMEvent.h"
 #include "nsIObserverService.h"
 #include "nsIScriptGlobalObject.h"
 #include "nsIWebNavigation.h"
@@ -137,18 +104,16 @@ NS_IMPL_RELEASE_INHERITED(nsDOMOfflineResourceList, nsDOMEventTargetHelper)
 
 nsDOMOfflineResourceList::nsDOMOfflineResourceList(nsIURI *aManifestURI,
                                                    nsIURI *aDocumentURI,
-                                                   nsPIDOMWindow *aWindow,
-                                                   nsIScriptContext* aScriptContext)
-  : mInitialized(PR_FALSE)
+                                                   nsPIDOMWindow *aWindow)
+  : mInitialized(false)
   , mManifestURI(aManifestURI)
   , mDocumentURI(aDocumentURI)
   , mExposeCacheUpdateStatus(true)
   , mStatus(nsIDOMOfflineResourceList::IDLE)
-  , mCachedKeys(nsnull)
+  , mCachedKeys(nullptr)
   , mCachedKeysCount(0)
 {
-  mOwner = aWindow;
-  mScriptContext = aScriptContext;
+  BindToOwner(aWindow);
 }
 
 nsDOMOfflineResourceList::~nsDOMOfflineResourceList()
@@ -170,7 +135,7 @@ nsDOMOfflineResourceList::Init()
   mManifestURI->GetAsciiSpec(mManifestSpec);
 
   nsresult rv = nsContentUtils::GetSecurityManager()->
-                   CheckSameOriginURI(mManifestURI, mDocumentURI, PR_TRUE);
+                   CheckSameOriginURI(mManifestURI, mDocumentURI, true);
   NS_ENSURE_SUCCESS(rv, rv);
 
   // Dynamically-managed resources are stored as a separate ownership list
@@ -190,11 +155,11 @@ nsDOMOfflineResourceList::Init()
       do_GetService(NS_OFFLINECACHEUPDATESERVICE_CONTRACTID, &rv);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    PRUint32 numUpdates;
+    uint32_t numUpdates;
     rv = cacheUpdateService->GetNumUpdates(&numUpdates);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    for (PRUint32 i = 0; i < numUpdates; i++) {
+    for (uint32_t i = 0; i < numUpdates; i++) {
       nsCOMPtr<nsIOfflineCacheUpdate> cacheUpdate;
       rv = cacheUpdateService->GetUpdate(i, getter_AddRefs(cacheUpdate));
       NS_ENSURE_SUCCESS(rv, rv);
@@ -210,12 +175,12 @@ nsDOMOfflineResourceList::Init()
   if (!observerService)
     return NS_ERROR_FAILURE;
 
-  rv = observerService->AddObserver(this, "offline-cache-update-added", PR_TRUE);
+  rv = observerService->AddObserver(this, "offline-cache-update-added", true);
   NS_ENSURE_SUCCESS(rv, rv);
-  rv = observerService->AddObserver(this, "offline-cache-update-completed", PR_TRUE);
+  rv = observerService->AddObserver(this, "offline-cache-update-completed", true);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  mInitialized = PR_TRUE;
+  mInitialized = true;
 
   return NS_OK;
 }
@@ -223,20 +188,20 @@ nsDOMOfflineResourceList::Init()
 void
 nsDOMOfflineResourceList::Disconnect()
 {
-  mOnCheckingListener = nsnull;
-  mOnErrorListener = nsnull;
-  mOnNoUpdateListener = nsnull;
-  mOnDownloadingListener = nsnull;
-  mOnProgressListener = nsnull;
-  mOnCachedListener = nsnull;
-  mOnUpdateReadyListener = nsnull;
-  mOnObsoleteListener = nsnull;
+  mOnCheckingListener = nullptr;
+  mOnErrorListener = nullptr;
+  mOnNoUpdateListener = nullptr;
+  mOnDownloadingListener = nullptr;
+  mOnProgressListener = nullptr;
+  mOnCachedListener = nullptr;
+  mOnUpdateReadyListener = nullptr;
+  mOnObsoleteListener = nullptr;
 
   mPendingEvents.Clear();
 
   if (mListenerManager) {
     mListenerManager->Disconnect();
-    mListenerManager = nsnull;
+    mListenerManager = nullptr;
   }
 }
 
@@ -250,7 +215,7 @@ nsDOMOfflineResourceList::GetMozItems(nsIDOMDOMStringList **aItems)
   if (IS_CHILD_PROCESS()) 
     return NS_ERROR_NOT_IMPLEMENTED;
 
-  *aItems = nsnull;
+  *aItems = nullptr;
 
   nsRefPtr<nsDOMStringList> items = new nsDOMStringList();
   NS_ENSURE_TRUE(items, NS_ERROR_OUT_OF_MEMORY);
@@ -266,13 +231,13 @@ nsDOMOfflineResourceList::GetMozItems(nsIDOMDOMStringList **aItems)
   nsresult rv = Init();
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRUint32 length;
+  uint32_t length;
   char **keys;
   rv = appCache->GatherEntries(nsIApplicationCache::ITEM_DYNAMIC,
                                &length, &keys);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  for (PRUint32 i = 0; i < length; i++) {
+  for (uint32_t i = 0; i < length; i++) {
     items->Add(NS_ConvertUTF8toUTF16(keys[i]));
   }
 
@@ -283,7 +248,7 @@ nsDOMOfflineResourceList::GetMozItems(nsIDOMDOMStringList **aItems)
 }
 
 NS_IMETHODIMP
-nsDOMOfflineResourceList::MozHasItem(const nsAString& aURI, PRBool* aExists)
+nsDOMOfflineResourceList::MozHasItem(const nsAString& aURI, bool* aExists)
 {
   if (IS_CHILD_PROCESS()) 
     return NS_ERROR_NOT_IMPLEMENTED;
@@ -300,10 +265,10 @@ nsDOMOfflineResourceList::MozHasItem(const nsAString& aURI, PRBool* aExists)
   rv = GetCacheKey(aURI, key);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRUint32 types;
+  uint32_t types;
   rv = appCache->GetTypes(key, &types);
   if (rv == NS_ERROR_CACHE_KEY_NOT_FOUND) {
-    *aExists = PR_FALSE;
+    *aExists = false;
     return NS_OK;
   }
   NS_ENSURE_SUCCESS(rv, rv);
@@ -313,7 +278,7 @@ nsDOMOfflineResourceList::MozHasItem(const nsAString& aURI, PRBool* aExists)
 }
 
 NS_IMETHODIMP
-nsDOMOfflineResourceList::GetMozLength(PRUint32 *aLength)
+nsDOMOfflineResourceList::GetMozLength(uint32_t *aLength)
 {
   if (IS_CHILD_PROCESS()) 
     return NS_ERROR_NOT_IMPLEMENTED;
@@ -334,7 +299,7 @@ nsDOMOfflineResourceList::GetMozLength(PRUint32 *aLength)
 }
 
 NS_IMETHODIMP
-nsDOMOfflineResourceList::MozItem(PRUint32 aIndex, nsAString& aURI)
+nsDOMOfflineResourceList::MozItem(uint32_t aIndex, nsAString& aURI)
 {
   if (IS_CHILD_PROCESS()) 
     return NS_ERROR_NOT_IMPLEMENTED;
@@ -384,7 +349,7 @@ nsDOMOfflineResourceList::MozAdd(const nsAString& aURI)
   rv = requestedURI->GetScheme(scheme);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool match;
+  bool match;
   rv = mManifestURI->SchemeIs(scheme.get(), &match);
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -392,10 +357,10 @@ nsDOMOfflineResourceList::MozAdd(const nsAString& aURI)
     return NS_ERROR_DOM_SECURITY_ERR;
   }
 
-  PRUint32 length;
+  uint32_t length;
   rv = GetMozLength(&length);
   NS_ENSURE_SUCCESS(rv, rv);
-  PRUint32 maxEntries =
+  uint32_t maxEntries =
     Preferences::GetUint(kMaxEntriesPref, DEFAULT_MAX_ENTRIES);
 
   if (length > maxEntries) return NS_ERROR_NOT_AVAILABLE;
@@ -459,7 +424,7 @@ nsDOMOfflineResourceList::MozRemove(const nsAString& aURI)
 }
 
 NS_IMETHODIMP
-nsDOMOfflineResourceList::GetStatus(PRUint16 *aStatus)
+nsDOMOfflineResourceList::GetStatus(uint16_t *aStatus)
 {
   nsresult rv = Init();
 
@@ -509,7 +474,7 @@ nsDOMOfflineResourceList::Update()
   NS_ENSURE_SUCCESS(rv, rv);
 
   nsCOMPtr<nsIDOMWindow> window = 
-    do_QueryInterface(mOwner);
+    do_QueryInterface(GetOwner());
 
   nsCOMPtr<nsIOfflineCacheUpdate> update;
   rv = updateService->ScheduleUpdate(mManifestURI, mDocumentURI,
@@ -559,7 +524,7 @@ nsDOMOfflineResourceList::SwapCache()
     NS_ENSURE_SUCCESS(rv, rv);
   }
 
-  mAvailableApplicationCache = nsnull;
+  mAvailableApplicationCache = nullptr;
   mStatus = nsIDOMOfflineResourceList::IDLE;
 
   return NS_OK;
@@ -677,8 +642,8 @@ nsDOMOfflineResourceList::SetOnobsolete(nsIDOMEventListener *aOnobsolete)
 void
 nsDOMOfflineResourceList::FirePendingEvents()
 {
-  for (PRInt32 i = 0; i < mPendingEvents.Count(); ++i) {
-    PRBool dummy;
+  for (int32_t i = 0; i < mPendingEvents.Count(); ++i) {
+    bool dummy;
     nsCOMPtr<nsIDOMEvent> event = mPendingEvents[i];
     DispatchEvent(event, &dummy);
   }
@@ -689,38 +654,32 @@ nsresult
 nsDOMOfflineResourceList::SendEvent(const nsAString &aEventName)
 {
   // Don't send events to closed windows
-  if (!mOwner) {
+  if (!GetOwner()) {
     return NS_OK;
   }
 
-  if (!mOwner->GetDocShell()) {
+  if (!GetOwner()->GetDocShell()) {
     return NS_OK;
   }
 
   nsCOMPtr<nsIDOMEvent> event;
-  nsresult rv = nsEventDispatcher::CreateEvent(nsnull, nsnull,
+  nsresult rv = nsEventDispatcher::CreateEvent(nullptr, nullptr,
                                                NS_LITERAL_STRING("Events"),
                                                getter_AddRefs(event));
   NS_ENSURE_SUCCESS(rv, rv);
-
-  nsCOMPtr<nsIPrivateDOMEvent> privevent = do_QueryInterface(event);
-  if (!privevent) {
-    return NS_ERROR_FAILURE;
-  }
-
-  event->InitEvent(aEventName, PR_FALSE, PR_TRUE);
+  event->InitEvent(aEventName, false, true);
 
   // We assume anyone that managed to call SendEvent is trusted
-  privevent->SetTrusted(PR_TRUE);
+  event->SetTrusted(true);
 
   // If the window is frozen or we're still catching up on events that were
   // queued while frozen, save the event for later.
-  if (mOwner->IsFrozen() || mPendingEvents.Count() > 0) {
+  if (GetOwner()->IsFrozen() || mPendingEvents.Count() > 0) {
     mPendingEvents.AppendObject(event);
     return NS_OK;
   }
 
-  PRBool dummy;
+  bool dummy;
   DispatchEvent(event, &dummy);
 
   return NS_OK;
@@ -755,7 +714,7 @@ nsDOMOfflineResourceList::Observe(nsISupports *aSubject,
 //
 NS_IMETHODIMP
 nsDOMOfflineResourceList::UpdateStateChanged(nsIOfflineCacheUpdate *aUpdate,
-                                     PRUint32 event)
+                                     uint32_t event)
 {
   mExposeCacheUpdateStatus = 
       (event == STATE_CHECKING) ||
@@ -777,7 +736,7 @@ nsDOMOfflineResourceList::UpdateStateChanged(nsIOfflineCacheUpdate *aUpdate,
       break;
     case STATE_OBSOLETE:
       mStatus = nsIDOMOfflineResourceList::OBSOLETE;
-      mAvailableApplicationCache = nsnull;
+      mAvailableApplicationCache = nullptr;
       SendEvent(NS_LITERAL_STRING(OBSOLETE_STR));
       break;
     case STATE_DOWNLOADING:
@@ -815,7 +774,7 @@ nsresult
 nsDOMOfflineResourceList::UpdateAdded(nsIOfflineCacheUpdate *aUpdate)
 {
   // Ignore partial updates.
-  PRBool partial;
+  bool partial;
   nsresult rv = aUpdate->GetPartial(&partial);
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -827,7 +786,7 @@ nsDOMOfflineResourceList::UpdateAdded(nsIOfflineCacheUpdate *aUpdate)
   rv = aUpdate->GetManifestURI(getter_AddRefs(updateURI));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool equals;
+  bool equals;
   rv = updateURI->Equals(mManifestURI, &equals);
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -844,7 +803,7 @@ nsDOMOfflineResourceList::UpdateAdded(nsIOfflineCacheUpdate *aUpdate)
   // are no listeners to accept signals anyway.
 
   mCacheUpdate = aUpdate;
-  mCacheUpdate->AddObserver(this, PR_TRUE);
+  mCacheUpdate->AddObserver(this, true);
 
   return NS_OK;
 }
@@ -852,9 +811,9 @@ nsDOMOfflineResourceList::UpdateAdded(nsIOfflineCacheUpdate *aUpdate)
 already_AddRefed<nsIApplicationCacheContainer>
 nsDOMOfflineResourceList::GetDocumentAppCacheContainer()
 {
-  nsCOMPtr<nsIWebNavigation> webnav = do_GetInterface(mOwner);
+  nsCOMPtr<nsIWebNavigation> webnav = do_GetInterface(GetOwner());
   if (!webnav) {
-    return nsnull;
+    return nullptr;
   }
 
   nsCOMPtr<nsIApplicationCacheContainer> appCacheContainer =
@@ -875,7 +834,7 @@ nsDOMOfflineResourceList::GetDocumentAppCache()
     return applicationCache.forget();
   }
 
-  return nsnull;
+  return nullptr;
 }
 
 nsresult
@@ -886,16 +845,16 @@ nsDOMOfflineResourceList::UpdateCompleted(nsIOfflineCacheUpdate *aUpdate)
     return NS_OK;
   }
 
-  PRBool partial;
+  bool partial;
   mCacheUpdate->GetPartial(&partial);
-  PRBool isUpgrade;
+  bool isUpgrade;
   mCacheUpdate->GetIsUpgrade(&isUpgrade);
 
-  PRBool succeeded;
+  bool succeeded;
   nsresult rv = mCacheUpdate->GetSucceeded(&succeeded);
 
   mCacheUpdate->RemoveObserver(this);
-  mCacheUpdate = nsnull;
+  mCacheUpdate = nullptr;
 
   if (NS_SUCCEEDED(rv) && succeeded && !partial) {
     if (isUpgrade) {
@@ -954,7 +913,7 @@ nsDOMOfflineResourceList::ClearCachedKeys()
 {
   if (mCachedKeys) {
     NS_FREE_XPCOM_ALLOCATED_POINTER_ARRAY(mCachedKeysCount, mCachedKeys);
-    mCachedKeys = nsnull;
+    mCachedKeys = nullptr;
     mCachedKeysCount = 0;
   }
 }

@@ -1,43 +1,7 @@
 /* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Simon Fraser (sfraser@netscape.com)
- *   Ryan Cassin (rcassin@supernova.org)
- *   Kathleen Brade (brade@netscape.com)
- *   Daniel Glazman (glazman@netscape.com)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* Implementations of nsIControllerCommand for composer commands */
 
@@ -188,8 +152,8 @@ function SetupComposerWindowCommands()
   commandTable.registerCommand("cmd_preview",        nsPreviewCommand);
   commandTable.registerCommand("cmd_editSendPage",   nsSendPageCommand);
   commandTable.registerCommand("cmd_print",          nsPrintCommand);
+  commandTable.registerCommand("cmd_printpreview",   nsPrintPreviewCommand);
   commandTable.registerCommand("cmd_printSetup",     nsPrintSetupCommand);
-  commandTable.registerCommand("cmd_quit",           nsQuitCommand);
   commandTable.registerCommand("cmd_close",          nsCloseCommand);
   commandTable.registerCommand("cmd_preferences",    nsPreferencesCommand);
 
@@ -565,7 +529,6 @@ var nsSaveCommand =
       if (IsHTMLEditor())
         FinishHTMLSource();
       result = SaveDocument(IsUrlAboutBlank(GetDocumentUrl()), false, editor.contentsMIMEType);
-      window.content.focus();
     }
     return result;
   }
@@ -590,7 +553,6 @@ var nsSaveAsCommand =
       if (IsHTMLEditor())
         FinishHTMLSource();
       result = SaveDocument(true, false, editor.contentsMIMEType);
-      window.content.focus();
     }
     return result;
   }
@@ -612,7 +574,6 @@ var nsExportToTextCommand =
     {
       FinishHTMLSource();
       var result = SaveDocument(true, true, "text/plain");
-      window.content.focus();
       return result;
     }
     return false;
@@ -653,7 +614,6 @@ var nsSaveAndChangeEncodingCommand =
       }
     }
 
-    window.content.focus();
     return window.ok;
   }
 };
@@ -716,7 +676,6 @@ var nsPublishCommand =
         if (GetDocumentTitle() != oldTitle)
           UpdateWindowTitle();
 
-        window.content.focus();
         if (!window.ok)
           return false;
       }
@@ -754,7 +713,6 @@ var nsPublishAsCommand =
       if (GetDocumentTitle() != oldTitle)
         UpdateWindowTitle();
 
-      window.content.focus();
       if (window.ok)
         return Publish(publishData);
     }
@@ -792,13 +750,12 @@ function GetSuggestedFileName(aDocumentURLString, aMIMEType)
     extension = "." + extension;
 
   // check for existing file name we can use
-  if (aDocumentURLString.length >= 0 && !IsUrlAboutBlank(aDocumentURLString))
+  if (aDocumentURLString && !IsUrlAboutBlank(aDocumentURLString))
   {
-    var docURI = null;
     try {
-
       var ioService = GetIOService();
-      docURI = ioService.newURI(aDocumentURLString, GetCurrentEditor().documentCharacterSet, null);
+      var docURI = ioService.newURI(aDocumentURLString,
+        GetCurrentEditor().documentCharacterSet, null);
       docURI = docURI.QueryInterface(Components.interfaces.nsIURL);
 
       // grab the file name
@@ -808,9 +765,10 @@ function GetSuggestedFileName(aDocumentURLString, aMIMEType)
     } catch(e) {}
   } 
 
-  // check if there is a title we can use to generate a valid filename,
-  // if we can't, just go with "untitled"
-  var title = validateFileName(GetDocumentTitle()) || GetString("untitled");
+  // Check if there is a title we can use to generate a valid filename,
+  // if we can't, use the default filename.
+  var title = validateFileName(GetDocumentTitle()) ||
+              GetString("untitledDefaultFilename");
   return title + extension;
 }
 
@@ -898,15 +856,18 @@ function PromptForSaveLocation(aDoSaveAsText, aEditorType, aMIMEType, aDocumentU
   return dialogResult;
 }
 
-// returns a boolean (whether to continue (true) or not (false) because user canceled)
+/**
+ * If needed, prompt for document title and set the document title to the
+ * preferred value.
+ * @return true if the title was set up successfully;
+ *         false if the user cancelled the title prompt
+ */
 function PromptAndSetTitleIfNone()
 {
   if (GetDocumentTitle()) // we have a title; no need to prompt!
     return true;
 
   var promptService = GetPromptService();
-  if (!promptService) return false;
-
   var result = {value:null};
   var captionStr = GetString("DocumentTitle");
   var msgStr = GetString("NeedDocTitle") + '\n' + GetString("DocTitleHelp");
@@ -1296,7 +1257,7 @@ var gEditorOutputProgressListener =
     }
   },
 
-  onLocationChange : function(aWebProgress, aRequest, aLocation)
+  onLocationChange : function(aWebProgress, aRequest, aLocation, aFlags)
   {
     if (gShowDebugOutputLocationChange)
     {
@@ -1711,7 +1672,10 @@ function SaveDocument(aSaveAs, aSaveCopy, aMimeType)
       // update the new URL for the webshell unless we are saving a copy
       if (!aSaveCopy)
         doUpdateURI = true;
-   } catch (e) {  return false; }
+    } catch (e) {
+       Components.utils.reportError(e);
+       return false; 
+    }
   } // mustShowFileDialog
 
   var success = true;
@@ -2073,7 +2037,6 @@ var nsPublishSettingsCommand =
       // Launch Publish Settings dialog
 
       window.ok = window.openDialog("chrome://editor/content/EditorPublishSettings.xul","_blank", "chrome,close,titlebar,modal", "");
-      window.content.focus();
       return window.ok;
     }
     return false;
@@ -2101,9 +2064,6 @@ var nsRevertCommand =
     {
       // Put the page title in the message string
       var title = GetDocumentTitle();
-      if (!title)
-        title = GetString("untitled");
-
       var msg = GetString("AbandonChanges").replace(/%title%/,title);
 
       var result = promptService.confirmEx(window, GetString("RevertCaption"), msg,
@@ -2194,7 +2154,6 @@ var nsOpenRemoteCommand =
         browser.selectedTab = browser.addTab(params.url, {allowThirdPartyFixup: true});
         break;
       default:
-        window.content.focus();
         break;
     }
   }
@@ -2311,6 +2270,27 @@ var nsPrintCommand =
 };
 
 //-----------------------------------------------------------------------------------
+var nsPrintPreviewCommand =
+{
+  isCommandEnabled: function(aCommand, dummy)
+  {
+    return true;    // we can always do this
+  },
+
+  getCommandStateParams: function(aCommand, aParams, aRefCon) {},
+  doCommandParams: function(aCommand, aParams, aRefCon) {},
+
+  doCommand: function(aCommand)
+  {
+    // In editor.js
+    FinishHTMLSource();
+    try {
+      PrintUtils.printPreview(PrintPreviewListener);
+    } catch (e) {}
+  }
+};
+
+//-----------------------------------------------------------------------------------
 var nsPrintSetupCommand =
 {
   isCommandEnabled: function(aCommand, dummy)
@@ -2327,27 +2307,6 @@ var nsPrintSetupCommand =
     FinishHTMLSource();
     PrintUtils.showPageSetup();
   }
-};
-
-//-----------------------------------------------------------------------------------
-var nsQuitCommand =
-{
-  isCommandEnabled: function(aCommand, dummy)
-  {
-    return true;    // we can always do this
-  },
-
-  getCommandStateParams: function(aCommand, aParams, aRefCon) {},
-  doCommandParams: function(aCommand, aParams, aRefCon) {}
-
-  /* The doCommand is not used, since cmd_quit's oncommand="goQuitApplication()" in platformCommunicatorOverlay.xul
-  doCommand: function(aCommand)
-  {
-    // In editor.js
-    FinishHTMLSource();
-    goQuitApplication();
-  }
-  */
 };
 
 //-----------------------------------------------------------------------------------
@@ -2370,7 +2329,6 @@ var nsFindCommand =
     catch(ex) {
       dump("*** Exception: couldn't open Replace Dialog\n");
     }
-    //window.content.focus();
   }
 };
 
@@ -2442,7 +2400,6 @@ var nsSpellingCommand =
               "chrome,close,titlebar,modal", false, skipBlockQuotes, true);
     }
     catch(ex) {}
-    window.content.focus();
   }
 };
 
@@ -2516,7 +2473,6 @@ var nsCheckLinksCommand =
   doCommand: function(aCommand)
   {
     window.openDialog("chrome://editor/content/EdLinkChecker.xul","_blank", "chrome,close,titlebar,modal");
-    window.content.focus();
   }
 };
 
@@ -2534,7 +2490,6 @@ var nsFormCommand =
   doCommand: function(aCommand)
   {
     window.openDialog("chrome://editor/content/EdFormProps.xul", "_blank", "chrome,close,titlebar,modal");
-    window.content.focus();
   }
 };
 
@@ -2552,7 +2507,6 @@ var nsInputTagCommand =
   doCommand: function(aCommand)
   {
     window.openDialog("chrome://editor/content/EdInputProps.xul", "_blank", "chrome,close,titlebar,modal");
-    window.content.focus();
   }
 };
 
@@ -2570,7 +2524,6 @@ var nsInputImageCommand =
   doCommand: function(aCommand)
   {
     window.openDialog("chrome://editor/content/EdInputImage.xul", "_blank", "chrome,close,titlebar,modal");
-    window.content.focus();
   }
 };
 
@@ -2588,7 +2541,6 @@ var nsTextAreaCommand =
   doCommand: function(aCommand)
   {
     window.openDialog("chrome://editor/content/EdTextAreaProps.xul", "_blank", "chrome,close,titlebar,modal");
-    window.content.focus();
   }
 };
 
@@ -2606,7 +2558,6 @@ var nsSelectCommand =
   doCommand: function(aCommand)
   {
     window.openDialog("chrome://editor/content/EdSelectProps.xul", "_blank", "chrome,close,titlebar,modal");
-    window.content.focus();
   }
 };
 
@@ -2624,7 +2575,6 @@ var nsButtonCommand =
   doCommand: function(aCommand)
   {
     window.openDialog("chrome://editor/content/EdButtonProps.xul", "_blank", "chrome,close,titlebar,modal");
-    window.content.focus();
   }
 };
 
@@ -2653,7 +2603,6 @@ var nsLabelCommand =
       if (labelElement) {
         // We only open the dialog for an existing label
         window.openDialog("chrome://editor/content/EdLabelProps.xul", "_blank", "chrome,close,titlebar,modal", labelElement);
-        window.content.focus();
       } else {
         EditorSetTextProperty(tagName, "", "");
       }
@@ -2675,7 +2624,6 @@ var nsFieldSetCommand =
   doCommand: function(aCommand)
   {
     window.openDialog("chrome://editor/content/EdFieldSetProps.xul", "_blank", "chrome,close,titlebar,modal");
-    window.content.focus();
   }
 };
 
@@ -2715,7 +2663,6 @@ var nsImageCommand =
   doCommand: function(aCommand)
   {
     window.openDialog("chrome://editor/content/EdImageProps.xul","_blank", "chrome,close,titlebar,modal");
-    window.content.focus();
   }
 };
 
@@ -2748,7 +2695,6 @@ var nsHLineCommand =
     {
       // We only open the dialog for an existing HRule
       window.openDialog("chrome://editor/content/EdHLineProps.xul", "_blank", "chrome,close,titlebar,modal");
-      window.content.focus();
     } 
     else
     {
@@ -2808,7 +2754,6 @@ var nsLinkCommand =
       window.openDialog("chrome://editor/content/EdImageProps.xul","_blank", "chrome,close,titlebar,modal", null, true);
     else
       window.openDialog("chrome://editor/content/EdLinkProps.xul","_blank", "chrome,close,titlebar,modal");
-    window.content.focus();
   }
 };
 
@@ -2826,7 +2771,6 @@ var nsAnchorCommand =
   doCommand: function(aCommand)
   {
     window.openDialog("chrome://editor/content/EdNamedAnchorProps.xul", "_blank", "chrome,close,titlebar,modal", "");
-    window.content.focus();
   }
 };
 
@@ -2844,7 +2788,6 @@ var nsInsertHTMLWithDialogCommand =
   doCommand: function(aCommand)
   {
     window.openDialog("chrome://editor/content/EdInsSrc.xul","_blank", "chrome,close,titlebar,modal,resizable", "");
-    window.content.focus();
   }
 };
 
@@ -2917,7 +2860,6 @@ var nsGridCommand =
   doCommand: function(aCommand)
   {
     window.openDialog("chrome://editor/content/EdSnapToGrid.xul","_blank", "chrome,close,titlebar,modal");
-    window.content.focus();
   }
 };
 
@@ -2936,7 +2878,6 @@ var nsListPropertiesCommand =
   doCommand: function(aCommand)
   {
     window.openDialog("chrome://editor/content/EdListProps.xul","_blank", "chrome,close,titlebar,modal");
-    window.content.focus();
   }
 };
 
@@ -2961,8 +2902,6 @@ var nsPagePropertiesCommand =
     // recent menu data in prefs if doc title changed
     if (GetDocumentTitle() != oldTitle)
       UpdateWindowTitle();
-
-    window.content.focus();
   }
 };
 
@@ -3058,7 +2997,6 @@ var nsObjectPropertiesCommand =
       if (element)
         goDoCommand("cmd_link");
     }
-    window.content.focus();
   }
 };
 
@@ -3167,7 +3105,6 @@ function doAdvancedProperties(element)
   if (element)
   {
     window.openDialog("chrome://editor/content/EdAdvancedEdit.xul", "_blank", "chrome,close,titlebar,modal,resizable=yes", "", element);
-    window.content.focus();
   }
 }
 
@@ -3206,7 +3143,6 @@ var nsColorPropertiesCommand =
   {
     window.openDialog("chrome://editor/content/EdColorProps.xul","_blank", "chrome,close,titlebar,modal", ""); 
     UpdateDefaultColors(); 
-    window.content.focus();
   }
 };
 
@@ -3719,7 +3655,7 @@ var nsNormalizeTableCommand =
 
   doCommand: function(aCommand)
   {
-    // Use nsnull to let editor find table enclosing current selection
+    // Use nullptr to let editor find table enclosing current selection
     try {
       GetCurrentTableEditor().normalizeTable(null);   
     } catch (e) {}
@@ -3860,7 +3796,6 @@ var nsPreferencesCommand =
   doCommand: function(aCommand)
   {
     goPreferences('composer_pane');
-    window.content.focus();
   }
 };
 
@@ -3948,7 +3883,6 @@ var nsConvertToTable =
     {
       window.openDialog("chrome://editor/content/EdConvertToTable.xul","_blank", "chrome,close,titlebar,modal")
     }
-    window.content.focus();
   }
 };
 

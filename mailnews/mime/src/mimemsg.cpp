@@ -1,39 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsCOMPtr.h"
 #include "nsIMimeEmitter.h"
@@ -64,8 +32,8 @@ static int MimeMessage_initialize (MimeObject *);
 static void MimeMessage_finalize (MimeObject *);
 static int MimeMessage_add_child (MimeObject *, MimeObject *);
 static int MimeMessage_parse_begin (MimeObject *);
-static int MimeMessage_parse_line (const char *, PRInt32, MimeObject *);
-static int MimeMessage_parse_eof (MimeObject *, PRBool);
+static int MimeMessage_parse_line (const char *, int32_t, MimeObject *);
+static int MimeMessage_parse_eof (MimeObject *, bool);
 static int MimeMessage_close_headers (MimeObject *obj);
 static int MimeMessage_write_headers_html (MimeObject *);
 static char *MimeMessage_partial_message_html(const char *data,
@@ -77,7 +45,7 @@ extern void MimeHeaders_do_unix_display_hook_hack(MimeHeaders *);
 #endif /* XP_UNIX */
 
 #if defined(DEBUG) && defined(XP_UNIX)
-static int MimeMessage_debug_print (MimeObject *, PRFileDesc *, PRInt32 depth);
+static int MimeMessage_debug_print (MimeObject *, PRFileDesc *, int32_t depth);
 #endif
 
 extern MimeObjectClass mimeMultipartClass;
@@ -107,8 +75,9 @@ static int
 MimeMessage_initialize (MimeObject *object)
 {
   MimeMessage *msg = (MimeMessage *)object;
-  msg->grabSubject = PR_FALSE;
+  msg->grabSubject = false;
   msg->bodyLength = 0;
+  msg->sizeSoFar = 0;
 
   return ((MimeObjectClass*)&MIME_SUPERCLASS)->initialize(object);
 }
@@ -133,7 +102,7 @@ MimeMessage_parse_begin (MimeObject *obj)
 
   if (obj->parent)
   {
-    msg->grabSubject = PR_TRUE;
+    msg->grabSubject = true;
   }
 
   /* Messages have separators before the headers, except for the outermost
@@ -143,16 +112,18 @@ MimeMessage_parse_begin (MimeObject *obj)
 
 
 static int
-MimeMessage_parse_line (const char *aLine, PRInt32 aLength, MimeObject *obj)
+MimeMessage_parse_line (const char *aLine, int32_t aLength, MimeObject *obj)
 {
   const char * line = aLine;
-  PRInt32 length = aLength;
+  int32_t length = aLength;
 
   MimeMessage *msg = (MimeMessage *) obj;
   int status = 0;
 
   NS_ASSERTION(line && *line, "empty line in mime msg parse_line");
   if (!line || !*line) return -1;
+
+  msg->sizeSoFar += length;
 
   if (msg->grabSubject)
   {
@@ -183,11 +154,11 @@ MimeMessage_parse_line (const char *aLine, PRInt32 aLength, MimeObject *obj)
   if (msg->container.nchildren)
   {
     MimeObject *kid = msg->container.children[0];
-    PRBool nl;
+    bool nl;
     PR_ASSERT(kid);
     if (!kid) return -1;
 
-          msg->bodyLength += length;
+    msg->bodyLength += length;
 
     /* Don't allow MimeMessage objects to not end in a newline, since it
      would be inappropriate for any following part to appear on the same
@@ -299,9 +270,9 @@ MimeMessage_close_headers (MimeObject *obj)
     // it.
     nsCString charset;
     nsCString contentType;
-    contentType.Adopt(MimeHeaders_get(msg->hdrs, HEADER_CONTENT_TYPE, PR_FALSE, PR_FALSE));
+    contentType.Adopt(MimeHeaders_get(msg->hdrs, HEADER_CONTENT_TYPE, false, false));
     if (!contentType.IsEmpty())
-      charset.Adopt(MimeHeaders_get_parameter(contentType.get(), "charset", nsnull, nsnull));
+      charset.Adopt(MimeHeaders_get_parameter(contentType.get(), "charset", nullptr, nullptr));
 
     // If we've got a charset, use nsMsgI18NConvertToUnicode to magically decode
     // the munged subject.
@@ -314,16 +285,16 @@ MimeMessage_close_headers (MimeObject *obj)
       if (NS_SUCCEEDED(rv))
         obj->headers->munged_subject = ToNewUTF8String(dest);
       else
-        obj->headers->munged_subject = nsnull;
+        obj->headers->munged_subject = nullptr;
     } else {
       PR_Free(obj->headers->munged_subject);
-      obj->headers->munged_subject = nsnull;
+      obj->headers->munged_subject = nullptr;
     }
   }
 
   if (msg->hdrs)
   {
-    PRBool outer_p = !obj->headers; /* is this the outermost message? */
+    bool outer_p = !obj->headers; /* is this the outermost message? */
 
 
 #ifdef MIME_DRAFTS
@@ -333,8 +304,8 @@ MimeMessage_close_headers (MimeObject *obj)
       obj->options->decompose_headers_info_fn)
     {
 #ifdef ENABLE_SMIME
-      if (obj->options->decrypt_p && !mime_crypto_object_p (msg->hdrs, PR_FALSE))
-        obj->options->decrypt_p = PR_FALSE;
+      if (obj->options->decrypt_p && !mime_crypto_object_p (msg->hdrs, false))
+        obj->options->decrypt_p = false;
 #endif /* ENABLE_SMIME */
       if (!obj->options->caller_need_root_headers || (obj == obj->options->state->root))
         status = obj->options->decompose_headers_info_fn (
@@ -374,7 +345,7 @@ MimeMessage_close_headers (MimeObject *obj)
                              msg->hdrs);
       if (html)
       {
-        lstatus = MimeObject_write(obj, html, strlen(html), PR_FALSE);
+        lstatus = MimeObject_write(obj, html, strlen(html), false);
         PR_Free(html);
         if (lstatus < 0) return lstatus;
       }
@@ -384,9 +355,9 @@ MimeMessage_close_headers (MimeObject *obj)
     /* Find the content-type of the body of this message.
      */
     {
-    PRBool ok = PR_TRUE;
+    bool ok = true;
     char *mv = MimeHeaders_get (msg->hdrs, HEADER_MIME_VERSION,
-                  PR_TRUE, PR_FALSE);
+                  true, false);
 
 #ifdef REQUIRE_MIME_VERSION_HEADER
     /* If this is the outermost message, it must have a MIME-Version
@@ -400,12 +371,12 @@ MimeMessage_close_headers (MimeObject *obj)
        it now could cause some compatibility nonsense, so for now, let's
        just believe any Content-Type header we see.
      */
-    ok = PR_TRUE;
+    ok = true;
 #endif
 
     if (ok)
       {
-      ct = MimeHeaders_get (msg->hdrs, HEADER_CONTENT_TYPE, PR_TRUE, PR_FALSE);
+      ct = MimeHeaders_get (msg->hdrs, HEADER_CONTENT_TYPE, true, false);
 
       /* If there is no Content-Type header, but there is a MIME-Version
          header, then assume that this *is* in fact a MIME message.
@@ -432,7 +403,7 @@ MimeMessage_close_headers (MimeObject *obj)
         obj->options &&
         obj->options->decrypt_p
 #ifdef ENABLE_SMIME
-        && !mime_crypto_object_p (msg->hdrs, PR_FALSE)
+        && !mime_crypto_object_p (msg->hdrs, false)
 #endif /* ENABLE_SMIME */
         )
     {
@@ -441,7 +412,7 @@ MimeMessage_close_headers (MimeObject *obj)
          body of the internal object up into one.) In this case,
          our output will end up being identical to our input.
       */
-      obj->options->decrypt_p = PR_FALSE;
+      obj->options->decrypt_p = false;
     }
 
     /* Emit the HTML for this message's headers.  Do this before
@@ -463,7 +434,7 @@ MimeMessage_close_headers (MimeObject *obj)
     else if (obj->output_p)
     {
       /* Dump the headers, raw. */
-      status = MimeObject_write(obj, "", 0, PR_FALSE);  /* initialize */
+      status = MimeObject_write(obj, "", 0, false);  /* initialize */
       if (status < 0) return status;
       status = MimeHeaders_write_raw_headers(msg->hdrs, obj->options,
                          obj->options->decrypt_p);
@@ -479,7 +450,7 @@ MimeMessage_close_headers (MimeObject *obj)
 
   /* Never put out a separator after a message header block. */
   if (obj->options && obj->options->state)
-  obj->options->state->separator_suppressed_p = PR_TRUE;
+  obj->options->state->separator_suppressed_p = true;
 
 #ifdef MIME_DRAFTS
   if ( !obj->headers &&    /* outer most message header */
@@ -504,7 +475,7 @@ MimeMessage_close_headers (MimeObject *obj)
   // Only do this if this is a Text Object!
   if ( mime_typep(body, (MimeObjectClass *) &mimeInlineTextClass) )
   {
-    ((MimeInlineText *) body)->needUpdateMsgWinCharset = PR_TRUE;
+    ((MimeInlineText *) body)->needUpdateMsgWinCharset = true;
   }
 
   /* Now that we've added this new object to our list of children,
@@ -516,7 +487,7 @@ MimeMessage_close_headers (MimeObject *obj)
   // it is a part that is not the head of the message. If it's a part,
   // we need to figure out the content type/charset of the part
   //
-  PRBool outer_p = !obj->headers;  /* is this the outermost message? */
+  bool outer_p = !obj->headers;  /* is this the outermost message? */
 
   if ( (outer_p || obj->options->notify_nested_bodies) &&
        (!obj->options->part_to_load || obj->options->format_out == nsMimeOutput::nsMimeMessageBodyDisplay))
@@ -530,7 +501,7 @@ MimeMessage_close_headers (MimeObject *obj)
     }
 
     char  *msgID = MimeHeaders_get (msg->hdrs, HEADER_MESSAGE_ID,
-                                    PR_FALSE, PR_FALSE);
+                                    false, false);
 
     const char  *outCharset = NULL;
     if (!obj->options->force_user_charset)  /* Only convert if the user prefs is false */
@@ -540,11 +511,11 @@ MimeMessage_close_headers (MimeObject *obj)
     PR_FREEIF(msgID);
 
   // setting up truncated message html fotter function
-  char *xmoz = MimeHeaders_get(msg->hdrs, HEADER_X_MOZILLA_STATUS, PR_FALSE,
-                 PR_FALSE);
+  char *xmoz = MimeHeaders_get(msg->hdrs, HEADER_X_MOZILLA_STATUS, false,
+                 false);
   if (xmoz)
   {
-    PRUint32 flags = 0;
+    uint32_t flags = 0;
     char dummy = 0;
     if (sscanf(xmoz, " %x %c", &flags, &dummy) == 1 &&
       flags & nsMsgMessageFlags::Partial)
@@ -563,10 +534,10 @@ MimeMessage_close_headers (MimeObject *obj)
 
 
 static int
-MimeMessage_parse_eof (MimeObject *obj, PRBool abort_p)
+MimeMessage_parse_eof (MimeObject *obj, bool abort_p)
 {
   int status;
-  PRBool outer_p;
+  bool outer_p;
   MimeMessage *msg = (MimeMessage *)obj;
   if (obj->closed_p) return 0;
 
@@ -605,7 +576,7 @@ MimeMessage_parse_eof (MimeObject *obj, PRBool abort_p)
         {
           int lstatus = MimeObject_write(obj, html,
                          strlen(html),
-                         PR_FALSE);
+                         false);
           PR_Free(html);
           if (lstatus < 0) return lstatus;
         }
@@ -674,12 +645,12 @@ MimeMessage_add_child (MimeObject *parent, MimeObject *child)
 char *
 DetermineMailCharset(MimeMessage *msg)
 {
-  char          *retCharset = nsnull;
+  char          *retCharset = nullptr;
 
   if ( (msg) && (msg->hdrs) )
   {
     char *ct = MimeHeaders_get (msg->hdrs, HEADER_CONTENT_TYPE,
-                                PR_FALSE, PR_FALSE);
+                                false, false);
     if (ct)
     {
       retCharset = MimeHeaders_get_parameter (ct, "charset", NULL, NULL);
@@ -692,7 +663,7 @@ DetermineMailCharset(MimeMessage *msg)
       // for "X-Sun-Charset: XX" instead.  (Maybe this should be done
       // in MimeSunAttachmentClass, but it's harder there than here.)
       retCharset = MimeHeaders_get (msg->hdrs, HEADER_X_SUN_CHARSET,
-                                    PR_FALSE, PR_FALSE);
+                                    false, false);
     }
   }
 
@@ -738,7 +709,7 @@ MimeMessage_write_headers_html (MimeObject *obj)
     status = MimeObject_output_init (obj, TEXT_HTML);
     if (status < 0)
     {
-      mimeEmitterEndHeader(obj->options);
+      mimeEmitterEndHeader(obj->options, obj);
       return status;
     }
     PR_ASSERT(obj->options->state->first_data_written_p);
@@ -746,8 +717,8 @@ MimeMessage_write_headers_html (MimeObject *obj)
 
   // Start the header parsing by the emitter
   char *msgID = MimeHeaders_get (msg->hdrs, HEADER_MESSAGE_ID,
-                                    PR_FALSE, PR_FALSE);
-  PRBool outer_p = !obj->headers; /* is this the outermost message? */
+                                    false, false);
+  bool outer_p = !obj->headers; /* is this the outermost message? */
   if (!outer_p && obj->options->format_out == nsMimeOutput::nsMimeMessageBodyDisplay &&
       obj->options->part_to_load)
   {
@@ -788,10 +759,10 @@ MimeMessage_write_headers_html (MimeObject *obj)
   PR_FREEIF(msgID);
   PR_FREEIF(mailCharset);
 
-  status = MimeHeaders_write_all_headers (msg->hdrs, obj->options, PR_FALSE);
+  status = MimeHeaders_write_all_headers (msg->hdrs, obj->options, false);
   if (status < 0)
   {
-    mimeEmitterEndHeader(obj->options);
+    mimeEmitterEndHeader(obj->options, obj);
     return status;
   }
 
@@ -813,21 +784,21 @@ MimeMessage_write_headers_html (MimeObject *obj)
       html = obj->options->generate_post_header_html_fn(NULL,
                                           obj->options->html_closure,
                                           msg->hdrs);
-      obj->options->state->post_header_html_run_p = PR_TRUE;
+      obj->options->state->post_header_html_run_p = true;
       if (html)
       {
-        status = MimeObject_write(obj, html, strlen(html), PR_FALSE);
+        status = MimeObject_write(obj, html, strlen(html), false);
         PR_Free(html);
         if (status < 0)
         {
-          mimeEmitterEndHeader(obj->options);
+          mimeEmitterEndHeader(obj->options, obj);
           return status;
         }
       }
     }
   }
 
-  mimeEmitterEndHeader(obj->options);
+  mimeEmitterEndHeader(obj->options, obj);
 
   // rhp:
   // For now, we are going to parse the entire message, even if we are
@@ -846,17 +817,16 @@ MimeMessage_write_headers_html (MimeObject *obj)
 
 static char *
 MimeMessage_partial_message_html(const char *data, void *closure,
-                 MimeHeaders *headers)
+                                 MimeHeaders *headers)
 {
   MimeMessage *msg = (MimeMessage *)closure;
   nsCAutoString orig_url(data);
-  char *uidl = MimeHeaders_get(headers, HEADER_X_UIDL, PR_FALSE, PR_FALSE);
-  char *msgId = MimeHeaders_get(headers, HEADER_MESSAGE_ID, PR_FALSE,
-                  PR_FALSE);
+  char *uidl = MimeHeaders_get(headers, HEADER_X_UIDL, false, false);
+  char *msgId = MimeHeaders_get(headers, HEADER_MESSAGE_ID, false,
+                  false);
   char *msgIdPtr = PL_strchr(msgId, '<');
-  int msgBase;
 
-  PRInt32 pos = orig_url.Find("mailbox-message");
+  int32_t pos = orig_url.Find("mailbox-message");
   if (pos != -1)
     orig_url.Cut(pos + 7, 8);
 
@@ -872,17 +842,30 @@ MimeMessage_partial_message_html(const char *data, void *closure,
   if (gtPtr)
     *gtPtr = 0;
 
-  msgBase = (msg->bodyLength > MSG_LINEBREAK_LEN) ? MIME_MSG_PARTIAL_FMT_1 : MIME_MSG_PARTIAL_FMT2_1;
+  bool msgBaseTruncated = (msg->bodyLength > MSG_LINEBREAK_LEN);
 
   nsCString partialMsgHtml;
   nsCString item;
 
-  item.Adopt(MimeGetStringByID(msgBase));
-  partialMsgHtml += item;
+  partialMsgHtml.AppendLiteral("<div style=\"margin: 1em auto; border: 1px solid black; width: 80%\">");
+  partialMsgHtml.AppendLiteral("<div style=\"margin: 5px; padding: 10px; border: 1px solid gray; font-weight: bold; text-align: center;\">");
 
-  item.Adopt(MimeGetStringByID(msgBase+1));
+  partialMsgHtml.AppendLiteral("<span style=\"font-size: 120%;\">");
+  if (msgBaseTruncated)
+    item.Adopt(MimeGetStringByName(NS_LITERAL_STRING("MIME_MSG_PARTIAL_TRUNCATED").get()));
+  else
+    item.Adopt(MimeGetStringByName(NS_LITERAL_STRING("MIME_MSG_PARTIAL_NOT_DOWNLOADED").get()));
   partialMsgHtml += item;
+  partialMsgHtml.AppendLiteral("</span><hr>");
 
+  if (msgBaseTruncated)
+    item.Adopt(MimeGetStringByName(NS_LITERAL_STRING("MIME_MSG_PARTIAL_TRUNCATED_EXPLANATION").get()));
+  else
+    item.Adopt(MimeGetStringByName(NS_LITERAL_STRING("MIME_MSG_PARTIAL_NOT_DOWNLOADED_EXPLANATION").get()));
+  partialMsgHtml += item;
+  partialMsgHtml.AppendLiteral("<br><br>");
+
+  partialMsgHtml.AppendLiteral("<a href=\"");
   partialMsgHtml.Append(orig_url);
 
   if (msgIdPtr) {
@@ -903,15 +886,19 @@ MimeMessage_partial_message_html(const char *data, void *closure,
     partialMsgHtml.Append(item);
   }
 
-  item.Adopt(MimeGetStringByID(msgBase+2));
+  partialMsgHtml.AppendLiteral("\">");
+  item.Adopt(MimeGetStringByName(NS_LITERAL_STRING("MIME_MSG_PARTIAL_CLICK_FOR_REST").get()));
   partialMsgHtml += item;
+  partialMsgHtml.AppendLiteral("</a>");
+
+  partialMsgHtml.AppendLiteral("</div></div>");
 
   return ToNewCString(partialMsgHtml);
 }
 
 #if defined(DEBUG) && defined(XP_UNIX)
 static int
-MimeMessage_debug_print (MimeObject *obj, PRFileDesc *stream, PRInt32 depth)
+MimeMessage_debug_print (MimeObject *obj, PRFileDesc *stream, int32_t depth)
 {
   MimeMessage *msg = (MimeMessage *) obj;
   char *addr = mime_part_address(obj);
@@ -923,7 +910,7 @@ MimeMessage_debug_print (MimeObject *obj, PRFileDesc *stream, PRInt32 depth)
       obj->clazz->class_name,
       addr ? addr : "???",
       (msg->container.nchildren == 0 ? " (no body)" : ""),
-      (PRUint32) msg);
+      (uint32_t) msg);
 */
   PR_FREEIF(addr);
 
@@ -937,7 +924,7 @@ MimeMessage_debug_print (MimeObject *obj, PRFileDesc *stream, PRInt32 depth)
 # define DUMP(HEADER) \
     for (i=0; i < depth; i++)                        \
         PR_Write(stream, "  ", 2);                        \
-    s = MimeHeaders_get (msg->hdrs, HEADER, PR_FALSE, PR_TRUE);
+    s = MimeHeaders_get (msg->hdrs, HEADER, false, true);
 /**
     \
     PR_Write(stream, HEADER ": %s\n", s ? s : "");              \

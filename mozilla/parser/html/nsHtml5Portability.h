@@ -34,17 +34,13 @@
 #include "nsString.h"
 #include "nsINameSpaceManager.h"
 #include "nsIContent.h"
-#include "nsIDocument.h"
 #include "nsTraceRefcnt.h"
 #include "jArray.h"
-#include "nsHtml5DocumentMode.h"
 #include "nsHtml5ArrayCopy.h"
-#include "nsHtml5NamedCharacters.h"
-#include "nsHtml5NamedCharactersAccel.h"
+#include "nsAHtml5TreeBuilderState.h"
 #include "nsHtml5Atoms.h"
 #include "nsHtml5ByteReadable.h"
 #include "nsIUnicodeDecoder.h"
-#include "nsAHtml5TreeBuilderState.h"
 #include "nsHtml5Macros.h"
 
 class nsHtml5StreamParser;
@@ -62,20 +58,20 @@ class nsHtml5StateSnapshot;
 class nsHtml5Portability
 {
   public:
-    static nsIAtom* newLocalNameFromBuffer(PRUnichar* buf, PRInt32 offset, PRInt32 length, nsHtml5AtomTable* interner);
-    static nsString* newStringFromBuffer(PRUnichar* buf, PRInt32 offset, PRInt32 length);
+    static nsIAtom* newLocalNameFromBuffer(PRUnichar* buf, int32_t offset, int32_t length, nsHtml5AtomTable* interner);
+    static nsString* newStringFromBuffer(PRUnichar* buf, int32_t offset, int32_t length);
     static nsString* newEmptyString();
     static nsString* newStringFromLiteral(const char* literal);
     static nsString* newStringFromString(nsString* string);
-    static jArray<PRUnichar,PRInt32> newCharArrayFromLocal(nsIAtom* local);
-    static jArray<PRUnichar,PRInt32> newCharArrayFromString(nsString* string);
+    static jArray<PRUnichar,int32_t> newCharArrayFromLocal(nsIAtom* local);
+    static jArray<PRUnichar,int32_t> newCharArrayFromString(nsString* string);
     static nsIAtom* newLocalFromLocal(nsIAtom* local, nsHtml5AtomTable* interner);
     static void releaseString(nsString* str);
-    static PRBool localEqualsBuffer(nsIAtom* local, PRUnichar* buf, PRInt32 offset, PRInt32 length);
-    static PRBool lowerCaseLiteralIsPrefixOfIgnoreAsciiCaseString(const char* lowerCaseLiteral, nsString* string);
-    static PRBool lowerCaseLiteralEqualsIgnoreAsciiCaseString(const char* lowerCaseLiteral, nsString* string);
-    static PRBool literalEqualsString(const char* literal, nsString* string);
-    static PRBool stringEqualsString(nsString* one, nsString* other);
+    static bool localEqualsBuffer(nsIAtom* local, PRUnichar* buf, int32_t offset, int32_t length);
+    static bool lowerCaseLiteralIsPrefixOfIgnoreAsciiCaseString(const char* lowerCaseLiteral, nsString* string);
+    static bool lowerCaseLiteralEqualsIgnoreAsciiCaseString(const char* lowerCaseLiteral, nsString* string);
+    static bool literalEqualsString(const char* literal, nsString* string);
+    static bool stringEqualsString(nsString* one, nsString* other);
     static void initializeStatics();
     static void releaseStatics();
 };

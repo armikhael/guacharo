@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsMsgWindow.h"
 #include "nsIURILoader.h"
@@ -53,7 +21,7 @@
 #include "nsIWebProgressListener.h"
 #include "nsPIDOMWindow.h"
 #include "nsIPrompt.h"
-#include "nsICharsetAlias.h"
+#include "nsICharsetConverterManager.h"
 #include "nsIChannel.h"
 #include "nsIRequestObserver.h"
 #include "netCore.h"
@@ -65,6 +33,7 @@
 #include "nsMsgContentPolicy.h"
 #include "nsComponentManagerUtils.h"
 #include "nsServiceManagerUtils.h"
+#include "nsIAuthPrompt.h"
 
 // used to dispatch urls to default protocol handlers
 #include "nsCExternalHandlerService.h"
@@ -79,8 +48,8 @@ NS_IMPL_THREADSAFE_ISUPPORTS3(nsMsgWindow,
 
 nsMsgWindow::nsMsgWindow()
 {
-  mCharsetOverride = PR_FALSE;
-  m_stopped = PR_FALSE;
+  mCharsetOverride = false;
+  m_stopped = false;
 }
 
 nsMsgWindow::~nsMsgWindow()
@@ -108,7 +77,7 @@ nsresult nsMsgWindow::Init()
 
 NS_IMETHODIMP nsMsgWindow::GetMessageWindowDocShell(nsIDocShell ** aDocShell)
 {
-  *aDocShell = nsnull;
+  *aDocShell = nullptr;
   nsCOMPtr<nsIDocShell> docShell(do_QueryReferent(mMessageWindowDocShellWeak));
   if (!docShell)
   {
@@ -120,7 +89,7 @@ NS_IMETHODIMP nsMsgWindow::GetMessageWindowDocShell(nsIDocShell ** aDocShell)
       nsCOMPtr<nsIDocShellTreeItem> msgDocShellItem;
       if(rootAsNode)
          rootAsNode->FindChildWithName(NS_LITERAL_STRING("messagepane").get(),
-                                       PR_TRUE, PR_FALSE, nsnull, nsnull,
+                                       true, false, nullptr, nullptr,
                                        getter_AddRefs(msgDocShellItem));
       NS_ENSURE_TRUE(msgDocShellItem, NS_ERROR_FAILURE);
       docShell = do_QueryInterface(msgDocShellItem);
@@ -139,8 +108,8 @@ NS_IMETHODIMP nsMsgWindow::CloseWindow()
   if (dispatcher) // on shut down it's possible dispatcher will be null.
     rv = dispatcher->UnRegisterContentListener(this);
 
-  mMsgWindowCommands = nsnull;
-  mStatusFeedback = nsnull;
+  mMsgWindowCommands = nullptr;
+  mStatusFeedback = nullptr;
 
   StopUrls();
 
@@ -149,13 +118,13 @@ NS_IMETHODIMP nsMsgWindow::CloseWindow()
   {
     nsCOMPtr<nsIURIContentListener> listener(do_GetInterface(messagePaneDocShell));
     if (listener)
-      listener->SetParentContentListener(nsnull);
-    SetRootDocShell(nsnull);
-    mMessageWindowDocShellWeak = nsnull;
+      listener->SetParentContentListener(nullptr);
+    SetRootDocShell(nullptr);
+    mMessageWindowDocShellWeak = nullptr;
   }
 
   // in case nsMsgWindow leaks, make sure other stuff doesn't leak.
-  mTransactionManager = nsnull;
+  mTransactionManager = nullptr;
   return NS_OK;
 }
 
@@ -239,8 +208,26 @@ NS_IMETHODIMP nsMsgWindow::GetRootDocShell(nsIDocShell * *aDocShell)
   if (mRootDocShellWeak)
     CallQueryReferent(mRootDocShellWeak.get(), aDocShell);
   else
-    *aDocShell = nsnull;
+    *aDocShell = nullptr;
   return NS_OK;
+}
+
+NS_IMETHODIMP nsMsgWindow::GetAuthPrompt(nsIAuthPrompt * *aAuthPrompt)
+{
+  NS_ENSURE_ARG_POINTER(aAuthPrompt);
+  if (!mRootDocShellWeak)
+    return NS_ERROR_FAILURE;
+
+  nsresult rv;
+  nsCOMPtr<nsIDocShell> docShell(do_QueryReferent(mRootDocShellWeak.get(), &rv));
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  nsCOMPtr<nsIAuthPrompt> prompt = do_GetInterface(docShell, &rv);
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  prompt.swap(*aAuthPrompt);
+
+  return rv;
 }
 
 NS_IMETHODIMP nsMsgWindow::SetRootDocShell(nsIDocShell * aDocShell)
@@ -263,7 +250,7 @@ NS_IMETHODIMP nsMsgWindow::SetRootDocShell(nsIDocShell * aDocShell)
   }
   
   // Query for the doc shell and release it
-  mRootDocShellWeak = nsnull;
+  mRootDocShellWeak = nullptr;
   if (aDocShell)
   {
     mRootDocShellWeak = do_GetWeakReference(aDocShell);
@@ -300,20 +287,22 @@ NS_IMETHODIMP nsMsgWindow::SetMailCharacterSet(const nsACString& aMailCharacterS
   // Convert to a canonical charset name instead of using the charset name from the message header as is.
   // This is needed for charset menu item to have a check mark correctly.
   nsresult rv;
-  nsCOMPtr<nsICharsetAlias> calias = do_GetService(NS_CHARSETALIAS_CONTRACTID, &rv);
+  nsCOMPtr <nsICharsetConverterManager> ccm =
+    do_GetService(NS_CHARSETCONVERTERMANAGER_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  return calias->GetPreferred(aMailCharacterSet,  mMailCharacterSet);
+  return ccm->GetCharsetAlias(PromiseFlatCString(aMailCharacterSet).get(),
+                              mMailCharacterSet);
 }
 
-NS_IMETHODIMP nsMsgWindow::GetCharsetOverride(PRBool *aCharsetOverride)
+NS_IMETHODIMP nsMsgWindow::GetCharsetOverride(bool *aCharsetOverride)
 {
   NS_ENSURE_ARG_POINTER(aCharsetOverride);
   *aCharsetOverride = mCharsetOverride;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgWindow::SetCharsetOverride(PRBool aCharsetOverride)
+NS_IMETHODIMP nsMsgWindow::SetCharsetOverride(bool aCharsetOverride)
 {
   mCharsetOverride = aCharsetOverride;
   return NS_OK;
@@ -325,7 +314,7 @@ NS_IMETHODIMP nsMsgWindow::GetDomWindow(nsIDOMWindow **aWindow)
   if (mDomWindow)
     CallQueryReferent(mDomWindow.get(), aWindow);
   else
-    *aWindow = nsnull;
+    *aWindow = nullptr;
   return NS_OK;
 }
 
@@ -335,7 +324,7 @@ NS_IMETHODIMP nsMsgWindow::SetDomWindow(nsIDOMWindow * aWindow)
   mDomWindow = do_GetWeakReference(aWindow);
 
   nsCOMPtr<nsPIDOMWindow> win(do_QueryInterface(aWindow));
-  nsIDocShell *docShell = nsnull;
+  nsIDocShell *docShell = nullptr;
   if (win)
     docShell = win->GetDocShell();
 
@@ -372,19 +361,19 @@ NS_IMETHODIMP nsMsgWindow::GetNotificationCallbacks(nsIInterfaceRequestor **aNot
 
 NS_IMETHODIMP nsMsgWindow::StopUrls()
 {
-  m_stopped = PR_TRUE;
+  m_stopped = true;
   nsCOMPtr<nsIWebNavigation> webnav(do_QueryReferent(mRootDocShellWeak));
   return webnav ? webnav->Stop(nsIWebNavigation::STOP_NETWORK) : NS_ERROR_FAILURE;
 }
 
 // nsIURIContentListener support
-NS_IMETHODIMP nsMsgWindow::OnStartURIOpen(nsIURI* aURI, PRBool* aAbortOpen)
+NS_IMETHODIMP nsMsgWindow::OnStartURIOpen(nsIURI* aURI, bool* aAbortOpen)
 {
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgWindow::DoContent(const char *aContentType, PRBool aIsContentPreferred,
-                                     nsIRequest *request, nsIStreamListener **aContentHandler, PRBool *aAbortProcess)
+NS_IMETHODIMP nsMsgWindow::DoContent(const char *aContentType, bool aIsContentPreferred,
+                                     nsIRequest *request, nsIStreamListener **aContentHandler, bool *aAbortProcess)
 {
   if (aContentType)
   {
@@ -417,16 +406,16 @@ NS_IMETHODIMP nsMsgWindow::DoContent(const char *aContentType, PRBool aIsContent
 NS_IMETHODIMP
 nsMsgWindow::IsPreferred(const char * aContentType,
                          char ** aDesiredContentType,
-                         PRBool * aCanHandleContent)
+                         bool * aCanHandleContent)
 {
-  *aCanHandleContent = PR_FALSE;
+  *aCanHandleContent = false;
   return NS_OK;
 }
 
 NS_IMETHODIMP nsMsgWindow::CanHandleContent(const char * aContentType,
-                                            PRBool aIsContentPreferred,
+                                            bool aIsContentPreferred,
                                             char ** aDesiredContentType,
-                                            PRBool * aCanHandleContent)
+                                            bool * aCanHandleContent)
 
 {
   // the mail window knows nothing about the default content types
@@ -440,14 +429,14 @@ NS_IMETHODIMP nsMsgWindow::CanHandleContent(const char * aContentType,
     return ctnListener->CanHandleContent(aContentType, aIsContentPreferred,
                                          aDesiredContentType, aCanHandleContent);
   else
-    *aCanHandleContent = PR_FALSE;
+    *aCanHandleContent = false;
   return NS_OK;
 }
 
 NS_IMETHODIMP nsMsgWindow::GetParentContentListener(nsIURIContentListener** aParent)
 {
   NS_ENSURE_ARG_POINTER(aParent);
-  *aParent = nsnull;
+  *aParent = nullptr;
   return NS_OK;
 }
 
@@ -459,7 +448,7 @@ NS_IMETHODIMP nsMsgWindow::SetParentContentListener(nsIURIContentListener* aPare
 NS_IMETHODIMP nsMsgWindow::GetLoadCookie(nsISupports ** aLoadCookie)
 {
   NS_ENSURE_ARG_POINTER(aLoadCookie);
-  *aLoadCookie = nsnull;
+  *aLoadCookie = nullptr;
   return NS_OK;
 }
 
@@ -483,7 +472,7 @@ NS_IMETHODIMP nsMsgWindow::GetPromptDialog(nsIPrompt **aPrompt)
 }
 
 NS_IMETHODIMP
-nsMsgWindow::DisplayHTMLInMessagePane(const nsAString& title, const nsAString& body, PRBool clearMsgHdr)
+nsMsgWindow::DisplayHTMLInMessagePane(const nsAString& title, const nsAString& body, bool clearMsgHdr)
 {
   if (clearMsgHdr && mMsgWindowCommands)
     mMsgWindowCommands->ClearMsgPane();
@@ -493,7 +482,7 @@ nsMsgWindow::DisplayHTMLInMessagePane(const nsAString& title, const nsAString& b
   htmlStr.Append(body);
   htmlStr.Append(NS_LITERAL_STRING("</body></html>").get());
 
-  char *encodedHtml = PL_Base64Encode(NS_ConvertUTF16toUTF8(htmlStr).get(), 0, nsnull);
+  char *encodedHtml = PL_Base64Encode(NS_ConvertUTF16toUTF8(htmlStr).get(), 0, nullptr);
   if (!encodedHtml)
     return NS_ERROR_OUT_OF_MEMORY;
 
@@ -512,7 +501,7 @@ nsMsgWindow::DisplayHTMLInMessagePane(const nsAString& title, const nsAString& b
 
   return webNav->LoadURI(NS_ConvertASCIItoUTF16(dataSpec).get(),
                          nsIWebNavigation::LOAD_FLAGS_NONE,
-                         nsnull, nsnull, nsnull);
+                         nullptr, nullptr, nullptr);
 }
 
-NS_IMPL_GETSET(nsMsgWindow, Stopped, PRBool, m_stopped)
+NS_IMPL_GETSET(nsMsgWindow, Stopped, bool, m_stopped)

@@ -54,8 +54,6 @@ const gCopyService = Cc["@mozilla.org/messenger/messagecopyservice;1"]
                        .getService(Ci.nsIMsgCopyService);
 const gDbService = Components.classes["@mozilla.org/msgDatabase/msgDBService;1"]
                              .getService(Components.interfaces.nsIMsgDBService);
-const gIMAPService = Cc["@mozilla.org/messenger/messageservice;1?type=imap"]
-                       .getService(Ci.nsIMsgMessageService);
 const gMailSession = Cc["@mozilla.org/messenger/services/session;1"]
                      .getService(Ci.nsIMsgMailSession);
 const kFiltersAppliedAtom = Cc["@mozilla.org/atom-service;1"]
@@ -98,7 +96,7 @@ const gTestArray =
   },
   function MarkRead() {
     gAction.type = Ci.nsMsgFilterAction.MarkRead;
-    gChecks = function checks() {
+    gChecks = function checkMarkRead() {
       testCounts(false, 0, 0, 0);
       do_check_true(gHeader.isRead);
     }
@@ -106,12 +104,11 @@ const gTestArray =
   },
   function MarkReadBody() {
     gAction.type = Ci.nsMsgFilterAction.MarkRead;
-    gChecks = function checkMarkRead() {
+    gChecks = function checkMarkReadBody() {
       testCounts(false, 0, 0, 0);
       do_check_true(gHeader.isRead);
     }
     setupTest(gBodyFilter, gAction);
-
   },
   function KillThread() {
     gAction.type = Ci.nsMsgFilterAction.KillThread;
@@ -173,6 +170,22 @@ const gTestArray =
   },
 
   // The remaining tests add new messages
+  function MarkUnread() {
+    gAction.type = Ci.nsMsgFilterAction.MarkUnread;
+    gChecks = function checkMarkUnread() {
+      testCounts(true, 1, 1, 1);
+      do_check_true(!gHeader.isRead);
+    }
+    setupTest(gFilter, gAction);
+  },
+  function MarkUnreadBody() {
+    gAction.type = Ci.nsMsgFilterAction.MarkUnread;
+    gChecks = function checkMarkUnreadBody() {
+      testCounts(true, 1, 1, 1);
+      do_check_true(!gHeader.isRead);
+    }
+    setupTest(gBodyFilter, gAction);
+  },
   function WatchThread() {
     gAction.type = Ci.nsMsgFilterAction.WatchThread;
     gChecks = function checkWatchThread() {
@@ -248,7 +261,7 @@ const gTestArray =
     gAction.strValue = "TheTag";
     gChecks = function checkAddTag() {
       testCounts(true, 1, 1, 1);
-      do_check_eq(gHeader.getStringProperty("keywords"), "TheTag");
+      do_check_eq(gHeader.getStringProperty("keywords"), "thetag");
     }
     setupTest(gFilter, gAction);
   },
@@ -257,7 +270,7 @@ const gTestArray =
     gAction.strValue = "TheTag2";
     gChecks = function checkAddTagBody() {
       testCounts(true, 1, 1, 1);
-      do_check_eq(gHeader.getStringProperty("keywords"), "TheTag2");
+      do_check_eq(gHeader.getStringProperty("keywords"), "thetag2");
     }
     setupTest(gBodyFilter, gAction);
   },
@@ -338,15 +351,13 @@ function run_test()
   imapAccount.incomingServer = gIMAPIncomingServer;
 
   // The server doesn't support more than one connection
-  let prefBranch = Cc["@mozilla.org/preferences-service;1"]
-                     .getService(Ci.nsIPrefBranch);
-  prefBranch.setIntPref("mail.server.default.max_cached_connections", 1);
+  Services.prefs.setIntPref("mail.server.default.max_cached_connections", 1);
   // We aren't interested in downloading messages automatically
-  prefBranch.setBoolPref("mail.server.default.download_on_biff", false);
-  prefBranch.setBoolPref("mail.biff.play_sound", false);
-  prefBranch.setBoolPref("mail.biff.show_alert", false);
-  prefBranch.setBoolPref("mail.biff.show_tray_icon", false);
-  prefBranch.setBoolPref("mail.biff.animate_dock_icon", false);
+  Services.prefs.setBoolPref("mail.server.default.download_on_biff", false);
+  Services.prefs.setBoolPref("mail.biff.play_sound", false);
+  Services.prefs.setBoolPref("mail.biff.show_alert", false);
+  Services.prefs.setBoolPref("mail.biff.show_tray_icon", false);
+  Services.prefs.setBoolPref("mail.biff.animate_dock_icon", false);
 
   gSubfolder = gLocalIncomingServer.rootFolder.createLocalSubfolder("Subfolder");
   gIMAPIncomingServer.performExpand(null);

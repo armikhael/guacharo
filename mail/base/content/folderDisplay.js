@@ -1,41 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Mail Client.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Andrew Sutherland <asutherland@asutherland.org>
- *   David Bienvenu <bienvenu@nventure.com>
- *   Siddharth Agarwal <sid.bugzilla@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource:///modules/dbViewWrapper.js");
 Components.utils.import("resource:///modules/jsTreeSelection.js");
@@ -265,6 +230,33 @@ FolderDisplayWidget.prototype = {
   },
 
   /**
+   * Determine which pane currently has focus (one of the folder pane, thread
+   * pane, or message pane). The message pane node is the common ancestor of
+   * the single- and multi-message content windows. When changing focus to the
+   * message pane, be sure to focus the appropriate content window in addition
+   * to the messagepanebox (doing both is required in order to blur the
+   * previously-focused chrome element).
+   *
+   * @return the focused pane
+   */
+  get focusedPane() {
+    let panes = [document.getElementById(id) for each (id in [
+      "threadTree", "folderTree", "messagepanebox"
+    ])];
+
+    let currentNode = top.document.activeElement;
+
+    while (currentNode) {
+      if (panes.indexOf(currentNode) != -1)
+        return currentNode;
+
+      currentNode = currentNode.parentNode;
+    }
+    return null;
+  },
+
+
+  /**
    * Number of headers to tell the message database to cache when we enter a
    *  folder.  This value is being propagated from legacy code which provided
    *  no explanation for its choice.
@@ -458,7 +450,7 @@ FolderDisplayWidget.prototype = {
     let dbFolderInfo = msgDatabase.dBFolderInfo;
     dbFolderInfo.setCharProperty(this.PERSISTED_COLUMN_PROPERTY_NAME,
                                  JSON.stringify(aState));
-    msgDatabase.Commit(Components.interfaces.nsMsgDBCommitType.kSmallCommit);
+    msgDatabase.Commit(Components.interfaces.nsMsgDBCommitType.kLargeCommit);
   },
 
   /**
@@ -1183,7 +1175,7 @@ FolderDisplayWidget.prototype = {
     //  [0, 0] with 0 rows.  If that happens, we need to fix up the selection
     //  here.
     if (rowCount == 0 && treeSelection.count)
-      // nsTreeSelection does't generate an event if we use clearRange, so use
+      // nsTreeSelection doesn't generate an event if we use clearRange, so use
       //  that to avoid spurious events, given that we are going to definitely
       //  trigger a change notification below.
       treeSelection.clearRange(0, 0);
@@ -1277,10 +1269,20 @@ FolderDisplayWidget.prototype = {
    */
   displayMessageChanged: function FolderDisplayWidget_displayMessageChanged(
       aFolder, aSubject, aKeywords) {
+    // Hide previous stale message to prevent brief threadpane selection and
+    // content displayed mismatch, on both folder and tab changes.
+    let browser = getBrowser();
+    if (browser && browser.contentDocument && browser.contentDocument.body)
+      browser.contentDocument.body.hidden = true;
+
     UpdateMailToolbar("FolderDisplayWidget displayed message changed");
     let viewIndex = this.view.dbView.currentlyDisplayedMessage;
     let msgHdr = (viewIndex != nsMsgViewIndex_None) ?
                    this.view.dbView.getMsgHdrAt(viewIndex) : null;
+
+    if (!FeedMessageHandler.shouldShowSummary(msgHdr, false))
+      FeedMessageHandler.setContent(msgHdr, false);
+
     this.messageDisplay.onDisplayingMessage(msgHdr);
 
     // Although deletes should now be so fast that the user has no time to do
@@ -1695,7 +1697,7 @@ FolderDisplayWidget.prototype = {
 
       // save the message pane's state only when it is potentially visible
       this.messagePaneCollapsed =
-        document.getElementById("messagepanebox").collapsed;
+        document.getElementById("messagepaneboxwrapper").collapsed;
 
       this.hookUpFakeTreeBox(true);
     }
@@ -1909,12 +1911,12 @@ FolderDisplayWidget.prototype = {
   },
 
   /**
-   * @return true if there is a selected message and it's an RSS feed message.
+   * @return true if there is a selected message and it's an RSS feed message;
+   *  a feed message does not have to be in an rss account folder if stored in
+   *  Tb15 and later.
    */
   get selectedMessageIsFeed() {
-    let message = this.selectedMessage;
-    return Boolean(message && message.folder &&
-                   message.folder.server.type == 'rss');
+    return FeedMessageHandler.isFeedMessage(this.selectedMessage);
   },
 
   /**

@@ -1,42 +1,9 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * vim: set ts=4 sw=4 et tw=78:
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef jsinterp_h___
 #define jsinterp_h___
@@ -46,83 +13,48 @@
 #include "jsprvtd.h"
 #include "jspubtd.h"
 #include "jsopcode.h"
-#include "jsscript.h"
-#include "jsvalue.h"
 
 #include "vm/Stack.h"
 
 namespace js {
 
-extern JSObject *
-GetBlockChain(JSContext *cx, StackFrame *fp);
-
-extern JSObject *
-GetBlockChainFast(JSContext *cx, StackFrame *fp, JSOp op, size_t oplen);
-
-extern JSObject *
-GetScopeChain(JSContext *cx);
-
-/*
- * Refresh and return fp->scopeChain.  It may be stale if block scopes are
- * active but not yet reflected by objects in the scope chain.  If a block
- * scope contains a with, eval, XML filtering predicate, or similar such
- * dynamically scoped construct, then compile-time block scope at fp->blocks
- * must reflect at runtime.
- */
-extern JSObject *
-GetScopeChain(JSContext *cx, StackFrame *fp);
-
-extern JSObject *
-GetScopeChainFast(JSContext *cx, StackFrame *fp, JSOp op, size_t oplen);
-
-/*
- * Report an error that the this value passed as |this| in the given arguments
- * vector is not compatible with the specified class.
- */
-void
-ReportIncompatibleMethod(JSContext *cx, Value *vp, Class *clasp);
-
-/*
- * Given a context and a vector of [callee, this, args...] for a function
- * whose JSFUN_PRIMITIVE_THIS flag is set, set |*v| to the primitive value
- * of |this|. If |this| is an object, insist that it be an instance of the
- * appropriate wrapper class for T, and set |*v| to its private slot value.
- * If |this| is a primitive, unbox it into |*v| if it's of the required
- * type, and throw an error otherwise.
- */
-template <typename T>
-bool GetPrimitiveThis(JSContext *cx, Value *vp, T *v);
-
-/*
- * ScriptPrologue/ScriptEpilogue must be called in pairs. ScriptPrologue
- * must be called before the script executes. ScriptEpilogue must be called
- * after the script returns or exits via exception.
- */
-
-inline bool
-ScriptPrologue(JSContext *cx, StackFrame *fp, JSScript *script);
-
-inline bool
-ScriptEpilogue(JSContext *cx, StackFrame *fp, bool ok);
-
-/*
- * It is not valid to call ScriptPrologue when a generator is resumed or to
- * call ScriptEpilogue when a generator yields. However, the debugger still
- * needs LIFO notification of generator start/stop. This pair of functions does
- * the right thing based on the state of 'fp'.
- */
-
-inline bool
-ScriptPrologueOrGeneratorResume(JSContext *cx, StackFrame *fp);
-
-inline bool
-ScriptEpilogueOrGeneratorYield(JSContext *cx, StackFrame *fp, bool ok);
-
 /* Implemented in jsdbgapi: */
 
-extern void
+/*
+ * Announce to the debugger that the thread has entered a new JavaScript frame,
+ * |fp|. Call whatever hooks have been registered to observe new frames, and
+ * return a JSTrapStatus code indication how execution should proceed:
+ *
+ * - JSTRAP_CONTINUE: Continue execution normally.
+ *
+ * - JSTRAP_THROW: Throw an exception. ScriptDebugPrologue has set |cx|'s
+ *   pending exception to the value to be thrown.
+ *
+ * - JSTRAP_ERROR: Terminate execution (as is done when a script is terminated
+ *   for running too long). ScriptDebugPrologue has cleared |cx|'s pending
+ *   exception.
+ *
+ * - JSTRAP_RETURN: Return from the new frame immediately. ScriptDebugPrologue
+ *   has set |cx->fp()|'s return value appropriately.
+ */
+extern JSTrapStatus
 ScriptDebugPrologue(JSContext *cx, StackFrame *fp);
 
+/*
+ * Announce to the debugger that the thread has exited a JavaScript frame, |fp|.
+ * If |ok| is true, the frame is returning normally; if |ok| is false, the frame
+ * is throwing an exception or terminating.
+ *
+ * Call whatever hooks have been registered to observe frame exits. Change cx's
+ * current exception and |fp|'s return value to reflect the changes in behavior
+ * the hooks request, if any. Return the new error/success value.
+ *
+ * This function may be called twice for the same outgoing frame; only the
+ * first call has any effect. (Permitting double calls simplifies some
+ * cases where an onPop handler's resumption value changes a return to a
+ * throw, or vice versa: we can redirect to a complete copy of the
+ * alternative path, containing its own call to ScriptDebugEpilogue.)
+ */
 extern bool
 ScriptDebugEpilogue(JSContext *cx, StackFrame *fp, bool ok);
 
@@ -144,93 +76,88 @@ BoxNonStrictThis(JSContext *cx, const CallReceiver &call);
 inline bool
 ComputeThis(JSContext *cx, StackFrame *fp);
 
-/*
- * The js::InvokeArgumentsGuard passed to js_Invoke must come from an
- * immediately-enclosing successful call to js::StackSpace::pushInvokeArgs,
- * i.e., there must have been no un-popped pushes to cx->stack. Furthermore,
- * |args.getvp()[0]| should be the callee, |args.getvp()[1]| should be |this|,
- * and the range [args.getvp() + 2, args.getvp() + 2 + args.getArgc()) should
- * be initialized actual arguments.
- */
+enum MaybeConstruct {
+    NO_CONSTRUCT = INITIAL_NONE,
+    CONSTRUCT = INITIAL_CONSTRUCT
+};
+
 extern bool
-Invoke(JSContext *cx, const CallArgs &args, MaybeConstruct construct = NO_CONSTRUCT);
+ReportIsNotFunction(JSContext *cx, const Value &v, MaybeConstruct construct = NO_CONSTRUCT);
+
+extern bool
+ReportIsNotFunction(JSContext *cx, const Value *vp, MaybeConstruct construct = NO_CONSTRUCT);
+
+extern JSObject *
+ValueToCallable(JSContext *cx, const Value *vp, MaybeConstruct construct = NO_CONSTRUCT);
+
+inline JSFunction *
+ReportIfNotFunction(JSContext *cx, const Value &v, MaybeConstruct construct = NO_CONSTRUCT)
+{
+    if (v.isObject() && v.toObject().isFunction())
+        return v.toObject().toFunction();
+
+    ReportIsNotFunction(cx, v, construct);
+    return NULL;
+}
 
 /*
- * For calls to natives, the InvokeArgsGuard object provides a record of the
- * call for the debugger's callstack. For this to work, the InvokeArgsGuard
- * record needs to know when the call is actually active (because the
- * InvokeArgsGuard can be pushed long before and popped long after the actual
- * call, during which time many stack-observing things can happen).
+ * InvokeKernel assumes that the given args have been pushed on the top of the
+ * VM stack. Additionally, if 'args' is contained in a CallArgsList, that they
+ * have already been marked 'active'.
+ */
+extern bool
+InvokeKernel(JSContext *cx, CallArgs args, MaybeConstruct construct = NO_CONSTRUCT);
+
+/*
+ * Invoke assumes that 'args' has been pushed (via ContextStack::pushInvokeArgs)
+ * and is currently at the top of the VM stack.
  */
 inline bool
 Invoke(JSContext *cx, InvokeArgsGuard &args, MaybeConstruct construct = NO_CONSTRUCT)
 {
     args.setActive();
-    bool ok = Invoke(cx, ImplicitCast<CallArgs>(args), construct);
+    bool ok = InvokeKernel(cx, args, construct);
     args.setInactive();
     return ok;
 }
 
 /*
- * Natives like sort/forEach/replace call Invoke repeatedly with the same
- * callee, this, and number of arguments. To optimize this, such natives can
- * start an "invoke session" to factor out much of the dynamic setup logic
- * required by a normal Invoke. Usage is:
- *
- *   InvokeSessionGuard session(cx);
- *   if (!session.start(cx, callee, thisp, argc, &session))
- *     ...
- *
- *   while (...) {
- *     // write actual args (not callee, this)
- *     session[0] = ...
- *     ...
- *     session[argc - 1] = ...
- *
- *     if (!session.invoke(cx, session))
- *       ...
- *
- *     ... = session.rval();
- *   }
- *
- *   // session ended by ~InvokeSessionGuard
+ * This Invoke overload places the least requirements on the caller: it may be
+ * called at any time and it takes care of copying the given callee, this, and
+ * arguments onto the stack.
  */
-class InvokeSessionGuard;
+extern bool
+Invoke(JSContext *cx, const Value &thisv, const Value &fval, unsigned argc, Value *argv,
+       Value *rval);
 
 /*
- * "External" calls may come from C or C++ code using a JSContext on which no
- * JS is running (!cx->fp), so they may need to push a dummy StackFrame.
+ * This helper takes care of the infinite-recursion check necessary for
+ * getter/setter calls.
  */
-
 extern bool
-ExternalInvoke(JSContext *cx, const Value &thisv, const Value &fval,
-               uintN argc, Value *argv, Value *rval);
-
-extern bool
-ExternalGetOrSet(JSContext *cx, JSObject *obj, jsid id, const Value &fval,
-                 JSAccessMode mode, uintN argc, Value *argv, Value *rval);
+InvokeGetterOrSetter(JSContext *cx, JSObject *obj, const Value &fval, unsigned argc, Value *argv,
+                     Value *rval);
 
 /*
- * These two functions invoke a function called from a constructor context
- * (e.g. 'new'). InvokeConstructor handles the general case where a new object
- * needs to be created for/by the constructor. ConstructWithGivenThis directly
- * calls the constructor with the given 'this', hence the caller must
- * understand the semantics of the constructor call.
+ * InvokeConstructor* implement a function call from a constructor context
+ * (e.g. 'new') handling the the creation of the new 'this' object.
  */
-
-extern JS_REQUIRES_STACK bool
-InvokeConstructor(JSContext *cx, const CallArgs &args);
-
-extern JS_REQUIRES_STACK bool
-InvokeConstructorWithGivenThis(JSContext *cx, JSObject *thisobj, const Value &fval,
-                               uintN argc, Value *argv, Value *rval);
-
 extern bool
-ExternalInvokeConstructor(JSContext *cx, const Value &fval, uintN argc, Value *argv,
-                          Value *rval);
+InvokeConstructorKernel(JSContext *cx, CallArgs args);
 
+/* See the InvokeArgsGuard overload of Invoke. */
+inline bool
+InvokeConstructor(JSContext *cx, InvokeArgsGuard &args)
+{
+    args.setActive();
+    bool ok = InvokeConstructorKernel(cx, ImplicitCast<CallArgs>(args));
+    args.setInactive();
+    return ok;
+}
+
+/* See the fval overload of Invoke. */
 extern bool
-ExternalExecute(JSContext *cx, JSScript *script, JSObject &scopeChain, Value *rval);
+InvokeConstructor(JSContext *cx, const Value &fval, unsigned argc, Value *argv, Value *rval);
 
 /*
  * Executes a script with the given scopeChain/this. The 'type' indicates
@@ -239,117 +166,156 @@ ExternalExecute(JSContext *cx, JSScript *script, JSObject &scopeChain, Value *rv
  * stack to simulate executing an eval in that frame.
  */
 extern bool
-Execute(JSContext *cx, JSScript *script, JSObject &scopeChain, const Value &thisv,
-        ExecuteType type, StackFrame *evalInFrame, Value *result);
+ExecuteKernel(JSContext *cx, HandleScript script, JSObject &scopeChain, const Value &thisv,
+              ExecuteType type, StackFrame *evalInFrame, Value *result);
+
+/* Execute a script with the given scopeChain as global code. */
+extern bool
+Execute(JSContext *cx, HandleScript script, JSObject &scopeChain, Value *rval);
 
 /* Flags to toggle js::Interpret() execution. */
 enum InterpMode
 {
     JSINTERP_NORMAL    = 0, /* interpreter is running normally */
-    JSINTERP_RECORD    = 1, /* interpreter has been started to record/run traces */
-    JSINTERP_SAFEPOINT = 2, /* interpreter should leave on a method JIT safe point */
-    JSINTERP_PROFILE   = 3  /* interpreter should profile a loop */
+    JSINTERP_REJOIN    = 1, /* as normal, but the frame has already started */
+    JSINTERP_SKIP_TRAP = 2  /* as REJOIN, but skip trap at first opcode */
 };
 
 /*
  * Execute the caller-initialized frame for a user-defined script or function
  * pointed to by cx->fp until completion or error.
  */
-extern JS_REQUIRES_STACK JS_NEVER_INLINE bool
+extern JS_NEVER_INLINE bool
 Interpret(JSContext *cx, StackFrame *stopFp, InterpMode mode = JSINTERP_NORMAL);
 
-extern JS_REQUIRES_STACK bool
+extern bool
 RunScript(JSContext *cx, JSScript *script, StackFrame *fp);
 
 extern bool
-CheckRedeclaration(JSContext *cx, JSObject *obj, jsid id, uintN attrs);
+StrictlyEqual(JSContext *cx, const Value &lval, const Value &rval, bool *equal);
 
 extern bool
-StrictlyEqual(JSContext *cx, const Value &lval, const Value &rval, JSBool *equal);
-
-extern bool
-LooselyEqual(JSContext *cx, const Value &lval, const Value &rval, JSBool *equal);
+LooselyEqual(JSContext *cx, const Value &lval, const Value &rval, bool *equal);
 
 /* === except that NaN is the same as NaN and -0 is not the same as +0. */
 extern bool
-SameValue(JSContext *cx, const Value &v1, const Value &v2, JSBool *same);
+SameValue(JSContext *cx, const Value &v1, const Value &v2, bool *same);
 
 extern JSType
 TypeOfValue(JSContext *cx, const Value &v);
 
 extern JSBool
-HasInstance(JSContext *cx, JSObject *obj, const js::Value *v, JSBool *bp);
-
-extern bool
-ValueToId(JSContext *cx, const Value &v, jsid *idp);
+HasInstance(JSContext *cx, HandleObject obj, const js::Value *v, JSBool *bp);
 
 /*
- * @param closureLevel      The static level of the closure that the cookie
- *                          pertains to.
- * @param cookie            Level amount is a "skip" (delta) value from the
- *                          closure level.
- * @return  The value of the upvar.
- */
-extern const Value &
-GetUpvar(JSContext *cx, uintN level, UpvarCookie cookie);
-
-/* Search the call stack for the nearest frame with static level targetLevel. */
-extern StackFrame *
-FindUpvarFrame(JSContext *cx, uintN targetLevel);
-
-} /* namespace js */
-
-/*
- * JS_LONE_INTERPRET indicates that the compiler should see just the code for
- * the js_Interpret function when compiling jsinterp.cpp. The rest of the code
- * from the file should be visible only when compiling jsinvoke.cpp. It allows
- * platform builds to optimize selectively js_Interpret when the granularity
- * of the optimizations with the given compiler is a compilation unit.
+ * A linked list of the |FrameRegs regs;| variables belonging to all
+ * js::Interpret C++ frames on this thread's stack.
  *
- * JS_STATIC_INTERPRET is the modifier for functions defined in jsinterp.cpp
- * that only js_Interpret calls. When JS_LONE_INTERPRET is true all such
- * functions are declared below.
+ * Note that this is *not* a list of all JS frames running under the
+ * interpreter; that would include inlined frames, whose FrameRegs are
+ * saved in various pieces in various places. Rather, this lists each
+ * js::Interpret call's live 'regs'; when control returns to that call, it
+ * will resume execution with this 'regs' instance.
+ *
+ * When Debugger puts a script in single-step mode, all js::Interpret
+ * invocations that might be presently running that script must have
+ * interrupts enabled. It's not practical to simply check
+ * script->stepModeEnabled() at each point some callee could have changed
+ * it, because there are so many places js::Interpret could possibly cause
+ * JavaScript to run: each place an object might be coerced to a primitive
+ * or a number, for example. So instead, we simply expose a list of the
+ * 'regs' those frames are using, and let Debugger tweak the affected
+ * js::Interpret frames when an onStep handler is established.
+ *
+ * Elements of this list are allocated within the js::Interpret stack
+ * frames themselves; the list is headed by this thread's js::ThreadData.
  */
-#ifndef JS_LONE_INTERPRET
-# ifdef _MSC_VER
-#  define JS_LONE_INTERPRET 0
-# else
-#  define JS_LONE_INTERPRET 1
-# endif
-#endif
+class InterpreterFrames {
+  public:
+    class InterruptEnablerBase {
+      public:
+        virtual void enable() const = 0;
+    };
 
-#if !JS_LONE_INTERPRET
-# define JS_STATIC_INTERPRET    static
-#else
-# define JS_STATIC_INTERPRET
+    InterpreterFrames(JSContext *cx, FrameRegs *regs, const InterruptEnablerBase &enabler);
+    ~InterpreterFrames();
 
-extern JS_REQUIRES_STACK JSBool
-js_EnterWith(JSContext *cx, jsint stackIndex, JSOp op, size_t oplen);
+    /* If this js::Interpret frame is running |script|, enable interrupts. */
+    inline void enableInterruptsIfRunning(JSScript *script);
+    inline void enableInterruptsUnconditionally() { enabler.enable(); }
 
-extern JS_REQUIRES_STACK void
-js_LeaveWith(JSContext *cx);
+    InterpreterFrames *older;
 
-/*
- * Find the results of incrementing or decrementing *vp. For pre-increments,
- * both *vp and *vp2 will contain the result on return. For post-increments,
- * vp will contain the original value converted to a number and vp2 will get
- * the result. Both vp and vp2 must be roots.
- */
-extern JSBool
-js_DoIncDec(JSContext *cx, const JSCodeSpec *cs, js::Value *vp, js::Value *vp2);
+  private:
+    JSContext *context;
+    FrameRegs *regs;
+    const InterruptEnablerBase &enabler;
+};
 
-#endif /* JS_LONE_INTERPRET */
 /*
  * Unwind block and scope chains to match the given depth. The function sets
  * fp->sp on return to stackDepth.
  */
-extern JS_REQUIRES_STACK JSBool
-js_UnwindScope(JSContext *cx, jsint stackDepth, JSBool normalUnwind);
+extern void
+UnwindScope(JSContext *cx, uint32_t stackDepth);
 
-extern JSBool
-js_OnUnknownMethod(JSContext *cx, js::Value *vp);
+/*
+ * Unwind for an uncatchable exception. This means not running finalizers, etc;
+ * just preserving the basic engine stack invariants.
+ */
+extern void
+UnwindForUncatchableException(JSContext *cx, const FrameRegs &regs);
 
-extern JS_REQUIRES_STACK js::Class *
-js_IsActiveWithOrBlock(JSContext *cx, JSObject *obj, int stackDepth);
+extern bool
+OnUnknownMethod(JSContext *cx, HandleObject obj, Value idval, MutableHandleValue vp);
+
+class TryNoteIter
+{
+    const FrameRegs &regs;
+    JSScript *script;
+    uint32_t pcOffset;
+    JSTryNote *tn, *tnEnd;
+    void settle();
+  public:
+    TryNoteIter(const FrameRegs &regs);
+    bool done() const;
+    void operator++();
+    JSTryNote *operator*() const { return tn; }
+};
+
+/************************************************************************/
+
+/*
+ * To really poison a set of values, using 'magic' or 'undefined' isn't good
+ * enough since often these will just be ignored by buggy code (see bug 629974)
+ * in debug builds and crash in release builds. Instead, we use a safe-for-crash
+ * pointer.
+ */
+static JS_ALWAYS_INLINE void
+Debug_SetValueRangeToCrashOnTouch(Value *beg, Value *end)
+{
+#ifdef DEBUG
+    for (Value *v = beg; v != end; ++v)
+        v->setObject(*reinterpret_cast<JSObject *>(0x42));
+#endif
+}
+
+static JS_ALWAYS_INLINE void
+Debug_SetValueRangeToCrashOnTouch(Value *vec, size_t len)
+{
+#ifdef DEBUG
+    Debug_SetValueRangeToCrashOnTouch(vec, vec + len);
+#endif
+}
+
+static JS_ALWAYS_INLINE void
+Debug_SetValueRangeToCrashOnTouch(HeapValue *vec, size_t len)
+{
+#ifdef DEBUG
+    Debug_SetValueRangeToCrashOnTouch((Value *) vec, len);
+#endif
+}
+
+}  /* namespace js */
 
 #endif /* jsinterp_h___ */

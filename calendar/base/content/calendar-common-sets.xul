@@ -1,43 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- ***** BEGIN LICENSE BLOCK *****
-   - Version: MPL 1.1/GPL 2.0/LGPL 2.1
-   -
-   - The contents of this file are subject to the Mozilla Public License Version
-   - 1.1 (the "License"); you may not use this file except in compliance with
-   - the License. You may obtain a copy of the License at
-   - http://www.mozilla.org/MPL/
-   -
-   - Software distributed under the License is distributed on an "AS IS" basis,
-   - WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-   - for the specific language governing rights and limitations under the
-   - License.
-   -
-   - The Original Code is Mozilla Calendar code.
-   -
-   - The Initial Developer of the Original Code is
-   -   Philipp Kewisch <mozilla@kewis.ch>
-   - Portions created by the Initial Developer are Copyright (C) 2007
-   - the Initial Developer. All Rights Reserved.
-   -
-   - Contributor(s):
-   - Simon Paquet <bugzilla@babylonsounds.com>
-   - Berend Cornelius <berend.cornelius@sun.com>
-   - Martin Schroeder <mschroeder@mozilla.x-home.org>
-   - Matthew Mecca <matthew.mecca@gmail.com>
-   -
-   - Alternatively, the contents of this file may be used under the terms of
-   - either the GNU General Public License Version 2 or later (the "GPL"), or
-   - the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-   - in which case the provisions of the GPL or the LGPL are applicable instead
-   - of those above. If you wish to allow use of your version of this file only
-   - under the terms of either the GPL or the LGPL, and not to allow others to
-   - use your version of this file under the terms of the MPL, indicate your
-   - decision by deleting the provisions above and replace them with the notice
-   - and other provisions required by the LGPL or the GPL. If you do not delete
-   - the provisions above, a recipient may use your version of this file under
-   - the terms of any one of the MPL, the GPL or the LGPL.
-   -
-   - ***** END LICENSE BLOCK ***** -->
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
 
 <!DOCTYPE overlay [
   <!ENTITY % calendarDTD SYSTEM "chrome://calendar/locale/calendar.dtd" > %calendarDTD;
@@ -112,6 +76,10 @@
     <command id="calendar_priority-1_command" oncommand="contextChangeTaskPriority(event, 1)"/>
     <command id="calendar_general-priority_command" oncommand="goDoCommand('calendar_general-priority_command')"/>
     <command id="calendar_general-progress_command" oncommand="goDoCommand('calendar_general-priority_command')"/>
+    <command id="calendar_general-postpone_command"/>
+    <command id="calendar_postpone-1hour_command" oncommand="contextPostponeTask(event, 'PT1H')"/>
+    <command id="calendar_postpone-1day_command" oncommand="contextPostponeTask(event, 'P1D')"/>
+    <command id="calendar_postpone-1week_command" oncommand="contextPostponeTask(event, 'P1W')"/>
     <command id="calendar_toggle_orientation_command" persist="checked" oncommand="goDoCommand('calendar_toggle_orientation_command')"/>
     <command id="calendar_toggle_workdays_only_command" persist="checked" oncommand="goDoCommand('calendar_toggle_workdays_only_command')"/>
     <command id="calendar_toggle_tasks_in_view_command" persist="checked" oncommand="toggleTasksInView()"/>
@@ -389,6 +357,25 @@
                 key="calendar-new-todo-key"
                 command="calendar_new_todo_todaypane_command"
                 observes="calendar_new_todo_todaypane_command"/>
+      <menuseparator id="task-context-menuseparator-cutcopypaste"/>
+      <menuitem id="task-context-menu-cut-menuitem"
+                label="&calendar.context.cutevent.label;"
+                accesskey="&calendar.context.cutevent.accesskey;"
+                key="key_cut"
+                observes="cmd_cut"
+                command="cmd_cut"/>
+      <menuitem id="task-context-menu-copy-menuitem"
+                label="&calendar.context.copyevent.label;"
+                accesskey="&calendar.context.copyevent.accesskey;"
+                key="key_copy"
+                observes="cmd_copy"
+                command="cmd_copy"/>
+      <menuitem id="task-context-menu-paste-menuitem"
+                label="&calendar.context.pasteevent.label;"
+                accesskey="&calendar.context.pasteevent.accesskey;"
+                key="key_paste"
+                observes="cmd_paste"
+                command="cmd_paste"/>
       <menuseparator id="calendar-menuseparator-beforemarkcompleted"/>
       <menuitem id="calendar-context-markcompleted"
                 type="checkbox"
@@ -406,6 +393,24 @@
             label="&calendar.context.priority.label;"
             accesskey="&calendar.context.priority.accesskey;">
         <menupopup id="priority-menupopup" type="task-priority"/>
+      </menu>
+      <menu id="task-context-menu-postpone"
+            label="&calendar.context.postpone.label;"
+            accesskey="&calendar.context.postpone.accesskey;">
+        <menupopup id="task-context-postpone-menupopup">
+          <menuitem id="task-context-postpone-1hour"
+                    label="&calendar.context.postpone.1hour.label;"
+                    accesskey="&calendar.context.postpone.1hour.accesskey;"
+                    observes="calendar_postpone-1hour_command"/>
+          <menuitem id="task-context-postpone-1day"
+                    label="&calendar.context.postpone.1day.label;"
+                    accesskey="&calendar.context.postpone.1day.accesskey;"
+                    observes="calendar_postpone-1day_command"/>
+          <menuitem id="task-context-postpone-1week"
+                    label="&calendar.context.postpone.1week.label;"
+                    accesskey="&calendar.context.postpone.1week.accesskey;"
+                    observes="calendar_postpone-1week_command"/>
+        </menupopup>
       </menu>
       <menu id="calendar-context-calendar-menu"
             label="&calendar.calendar.label;"
@@ -507,14 +512,14 @@
                     accesskey="&calendar.task.filter.current.accesskey;"/>
           <menuitem id="task-context-menu-filter-todaypane-today"
                     name="filtergrouptodaypane"
-                    value="today"
+                    value="throughtoday"
                     type="radio"
                     command="calendar_task_filter_todaypane_command"
                     label="&calendar.task.filter.today.label;"
                     accesskey="&calendar.task.filter.today.accesskey;"/>
           <menuitem id="task-context-menu-filter-todaypane-next7days"
                     name="filtergrouptodaypane"
-                    value="next7days"
+                    value="throughsevendays"
                     type="radio"
                     command="calendar_task_filter_todaypane_command"
                     label="&calendar.task.filter.next7days.label;"
@@ -556,6 +561,14 @@
                     accesskey="&calendar.task.filter.all.accesskey;"/>
         </menupopup>
       </menu>
+    </menupopup>
+
+    <!-- TASKVIEW LINK CONTEXT MENU -->
+    <menupopup id="taskview-link-context-menu">
+      <menuitem id="taskview-link-context-menu-copy"
+                label="&calendar.copylink.label;"
+                accesskey="&calendar.copylink.accesskey;"
+                oncommand="taskViewCopyLink(document.popupNode)"/>
     </menupopup>
   </popupset>
 </overlay>

@@ -1,49 +1,9 @@
 /** ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jan Varga (varga@nixcorp.com)
- *   Håkan Waara (hwaara@chello.se)
- *   Neil Rashbrook (neil@parkwaycc.co.uk)
- *   Seth Spitzer <sspitzer@netscape.com>
- *   David Bienvenu <bienvenu@nventure.com>
- *   Jeremy Morton <bugzilla@game-point.net>
- *   Steffen Wilberg <steffen.wilberg@web.de>
- *   Joachim Herb <herb@leo.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-Components.utils.import("resource://gre/modules/folderUtils.jsm");
+Components.utils.import("resource:///modules/folderUtils.jsm");
 Components.utils.import("resource:///modules/activity/activityModules.js");
 Components.utils.import("resource:///modules/jsTreeSelection.js");
 Components.utils.import("resource:///modules/MailConsts.js");
@@ -51,7 +11,9 @@ Components.utils.import("resource:///modules/errUtils.js");
 Components.utils.import("resource:///modules/IOUtils.js");
 Components.utils.import("resource:///modules/mailnewsMigrator.js");
 Components.utils.import("resource:///modules/sessionStoreManager.js");
+Components.utils.import("resource:///modules/summaryFrameManager.js");
 Components.utils.import("resource:///modules/mailInstrumentation.js");
+Components.utils.import("resource:///modules/msgDBCacheManager.js");
 
 /* This is where functions related to the 3 pane window are kept */
 
@@ -69,6 +31,9 @@ const kNumFolderViews = 4; // total number of folder views
 /** widget with id=messagepanebox, initialized by GetMessagePane() */
 var gMessagePane;
 
+/** widget with id=messagepaneboxwrapper, initialized by GetMessagePaneWrapper() */
+var gMessagePaneWrapper;
+
 var gThreadAndMessagePaneSplitter = null;
 /**
  * Tracks whether the right mouse button changed the selection or not.  If the
@@ -84,6 +49,9 @@ var gRightMouseButtonSavedSelection = null;
 var gNewAccountToLoad = null;
 
 var gDisplayStartupPage = false;
+
+// The object in charge of managing the mail summary pane
+var gSummaryFrameManager;
 
 // the folderListener object
 var folderListener = {
@@ -199,11 +167,13 @@ function UpdateMailPaneConfig(aMsgWindowInitialized) {
   const dynamicIds = ["messagesBox", "mailContent", "threadPaneBox"];
   const layouts = ["standard", "wide", "vertical"];
   var layoutView = gPrefBranch.getIntPref("mail.pane_config.dynamic");
+  // Ensure valid value; hard fail if not.
+  layoutView = dynamicIds[layoutView] ? layoutView : kStandardPaneConfig;
   var desiredId = dynamicIds[layoutView];
   document.getElementById("mailContent")
           .setAttribute("layout", layouts[layoutView]);
-  var messagePane = GetMessagePane();
-  if (messagePane.parentNode.id != desiredId) {
+  var messagePaneBoxWrapper = GetMessagePaneWrapper();
+  if (messagePaneBoxWrapper.parentNode.id != desiredId) {
     ClearAttachmentList();
     var hdrToolbox = document.getElementById("header-view-toolbox");
     var hdrToolbar = document.getElementById("header-view-toolbar");
@@ -231,12 +201,12 @@ function UpdateMailPaneConfig(aMsgWindowInitialized) {
     }
 
     // See Bug 381992. The ctor for the browser element will fire again when we
-    // re-insert the messagePaneBox back into the document.  But the dtor
+    // re-insert the messagePaneBoxWrapper back into the document.  But the dtor
     // doesn't fire when the element is removed from the document.  Manually
     // call destroy here to avoid a nasty leak.
     document.getElementById("messagepane").destroy();
     desiredParent.appendChild(messagePaneSplitter);
-    desiredParent.appendChild(messagePane);
+    desiredParent.appendChild(messagePaneBoxWrapper);
     hdrToolbox.palette  = cloneToolboxPalette;
     hdrToolbox.toolbarset = cloneToolbarset;
     hdrToolbar = document.getElementById("header-view-toolbar");
@@ -273,12 +243,20 @@ function UpdateMailPaneConfig(aMsgWindowInitialized) {
       let threadPaneBox = document.getElementById("threadPaneBox");
       let overflowNodes =
         threadPaneBox.querySelectorAll("[onoverflow]");
+
       for (let iNode = 0; iNode < overflowNodes.length; iNode++) {
         let node = overflowNodes[iNode];
-        if (node.scrollWidth > node.clientWidth)
-          node.onoverflow();
-        else if (node.onresize)
-          node.onresize();
+
+        if (node.scrollWidth > node.clientWidth) {
+          let e = document.createEvent("HTMLEvents");
+          e.initEvent("overflow", false, false);
+          node.dispatchEvent(e);
+        }
+        else if (node.onresize) {
+          let e = document.createEvent("HTMLEvents");
+          e.initEvent("resize", false, false);
+          node.dispatchEvent(e);
+        }
       }
     }, 1500);
   }
@@ -309,9 +287,41 @@ const MailPrefObserver = {
   }
 };
 
+/**
+ * Called on startup if there are no accounts.
+ */
 function AutoConfigWizard(okCallback)
 {
-  NewMailAccount(msgWindow, okCallback);
+  let suppressDialogs = false;
+
+  // Try to get the suppression pref that we stashed away in accountProvisionerTab.js.
+  // If it doesn't exist, nsIPrefBranch throws, so we eat it silently and move along.
+  try {
+    suppressDialogs = Services.prefs.getBoolPref("mail.provider.suppress_dialog_on_startup");
+  } catch(e) {};
+
+  if (suppressDialogs) {
+    // Looks like we were in the middle of filling out an account form. We
+    // won't display the dialogs in that case.
+    Services.prefs.clearUserPref("mail.provider.suppress_dialog_on_startup");
+    okCallback();
+    return;
+  }
+
+  if (gPrefBranch.getBoolPref("mail.provider.enabled")) {
+    Services.obs.addObserver({
+      observe: function(aSubject, aTopic, aData) {
+        if (aTopic == "mail-tabs-session-restored" && aSubject === window) {
+          // We're done here, unregister this observer.
+          Services.obs.removeObserver(this, "mail-tabs-session-restored");
+          NewMailAccountProvisioner(msgWindow, { okCallback: null });
+        }
+      }
+    }, "mail-tabs-session-restored", false);
+    okCallback();
+  }
+  else
+    NewMailAccount(msgWindow, okCallback);
 }
 
 /**
@@ -320,12 +330,12 @@ function AutoConfigWizard(okCallback)
 function OnLoadMessenger()
 {
   migrateMailnews();
-
+  // Rig up our TabsInTitlebar early so that we can catch any resize events.
+  TabsInTitlebar.init();
   // update the pane config before we exit onload otherwise the user may see a flicker if we poke the document
   // in delayedOnLoadMessenger...
   UpdateMailPaneConfig(false);
   document.loadBindingDocument('chrome://global/content/bindings/textbox.xml');
-
   // Set a sane starting width/height for all resolutions on new profiles.
   // Do this before the window loads.
   if (!document.documentElement.hasAttribute("width"))
@@ -345,14 +355,14 @@ function OnLoadMessenger()
     document.documentElement.setAttribute("screenY", screen.availTop);
   }
 
-  gPrefBranch.QueryInterface(Components.interfaces.nsIPrefBranch2);
   gPrefBranch.addObserver("mail.pane_config.dynamic", MailPrefObserver, false);
   gPrefBranch.addObserver("mail.showCondensedAddresses", MailPrefObserver,
                           false);
 
   MailOfflineMgr.init();
   CreateMailWindowGlobals();
-  GetMessagePane().collapsed = true;
+  GetMessagePaneWrapper().collapsed = true;
+  msgDBCacheManager.init();
 
   // This needs to be before we throw up the account wizard on first run.
   try {
@@ -378,11 +388,6 @@ function OnLoadMessenger()
     tabmail.openFirstTab();
   }
 
-  // verifyAccounts returns true if the callback won't be called
-  // We also don't want the account wizard to open if any sort of account exists
-  if (verifyAccounts(LoadPostAccountWizard, false, AutoConfigWizard))
-    LoadPostAccountWizard();
-
   // Install the light-weight theme handlers
   let panelcontainer = document.getElementById("tabpanelcontainer");
   if (panelcontainer) {
@@ -394,8 +399,22 @@ function OnLoadMessenger()
                                     LightWeightThemeWebInstaller, false, true);
   }
 
+  Services.obs.addObserver(gPluginHandler.pluginCrashed, "plugin-crashed", false);
+
   // This also registers the contentTabType ("contentTab")
   specialTabs.openSpecialTabsOnStartup();
+  webSearchTabType.initialize();
+  tabmail.registerTabType(accountProvisionerTabType);
+
+  // verifyAccounts returns true if the callback won't be called
+  // We also don't want the account wizard to open if any sort of account exists
+  if (verifyAccounts(LoadPostAccountWizard, false, AutoConfigWizard))
+    LoadPostAccountWizard();
+
+  // Set up the summary frame manager to handle loading pages in the
+  // multi-message pane
+  gSummaryFrameManager = new SummaryFrameManager(
+                         document.getElementById("multimessage"));
 
   window.addEventListener("AppCommand", HandleAppCommandEvent, true);
 }
@@ -411,9 +430,10 @@ function LoadPostAccountWizard()
   MigrateFolderViews();
   MigrateOpenMessageBehavior();
   Components.utils.import("resource:///modules/mailMigrator.js");
-  MailMigrator.migrateMail();
+  MailMigrator.migratePostAccountWizard();
 
   accountManager.setSpecialFolders();
+
   try {
     accountManager.loadVirtualFolders();
   } catch (e) {Components.utils.reportError(e);}
@@ -574,21 +594,27 @@ function FindOther3PaneWindow()
  */
 function OnUnloadMessenger()
 {
+  Services.obs.notifyObservers(window, "mail-unloading-messenger", null);
   accountManager.removeIncomingServerListener(gThreePaneIncomingServerListener);
-  gPrefBranch.QueryInterface(Components.interfaces.nsIPrefBranch2);
   gPrefBranch.removeObserver("mail.pane_config.dynamic", MailPrefObserver);
   gPrefBranch.removeObserver("mail.showCondensedAddresses", MailPrefObserver);
 
   sessionStoreManager.unloadingWindow(window);
 
+  TabsInTitlebar.uninit();
+
   let tabmail = document.getElementById("tabmail");
   tabmail._teardown();
+
+  webSearchTabType.shutdown();
 
   var mailSession = Components.classes["@mozilla.org/messenger/services/session;1"]
                               .getService(Components.interfaces.nsIMsgMailSession);
   mailSession.RemoveFolderListener(folderListener);
 
   gPhishingDetector.shutdown();
+
+  Services.obs.removeObserver(gPluginHandler.pluginCrashed, "plugin-crashed");
 
   // FIX ME - later we will be able to use onload from the overlay
   OnUnloadMsgHeaderPane();
@@ -635,7 +661,7 @@ function atStartupRestoreTabs(aDontRestoreFirstTab) {
 
   // it's now safe to load extra Tabs.
   setTimeout(loadExtraTabs, 0);
-
+  Services.obs.notifyObservers(window, "mail-tabs-session-restored", null);
   return state ? true : false;
 }
 
@@ -726,17 +752,23 @@ function loadStartFolder(initialUri)
 
     // If a URI was explicitly specified, we'll just clobber the default tab
     let loadFolder = !atStartupRestoreTabs(!!initialUri);
+
     if (initialUri)
       loadFolder = true;
 
     //First get default account
     try
     {
+
         if(initialUri)
             startFolder = GetMsgFolderFromUri(initialUri);
         else
         {
-            var defaultAccount = accountManager.defaultAccount;
+            try {
+                var defaultAccount = accountManager.defaultAccount;
+            } catch (x) {
+                return; // exception caused by no default account, ignore it.
+            }
 
             defaultServer = defaultAccount.incomingServer;
             var rootMsgFolder = defaultServer.rootMsgFolder;
@@ -801,8 +833,7 @@ function loadStartFolder(initialUri)
         return;
       }
 
-      dump(ex);
-      dump('Exception in LoadStartFolder caused by no default account.  We know about this\n');
+      Components.utils.reportError(ex);
     }
 
     MsgGetMessagesForAllServers(defaultServer);
@@ -883,18 +914,10 @@ function UpgradeProfileAndBeUglyAboutIt()
   var threadPaneUIVersion;
 
   try {
-
     threadPaneUIVersion = gPrefBranch.getIntPref("mailnews.ui.threadpane.version");
-
     if (threadPaneUIVersion < 7)
     {
-      // Open a dialog explaining the major changes from version 2.
-      if (gPrefBranch.getBoolPref("mail.ui.show.migration.on.upgrade"))
-        // But let the main window finish opening first.
-        setTimeout(openFeatureConfigurator, 0, [true,]);
-
       gPrefBranch.setIntPref("mailnews.ui.threadpane.version", 7);
-
     } // version 7 upgrades
   }
   catch (ex) {
@@ -929,6 +952,13 @@ function GetMessagePane()
   if (!gMessagePane)
     gMessagePane = document.getElementById("messagepanebox");
   return gMessagePane;
+}
+
+function GetMessagePaneWrapper()
+{
+  if (!gMessagePaneWrapper)
+    gMessagePaneWrapper = document.getElementById("messagepaneboxwrapper");
+  return gMessagePaneWrapper;
 }
 
 function GetMessagePaneFrame()
@@ -1524,21 +1554,6 @@ var LightWeightThemeWebInstaller = {
     let pm = Components.classes["@mozilla.org/permissionmanager;1"]
       .getService(Components.interfaces.nsIPermissionManager);
 
-    let prefs = [["xpinstall.whitelist.add", pm.ALLOW_ACTION],
-                 ["xpinstall.whitelist.add.36", pm.ALLOW_ACTION],
-                 ["xpinstall.blacklist.add", pm.DENY_ACTION]];
-
-    prefs.forEach(function ([pref, permission]) {
-      let hosts = Application.prefs.getValue(pref, "");
-      if (hosts) {
-        hosts.split(",").forEach(function (host) {
-          pm.add(makeURI("http://" + host.trim()), "install", permission);
-        });
-
-        Application.prefs.setValue(pref, "");
-      }
-    });
-
     let uri = node.ownerDocument.documentURIObject;
     return pm.testPermission(uri, "install") == pm.ALLOW_ACTION;
   },
@@ -1558,4 +1573,125 @@ var LightWeightThemeWebInstaller = {
     return this._manager.parseTheme(node.getAttribute("data-browsertheme"),
                                     node.baseURI);
   }
+}
+
+/**
+ * Initialize and attach the HTML5 context menu to the specified menupopup
+ * during the onpopupshowing event.
+ *
+ * @param menuPopup the menupopup element
+ * @param event the event responsible for showing the popup
+ */
+function InitPageMenu(menuPopup, event) {
+  if (event.target != menuPopup)
+    return;
+
+  PageMenu.maybeBuildAndAttachMenu(menuPopup.triggerNode, menuPopup);
+
+  if (menuPopup.children.length == 0)
+    event.preventDefault();
+}
+
+let TabsInTitlebar = {
+  init: function () {
+#ifdef CAN_DRAW_IN_TITLEBAR
+    // Don't trust the initial value of the sizemode attribute; wait for the resize event.
+    this._readPref();
+    Services.prefs.addObserver(this._prefName, this, false);
+
+    this.allowedBy("sizemode", false);
+    window.addEventListener("resize", function (event) {
+      if (event.target != window)
+        return;
+      TabsInTitlebar.allowedBy("sizemode", true);
+    }, false);
+
+    this._initialized = true;
+#endif
+  },
+
+  allowedBy: function (condition, allow) {
+#ifdef CAN_DRAW_IN_TITLEBAR
+    if (allow) {
+      if (condition in this._disallowed) {
+        delete this._disallowed[condition];
+        this._update();
+      }
+    } else {
+      if (!(condition in this._disallowed)) {
+        this._disallowed[condition] = null;
+        this._update();
+      }
+    }
+#endif
+  },
+
+  _initialized: false,
+  _disallowed: {},
+  _prefName: 'mail.tabs.drawInTitlebar',
+
+  get enabled() {
+    return document.documentElement.getAttribute('tabsintitlebar') == 'true';
+  },
+
+  _readPref: function() {
+    this.allowedBy('pref', Services.prefs.getBoolPref(this._prefName));
+  },
+
+  observe: function(aSubject, aTopic, aData) {
+    if (aTopic == 'nsPref:changed')
+      this._readPref();
+  },
+
+  _update: function() {
+#ifdef CAN_DRAW_IN_TITLEBAR
+    if (!this._initialized || window.fullScreen)
+      return;
+
+    let allowed = Object.keys(this._disallowed).length == 0;
+    if (allowed == this.enabled)
+      return;
+
+    function $(id) document.getElementById(id);
+    let titlebar = $("titlebar");
+
+    if (allowed) {
+      document.documentElement.setAttribute('tabsintitlebar', 'true');
+      document.documentElement.setAttribute('chromemargin', '0,2,2,2');
+      function rect(ele) ele.getBoundingClientRect();
+
+      let captionButtonsBox = $("titlebar-buttonbox");
+      this._sizePlaceholder("caption-buttons", rect(captionButtonsBox).width);
+
+      let titlebarRect = rect(titlebar);
+      titlebar.style.marginBottom = - (titlebarRect.height - 16) + "px";
+    } else {
+      document.documentElement.removeAttribute('tabsintitlebar');
+      document.documentElement.removeAttribute('chromemargin');
+      titlebar.style.marginBottom = "";
+    }
+#endif
+  },
+
+  _sizePlaceholder: function (type, width) {
+#ifdef CAN_DRAW_IN_TITLEBAR
+    Array.forEach(document.querySelectorAll(".titlebar-placeholder[type='"+ type +"']"),
+                  function (node) { node.width = width; });
+#endif
+  },
+
+  uninit: function () {
+#ifdef CAN_DRAW_IN_TITLEBAR
+    this._initialized = false;
+    Services.prefs.removeObserver(this._prefName, this);
+#endif
+  }
+};
+
+/* Draw */
+function onTitlebarMaxClick() {
+  if (window.windowState == window.STATE_MAXIMIZED)
+    window.restore();
+  else
+    window.maximize();
 }

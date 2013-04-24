@@ -1,9 +1,13 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 function MultiplexHandler(aEvent)
 {
     MultiplexHandlerEx(
         aEvent,
         function Browser_SelectDetector(event) {
-            BrowserSetForcedDetector(true/*Reload from history*/);
+            BrowserCharsetReload();
             /* window.content.location.reload() will re-download everything */
             SelectDetector(event, null);
         },

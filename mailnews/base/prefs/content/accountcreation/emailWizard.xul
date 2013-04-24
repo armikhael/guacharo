@@ -1,39 +1,7 @@
 <?xml version="1.0"?>
-<!-- ***** BEGIN LICENSE BLOCK *****
-   - Version: MPL 1.1/GPL 2.0/LGPL 2.1
-   -
-   - The contents of this file are subject to the Mozilla Public License Version
-   - 1.1 (the "License"); you may not use this file except in compliance with
-   - the License. You may obtain a copy of the License at
-   - http://www.mozilla.org/MPL/
-   -
-   - Software distributed under the License is distributed on an "AS IS" basis,
-   - WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-   - for the specific language governing rights and limitations under the
-   - License.
-   -
-   - The Original Code is mozilla.org code.
-   -
-   - The Initial Developer of the Original Code is
-   - Ben Bucksch <mozilla bucksch.org>.
-   - Portions created by the Initial Developer are Copyright (C) 2008
-   - the Initial Developer. All Rights Reserved.
-   -
-   - Contributor(s):
-   -
-   - Alternatively, the contents of this file may be used under the terms of
-   - either the GNU General Public License Version 2 or later (the "GPL"), or
-   - the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-   - in which case the provisions of the GPL or the LGPL are applicable instead
-   - of those above. If you wish to allow use of your version of this file only
-   - under the terms of either the GPL or the LGPL, and not to allow others to
-   - use your version of this file under the terms of the MPL, indicate your
-   - decision by deleting the provisions above and replace them with the notice
-   - and other provisions required by the LGPL or the GPL. If you do not delete
-   - the provisions above, a recipient may use your version of this file under
-   - the terms of any one of the MPL, the GPL or the LGPL.
-   -
-   - ***** END LICENSE BLOCK ***** -->
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
 
 <?xml-stylesheet href="chrome://global/skin/" type="text/css"?>
 <?xml-stylesheet href="chrome://messenger/skin/accountCreation.css"
@@ -88,6 +56,8 @@
           src="chrome://messenger/content/accountcreation/createInBackend.js"/>
   <script type="application/javascript"
           src="chrome://messenger/content/accountcreation/MyBadCertHandler.js"/>
+  <script type="application/javascript"
+          src="chrome://messenger/content/accountUtils.js" />
 
   <keyset id="mailKeys">
     <key keycode="VK_ESCAPE" oncommand="window.close();"/>
@@ -155,66 +125,79 @@
   <spacer id="fullwidth"/>
 
   <vbox id="mastervbox" class="mastervbox" flex="1">
-    <groupbox id="initialSettings">
-      <hbox align="center">
-        <label accesskey="&name.accesskey;"
-               class="autoconfigLabel"
-               value="&name.label;"
-               control="realname"/>
-        <textbox id="realname"
-                 class="padded"
-                 placeholder="&name.placeholder;"
-                 oninput="gEmailConfigWizard.onInputRealname();"
-                 onblur="gEmailConfigWizard.onBlurRealname();"/>
-        <description id="nametext" class="initialDesc">&name.text;</description>
-        <image id="nameerroricon"
-               hidden="true"
-               src="chrome://global/skin/icons/warning-16.png"/>
-        <description id="nameerror" class="errordescription" hidden="true"/>
-      </hbox>
-      <hbox align="center">
-        <label accesskey="&email.accesskey;"
-               class="autoconfigLabel"
-               value="&email.label;"
-               control="email"/>
-        <textbox id="email"
-                 class="padded uri-element"
-                 placeholder="&email.placeholder;"
-                 oninput="gEmailConfigWizard.onInputEmail();"
-                 onblur="gEmailConfigWizard.onBlurEmail();"/>
-        <image id="emailerroricon"
-               hidden="true"
-               src="chrome://global/skin/icons/warning-16.png"/>
-        <description id="emailerror" class="errordescription" hidden="true"/>
-      </hbox>
-      <hbox align="center">
-        <!-- this starts out as text so the emptytext shows, but then
-             changes to type=password once it's not empty -->
-        <label accesskey="&password.accesskey;"
-               class="autoconfigLabel"
-               value="&password.label;"
-               control="password"
-               tooltip="optional-password"/>
-        <textbox id="password"
-                 class="padded"
-                 placeholder="&password.placeholder;"
-                 type="text"
-                 oninput="gEmailConfigWizard.onInputPassword();"
-                 onfocus="gEmailConfigWizard.onFocusPassword();"
-                 onblur="gEmailConfigWizard.onBlurPassword();"/>
-        <image id="passworderroricon"
-               hidden="true"
-               src="chrome://global/skin/icons/warning-16.png"/>
-        <description id="passworderror" class="errordescription" hidden="true"/>
-      </hbox>
-      <hbox align="center" pack="start">
-        <label class="autoconfigLabel"/>
-        <checkbox id="remember_password"
-                  label="&rememberPassword.label;"
-                  accesskey="&rememberPassword.accesskey;"
-                  checked="true"/>
-      </hbox>
-    </groupbox>
+    <grid id="initialSettings">
+      <columns>
+        <column/>
+        <column/>
+        <column/>
+      </columns>
+      <rows>
+        <row align="center">
+          <label accesskey="&name.accesskey;"
+                 class="autoconfigLabel"
+                 value="&name.label;"
+                 control="realname"/>
+          <textbox id="realname"
+                   class="padded"
+                   placeholder="&name.placeholder;"
+                   oninput="gEmailConfigWizard.onInputRealname();"
+                   onblur="gEmailConfigWizard.onBlurRealname();"/>
+          <hbox>
+            <description id="nametext" class="initialDesc">&name.text;</description>
+            <image id="nameerroricon"
+                   hidden="true"
+                   class="warningicon"/>
+            <description id="nameerror" class="errordescription" hidden="true"/>
+          </hbox>
+        </row>
+        <row align="center">
+          <label accesskey="&email.accesskey;"
+                 class="autoconfigLabel"
+                 value="&email.label;"
+                 control="email"/>
+          <textbox id="email"
+                   class="padded uri-element"
+                   placeholder="&email.placeholder;"
+                   oninput="gEmailConfigWizard.onInputEmail();"
+                   onblur="gEmailConfigWizard.onBlurEmail();"/>
+          <hbox>
+            <image id="emailerroricon"
+                   hidden="true"
+                   class="warningicon"/>
+            <description id="emailerror" class="errordescription" hidden="true"/>
+          </hbox>
+        </row>
+        <row align="center">
+          <!-- this starts out as text so the emptytext shows, but then
+               changes to type=password once it's not empty -->
+          <label accesskey="&password.accesskey;"
+                 class="autoconfigLabel"
+                 value="&password.label;"
+                 control="password"
+                 tooltip="optional-password"/>
+          <textbox id="password"
+                   class="padded"
+                   placeholder="&password.placeholder;"
+                   type="text"
+                   oninput="gEmailConfigWizard.onInputPassword();"
+                   onfocus="gEmailConfigWizard.onFocusPassword();"
+                   onblur="gEmailConfigWizard.onBlurPassword();"/>
+          <hbox>
+            <image id="passworderroricon"
+                   hidden="true"
+                   class="warningicon"/>
+            <description id="passworderror" class="errordescription" hidden="true"/>
+          </hbox>
+        </row>
+        <row align="center" pack="start">
+          <label class="autoconfigLabel"/>
+          <checkbox id="remember_password"
+                    label="&rememberPassword.label;"
+                    accesskey="&rememberPassword.accesskey;"
+                    checked="true"/>
+        </row>
+      </rows>
+    </grid>
     <spacer flex="1" />
 
      <hbox id="status_area" flex="1">
@@ -233,18 +216,29 @@
         <radio id="result_select_pop3" label="&pop3Long.label;" value="2"
                oncommand="gEmailConfigWizard.onResultIMAPOrPOP3();"/>
       </radiogroup>
-      <hbox>
-        <label class="textbox-label" value="&incoming.label;"/>
-        <description id="result-incoming" flex="1">&#160;</description>
-      </hbox>
-      <hbox>
-        <label class="textbox-label" value="&outgoing.label;"/>
-        <description id="result-outgoing" flex="1">&#160;</description>
-      </hbox>
-      <hbox>
-        <label class="textbox-label" value="&username.label;"/>
-        <description id="result-username" flex="1">&#160;</description>
-      </hbox>
+      <grid>
+        <columns>
+          <column/>
+          <column flex="1"/>
+        </columns>
+        <rows>
+          <row align="center">
+            <label class="textbox-label" value="&incoming.label;"
+                   control="result-incoming"/>
+            <textbox id="result-incoming" disabled="true" flex="1"/>
+          </row>
+          <row align="center">
+            <label class="textbox-label" value="&outgoing.label;"
+                   control="result-outgoing"/>
+            <textbox id="result-outgoing" disabled="true" flex="1"/>
+          </row>
+          <row align="center">
+            <label class="textbox-label" value="&username.label;"
+                   control="result-username"/>
+            <textbox id="result-username" disabled="true" flex="1"/>
+          </row>
+        </rows>
+      </grid>
     </groupbox>
 
     <groupbox id="manual-edit_area" hidden="true">
@@ -382,6 +376,11 @@
     <spacer flex="1" />
     <hbox id="buttons_area">
       <hbox id="left_buttons_area" align="center" pack="start">
+        <button id="provisioner_button"
+                label="&switch-to-provisioner.label;"
+                accesskey="&switch-to-provisioner.accesskey;"
+                class="larger-button"
+                oncommand="gEmailConfigWizard.onSwitchToProvisioner();"/>
         <button id="manual-edit_button"
                 label="&manual-edit.label;"
                 accesskey="&manual-edit.accesskey;"
@@ -416,8 +415,8 @@
                 hidden="false"
                 oncommand="gEmailConfigWizard.onNext();"/>
         <button id="create_button"
-                label="&createAccount.label;"
-                accesskey="&createAccount.accesskey;"
+                label="&doneAccount.label;"
+                accesskey="&doneAccount.accesskey;"
                 class="important-button"
                 hidden="true"
                 oncommand="gEmailConfigWizard.onCreate();"/>
@@ -471,8 +470,8 @@
                   oncommand="gSecurityWarningDialog.onCancel()"/>
           <spacer flex="1"/>
           <button id="iknow"
-                  label="&createAccount.label;"
-                  accesskey="&createAccount.accesskey;"
+                  label="&doneAccount.label;"
+                  accesskey="&doneAccount.accesskey;"
                   disabled="true"
                   oncommand="gSecurityWarningDialog.onOK()"/>
         </hbox>

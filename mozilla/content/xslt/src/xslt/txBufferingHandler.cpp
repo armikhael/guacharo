@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is TransforMiiX XSLT processor code.
- *
- * The Initial Developer of the Original Code is
- * Jonas Sicking.
- * Portions created by the Initial Developer are Copyright (C) 2003
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jonas Sicking <jonas@sicking.cc>
- *   Peter Van der Beken <peterv@propagandism.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "txBufferingHandler.h"
 
@@ -70,7 +36,7 @@ public:
 class txCharacterTransaction : public txOutputTransaction
 {
 public:
-    txCharacterTransaction(txTransactionType aType, PRUint32 aLength)
+    txCharacterTransaction(txTransactionType aType, uint32_t aLength)
         : txOutputTransaction(aType),
           mLength(aLength)
     {
@@ -80,7 +46,7 @@ public:
     {
         MOZ_COUNT_DTOR_INHERITED(txCharacterTransaction, txOutputTransaction);
     }
-    PRUint32 mLength;
+    uint32_t mLength;
 };
 
 class txCommentTransaction : public txOutputTransaction
@@ -121,7 +87,7 @@ class txStartElementAtomTransaction : public txOutputTransaction
 {
 public:
     txStartElementAtomTransaction(nsIAtom* aPrefix, nsIAtom* aLocalName,
-                                  nsIAtom* aLowercaseLocalName, PRInt32 aNsID)
+                                  nsIAtom* aLowercaseLocalName, int32_t aNsID)
         : txOutputTransaction(eStartElementAtomTransaction),
           mPrefix(aPrefix),
           mLocalName(aLocalName),
@@ -137,14 +103,14 @@ public:
     nsCOMPtr<nsIAtom> mPrefix;
     nsCOMPtr<nsIAtom> mLocalName;
     nsCOMPtr<nsIAtom> mLowercaseLocalName;
-    PRInt32 mNsID;
+    int32_t mNsID;
 };
 
 class txStartElementTransaction : public txOutputTransaction
 {
 public:
     txStartElementTransaction(nsIAtom* aPrefix,
-                              const nsSubstring& aLocalName, PRInt32 aNsID)
+                              const nsSubstring& aLocalName, int32_t aNsID)
         : txOutputTransaction(eStartElementTransaction),
           mPrefix(aPrefix),
           mLocalName(aLocalName),
@@ -158,14 +124,14 @@ public:
     }
     nsCOMPtr<nsIAtom> mPrefix;
     nsString mLocalName;
-    PRInt32 mNsID;
+    int32_t mNsID;
 };
 
 class txAttributeTransaction : public txOutputTransaction
 {
 public:
     txAttributeTransaction(nsIAtom* aPrefix,
-                           const nsSubstring& aLocalName, PRInt32 aNsID,
+                           const nsSubstring& aLocalName, int32_t aNsID,
                            const nsString& aValue)
         : txOutputTransaction(eAttributeTransaction),
           mPrefix(aPrefix),
@@ -181,7 +147,7 @@ public:
     }
     nsCOMPtr<nsIAtom> mPrefix;
     nsString mLocalName;
-    PRInt32 mNsID;
+    int32_t mNsID;
     nsString mValue;
 };
 
@@ -190,7 +156,7 @@ class txAttributeAtomTransaction : public txOutputTransaction
 public:
     txAttributeAtomTransaction(nsIAtom* aPrefix, nsIAtom* aLocalName,
                                nsIAtom* aLowercaseLocalName,
-                               PRInt32 aNsID, const nsString& aValue)
+                               int32_t aNsID, const nsString& aValue)
         : txOutputTransaction(eAttributeAtomTransaction),
           mPrefix(aPrefix),
           mLocalName(aLocalName),
@@ -207,11 +173,11 @@ public:
     nsCOMPtr<nsIAtom> mPrefix;
     nsCOMPtr<nsIAtom> mLocalName;
     nsCOMPtr<nsIAtom> mLowercaseLocalName;
-    PRInt32 mNsID;
+    int32_t mNsID;
     nsString mValue;
 };
 
-txBufferingHandler::txBufferingHandler() : mCanAddAttribute(PR_FALSE)
+txBufferingHandler::txBufferingHandler() : mCanAddAttribute(false)
 {
     MOZ_COUNT_CTOR(txBufferingHandler);
     mBuffer = new txResultBuffer();
@@ -224,7 +190,7 @@ txBufferingHandler::~txBufferingHandler()
 
 nsresult
 txBufferingHandler::attribute(nsIAtom* aPrefix, nsIAtom* aLocalName,
-                              nsIAtom* aLowercaseLocalName, PRInt32 aNsID,
+                              nsIAtom* aLowercaseLocalName, int32_t aNsID,
                               const nsString& aValue)
 {
     NS_ENSURE_TRUE(mBuffer, NS_ERROR_OUT_OF_MEMORY);
@@ -245,7 +211,7 @@ txBufferingHandler::attribute(nsIAtom* aPrefix, nsIAtom* aLocalName,
 
 nsresult
 txBufferingHandler::attribute(nsIAtom* aPrefix, const nsSubstring& aLocalName,
-                              const PRInt32 aNsID, const nsString& aValue)
+                              const int32_t aNsID, const nsString& aValue)
 {
     NS_ENSURE_TRUE(mBuffer, NS_ERROR_OUT_OF_MEMORY);
 
@@ -262,11 +228,11 @@ txBufferingHandler::attribute(nsIAtom* aPrefix, const nsSubstring& aLocalName,
 }
 
 nsresult
-txBufferingHandler::characters(const nsSubstring& aData, PRBool aDOE)
+txBufferingHandler::characters(const nsSubstring& aData, bool aDOE)
 {
     NS_ENSURE_TRUE(mBuffer, NS_ERROR_OUT_OF_MEMORY);
 
-    mCanAddAttribute = PR_FALSE;
+    mCanAddAttribute = false;
 
     txOutputTransaction::txTransactionType type =
          aDOE ? txOutputTransaction::eCharacterNoOETransaction
@@ -292,7 +258,7 @@ txBufferingHandler::comment(const nsString& aData)
 {
     NS_ENSURE_TRUE(mBuffer, NS_ERROR_OUT_OF_MEMORY);
 
-    mCanAddAttribute = PR_FALSE;
+    mCanAddAttribute = false;
 
     txOutputTransaction* transaction = new txCommentTransaction(aData);
     NS_ENSURE_TRUE(transaction, NS_ERROR_OUT_OF_MEMORY);
@@ -317,7 +283,7 @@ txBufferingHandler::endElement()
 {
     NS_ENSURE_TRUE(mBuffer, NS_ERROR_OUT_OF_MEMORY);
 
-    mCanAddAttribute = PR_FALSE;
+    mCanAddAttribute = false;
 
     txOutputTransaction* transaction =
         new txOutputTransaction(txOutputTransaction::eEndElementTransaction);
@@ -332,7 +298,7 @@ txBufferingHandler::processingInstruction(const nsString& aTarget,
 {
     NS_ENSURE_TRUE(mBuffer, NS_ERROR_OUT_OF_MEMORY);
 
-    mCanAddAttribute = PR_FALSE;
+    mCanAddAttribute = false;
 
     txOutputTransaction* transaction =
         new txPITransaction(aTarget, aData);
@@ -356,11 +322,11 @@ txBufferingHandler::startDocument()
 nsresult
 txBufferingHandler::startElement(nsIAtom* aPrefix, nsIAtom* aLocalName,
                                  nsIAtom* aLowercaseLocalName,
-                                 PRInt32 aNsID)
+                                 int32_t aNsID)
 {
     NS_ENSURE_TRUE(mBuffer, NS_ERROR_OUT_OF_MEMORY);
 
-    mCanAddAttribute = PR_TRUE;
+    mCanAddAttribute = true;
 
     txOutputTransaction* transaction =
         new txStartElementAtomTransaction(aPrefix, aLocalName,
@@ -373,11 +339,11 @@ txBufferingHandler::startElement(nsIAtom* aPrefix, nsIAtom* aLocalName,
 nsresult
 txBufferingHandler::startElement(nsIAtom* aPrefix,
                                  const nsSubstring& aLocalName,
-                                 const PRInt32 aNsID)
+                                 const int32_t aNsID)
 {
     NS_ENSURE_TRUE(mBuffer, NS_ERROR_OUT_OF_MEMORY);
 
-    mCanAddAttribute = PR_TRUE;
+    mCanAddAttribute = true;
 
     txOutputTransaction* transaction =
         new txStartElementTransaction(aPrefix, aLocalName, aNsID);
@@ -394,7 +360,7 @@ txResultBuffer::txResultBuffer()
 txResultBuffer::~txResultBuffer()
 {
     MOZ_COUNT_DTOR(txResultBuffer);
-    for (PRUint32 i = 0, len = mTransactions.Length(); i < len; ++i) {
+    for (uint32_t i = 0, len = mTransactions.Length(); i < len; ++i) {
         delete mTransactions[i];
     }
 }
@@ -402,7 +368,7 @@ txResultBuffer::~txResultBuffer()
 nsresult
 txResultBuffer::addTransaction(txOutputTransaction* aTransaction)
 {
-    if (mTransactions.AppendElement(aTransaction) == nsnull) {
+    if (mTransactions.AppendElement(aTransaction) == nullptr) {
         return NS_ERROR_OUT_OF_MEMORY;
     }
     return NS_OK;
@@ -499,7 +465,7 @@ txResultBuffer::flushToHandler(txAXMLEventHandler* aHandler)
     nsAFlatString::const_char_iterator iter;
     mStringValue.BeginReading(iter);
 
-    for (PRUint32 i = 0, len = mTransactions.Length(); i < len; ++i) {
+    for (uint32_t i = 0, len = mTransactions.Length(); i < len; ++i) {
         nsresult rv = flushTransaction(mTransactions[i], aHandler, iter);
         NS_ENSURE_SUCCESS(rv, rv);
     }
@@ -510,9 +476,9 @@ txResultBuffer::flushToHandler(txAXMLEventHandler* aHandler)
 txOutputTransaction*
 txResultBuffer::getLastTransaction()
 {
-    PRInt32 last = mTransactions.Length() - 1;
+    int32_t last = mTransactions.Length() - 1;
     if (last < 0) {
-        return nsnull;
+        return nullptr;
     }
     return mTransactions[last];
 }

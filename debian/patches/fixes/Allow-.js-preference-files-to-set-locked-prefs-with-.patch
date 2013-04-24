@@ -12,40 +12,40 @@ https://bugzilla.mozilla.org/show_bug.cgi?id=440908
  4 files changed, 17 insertions(+), 6 deletions(-)
 
 diff --git a/mozilla/modules/libpref/src/prefapi.cpp b/mozilla/modules/libpref/src/prefapi.cpp
-index feb07e1..5f0dc83 100644
+index 18354b9..24a466e 100644
 --- a/mozilla/modules/libpref/src/prefapi.cpp
 +++ b/mozilla/modules/libpref/src/prefapi.cpp
-@@ -992,7 +992,10 @@ void PREF_ReaderCallback(void       *closure,
+@@ -978,7 +978,10 @@ void PREF_ReaderCallback(void       *closure,
                           const char *pref,
                           PrefValue   value,
                           PrefType    type,
--                         PRBool      isDefault)
-+                         PRBool      isDefault,
-+                         PRBool      isLocked)
+-                         bool        isDefault)
++                         bool        isDefault,
++                         bool        isLocked)
  {
-     pref_HashPref(pref, value, type, isDefault);
+     pref_HashPref(pref, value, type, isDefault ? kPrefSetDefault : kPrefForceSet);
 +    if (isLocked)
 +        PREF_LockPref(pref, PR_TRUE);
  }
 diff --git a/mozilla/modules/libpref/src/prefapi.h b/mozilla/modules/libpref/src/prefapi.h
-index e8ca98d..76b966a 100644
+index 2fc8280..086a159 100644
 --- a/mozilla/modules/libpref/src/prefapi.h
 +++ b/mozilla/modules/libpref/src/prefapi.h
-@@ -207,7 +207,8 @@ void PREF_ReaderCallback( void *closure,
+@@ -176,7 +176,8 @@ void PREF_ReaderCallback( void *closure,
                            const char *pref,
                            PrefValue   value,
                            PrefType    type,
--                          PRBool      isDefault);
-+                          PRBool      isDefault,
-+                          PRBool      isLocked);
+-                          bool        isDefault);
++                          bool        isDefault,
++                          bool        isLocked);
  
  PR_END_EXTERN_C
  #endif
 diff --git a/mozilla/modules/libpref/src/prefread.cpp b/mozilla/modules/libpref/src/prefread.cpp
-index c2a4f7e..b80da67 100644
+index f0423e8..444d08a 100644
 --- a/mozilla/modules/libpref/src/prefread.cpp
 +++ b/mozilla/modules/libpref/src/prefread.cpp
-@@ -75,6 +75,7 @@ enum {
+@@ -43,6 +43,7 @@ enum {
  #define BITS_PER_HEX_DIGIT      4
  
  static const char kUserPref[] = "user_pref";
@@ -53,24 +53,24 @@ index c2a4f7e..b80da67 100644
  static const char kPref[] = "pref";
  static const char kTrue[] = "true";
  static const char kFalse[] = "false";
-@@ -161,7 +162,7 @@ pref_DoCallback(PrefParseState *ps)
+@@ -129,7 +130,7 @@ pref_DoCallback(PrefParseState *ps)
      default:
          break;
      }
 -    (*ps->reader)(ps->closure, ps->lb, value, ps->vtype, ps->fdefault);
 +    (*ps->reader)(ps->closure, ps->lb, value, ps->vtype, ps->fdefault, ps->flock);
-     return PR_TRUE;
+     return true;
  }
  
-@@ -220,6 +221,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
+@@ -188,6 +189,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
                  ps->vb    = NULL;
                  ps->vtype = PREF_INVALID;
-                 ps->fdefault = PR_FALSE;
-+                ps->flock = PR_FALSE;
+                 ps->fdefault = false;
++                ps->flock = false;
              }
              switch (c) {
              case '/':       /* begin comment block or line? */
-@@ -230,7 +232,9 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
+@@ -198,7 +200,9 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
                  break;
              case 'u':       /* indicating user_pref */
              case 'p':       /* indicating pref */
@@ -81,7 +81,7 @@ index c2a4f7e..b80da67 100644
                  ps->sindex = 1;
                  ps->nextstate = PREF_PARSE_UNTIL_OPEN_PAREN;
                  state = PREF_PARSE_MATCH_STRING;
-@@ -274,7 +278,8 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
+@@ -242,7 +246,8 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
          /* name parsing */
          case PREF_PARSE_UNTIL_NAME:
              if (c == '\"' || c == '\'') {
@@ -92,25 +92,24 @@ index c2a4f7e..b80da67 100644
                  ps->nextstate = PREF_PARSE_UNTIL_COMMA; /* return here when done */
                  state = PREF_PARSE_QUOTED_STRING;
 diff --git a/mozilla/modules/libpref/src/prefread.h b/mozilla/modules/libpref/src/prefread.h
-index 1dc374b..a2d93ca 100644
+index fe9850d..e4a474f 100644
 --- a/mozilla/modules/libpref/src/prefread.h
 +++ b/mozilla/modules/libpref/src/prefread.h
-@@ -62,7 +62,8 @@ typedef void (*PrefReader)(void       *closure,
+@@ -30,7 +30,8 @@ typedef void (*PrefReader)(void       *closure,
                             const char *pref,
                             PrefValue   val,
                             PrefType    type,
--                           PRBool      defPref);
-+                           PRBool      defPref,
-+                           PRBool      lockPref);
+-                           bool        defPref);
++                           bool        defPref,
++                           bool        lockPref);
  
  /* structure fields are private */
  typedef struct PrefParseState {
-@@ -83,6 +84,7 @@ typedef struct PrefParseState {
+@@ -51,6 +52,7 @@ typedef struct PrefParseState {
      char       *vb;         /* value buffer (ptr into lb)    */
      PrefType    vtype;      /* PREF_STRING,INT,BOOL          */
-     PRBool      fdefault;   /* PR_TRUE if (default) pref     */
-+    PRBool      flock;      /* PR_TRUE if pref to be locked  */
+     bool        fdefault;   /* true if (default) pref     */
++    bool        flock;      /* true if pref to be locked  */
  } PrefParseState;
  
  /**
--- 

@@ -1,40 +1,7 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Alec Flett <alecf@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
  * Communicator Shared Utility Library
@@ -148,16 +115,12 @@ function InitProxyMenu()
     networkProxyPac.setAttribute("disabled", "true");
   }
 
-  var networkProxyType;
-  try {
-    networkProxyType = Services.prefs.getIntPref("network.proxy.type");
-  } catch(e) {}
-
   // The pref value 3 for network.proxy.type is unused to maintain
   // backwards compatibility. Treat 3 equally to 0. See bug 115720.
   var networkProxyStatus = [networkProxyNo, networkProxyManual, networkProxyPac,
                             networkProxyNo, networkProxyWpad,
                             networkProxySystem];
+  var networkProxyType = GetIntPref("network.proxy.type", 0);
   networkProxyStatus[networkProxyType].setAttribute("checked", "true");
 }
 
@@ -167,12 +130,19 @@ function setProxyTypeUI()
   if (!panel)
     return;
 
-  try {
-    var networkProxyType = Services.prefs.getIntPref("network.proxy.type");
-  } catch(e) {}
-
-  var onlineTooltip = "onlineTooltip" + networkProxyType;
+  var onlineTooltip = "onlineTooltip" + GetIntPref("network.proxy.type", 0);
   panel.setAttribute("tooltiptext", gUtilityBundle.getString(onlineTooltip));
+}
+
+function SetStringPref(aPref, aValue)
+{
+  const nsISupportsString = Components.interfaces.nsISupportsString;
+  try {
+    var str = Components.classes["@mozilla.org/supports-string;1"]
+                        .createInstance(nsISupportsString);
+    str.data = aValue;
+    Services.prefs.setComplexValue(aPref, nsISupportsString, str);
+  } catch (e) {}
 }
 
 function GetStringPref(name)
@@ -235,11 +205,8 @@ function setOfflineUI(offline)
 
   // Checking for a preference "network.online", if it's locked, disabling
   // network icon and menu item
-  var offlineLocked = Services.prefs.prefIsLocked("network.online");
-
-  if (offlineLocked ) {
-      broadcaster.setAttribute("disabled","true");
-  }
+  if (Services.prefs.prefIsLocked("network.online"))
+    broadcaster.setAttribute("disabled", "true");
 
   if (offline)
     {
@@ -253,11 +220,7 @@ function setOfflineUI(offline)
       broadcaster.removeAttribute("offline");
       broadcaster.removeAttribute("checked");
       panel.setAttribute("context", "networkProperties");
-      try {
-        var networkProxyType = Services.prefs.getIntPref("network.proxy.type");
-      } catch(e) {}
-      var onlineTooltip = "onlineTooltip" + networkProxyType;
-      panel.setAttribute("tooltiptext", gUtilityBundle.getString(onlineTooltip));
+      setProxyTypeUI();
     }
 }
 
@@ -315,6 +278,17 @@ function goToggleToolbar( id, elementID )
 
 var gCustomizeSheet = false;
 
+function SuiteCustomizeToolbar(aMenuItem)
+{
+  let toolbar = aMenuItem.parentNode.triggerNode;
+  while (toolbar.localName != "toolbar") {
+    toolbar = toolbar.parentNode;
+    if (!toolbar)
+      return false;
+  }
+  return goCustomizeToolbar(toolbar.toolbox);
+}
+
 function goCustomizeToolbar(toolbox)
 {
   /* If the toolbox has a method "customizeInit" then call it first.
@@ -325,7 +299,7 @@ function goCustomizeToolbar(toolbox)
 
   var customizeURL = "chrome://global/content/customizeToolbar.xul";
 
-  gCustomizeSheet = getBoolPref("toolbar.customization.usesheet", false);
+  gCustomizeSheet = GetBoolPref("toolbar.customization.usesheet", false);
 
   if (gCustomizeSheet) {
     var sheetFrame = document.getElementById("customizeToolbarSheetIFrame");
@@ -345,8 +319,8 @@ function goCustomizeToolbar(toolbox)
     // Open the panel, but make it invisible until the iframe has loaded so
     // that the user doesn't see a white flash.
     panel.style.visibility = "hidden";
-    toolbox.addEventListener("beforecustomization", function () {
-      toolbox.removeEventListener("beforecustomization", arguments.callee, false);
+    toolbox.addEventListener("beforecustomization", function toolboxBeforeCustom() {
+      toolbox.removeEventListener("beforecustomization", toolboxBeforeCustom, false);
       panel.style.removeProperty("visibility");
     }, false);
     panel.openPopup(toolbox, "after_start", 0, 0);
@@ -377,9 +351,19 @@ function onViewToolbarsPopupShowing(aEvent, aInsertPoint)
   while (toolbar.localName != "toolbar")
     toolbar = toolbar.parentNode;
   var toolbox = toolbar.toolbox;
-
+  var externalToolbars = Array.filter(toolbox.externalToolbars,
+                                      function(toolbar) {
+                                        return toolbar.hasAttribute("toolbarname")});
   var toolbars = Array.slice(toolbox.getElementsByAttribute("toolbarname", "*"));
-  toolbars = toolbars.concat(toolbox.externalToolbars);
+  toolbars = toolbars.concat(externalToolbars);
+  var menusep = document.getElementById("toolbarmode-sep");
+
+  var menubar = toolbox.getElementsByAttribute("type", "menubar").item(0);
+  if (!menubar || !toolbars.length) {
+    menusep.hidden = true;
+    return;
+  }
+  menusep.hidden = false;
 
   toolbars.forEach(function(bar) {
     let menuItem = document.createElement("menuitem");
@@ -582,11 +566,8 @@ function toolboxCustomizeChange(toolbox, event)
 function goClickThrobber(urlPref, aEvent)
 {
   var url = GetLocalizedStringPref(urlPref);
-
-  if (url) {
-    var where = whereToOpenLink(aEvent, false, true, true);
-    return openUILinkIn(url, where);
-  }
+  if (url)
+    openUILinkIn(url, whereToOpenLink(aEvent, false, true, true));
 }
 
 function getTopWin()
@@ -598,14 +579,14 @@ function isRestricted( url )
 {
   try {
     const nsIURIFixup = Components.interfaces.nsIURIFixup;
-    var uriFixup = Components.classes["@mozilla.org/docshell/urifixup;1"]
-                             .getService(nsIURIFixup);
-    var url = uriFixup.createFixupURI(url, nsIURIFixup.FIXUP_FLAG_NONE);
+    var uri = Components.classes["@mozilla.org/docshell/urifixup;1"]
+                        .getService(nsIURIFixup)
+                        .createFixupURI(url, nsIURIFixup.FIXUP_FLAG_NONE);
     const URI_INHERITS_SECURITY_CONTEXT =
         Components.interfaces.nsIProtocolHandler.URI_INHERITS_SECURITY_CONTEXT;
     return Components.classes["@mozilla.org/network/util;1"]
                      .getService(Components.interfaces.nsINetUtil)
-                     .URIChainHasFlags(url, URI_INHERITS_SECURITY_CONTEXT);
+                     .URIChainHasFlags(uri, URI_INHERITS_SECURITY_CONTEXT);
   } catch (e) {
     return false;
   }
@@ -970,11 +951,11 @@ function isElementVisible(aElement)
   return (bo.height > 0 && bo.width > 0);
 }
 
-function makeURLAbsolute(aBase, aUrl)
+function makeURLAbsolute(aBase, aUrl, aCharset)
 {
   // Construct nsIURL.
-  return Services.io.newURI(aUrl, null,
-                            Services.io.newURI(aBase, null, null)).spec;
+  return Services.io.newURI(aUrl, aCharset,
+                            Services.io.newURI(aBase, aCharset, null)).spec;
 }
 
 function openAsExternal(aURL)
@@ -1119,16 +1100,12 @@ function BrowserOnCommand(event)
     if (ot.getAttribute('anonid') == 'exceptionDialogButton') {
       var params = { exceptionAdded : false };
 
-      try {
-        switch (Services.prefs.getIntPref("browser.ssl_override_behavior")) {
-          case 2 : // Pre-fetch & pre-populate.
-            params.prefetchCert = true;
-            // Fall through.
-          case 1 : // Pre-populate.
-            params.location = ownerDoc.location.href;
-        }
-      } catch (e) {
-        Components.utils.reportError("Couldn't get ssl_override pref: " + e);
+      switch (GetIntPref("browser.ssl_override_behavior", 2)) {
+        case 2 : // Pre-fetch & pre-populate.
+          params.prefetchCert = true;
+          // Fall through.
+        case 1 : // Pre-populate.
+          params.location = ownerDoc.location.href;
       }
 
       window.openDialog('chrome://pippki/content/exceptionDialog.xul',
@@ -1172,11 +1149,14 @@ function popupNotificationMenuShowing(event)
   separator.hidden = !createShowPopupsMenu(event.target, notificationbox.activeBrowser);
 }
 
-function createShowPopupsMenu(parent, browser)
+function RemovePopupsItems(parent)
 {
   while (parent.lastChild && ("popup" in parent.lastChild))
     parent.removeChild(parent.lastChild);
+}
 
+function createShowPopupsMenu(parent, browser)
+{
   if (!browser)
     return false;
 
@@ -1277,14 +1257,37 @@ function closeMenus(node)
   }
 }
 
-function getBoolPref(prefname, def)
+function GetBoolPref(aPrefName, aDefaultValue)
 {
   try {
-    return Services.prefs.getBoolPref(prefname);
+    return Services.prefs.getBoolPref(aPrefName);
+  } catch (e) {}
+  return aDefaultValue;
+}
+
+function GetIntPref(aPrefName, aDefaultValue)
+{
+  try {
+    return Services.prefs.getIntPref(aPrefName);
+  } catch (e) {
+    Components.utils.reportError("Couldn't get " + aPrefName + " pref: " + e);
   }
-  catch (er) {
-    return def;
-  }
+  return aDefaultValue;
+}
+
+/**
+ * Toggle a splitter to show or hide some piece of UI (e.g. the message preview
+ * pane).
+ *
+ * @param aSplitterId the splitter that should be toggled
+ */
+function togglePaneSplitter(aSplitterId)
+{
+  var splitter = document.getElementById(aSplitterId);
+  if (splitter.getAttribute("state") == "collapsed")
+    splitter.setAttribute("state", "open");
+  else
+    splitter.setAttribute("state", "collapsed");
 }
 
 // openUILink handles clicks on UI elements that cause URLs to load.
@@ -1323,16 +1326,15 @@ function whereToOpenLink(e, ignoreButton, ignoreSave, ignoreBackground)
   var middle = !ignoreButton && e.button == 1;
 
   if (meta || ctrl || middle) {
-    if (getBoolPref("browser.tabs.opentabfor.middleclick", true))
+    if (GetBoolPref("browser.tabs.opentabfor.middleclick", true))
       return ignoreBackground ? "tabfocused" : shift ? "tabshifted" : "tab";
-    if (getBoolPref("middlemouse.openNewWindow", true))
+    if (GetBoolPref("middlemouse.openNewWindow", true))
       return "window";
     if (middle)
       return null;
   }
   if (!ignoreSave) {
-    var saveKey = getBoolPref("ui.key.saveLink.shift", true) ? shift : alt;
-    if (saveKey)
+    if (GetBoolPref("ui.key.saveLink.shift", true) ? shift : alt)
       return "save";
   }
   if (alt || shift || meta || ctrl)
@@ -1389,7 +1391,7 @@ function openUILinkIn(url, where, aAllowThirdPartyFixup, aPostData, aReferrerURI
                              null, null, aPostData, aAllowThirdPartyFixup);
   }
 
-  var loadInBackground = getBoolPref("browser.tabs.loadInBackground", false);
+  var loadInBackground = GetBoolPref("browser.tabs.loadInBackground", false);
 
   // reuse the browser if its current tab is empty
   if (isBrowserEmpty(w.getBrowser()))
@@ -1446,7 +1448,7 @@ function openUILinkArrayIn(urlArray, where, allowThirdPartyFixup)
                              null, null, null, allowThirdPartyFixup);
   }
 
-  var loadInBackground = getBoolPref("browser.tabs.loadInBackground", false);
+  var loadInBackground = GetBoolPref("browser.tabs.loadInBackground", false);
 
   var browser = w.getBrowser();
   switch (where) {
@@ -1524,12 +1526,14 @@ function switchToTabHavingURI(aURI, aOpenNew, aCallback) {
 
   // No opened tab has that url.
   if (aOpenNew) {
-    let browserWin = openUILinkIn(aURI.spec, "tabfocused");
+    let newWindowPref = Services.prefs.getIntPref("browser.link.open_external");
+    let where = newWindowPref == kNewTab ? "tabfocused" : "window";
+    let browserWin = openUILinkIn(aURI.spec, where);
     if (aCallback) {
-      browserWin.addEventListener("pageshow", function(event) {
+      browserWin.addEventListener("pageshow", function browserWinPageShow(event) {
         if (event.target.location.href != aURI.spec)
           return;
-        browserWin.removeEventListener("pageshow", arguments.callee, true);
+        browserWin.removeEventListener("pageshow", browserWinPageShow, true);
         aCallback(browserWin.getBrowser().selectedBrowser);
       }, true);
     }
@@ -1597,28 +1601,83 @@ function loadAddSearchEngines() {
 
 function FillInHTMLTooltip(tipElement)
 {
-  if (tipElement.namespaceURI == "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul")
+  // Don't show the tooltip if the tooltip node is a document or disconnected.
+  if (!tipElement.ownerDocument ||
+      (tipElement.ownerDocument.compareDocumentPosition(tipElement) & document.DOCUMENT_POSITION_DISCONNECTED))
     return false;
 
-  while (tipElement instanceof Element) {
-    if (tipElement.hasAttribute("title")) {
-      var defView = tipElement.ownerDocument.defaultView;
-      var titleText = tipElement.getAttribute("title");
-      // XXX Work around bug 350679:
-      // "Tooltips can be fired in documents with no view".
-      if (!defView || !titleText)
-        return false;
+  var defView = tipElement.ownerDocument.defaultView;
+  // XXX Work around bug 350679:
+  // "Tooltips can be fired in documents with no view".
+  if (!defView)
+    return false;
 
-      var tipNode = document.getElementById("aHTMLTooltip");
-      tipNode.style.direction = defView.getComputedStyle(tipElement, "")
-                                       .getPropertyValue("direction");
-      tipNode.label = titleText;
-      return true;
+  const XLinkNS = "http://www.w3.org/1999/xlink";
+  const XULNS = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
+
+  var titleText = null;
+  var XLinkTitleText = null;
+  var SVGTitleText = null;
+  var lookingForSVGTitle = true;
+  var direction = defView.getComputedStyle(tipElement, "")
+                         .getPropertyValue("direction");
+
+  // If the element is invalid per HTML5 Forms specifications and has no title,
+  // show the constraint validation error message.
+  if ((tipElement instanceof HTMLInputElement ||
+       tipElement instanceof HTMLTextAreaElement ||
+       tipElement instanceof HTMLSelectElement ||
+       tipElement instanceof HTMLButtonElement) &&
+      !tipElement.hasAttribute("title") &&
+      (!tipElement.form || !tipElement.form.noValidate)) {
+    // If the element is barred from constraint validation or is valid,
+    // the validation message will be the empty string.
+    titleText = tipElement.validationMessage || null;
+  }
+
+  while ((titleText == null) && (XLinkTitleText == null) &&
+         (SVGTitleText == null) && tipElement) {
+    if (tipElement.nodeType == Node.ELEMENT_NODE &&
+        tipElement.namespaceURI != XULNS) {
+      titleText = tipElement.getAttribute("title");
+      if ((tipElement instanceof HTMLAnchorElement ||
+           tipElement instanceof HTMLAreaElement ||
+           tipElement instanceof HTMLLinkElement ||
+           tipElement instanceof SVGAElement) && tipElement.href) {
+        XLinkTitleText = tipElement.getAttributeNS(XLinkNS, "title");
+      }
+      if (lookingForSVGTitle &&
+          (!(tipElement instanceof SVGElement) ||
+           tipElement.parentNode.nodeType == Node.DOCUMENT_NODE)) {
+        lookingForSVGTitle = false;
+      }
+      if (lookingForSVGTitle) {
+        let length = tipElement.childNodes.length;
+        for (let i = 0; i < length; i++) {
+          let childNode = tipElement.childNodes[i];
+          if (childNode instanceof SVGTitleElement) {
+            SVGTitleText = childNode.textContent;
+            break;
+          }
+        }
+      }
+      direction = defView.getComputedStyle(tipElement, "")
+                         .getPropertyValue("direction");
     }
     tipElement = tipElement.parentNode;
   }
 
-  return false;
+  var tipNode = document.getElementById("aHTMLTooltip");
+  tipNode.style.direction = direction;
+
+  return [titleText, XLinkTitleText, SVGTitleText].some(function (t) {
+    if (t && /\S/.test(t)) {
+      // Make CRLF and CR render one line break each.
+      tipNode.setAttribute("label", t.replace(/\r\n?/g, "\n"));
+      return true;
+    }
+    return false;
+  });
 }
 
 function GetFileFromString(aString)
@@ -1632,4 +1691,15 @@ function GetFileFromString(aString)
   let uri = commandLine.resolveURI(aString);
   return uri instanceof Components.interfaces.nsIFileURL ?
          uri.file.QueryInterface(Components.interfaces.nsILocalFile) : null;
+}
+
+function CopyImage()
+{
+  var param = Components.classes["@mozilla.org/embedcomp/command-params;1"]
+                        .createInstance(Components.interfaces.nsICommandParams);
+  param.setLongValue("imageCopy",
+                     Components.interfaces.nsIContentViewerEdit.COPY_IMAGE_ALL);
+  document.commandDispatcher.getControllerForCommand("cmd_copyImage")
+          .QueryInterface(Components.interfaces.nsICommandController)
+          .doCommandWithParams("cmd_copyImage", param);
 }

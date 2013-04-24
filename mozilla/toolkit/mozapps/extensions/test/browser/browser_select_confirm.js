@@ -9,6 +9,11 @@ var gWin;
 
 function waitForView(aView, aCallback) {
   var view = gWin.document.getElementById(aView);
+  if (view.parentNode.selectedPanel == view) {
+    aCallback();
+    return;
+  }
+
   view.addEventListener("ViewChanged", function() {
     view.removeEventListener("ViewChanged", arguments.callee, false);
     try {
@@ -66,6 +71,12 @@ function setupUI(aAppDisabled, aUpdateAvailable, aCallback) {
     waitForView("select", function() {
       var row = gWin.document.getElementById("select-rows").firstChild.nextSibling;
       while (row) {
+        if (!row.id || row.id.indexOf("@tests.mozilla.org") < 0) {
+          // not a test add-on
+          row = row.nextSibling;
+          continue;
+        }
+
         if (row.id == "test2@tests.mozilla.org" ||
             row.id == "test4@tests.mozilla.org") {
           row.disable();

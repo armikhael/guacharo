@@ -1,94 +1,79 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla.org.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corp.
- * Portions created by the Initial Developer are Copyright (C) 2003
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Daniel Glazman (glazman@netscape.com) (Original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <math.h>
 
-#include "nsHTMLEditor.h"
-
-#include "nsIContent.h"
-#include "nsIDocument.h"
-#include "nsIEditor.h"
-#include "nsIPresShell.h"
-
-#include "nsISelection.h"
-
-#include "nsTextEditUtils.h"
-#include "nsEditorUtils.h"
-#include "nsHTMLEditUtils.h"
-#include "nsTextEditRules.h"
-#include "nsHTMLEditRules.h"
-
-#include "nsIDOMHTMLElement.h"
-#include "nsIDOMNSHTMLElement.h"
-#include "nsIDOMNodeList.h"
-
-#include "nsIDOMEventTarget.h"
-
-#include "nsIDOMCSSValue.h"
-#include "nsIDOMCSSPrimitiveValue.h"
-#include "nsIDOMRGBColor.h"
-
 #include "mozilla/Preferences.h"
+#include "mozilla/Selection.h"
+#include "mozilla/dom/Element.h"
+#include "mozilla/mozalloc.h"
+#include "nsAString.h"
+#include "nsAlgorithm.h"
+#include "nsAutoPtr.h"
+#include "nsCOMPtr.h"
+#include "nsComputedDOMStyle.h"
+#include "nsDebug.h"
+#include "nsEditProperty.h"
+#include "nsEditRules.h"
+#include "nsEditor.h"
+#include "nsEditorUtils.h"
+#include "nsError.h"
+#include "nsGkAtoms.h"
+#include "nsHTMLCSSUtils.h"
+#include "nsHTMLEditRules.h"
+#include "nsHTMLEditUtils.h"
+#include "nsHTMLEditor.h"
+#include "nsHTMLObjectResizer.h"
+#include "nsIContent.h"
+#include "nsIDOMCSSPrimitiveValue.h"
+#include "nsIDOMCSSStyleDeclaration.h"
+#include "nsIDOMCSSValue.h"
+#include "nsIDOMElement.h"
+#include "nsIDOMEventListener.h"
+#include "nsIDOMEventTarget.h"
+#include "nsIDOMNode.h"
+#include "nsIDOMRGBColor.h"
+#include "nsIDOMWindow.h"
+#include "nsIEditor.h"
+#include "nsIHTMLEditor.h"
+#include "nsIHTMLObjectResizer.h"
+#include "nsINode.h"
+#include "nsIPresShell.h"
+#include "nsISelection.h"
+#include "nsISupportsImpl.h"
+#include "nsISupportsUtils.h"
+#include "nsLiteralString.h"
+#include "nsReadableUtils.h"
+#include "nsString.h"
+#include "nsStringFwd.h"
+#include "nsTextEditRules.h"
+#include "nsTextEditUtils.h"
+#include "nscore.h"
+#include "prtypes.h"
 
 using namespace mozilla;
 
 #define  BLACK_BG_RGB_TRIGGER 0xd0
 
 NS_IMETHODIMP
-nsHTMLEditor::AbsolutePositionSelection(PRBool aEnabled)
+nsHTMLEditor::AbsolutePositionSelection(bool aEnabled)
 {
   nsAutoEditBatch beginBatching(this);
   nsAutoRules beginRulesSniffing(this,
-                                 aEnabled ? kOpSetAbsolutePosition :
-                                            kOpRemoveAbsolutePosition,
+                                 aEnabled ? EditAction::setAbsolutePosition :
+                                            EditAction::removeAbsolutePosition,
                                  nsIEditor::eNext);
   
   // the line below does not match the code; should it be removed?
   // Find out if the selection is collapsed:
-  nsCOMPtr<nsISelection> selection;
-  nsresult res = GetSelection(getter_AddRefs(selection));
-  NS_ENSURE_SUCCESS(res, res);
+  nsRefPtr<Selection> selection = GetSelection();
   NS_ENSURE_TRUE(selection, NS_ERROR_NULL_POINTER);
 
-  nsTextRulesInfo ruleInfo(aEnabled ?
-                           nsTextEditRules::kSetAbsolutePosition :
-                           nsTextEditRules::kRemoveAbsolutePosition);
-  PRBool cancel, handled;
-  res = mRules->WillDoAction(selection, &ruleInfo, &cancel, &handled);
+  nsTextRulesInfo ruleInfo(aEnabled ? EditAction::setAbsolutePosition :
+                                      EditAction::removeAbsolutePosition);
+  bool cancel, handled;
+  nsresult res = mRules->WillDoAction(selection, &ruleInfo, &cancel, &handled);
   if (NS_FAILED(res) || cancel)
     return res;
   
@@ -127,21 +112,21 @@ nsHTMLEditor::GetAbsolutelyPositionedSelectionContainer(nsIDOMElement **_retval)
 }
 
 NS_IMETHODIMP
-nsHTMLEditor::GetSelectionContainerAbsolutelyPositioned(PRBool *aIsSelectionContainerAbsolutelyPositioned)
+nsHTMLEditor::GetSelectionContainerAbsolutelyPositioned(bool *aIsSelectionContainerAbsolutelyPositioned)
 {
-  *aIsSelectionContainerAbsolutelyPositioned = (mAbsolutelyPositionedObject != nsnull);
+  *aIsSelectionContainerAbsolutelyPositioned = (mAbsolutelyPositionedObject != nullptr);
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsHTMLEditor::GetAbsolutePositioningEnabled(PRBool * aIsEnabled)
+nsHTMLEditor::GetAbsolutePositioningEnabled(bool * aIsEnabled)
 {
   *aIsEnabled = mIsAbsolutelyPositioningEnabled;
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsHTMLEditor::SetAbsolutePositioningEnabled(PRBool aIsEnabled)
+nsHTMLEditor::SetAbsolutePositioningEnabled(bool aIsEnabled)
 {
   mIsAbsolutelyPositioningEnabled = aIsEnabled;
   return NS_OK;
@@ -149,15 +134,15 @@ nsHTMLEditor::SetAbsolutePositioningEnabled(PRBool aIsEnabled)
 
 NS_IMETHODIMP
 nsHTMLEditor::RelativeChangeElementZIndex(nsIDOMElement * aElement,
-                                          PRInt32 aChange,
-                                          PRInt32 * aReturn)
+                                          int32_t aChange,
+                                          int32_t * aReturn)
 {
   NS_ENSURE_ARG_POINTER(aElement);
   NS_ENSURE_ARG_POINTER(aReturn);
   if (!aChange) // early way out, no change
     return NS_OK;
 
-  PRInt32 zIndex;
+  int32_t zIndex;
   nsresult res = GetElementZIndex(aElement, &zIndex);
   NS_ENSURE_SUCCESS(res, res);
 
@@ -170,7 +155,7 @@ nsHTMLEditor::RelativeChangeElementZIndex(nsIDOMElement * aElement,
 
 NS_IMETHODIMP
 nsHTMLEditor::SetElementZIndex(nsIDOMElement * aElement,
-                               PRInt32 aZindex)
+                               int32_t aZindex)
 {
   NS_ENSURE_ARG_POINTER(aElement);
   
@@ -180,29 +165,27 @@ nsHTMLEditor::SetElementZIndex(nsIDOMElement * aElement,
   mHTMLCSSUtils->SetCSSProperty(aElement,
                                 nsEditProperty::cssZIndex,
                                 zIndexStr,
-                                PR_FALSE);
+                                false);
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsHTMLEditor::RelativeChangeZIndex(PRInt32 aChange)
+nsHTMLEditor::RelativeChangeZIndex(int32_t aChange)
 {
   nsAutoEditBatch beginBatching(this);
   nsAutoRules beginRulesSniffing(this,
-                                 (aChange < 0) ? kOpDecreaseZIndex :
-                                                 kOpIncreaseZIndex,
+                                 (aChange < 0) ? EditAction::decreaseZIndex :
+                                                 EditAction::increaseZIndex,
                                  nsIEditor::eNext);
   
   // brade: can we get rid of this comment?
   // Find out if the selection is collapsed:
-  nsCOMPtr<nsISelection> selection;
-  nsresult res = GetSelection(getter_AddRefs(selection));
-  NS_ENSURE_SUCCESS(res, res);
+  nsRefPtr<Selection> selection = GetSelection();
   NS_ENSURE_TRUE(selection, NS_ERROR_NULL_POINTER);
-  nsTextRulesInfo ruleInfo((aChange < 0) ? nsTextEditRules::kDecreaseZIndex:
-                                           nsTextEditRules::kIncreaseZIndex);
-  PRBool cancel, handled;
-  res = mRules->WillDoAction(selection, &ruleInfo, &cancel, &handled);
+  nsTextRulesInfo ruleInfo(aChange < 0 ? EditAction::decreaseZIndex :
+                                         EditAction::increaseZIndex);
+  bool cancel, handled;
+  nsresult res = mRules->WillDoAction(selection, &ruleInfo, &cancel, &handled);
   if (cancel || NS_FAILED(res))
     return res;
   
@@ -211,7 +194,7 @@ nsHTMLEditor::RelativeChangeZIndex(PRInt32 aChange)
 
 NS_IMETHODIMP
 nsHTMLEditor::GetElementZIndex(nsIDOMElement * aElement,
-                               PRInt32 * aZindex)
+                               int32_t * aZindex)
 {
   nsAutoString zIndexStr;
   *aZindex = 0;
@@ -250,7 +233,7 @@ nsHTMLEditor::GetElementZIndex(nsIDOMElement * aElement,
   }
 
   if (!zIndexStr.EqualsLiteral("auto")) {
-    PRInt32 errorCode;
+    nsresult errorCode;
     *aZindex = zIndexStr.ToInteger(&errorCode);
   }
 
@@ -264,7 +247,7 @@ nsHTMLEditor::CreateGrabber(nsIDOMNode * aParentNode, nsIDOMElement ** aReturn)
   nsresult res = CreateAnonymousElement(NS_LITERAL_STRING("span"),
                                         aParentNode,
                                         NS_LITERAL_STRING("mozGrabber"),
-                                        PR_FALSE,
+                                        false,
                                         aReturn);
 
   NS_ENSURE_TRUE(*aReturn, NS_ERROR_FAILURE);
@@ -272,7 +255,7 @@ nsHTMLEditor::CreateGrabber(nsIDOMNode * aParentNode, nsIDOMElement ** aReturn)
   // add the mouse listener so we can detect a click on a resizer
   nsCOMPtr<nsIDOMEventTarget> evtTarget(do_QueryInterface(*aReturn));
   evtTarget->AddEventListener(NS_LITERAL_STRING("mousedown"),
-                              mEventListener, PR_FALSE);
+                              mEventListener, false);
 
   return res;
 }
@@ -307,7 +290,7 @@ nsHTMLEditor::HideGrabber()
     mAbsolutelyPositionedObject->RemoveAttribute(NS_LITERAL_STRING("_moz_abspos"));
   NS_ENSURE_SUCCESS(res, res);
 
-  mAbsolutelyPositionedObject = nsnull;
+  mAbsolutelyPositionedObject = nullptr;
   NS_ENSURE_TRUE(mGrabber, NS_ERROR_NULL_POINTER);
 
   // get the presshell's document observer interface.
@@ -324,9 +307,9 @@ nsHTMLEditor::HideGrabber()
   NS_ENSURE_TRUE(parentContent, NS_ERROR_NULL_POINTER);
 
   DeleteRefToAnonymousNode(mGrabber, parentContent, ps);
-  mGrabber = nsnull;
+  mGrabber = nullptr;
   DeleteRefToAnonymousNode(mPositioningShadow, parentContent, ps);
-  mPositioningShadow = nsnull;
+  mPositioningShadow = nullptr;
 
   return NS_OK;
 }
@@ -389,16 +372,16 @@ nsHTMLEditor::StartMoving(nsIDOMElement *aHandle)
                                       NS_LITERAL_STRING("height"),
                                       mPositionedObjectHeight);
 
-  mIsMoving = PR_TRUE;
+  mIsMoving = true;
   return res;
 }
 
 void
-nsHTMLEditor::SnapToGrid(PRInt32 & newX, PRInt32 & newY)
+nsHTMLEditor::SnapToGrid(int32_t & newX, int32_t & newY)
 {
   if (mSnapToGridEnabled && mGridSize) {
-    newX = (PRInt32) floor( ((float)newX / (float)mGridSize) + 0.5f ) * mGridSize;
-    newY = (PRInt32) floor( ((float)newY / (float)mGridSize) + 0.5f ) * mGridSize;
+    newX = (int32_t) floor( ((float)newX / (float)mGridSize) + 0.5f ) * mGridSize;
+    newY = (int32_t) floor( ((float)newY / (float)mGridSize) + 0.5f ) * mGridSize;
   }
 }
 
@@ -416,11 +399,11 @@ nsHTMLEditor::GrabberClicked()
 
     res = piTarget->AddEventListener(NS_LITERAL_STRING("mousemove"),
                                      mMouseMotionListenerP,
-                                     PR_FALSE, PR_FALSE);
+                                     false, false);
     NS_ASSERTION(NS_SUCCEEDED(res),
                  "failed to register mouse motion listener");
   }
-  mGrabberClicked = PR_TRUE;
+  mGrabberClicked = true;
   return res;
 }
 
@@ -440,7 +423,7 @@ nsHTMLEditor::EndMoving()
 
     DeleteRefToAnonymousNode(mPositioningShadow, parentContent, ps);
 
-    mPositioningShadow = nsnull;
+    mPositioningShadow = nullptr;
   }
   nsCOMPtr<nsIDOMEventTarget> piTarget = GetDOMEventTarget();
 
@@ -450,13 +433,13 @@ nsHTMLEditor::EndMoving()
 #endif
     piTarget->RemoveEventListener(NS_LITERAL_STRING("mousemove"),
                                   mMouseMotionListenerP,
-                                  PR_FALSE);
+                                  false);
     NS_ASSERTION(NS_SUCCEEDED(res), "failed to remove mouse motion listener");
   }
-  mMouseMotionListenerP = nsnull;
+  mMouseMotionListenerP = nullptr;
 
-  mGrabberClicked = PR_FALSE;
-  mIsMoving = PR_FALSE;
+  mGrabberClicked = false;
+  mIsMoving = false;
   nsCOMPtr<nsISelection> selection;
   GetSelection(getter_AddRefs(selection));
   if (!selection) {
@@ -465,7 +448,7 @@ nsHTMLEditor::EndMoving()
   return CheckSelectionStateForAnonymousButtons(selection);
 }
 nsresult
-nsHTMLEditor::SetFinalPosition(PRInt32 aX, PRInt32 aY)
+nsHTMLEditor::SetFinalPosition(int32_t aX, int32_t aY)
 {
   nsresult res = EndMoving();
   NS_ENSURE_SUCCESS(res, res);
@@ -473,8 +456,8 @@ nsHTMLEditor::SetFinalPosition(PRInt32 aX, PRInt32 aY)
   // we have now to set the new width and height of the resized object
   // we don't set the x and y position because we don't control that in
   // a normal HTML layout
-  PRInt32 newX = mPositionedObjectX + aX - mOriginalX - (mPositionedObjectBorderLeft+mPositionedObjectMarginLeft);
-  PRInt32 newY = mPositionedObjectY + aY - mOriginalY - (mPositionedObjectBorderTop+mPositionedObjectMarginTop);
+  int32_t newX = mPositionedObjectX + aX - mOriginalX - (mPositionedObjectBorderLeft+mPositionedObjectMarginLeft);
+  int32_t newY = mPositionedObjectY + aY - mOriginalY - (mPositionedObjectBorderTop+mPositionedObjectMarginTop);
 
   SnapToGrid(newX, newY);
 
@@ -488,11 +471,11 @@ nsHTMLEditor::SetFinalPosition(PRInt32 aX, PRInt32 aY)
   mHTMLCSSUtils->SetCSSPropertyPixels(mAbsolutelyPositionedObject,
                                       nsEditProperty::cssTop,
                                       newY,
-                                      PR_FALSE);
+                                      false);
   mHTMLCSSUtils->SetCSSPropertyPixels(mAbsolutelyPositionedObject,
                                       nsEditProperty::cssLeft,
                                       newX,
-                                      PR_FALSE);
+                                      false);
   // keep track of that size
   mPositionedObjectX  = newX;
   mPositionedObjectY  = newY;
@@ -501,10 +484,10 @@ nsHTMLEditor::SetFinalPosition(PRInt32 aX, PRInt32 aY)
 }
 
 void
-nsHTMLEditor::AddPositioningOffset(PRInt32 & aX, PRInt32 & aY)
+nsHTMLEditor::AddPositioningOffset(int32_t & aX, int32_t & aY)
 {
   // Get the positioning offset
-  PRInt32 positioningOffset =
+  int32_t positioningOffset =
     Preferences::GetInt("editor.positioning.offset", 0);
 
   aX += positioningOffset;
@@ -513,30 +496,29 @@ nsHTMLEditor::AddPositioningOffset(PRInt32 & aX, PRInt32 & aY)
 
 NS_IMETHODIMP
 nsHTMLEditor::AbsolutelyPositionElement(nsIDOMElement * aElement,
-                                        PRBool aEnabled)
+                                        bool aEnabled)
 {
   NS_ENSURE_ARG_POINTER(aElement);
 
   nsAutoString positionStr;
   mHTMLCSSUtils->GetComputedProperty(aElement, nsEditProperty::cssPosition,
                                      positionStr);
-  PRBool isPositioned = (positionStr.EqualsLiteral("absolute"));
+  bool isPositioned = (positionStr.EqualsLiteral("absolute"));
 
   // nothing to do if the element is already in the state we want
   if (isPositioned == aEnabled)
     return NS_OK;
 
   nsAutoEditBatch batchIt(this);
-  nsresult res;
 
   if (aEnabled) {
-    PRInt32 x, y;
+    int32_t x, y;
     GetElementOrigin(aElement, x, y);
 
     mHTMLCSSUtils->SetCSSProperty(aElement,
                                   nsEditProperty::cssPosition,
                                   NS_LITERAL_STRING("absolute"),
-                                  PR_FALSE);
+                                  false);
 
     AddPositioningOffset(x, y);
     SnapToGrid(x, y);
@@ -544,83 +526,75 @@ nsHTMLEditor::AbsolutelyPositionElement(nsIDOMElement * aElement,
 
     // we may need to create a br if the positioned element is alone in its
     // container
-    nsCOMPtr<nsIDOMNode> parentNode;
-    res = aElement->GetParentNode(getter_AddRefs(parentNode));
-    NS_ENSURE_SUCCESS(res, res);
+    nsCOMPtr<nsINode> element = do_QueryInterface(aElement);
+    NS_ENSURE_STATE(element);
 
-    nsCOMPtr<nsIDOMNodeList> childNodes;
-    res = parentNode->GetChildNodes(getter_AddRefs(childNodes));
-    NS_ENSURE_SUCCESS(res, res);
-    NS_ENSURE_TRUE(childNodes, NS_ERROR_NULL_POINTER);
-    PRUint32 childCount;
-    res = childNodes->GetLength(&childCount);
-    NS_ENSURE_SUCCESS(res, res);
-
-    if (childCount == 1) {
+    nsINode* parentNode = element->GetNodeParent();
+    if (parentNode->GetChildCount() == 1) {
       nsCOMPtr<nsIDOMNode> brNode;
-      res = CreateBR(parentNode, 0, address_of(brNode));
+      nsresult res = CreateBR(parentNode->AsDOMNode(), 0, address_of(brNode));
+      NS_ENSURE_SUCCESS(res, res);
     }
   }
   else {
     mHTMLCSSUtils->RemoveCSSProperty(aElement,
                                      nsEditProperty::cssPosition,
-                                     EmptyString(), PR_FALSE);
+                                     EmptyString(), false);
     mHTMLCSSUtils->RemoveCSSProperty(aElement,
                                      nsEditProperty::cssTop,
-                                     EmptyString(), PR_FALSE);
+                                     EmptyString(), false);
     mHTMLCSSUtils->RemoveCSSProperty(aElement,
                                      nsEditProperty::cssLeft,
-                                     EmptyString(), PR_FALSE);
+                                     EmptyString(), false);
     mHTMLCSSUtils->RemoveCSSProperty(aElement,
                                      nsEditProperty::cssZIndex,
-                                     EmptyString(), PR_FALSE);
+                                     EmptyString(), false);
 
     if (!nsHTMLEditUtils::IsImage(aElement)) {
       mHTMLCSSUtils->RemoveCSSProperty(aElement,
                                        nsEditProperty::cssWidth,
-                                       EmptyString(), PR_FALSE);
+                                       EmptyString(), false);
       mHTMLCSSUtils->RemoveCSSProperty(aElement,
                                        nsEditProperty::cssHeight,
-                                       EmptyString(), PR_FALSE);
+                                       EmptyString(), false);
     }
 
-    PRBool hasStyleOrIdOrClass;
-    res = HasStyleOrIdOrClass(aElement, &hasStyleOrIdOrClass);
-    NS_ENSURE_SUCCESS(res, res);
-    if (!hasStyleOrIdOrClass && nsHTMLEditUtils::IsDiv(aElement)) {
+    nsCOMPtr<dom::Element> element = do_QueryInterface(aElement);
+    if (element && element->IsHTML(nsGkAtoms::div) && !HasStyleOrIdOrClass(element)) {
       nsHTMLEditRules* htmlRules = static_cast<nsHTMLEditRules*>(mRules.get());
       NS_ENSURE_TRUE(htmlRules, NS_ERROR_FAILURE);
-      res = htmlRules->MakeSureElemStartsOrEndsOnCR(aElement);
+      nsresult res = htmlRules->MakeSureElemStartsOrEndsOnCR(aElement);
       NS_ENSURE_SUCCESS(res, res);
       res = RemoveContainer(aElement);
+      NS_ENSURE_SUCCESS(res, res);
     }
   }
-  return res;
+  return NS_OK;
 }
 
 NS_IMETHODIMP
-nsHTMLEditor::SetSnapToGridEnabled(PRBool aEnabled)
+nsHTMLEditor::SetSnapToGridEnabled(bool aEnabled)
 {
   mSnapToGridEnabled = aEnabled;
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsHTMLEditor::GetSnapToGridEnabled(PRBool * aIsEnabled)
+nsHTMLEditor::GetSnapToGridEnabled(bool * aIsEnabled)
 {
   *aIsEnabled = mSnapToGridEnabled;
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsHTMLEditor::SetGridSize(PRUint32 aSize)
+nsHTMLEditor::SetGridSize(uint32_t aSize)
 {
   mGridSize = aSize;
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsHTMLEditor::GetGridSize(PRUint32 * aSize)
+nsHTMLEditor::GetGridSize(uint32_t * aSize)
 {
   *aSize = mGridSize;
   return NS_OK;
@@ -628,18 +602,18 @@ nsHTMLEditor::GetGridSize(PRUint32 * aSize)
 
 // self-explanatory
 NS_IMETHODIMP
-nsHTMLEditor::SetElementPosition(nsIDOMElement *aElement, PRInt32 aX, PRInt32 aY)
+nsHTMLEditor::SetElementPosition(nsIDOMElement *aElement, int32_t aX, int32_t aY)
 {
   nsAutoEditBatch batchIt(this);
 
   mHTMLCSSUtils->SetCSSPropertyPixels(aElement,
                                       nsEditProperty::cssLeft,
                                       aX,
-                                      PR_FALSE);
+                                      false);
   mHTMLCSSUtils->SetCSSPropertyPixels(aElement,
                                       nsEditProperty::cssTop,
                                       aY,
-                                      PR_FALSE);
+                                      false);
   return NS_OK;
 }
 
@@ -683,20 +657,16 @@ nsHTMLEditor::CheckPositionedElementBGandFG(nsIDOMElement * aElement,
                                          bgColorStr);
     NS_ENSURE_SUCCESS(res, res);
     if (bgColorStr.EqualsLiteral("transparent")) {
-      nsCOMPtr<nsIDOMWindow> window;
-      res = mHTMLCSSUtils->GetDefaultViewCSS(aElement, getter_AddRefs(window));
-      NS_ENSURE_SUCCESS(res, res);
-
-      nsCOMPtr<nsIDOMCSSStyleDeclaration> cssDecl;
-      res = window->GetComputedStyle(aElement, EmptyString(), getter_AddRefs(cssDecl));
-      NS_ENSURE_SUCCESS(res, res);
+      nsRefPtr<nsComputedDOMStyle> cssDecl =
+        mHTMLCSSUtils->GetComputedStyle(aElement);
+      NS_ENSURE_STATE(cssDecl);
 
       // from these declarations, get the one we want and that one only
       nsCOMPtr<nsIDOMCSSValue> colorCssValue;
       res = cssDecl->GetPropertyCSSValue(NS_LITERAL_STRING("color"), getter_AddRefs(colorCssValue));
       NS_ENSURE_SUCCESS(res, res);
 
-      PRUint16 type;
+      uint16_t type;
       res = colorCssValue->GetCssValueType(&type);
       NS_ENSURE_SUCCESS(res, res);
       if (nsIDOMCSSValue::CSS_PRIMITIVE_VALUE == type) {

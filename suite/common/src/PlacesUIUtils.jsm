@@ -1,44 +1,7 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Places Command Controller.
- *
- * The Initial Developer of the Original Code is Google Inc.
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Ben Goodger <beng@google.com>
- *   Myk Melez <myk@mozilla.org>
- *   Asaf Romano <mano@mozilla.com>
- *   Sungjoon Steve Won <stevewon@gmail.com>
- *   Dietrich Ayala <dietrich@mozilla.com>
- *   Marco Bonardo <mak77@bonardo.net>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var EXPORTED_SYMBOLS = ["PlacesUIUtils"];
 
@@ -191,7 +154,7 @@ var PlacesUIUtils = {
             txn = PlacesUIUtils._getFolderCopyTransaction(node, aContainer, index);
         }
         else if (node.type == PlacesUtils.TYPE_X_MOZ_PLACE_SEPARATOR)
-          txn = PlacesUIUtils.ptm.createSeparator(-1, index);
+          txn = new PlacesCreateSeparatorTransaction(-1, index);
         else if (node.type == PlacesUtils.TYPE_X_MOZ_PLACE)
           txn = PlacesUIUtils._getBookmarkItemCopyTransaction(node, -1, index);
 
@@ -208,7 +171,10 @@ var PlacesUIUtils = {
       var txns = [];
       if (aData.children) {
         aData.children.forEach(function(aChild) {
-          txns.push(this.ptm.tagURI(PlacesUtils._uri(aChild.uri), [aData.title]));
+          txns.push(
+            new PlacesTagURITransaction(PlacesUtils._uri(aChild.uri),
+                                        [aData.title])          
+          );
         }, this);
       }
       return this.ptm.aggregateTransactions("addTags", txns);
@@ -220,16 +186,17 @@ var PlacesUIUtils = {
     else {
       var childItems = getChildItemsTransactions(aData.children);
       if (aData.dateAdded)
-        childItems.push(this.ptm.editItemDateAdded(null, aData.dateAdded));
+        childItems.push(new PlacesEditItemDateAddedTransaction(null, aData.dateAdded));
       if (aData.lastModified)
-        childItems.push(this.ptm.editItemLastModified(null, aData.lastModified));
+        childItems.push(new PlacesEditItemLastModifiedTransaction(null, aData.lastModified));
 
       var annos = aData.annos || [];
       annos = annos.filter(function(aAnno) {
         // always exclude GUID when copying any item
         return aAnno.name != PlacesUtils.GUID_ANNO;
       });
-      return this.ptm.createFolder(aData.title, aContainer, aIndex, annos, childItems);
+      return new PlacesCreateFolderTransaction(aData.title, aContainer, aIndex,
+                                               annos, childItems);
     }
   },
 
@@ -252,8 +219,8 @@ var PlacesUIUtils = {
       // always exclude GUID when copying any item
       return aAnno.name != PlacesUtils.GUID_ANNO;
     });
-    return this.ptm.createLivemark(feedURI, siteURI, aData.title, aContainer,
-                                   aIndex, aData.annos);
+    return new PlacesCreateLivemarkTransaction(feedURI, siteURI, aData.title,
+                                               aContainer, aIndex, aData.annos);
   },
 
   /**
@@ -279,7 +246,7 @@ var PlacesUIUtils = {
         if (copy)
           return this._getFolderCopyTransaction(data, container, index);
         // Otherwise move the item.
-        return this.ptm.moveItem(data.id, container, index);
+        return new PlacesMoveItemTransaction(data.id, container, index);
         break;
       case PlacesUtils.TYPE_X_MOZ_PLACE:
         if (data.id == -1) // Not bookmarked.
@@ -288,15 +255,15 @@ var PlacesUIUtils = {
         if (copy)
           return this._getBookmarkItemCopyTransaction(data, container, index);
         // Otherwise move the item.
-        return this.ptm.moveItem(data.id, container, index);
+        return new PlacesMoveItemTransaction(data.id, container, index);
         break;
       case PlacesUtils.TYPE_X_MOZ_PLACE_SEPARATOR:
         // There is no data in a separator, so copying it just amounts to
         // inserting a new separator.
         if (copy)
-          return this.ptm.createSeparator(container, index);
+          return new PlacesCreateSeparatorTransaction(container, index);
         // Otherwise move the item.
-        return this.ptm.moveItem(data.id, container, index);
+        return new PlacesMoveItemTransaction(data.id, container, index);
         break;
       default:
         if (type == PlacesUtils.TYPE_X_MOZ_URL ||
@@ -304,8 +271,8 @@ var PlacesUIUtils = {
             type == this.TYPE_TAB_DROP) {
           var title = (type != PlacesUtils.TYPE_UNICODE) ? data.title :
                                                              data.uri;
-          return this.ptm.createItem(PlacesUtils._uri(data.uri),
-                                     container, index, title);
+          return new PlacesCreateBookmarkTransaction(PlacesUtils._uri(data.uri),
+                                                     container, index, title);
         }
     }
     return null;
@@ -460,7 +427,7 @@ var PlacesUIUtils = {
     else
       info.hiddenRows.push("keyword");
 
-    return this._showBookmarkDialog(info, true);
+    return this._showBookmarkDialog(info);
   },
 
   /**
@@ -551,7 +518,7 @@ var PlacesUIUtils = {
       if (!aShowPicker)
         info.hiddenRows.push("folderPicker");
     }
-    return this._showBookmarkDialog(info, true);
+    return this._showBookmarkDialog(info);
   },
 
   /**
@@ -572,7 +539,7 @@ var PlacesUIUtils = {
       hiddenRows: ["description"],
       URIList: aURIList
     };
-    return this._showBookmarkDialog(info, true);
+    return this._showBookmarkDialog(info);
   },
 
   /**
@@ -642,17 +609,10 @@ var PlacesUIUtils = {
    *
    * @return true if any transaction has been performed, false otherwise.
    */
-  _showBookmarkDialog: function PUIU__showBookmarkDialog(aInfo, aMinimalUI) {
-    var dialogURL = aMinimalUI ?
-                    "chrome://communicator/content/bookmarks/bm-props2.xul" :
-                    "chrome://communicator/content/bookmarks/bm-props.xul";
-
-    var features;
-    if (aMinimalUI)
-      features = "centerscreen,chrome,modal,resizable=yes";
-    else
-      features = "centerscreen,chrome,modal,resizable=no";
-    this._getCurrentActiveWin().openDialog(dialogURL, "",  features, aInfo);
+  _showBookmarkDialog: function PUIU__showBookmarkDialog(aInfo) {
+    var dialogURL = "chrome://communicator/content/bookmarks/bm-props.xul";
+    var features = "centerscreen,chrome,modal,resizable=yes";
+    this._getCurrentActiveWin().openDialog(dialogURL, "", features, aInfo);
     return ("performed" in aInfo && aInfo.performed);
   },
 

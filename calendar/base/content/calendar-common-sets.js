@@ -1,39 +1,9 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Sun Microsystems code.
- *
- * The Initial Developer of the Original Code is
- *   Philipp Kewisch <mozilla@kewis.ch>
- * Portions created by the Initial Developer are Copyright (C) 2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Martin Schroeder <mschroeder@mozilla.x-home.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+var CalendarDeleteCommandEnabled = false;
+var CalendarNewItemsCommandEnabled = false;
 
 /**
  * Command controller to execute calendar specific commands
@@ -98,6 +68,10 @@ var calendarController = {
         "calendar_priority-1_command": true,
         "calendar_general-priority_command": true,
         "calendar_general-progress_command": true,
+        "calendar_general-postpone_command": true,
+        "calendar_postpone-1hour_command": true,
+        "calendar_postpone-1day_command": true,
+        "calendar_postpone-1week_command": true,
         "calendar_task_category_command": true,
 
         "calendar_attendance_command": true,
@@ -131,19 +105,19 @@ var calendarController = {
         switch (aCommand) {
             case "calendar_new_event_command":
             case "calendar_new_event_context_command":
-                return this.writable && this.calendars_support_events;
+                return CalendarNewItemsCommandEnabled && this.writable && this.calendars_support_events;
             case "calendar_modify_focused_item_command":
                 return this.item_selected;
             case "calendar_modify_event_command":
                 return this.item_selected;
             case "calendar_delete_focused_item_command":
-                return this.selected_items_writable;
+                return CalendarDeleteCommandEnabled && this.selected_items_writable;
             case "calendar_delete_event_command":
-                return this.selected_items_writable;
+                return CalendarDeleteCommandEnabled && this.selected_items_writable;
             case "calendar_new_todo_command":
             case "calendar_new_todo_context_command":
             case "calendar_new_todo_todaypane_command":
-                return this.writable && this.calendars_support_tasks;
+                return CalendarNewItemsCommandEnabled && this.writable && this.calendars_support_tasks;
             case "calendar_modify_todo_command":
             case "calendar_modify_todo_todaypane_command":
                  return this.todo_items_selected;
@@ -155,6 +129,8 @@ var calendarController = {
             case "calendar_task_filter_command":
                 return true;
             case "calendar_delete_todo_command":
+                if (!CalendarDeleteCommandEnabled)
+                    return false;
             case "calendar_toggle_completed_command":
             case "calendar_percentComplete-0_command":
             case "calendar_percentComplete-25_command":
@@ -168,6 +144,10 @@ var calendarController = {
             case "calendar_task_category_command":
             case "calendar_general-progress_command":
             case "calendar_general-priority_command":
+            case "calendar_general-postpone_command":
+            case "calendar_postpone-1hour_command":
+            case "calendar_postpone-1day_command":
+            case "calendar_postpone-1week_command":
                 return (this.isCalendarInForeground() || this.todo_tasktree_focused) &&
                        this.writable &&
                        this.todo_items_selected &&
@@ -197,7 +177,9 @@ var calendarController = {
                                 this.todo_items_selected &&
                                 this.todo_items_writable;
                 } else {
-                    attendSel = this.item_selected && this.selected_events_invitation;
+                    attendSel = this.item_selected &&
+                                this.selected_events_invitation &&
+                                this.selected_items_writable;
                 }
 
                 // Small hack, we want to hide instead of disable.
@@ -461,11 +443,14 @@ var calendarController = {
                 return isSunbird() || (gCurrentMode && gCurrentMode == "calendar");
             case "task":
                 return !isSunbird() && (gCurrentMode && gCurrentMode == "task");
-       }
+        }
+        return false;
     },
 
     onSelectionChanged: function cC_onSelectionChanged(aEvent) {
         var selectedItems = aEvent.detail;
+
+        calendarUpdateDeleteCommand(selectedItems);
         calendarController.item_selected = selectedItems && (selectedItems.length > 0);
 
         let selLength = (selectedItems === undefined ? 0 : selectedItems.length);
@@ -479,7 +464,8 @@ var calendarController = {
                     selected_events_readonly++;
                 }
                 if (item.calendar.getProperty("requiresNetwork") &&
-                    !item.calendar.getProperty("cache.enabled")) {
+                    !item.calendar.getProperty("cache.enabled") &&
+                    !item.calendar.getProperty("cache.always")) {
                     selected_events_requires_network++;
                 }
 
@@ -573,7 +559,7 @@ var calendarController = {
         let calMgr = getCalendarManager();
         let calendars = calMgr.getCalendars({});
         for each (let calendar in calendars) {
-            if (calendar.getProperty("cache.enabled")) {
+            if (calendar.getProperty("cache.enabled") || calendar.getProperty("cache.always")) {
                 return true;
             }
         }
@@ -604,8 +590,8 @@ var calendarController = {
     },
 
     /**
-     * Returns a boolean indicating if the items selected in the current view
-     * all have writable calendars.
+     * Returns a boolean indicating that at least one of the items selected
+     * in the current view has a writable calendar.
      */
     get selected_items_writable() {
         return this.writable &&
@@ -718,7 +704,8 @@ var calendarController2 = {
         "cmd_goBack": true,
         "cmd_fullZoomReduce": true,
         "cmd_fullZoomEnlarge": true,
-        "cmd_fullZoomReset": true
+        "cmd_fullZoomReset": true,
+        "cmd_showQuickFilterBar": true
     },
 
     // These functions can use the same from the calendar controller for now.
@@ -752,6 +739,8 @@ var calendarController2 = {
             case "cmd_properties":
             case "cmd_printpreview":
                 return false;
+            case "cmd_showQuickFilterBar":
+                return calendarController.isInMode("task");
             default:
                 return true;
         }
@@ -798,6 +787,9 @@ var calendarController2 = {
                 break;
             case "cmd_fullZoomReset":
                 currentView().zoomReset();
+                break;
+            case "cmd_showQuickFilterBar":
+                document.getElementById('task-text-filter-field').select();
                 break;
 
             case "button_delete":
@@ -894,7 +886,7 @@ function setupContextItemType(event, items) {
  */
 function minimonthPick(aNewDate) {
   if (cal.isSunbird() || gCurrentMode == "calendar" || gCurrentMode == "task") {
-      let cdt = jsDateToDateTime(aNewDate, currentView().timezone);
+      let cdt = cal.jsDateToDateTime(aNewDate, currentView().timezone);
       cdt.isDate = true;
       currentView().goToDay(cdt);
 
@@ -913,4 +905,72 @@ function selectAllItems() {
   } else if (calendarController.isInMode("calendar")) {
     selectAllEvents();
   }
+}
+
+/**
+ * Returns the selected items, based on which mode we are currently in and what task tree is focused
+ */
+function getSelectedItems() {
+    if (calendarController.todo_tasktree_focused) {
+        return getSelectedTasks();
+    }
+
+    return currentView().getSelectedItems({});
+}
+
+/**
+ * Deletes the selected items, based on which mode we are currently in and what task tree is focused
+ */
+function deleteSelectedItems() {
+    if (calendarController.todo_tasktree_focused) {
+        deleteToDoCommand();
+    } else if (calendarController.isInMode("calendar")) {
+        deleteSelectedEvents();
+    }
+}
+
+function calendarUpdateNewItemsCommand() {
+    let oldValue = CalendarNewItemsCommandEnabled;
+
+    let commands = ["calendar_new_event_command",
+                    "calendar_new_event_context_command",
+                    "calendar_new_todo_command",
+                    "calendar_new_todo_context_command",
+                    "calendar_new_todo_todaypane_command"];
+
+    CalendarNewItemsCommandEnabled = false;
+    let cal = getSelectedCalendar();
+    if (cal && isCalendarWritable(cal) && userCanAddItemsToCalendar(cal)) {
+        CalendarNewItemsCommandEnabled = true;
+    }
+
+    if (CalendarNewItemsCommandEnabled != oldValue) {
+        for (let i = 0; i < commands.length; i++) {
+            goUpdateCommand(commands[i]);
+        }
+    }
+}
+
+function calendarUpdateDeleteCommand(selectedItems) {
+    let oldValue = CalendarDeleteCommandEnabled;
+    CalendarDeleteCommandEnabled = (selectedItems.length > 0);
+
+    /* we must disable "delete" when at least one item cannot be deleted */
+    for each (let item in selectedItems) {
+        if (!userCanDeleteItemsFromCalendar(item.calendar)) {
+            CalendarDeleteCommandEnabled = false;
+            break;
+        }
+    }
+
+    if (CalendarDeleteCommandEnabled != oldValue) {
+        let commands = ["calendar_delete_event_command",
+                        "calendar_delete_todo_command",
+                        "calendar_delete_focused_item_command",
+                        "button_delete",
+                        "cmd_delete"];
+        for each (let command in commands) {
+            goUpdateCommand(command);
+        }
+    }
 }

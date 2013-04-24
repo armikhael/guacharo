@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Mats Palmgren <matspal@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* keywords used within CSS property values */
 
@@ -107,6 +74,9 @@ CSS_KEY(-moz-ethiopic-halehame-ti-et, _moz_ethiopic_halehame_ti_et)
 CSS_KEY(-moz-field, _moz_field)
 CSS_KEY(-moz-fieldtext, _moz_fieldtext)
 CSS_KEY(-moz-fit-content, _moz_fit_content)
+#ifdef MOZ_FLEXBOX
+CSS_KEY(-moz-flex, _moz_flex)
+#endif // MOZ_FLEXBOX
 CSS_KEY(-moz-grabbing, _moz_grabbing)
 CSS_KEY(-moz-grab, _moz_grab)
 CSS_KEY(-moz-grid-group, _moz_grid_group)
@@ -125,8 +95,13 @@ CSS_KEY(-moz-image-rect, _moz_image_rect)
 CSS_KEY(-moz-info, _moz_info)
 CSS_KEY(-moz-initial, _moz_initial)
 CSS_KEY(-moz-inline-box, _moz_inline_box)
+#ifdef MOZ_FLEXBOX
+CSS_KEY(-moz-inline-flex, _moz_inline_flex)
+#endif // MOZ_FLEXBOX
 CSS_KEY(-moz-inline-grid, _moz_inline_grid)
 CSS_KEY(-moz-inline-stack, _moz_inline_stack)
+CSS_KEY(-moz-isolate, _moz_isolate)
+CSS_KEY(-moz-isolate-override, _moz_isolate_override)
 CSS_KEY(-moz-japanese-formal, _moz_japanese_formal)
 CSS_KEY(-moz-japanese-informal, _moz_japanese_informal)
 CSS_KEY(-moz-kannada, _moz_kannada)
@@ -158,6 +133,7 @@ CSS_KEY(-moz-none, _moz_none)
 CSS_KEY(-moz-oddtreerow, _moz_oddtreerow)
 CSS_KEY(-moz-oriya, _moz_oriya)
 CSS_KEY(-moz-persian, _moz_persian)
+CSS_KEY(-moz-plaintext, _moz_plaintext)
 CSS_KEY(-moz-popup, _moz_popup)
 CSS_KEY(-moz-pull-down-menu, _moz_pull_down_menu)
 CSS_KEY(-moz-right, _moz_right)
@@ -189,6 +165,7 @@ CSS_KEY(alias, alias)
 CSS_KEY(all, all)
 CSS_KEY(all-scroll, all_scroll)
 CSS_KEY(alternate, alternate)
+CSS_KEY(alternate-reverse, alternate_reverse)
 CSS_KEY(always, always)
 CSS_KEY(appworkspace, appworkspace)
 CSS_KEY(armenian, armenian)
@@ -208,6 +185,7 @@ CSS_KEY(both, both)
 CSS_KEY(bottom, bottom)
 CSS_KEY(bottom-outside, bottom_outside)
 CSS_KEY(bounding-box, bounding_box)
+CSS_KEY(break-all, break_all)
 CSS_KEY(break-word, break_word)
 CSS_KEY(button, button)
 CSS_KEY(buttonface, buttonface)
@@ -229,6 +207,8 @@ CSS_KEY(closest-side, closest_side)
 CSS_KEY(cm, cm)
 CSS_KEY(col-resize, col_resize)
 CSS_KEY(collapse, collapse)
+CSS_KEY(column, column)
+CSS_KEY(column-reverse, column_reverse)
 CSS_KEY(condensed, condensed)
 CSS_KEY(contain, contain)
 CSS_KEY(content-box, content_box)
@@ -273,6 +253,9 @@ CSS_KEY(farthest-side, farthest_side)
 CSS_KEY(farthest-corner, farthest_corner)
 CSS_KEY(fill, fill)
 CSS_KEY(fixed, fixed)
+CSS_KEY(flat, flat)
+CSS_KEY(flex-end, flex_end)
+CSS_KEY(flex-start, flex_start)
 CSS_KEY(forwards, forwards)
 CSS_KEY(georgian, georgian)
 CSS_KEY(grad, grad)
@@ -307,13 +290,11 @@ CSS_KEY(inline-table, inline_table)
 CSS_KEY(inset, inset)
 CSS_KEY(inside, inside)
 CSS_KEY(interpolatematrix, interpolatematrix)
-#ifdef GFX_HAS_INVERT
-CSS_KEY(invert, invert)
-#endif
 CSS_KEY(italic, italic)
 CSS_KEY(justify, justify)
 CSS_KEY(katakana, katakana)
 CSS_KEY(katakana-iroha, katakana_iroha)
+CSS_KEY(keep-all, keep_all)
 CSS_KEY(khz, khz)
 CSS_KEY(landscape, landscape)
 CSS_KEY(large, large)
@@ -374,6 +355,7 @@ CSS_KEY(portrait, portrait)
 CSS_KEY(pre, pre)
 CSS_KEY(pre-wrap, pre_wrap)
 CSS_KEY(pre-line, pre_line)
+CSS_KEY(preserve-3d, preserve_3d)
 CSS_KEY(progress, progress)
 CSS_KEY(progressive, progressive)
 CSS_KEY(pt, pt)
@@ -394,7 +376,9 @@ CSS_KEY(rotatex, rotatex)
 CSS_KEY(rotatey, rotatey)
 CSS_KEY(rotatez, rotatez)
 CSS_KEY(round, round)
+CSS_KEY(row, row)
 CSS_KEY(row-resize, row_resize)
+CSS_KEY(row-reverse, row_reverse)
 CSS_KEY(rtl, rtl)
 CSS_KEY(running, running)
 CSS_KEY(s, s)
@@ -426,6 +410,8 @@ CSS_KEY(small-caption, small_caption)
 CSS_KEY(smaller, smaller)
 CSS_KEY(soft, soft)
 CSS_KEY(solid, solid)
+CSS_KEY(space-around, space_around)
+CSS_KEY(space-between, space_between)
 CSS_KEY(square, square)
 CSS_KEY(start, start)
 CSS_KEY(static, static)
@@ -565,6 +551,8 @@ CSS_KEY(menulist, menulist)
 CSS_KEY(menulist-button, menulistbutton)
 CSS_KEY(menulist-text, menulisttext)
 CSS_KEY(menulist-textfield, menulisttextfield)
+CSS_KEY(meterbar, meterbar)
+CSS_KEY(meterchunk, meterchunk)
 CSS_KEY(scale-horizontal, scale_horizontal)
 CSS_KEY(scale-vertical, scale_vertical)
 CSS_KEY(scalethumb-horizontal, scalethumb_horizontal)
@@ -613,6 +601,7 @@ CSS_KEY(mathematical, mathematical)
 //CSS_KEY(middle, middle)
 CSS_KEY(miter, miter)
 CSS_KEY(no-change, no_change)
+CSS_KEY(non-scaling-stroke, non_scaling_stroke)
 CSS_KEY(nonzero, nonzero)
 CSS_KEY(optimizelegibility, optimizelegibility)
 CSS_KEY(optimizequality, optimizequality)

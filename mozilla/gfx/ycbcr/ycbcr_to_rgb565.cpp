@@ -1,47 +1,13 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Tom Brinkman <reportbase@gmail.com>
- *  Siarhei Siamashka <siarhei.siamashka@gmail.com>
- *  Timothy B. Terriberry <tterriberry@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <stdlib.h>
 #include <limits.h>
 #include "nsDebug.h"
 #include "ycbcr_to_rgb565.h"
+#include "nsAlgorithm.h"
 
 
 
@@ -55,10 +21,10 @@ namespace gfx {
   Passing them in a struct instead of as individual parameters saves the need
    to continually push onto the stack the ones that are fixed for every row.*/
 struct yuv2rgb565_row_scale_bilinear_ctx{
-  PRUint16 *rgb_row;
-  const PRUint8 *y_row;
-  const PRUint8 *u_row;
-  const PRUint8 *v_row;
+  uint16_t *rgb_row;
+  const uint8_t *y_row;
+  const uint8_t *u_row;
+  const uint8_t *v_row;
   int y_yweight;
   int y_pitch;
   int width;
@@ -78,10 +44,10 @@ struct yuv2rgb565_row_scale_bilinear_ctx{
   Passing them in a struct instead of as individual parameters saves the need
    to continually push onto the stack the ones that are fixed for every row.*/
 struct yuv2rgb565_row_scale_nearest_ctx{
-  PRUint16 *rgb_row;
-  const PRUint8 *y_row;
-  const PRUint8 *u_row;
-  const PRUint8 *v_row;
+  uint16_t *rgb_row;
+  const uint8_t *y_row;
+  const uint8_t *u_row;
+  const uint8_t *v_row;
   int width;
   int source_x0_q16;
   int source_dx_q16;
@@ -118,7 +84,7 @@ void __attribute((noinline)) yuv42x_to_rgb565_row_neon(uint16 *dst,
 /*Bilinear interpolation of a single value.
   This uses the exact same formulas as the asm, even though it adds some extra
    shifts that do nothing but reduce accuracy.*/
-static int bislerp(const PRUint8 *row,
+static int bislerp(const uint8_t *row,
                    int pitch,
                    int source_x,
                    int xweight,
@@ -139,7 +105,7 @@ static int bislerp(const PRUint8 *row,
 /*Convert a single pixel from Y'CbCr to RGB565.
   This uses the exact same formulas as the asm, even though we could make the
    constants a lot more accurate with 32-bit wide registers.*/
-static PRUint16 yu2rgb565(int y, int u, int v, int dither) {
+static uint16_t yu2rgb565(int y, int u, int v, int dither) {
   /*This combines the constant offset that needs to be added during the Y'CbCr
      conversion with a rounding offset that depends on the dither parameter.*/
   static const int DITHER_BIAS[4][3]={
@@ -151,10 +117,10 @@ static PRUint16 yu2rgb565(int y, int u, int v, int dither) {
   int r;
   int g;
   int b;
-  r = NS_CLAMP((74*y+102*v+DITHER_BIAS[dither][0])>>9, 0, 31);
-  g = NS_CLAMP((74*y-25*u-52*v+DITHER_BIAS[dither][1])>>8, 0, 63);
-  b = NS_CLAMP((74*y+129*u+DITHER_BIAS[dither][2])>>9, 0, 31);
-  return (PRUint16)(r<<11 | g<<5 | b);
+  r = clamped((74*y+102*v+DITHER_BIAS[dither][0])>>9, 0, 31);
+  g = clamped((74*y-25*u-52*v+DITHER_BIAS[dither][1])>>8, 0, 63);
+  b = clamped((74*y+129*u+DITHER_BIAS[dither][2])>>9, 0, 31);
+  return (uint16_t)(r<<11 | g<<5 | b);
 }
 
 static void ScaleYCbCr420ToRGB565_Bilinear_Row_C(
@@ -314,10 +280,10 @@ static void ScaleYCbCr444ToRGB565_Nearest_Row_C(
   }
 }
 
-NS_GFX_(void) ScaleYCbCrToRGB565(const PRUint8 *y_buf,
-                                 const PRUint8 *u_buf,
-                                 const PRUint8 *v_buf,
-                                 PRUint8 *rgb_buf,
+NS_GFX_(void) ScaleYCbCrToRGB565(const uint8_t *y_buf,
+                                 const uint8_t *u_buf,
+                                 const uint8_t *v_buf,
+                                 uint8_t *rgb_buf,
                                  int source_x0,
                                  int source_y0,
                                  int source_width,
@@ -377,8 +343,8 @@ NS_GFX_(void) ScaleYCbCrToRGB565(const PRUint8 *y_buf,
      that would require the mis-alignment to be the same for the U and V
      planes.*/
   NS_ASSERTION((y_pitch&15) == 0 && (uv_pitch&15) == 0 &&
-   ((y_buf-(PRUint8 *)NULL)&15) == 0 &&
-   ((u_buf-(PRUint8 *)NULL)&15) == 0 && ((v_buf-(PRUint8 *)NULL)&15) == 0,
+   ((y_buf-(uint8_t *)NULL)&15) == 0 &&
+   ((u_buf-(uint8_t *)NULL)&15) == 0 && ((v_buf-(uint8_t *)NULL)&15) == 0,
    "ScaleYCbCrToRGB565 source image unaligned");
   /*We take an area-based approach to pixel coverage to avoid shifting by small
      amounts (or not so small, when up-scaling or down-scaling by a large
@@ -456,12 +422,12 @@ NS_GFX_(void) ScaleYCbCrToRGB565(const PRUint8 *y_buf,
     ctx.source_uv_xoffs_q16 = source_uv_xoffs_q16;
     for (y=0; y<height; y++) {
       int source_y;
-      ctx.rgb_row = (PRUint16 *)(rgb_buf + y*rgb_pitch);
+      ctx.rgb_row = (uint16_t *)(rgb_buf + y*rgb_pitch);
       source_y = source_y0_q16>>16;
-      source_y = NS_CLAMP(source_y, ymin, ymax);
+      source_y = clamped(source_y, ymin, ymax);
       ctx.y_row = y_buf + source_y*y_pitch;
       source_y = (source_y0_q16+source_uv_yoffs_q16)>>(16+y_shift);
-      source_y = NS_CLAMP(source_y, uvmin, uvmax);
+      source_y = clamped(source_y, uvmin, uvmax);
       source_y0_q16 += source_dy_q16;
       ctx.u_row = u_buf + source_y*uv_pitch;
       ctx.v_row = v_buf + source_y*uv_pitch;
@@ -534,7 +500,7 @@ NS_GFX_(void) ScaleYCbCrToRGB565(const PRUint8 *y_buf,
       int source_y;
       int yweight;
       int uvweight;
-      ctx.rgb_row = (PRUint16 *)(rgb_buf + y*rgb_pitch);
+      ctx.rgb_row = (uint16_t *)(rgb_buf + y*rgb_pitch);
       source_y = (source_y0_q16+128)>>16;
       yweight = ((source_y0_q16+128)>>8)&0xFF;
       if (source_y < ymin) {

@@ -1,42 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Darin Fisher <darin@netscape.com> (original author)
- *   Alexey Chernyak <alexeyc@bigfoot.com> (XHTML 1.1 conversion)
- *   Steffen Wilberg <steffen.wilberg@web.de> (new layout)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <limits.h>
 
@@ -53,7 +18,7 @@
 #define HEXDUMP_MAX_ROWS 16
 
 static void
-HexDump(PRUint32 *state, const char *buf, PRInt32 n, nsCString &result)
+HexDump(uint32_t *state, const char *buf, int32_t n, nsCString &result)
 {
   char temp[16];
 
@@ -65,7 +30,7 @@ HexDump(PRUint32 *state, const char *buf, PRInt32 n, nsCString &result)
 
     p = (const unsigned char *) buf;
 
-    PRInt32 i, row_max = NS_MIN(HEXDUMP_MAX_ROWS, n);
+    int32_t i, row_max = NS_MIN(HEXDUMP_MAX_ROWS, n);
 
     // print hex codes:
     for (i = 0; i < row_max; ++i) {
@@ -131,7 +96,7 @@ nsAboutCacheEntry::NewChannel(nsIURI *uri, nsIChannel **result)
 }
 
 NS_IMETHODIMP
-nsAboutCacheEntry::GetURIFlags(nsIURI *aURI, PRUint32 *result)
+nsAboutCacheEntry::GetURIFlags(nsIURI *aURI, uint32_t *result)
 {
     *result = nsIAboutModule::HIDE_FROM_ABOUTABOUT;
     return NS_OK;
@@ -145,7 +110,7 @@ nsAboutCacheEntry::GetContentStream(nsIURI *uri, nsIInputStream **result)
 {
     nsCOMPtr<nsIStorageStream> storageStream;
     nsCOMPtr<nsIOutputStream> outputStream;
-    PRUint32 n;
+    uint32_t n;
     nsCString buffer;
     nsresult rv;
 
@@ -153,7 +118,7 @@ nsAboutCacheEntry::GetContentStream(nsIURI *uri, nsIInputStream **result)
     OpenCacheEntry(uri, getter_AddRefs(descriptor));
 
     // Init: (block size, maximum length)
-    rv = NS_NewStorageStream(256, PRUint32(-1), getter_AddRefs(storageStream));
+    rv = NS_NewStorageStream(256, uint32_t(-1), getter_AddRefs(storageStream));
     if (NS_FAILED(rv)) return rv;
 
     rv = storageStream->GetOutputStream(0, getter_AddRefs(outputStream));
@@ -183,7 +148,7 @@ nsAboutCacheEntry::GetContentStream(nsIURI *uri, nsIInputStream **result)
     outputStream->Write(buffer.get(), buffer.Length(), &n);
 
     nsCOMPtr<nsIInputStream> inStr;
-    PRUint32 size;
+    uint32_t size;
 
     rv = storageStream->GetLength(&size);
     if (NS_FAILED(rv)) return rv;
@@ -196,7 +161,7 @@ nsAboutCacheEntry::OpenCacheEntry(nsIURI *uri, nsICacheEntryDescriptor **result)
 {
     nsresult rv;
     nsCAutoString clientID, key;
-    PRBool streamBased = PR_TRUE;
+    bool streamBased = true;
 
     rv = ParseURI(uri, clientID, streamBased, key);
     if (NS_FAILED(rv)) return rv;
@@ -212,10 +177,10 @@ nsAboutCacheEntry::OpenCacheEntry(nsIURI *uri, nsICacheEntryDescriptor **result)
                              getter_AddRefs(session));
     if (NS_FAILED(rv)) return rv;
 
-    rv = session->SetDoomEntriesIfExpired(PR_FALSE);
+    rv = session->SetDoomEntriesIfExpired(false);
     if (NS_FAILED(rv)) return rv;
 
-    rv = session->OpenCacheEntry(key, nsICache::ACCESS_READ, PR_FALSE, result);
+    rv = session->OpenCacheEntry(key, nsICache::ACCESS_READ, false, result);
     return rv;
 }
 
@@ -224,7 +189,7 @@ nsAboutCacheEntry::OpenCacheEntry(nsIURI *uri, nsICacheEntryDescriptor **result)
 // helper methods
 //-----------------------------------------------------------------------------
 
-static PRTime SecondsToPRTime(PRUint32 t_sec)
+static PRTime SecondsToPRTime(uint32_t t_sec)
 {
     PRTime t_usec, usec_per_sec;
     LL_I2L(t_usec, t_sec);
@@ -232,7 +197,7 @@ static PRTime SecondsToPRTime(PRUint32 t_sec)
     LL_MUL(t_usec, t_usec, usec_per_sec);
     return t_usec;
 }
-static void PrintTimeString(char *buf, PRUint32 bufsize, PRUint32 t_sec)
+static void PrintTimeString(char *buf, uint32_t bufsize, uint32_t t_sec)
 {
     PRExplodedTime et;
     PRTime t_usec = SecondsToPRTime(t_sec);
@@ -258,7 +223,7 @@ nsAboutCacheEntry::WriteCacheEntryDescription(nsIOutputStream *outputStream,
 {
     nsresult rv;
     nsCString buffer;
-    PRUint32 n;
+    uint32_t n;
 
     nsCAutoString str;
 
@@ -273,8 +238,8 @@ nsAboutCacheEntry::WriteCacheEntryDescription(nsIOutputStream *outputStream,
 
     // Test if the key is actually a URI
     nsCOMPtr<nsIURI> uri;
-    PRBool isJS = PR_FALSE;
-    PRBool isData = PR_FALSE;
+    bool isJS = false;
+    bool isData = false;
 
     rv = NS_NewURI(getter_AddRefs(uri), str);
     // javascript: and data: URLs should not be linkified
@@ -300,8 +265,8 @@ nsAboutCacheEntry::WriteCacheEntryDescription(nsIOutputStream *outputStream,
 
     // temp vars for reporting
     char timeBuf[255];
-    PRUint32 u = 0;
-    PRInt32  i = 0;
+    uint32_t u = 0;
+    int32_t  i = 0;
     nsCAutoString s;
 
     // Fetch Count
@@ -339,9 +304,9 @@ nsAboutCacheEntry::WriteCacheEntryDescription(nsIOutputStream *outputStream,
 
     // Data Size
     s.Truncate();
-    PRUint32 dataSize;
-    descriptor->GetDataSize(&dataSize);
-    s.AppendInt((PRInt32)dataSize);     // XXX nsICacheEntryInfo interfaces should be fixed.
+    uint32_t dataSize;
+    descriptor->GetStorageDataSize(&dataSize);
+    s.AppendInt((int32_t)dataSize);     // XXX nsICacheEntryInfo interfaces should be fixed.
     APPEND_ROW("Data size", s);
 
     // Storage Policy
@@ -388,7 +353,7 @@ nsAboutCacheEntry::WriteCacheEntryDescription(nsIOutputStream *outputStream,
     // nsCacheMetaData::VisitElements, which calls
     // nsAboutCacheEntry::VisitMetaDataElement (below) in a loop.
     descriptor->VisitMetaData(this);
-    mBuffer = nsnull;
+    mBuffer = nullptr;
 
     buffer.AppendLiteral("</table>\n");
     outputStream->Write(buffer.get(), buffer.Length(), &n);
@@ -402,13 +367,10 @@ nsAboutCacheEntry::WriteCacheEntryDescription(nsIOutputStream *outputStream,
         if (stream) {
             buffer.AssignLiteral("<hr/>\n"
                                  "<pre>");
-            PRUint32 hexDumpState = 0;
+            uint32_t hexDumpState = 0;
             char chunk[4096];
-            while (dataSize) {
-                PRUint32 count = NS_MIN<PRUint32>(dataSize, sizeof(chunk));
-                if (NS_FAILED(stream->Read(chunk, count, &n)) || n == 0)
-                    break;
-                dataSize -= n;
+            while(NS_SUCCEEDED(stream->Read(chunk, sizeof(chunk), &n)) && 
+                  n > 0) {
                 HexDump(&hexDumpState, chunk, n, buffer);
                 outputStream->Write(buffer.get(), buffer.Length(), &n);
                 buffer.Truncate();
@@ -423,7 +385,7 @@ nsAboutCacheEntry::WriteCacheEntryDescription(nsIOutputStream *outputStream,
 nsresult
 nsAboutCacheEntry::WriteCacheEntryUnavailable(nsIOutputStream *outputStream)
 {
-    PRUint32 n;
+    uint32_t n;
     NS_NAMED_LITERAL_CSTRING(buffer,
         "The cache entry you selected is not available.");
     outputStream->Write(buffer.get(), buffer.Length(), &n);
@@ -432,7 +394,7 @@ nsAboutCacheEntry::WriteCacheEntryUnavailable(nsIOutputStream *outputStream)
 
 nsresult
 nsAboutCacheEntry::ParseURI(nsIURI *uri, nsCString &clientID,
-                            PRBool &streamBased, nsCString &key)
+                            bool &streamBased, nsCString &key)
 {
     //
     // about:cache-entry?client=[string]&sb=[boolean]&key=[string]
@@ -482,7 +444,7 @@ nsAboutCacheEntry::ParseURI(nsIURI *uri, nsCString &clientID,
 NS_IMETHODIMP
 nsAboutCacheEntry::VisitMetaDataElement(const char * key,
                                         const char * value,
-                                        PRBool *     keepGoing)
+                                        bool *     keepGoing)
 {
     mBuffer->AppendLiteral("  <tr>\n"
                            "    <th>");
@@ -495,6 +457,6 @@ nsAboutCacheEntry::VisitMetaDataElement(const char * key,
     mBuffer->AppendLiteral("</td>\n"
                            "  </tr>\n");
 
-    *keepGoing = PR_TRUE;
+    *keepGoing = true;
     return NS_OK;
 }

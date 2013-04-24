@@ -1,39 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef _MIMEI_H_
 #define _MIMEI_H_
@@ -272,7 +240,7 @@ extern "C" void mime_free (MimeObject *object);
 extern MimeObjectClass *mime_find_class (const char *content_type,
                      MimeHeaders *hdrs,
                      MimeDisplayOptions *opts,
-                     PRBool exact_match_p);
+                     bool exact_match_p);
 
 /** Given a content-type string, creates and returns an appropriate subclass
  * of MimeObject.  The headers (from which the content-type was presumably
@@ -281,13 +249,13 @@ extern MimeObjectClass *mime_find_class (const char *content_type,
  * display, e.g., mimemalt wants the body part to be shown inline.
  */
 extern MimeObject *mime_create (const char *content_type, MimeHeaders *hdrs,
-                MimeDisplayOptions *opts, PRBool forceInline = PR_FALSE);
+                MimeDisplayOptions *opts, bool forceInline = false);
 
 
 /* Querying the type hierarchy */
-extern PRBool mime_subclass_p(MimeObjectClass *child,
+extern bool mime_subclass_p(MimeObjectClass *child,
                  MimeObjectClass *parent);
-extern PRBool mime_typep(MimeObject *obj, MimeObjectClass *clazz);
+extern bool mime_typep(MimeObject *obj, MimeObjectClass *clazz);
 
 /* Returns a string describing the location of the part (like "2.5.3").
    This is not a full URL, just a part-number.
@@ -307,7 +275,7 @@ extern char *mime_external_attachment_url(MimeObject *obj);
    is appended to any existing part-number already in that URL; otherwise,
    it replaces it.
  */
-extern char *mime_set_url_part(const char *url, const char *part, PRBool append_p);
+extern char *mime_set_url_part(const char *url, const char *part, bool append_p);
 
 /*
   cut the part of url for display a attachment as a email.
@@ -349,14 +317,14 @@ extern int mime_parse_url_options(const char *url, MimeDisplayOptions *);
    or encrypted objects that we know about.  (MimeMessageClass uses this
    to decide if the headers need to be presented differently.)
  */
-extern PRBool mime_crypto_object_p(MimeHeaders *, PRBool clearsigned_counts);
+extern bool mime_crypto_object_p(MimeHeaders *, bool clearsigned_counts);
 
 /* Tells whether the given MimeObject is a message which has been encrypted
    or signed.  (Helper for MIME_GetMessageCryptoState()).
  */
 extern void mime_get_crypto_state (MimeObject *obj,
-                   PRBool *signed_p, PRBool *encrypted_p,
-                   PRBool *signed_ok, PRBool *encrypted_ok);
+                   bool *signed_p, bool *encrypted_p,
+                   bool *signed_ok, bool *encrypted_ok);
 
 
 /* Whether the given object has written out the HTML version of its headers
@@ -364,51 +332,51 @@ extern void mime_get_crypto_state (MimeObject *obj,
    this is true, then the child must write out its HTML slightly differently
    to take this into account...
  */
-extern PRBool mime_crypto_stamped_p(MimeObject *obj);
+extern bool mime_crypto_stamped_p(MimeObject *obj);
 
 /* How the crypto code tells the MimeMessage object what the crypto stamp
    on it says. */
 extern void mime_set_crypto_stamp(MimeObject *obj,
-                  PRBool signed_p, PRBool encrypted_p);
+                  bool signed_p, bool encrypted_p);
 #endif // ENABLE_SMIME
 
 class MimeParseStateObject {
 public:
 
   MimeParseStateObject()
-      {root = 0; separator_queued_p = PR_FALSE; separator_suppressed_p = PR_FALSE;
-        first_part_written_p = PR_FALSE; post_header_html_run_p = PR_FALSE; first_data_written_p = PR_FALSE;
-        decrypted_p = PR_FALSE; strippingPart = PR_FALSE;
+      {root = 0; separator_queued_p = false; separator_suppressed_p = false;
+        first_part_written_p = false; post_header_html_run_p = false; first_data_written_p = false;
+        decrypted_p = false; strippingPart = false;
       }
   MimeObject *root;        /* The outermost parser object. */
 
-  PRBool separator_queued_p;  /* Whether a separator should be written out
+  bool separator_queued_p;  /* Whether a separator should be written out
                    before the next text is written (this lets
                    us write separators lazily, so that one
                    doesn't appear at the end, and so that more
                    than one don't appear in a row.) */
 
-  PRBool separator_suppressed_p; /* Whether the currently-queued separator
+  bool separator_suppressed_p; /* Whether the currently-queued separator
                    should not be printed; this is a kludge to
                    prevent seps from being printed just after
                    a header block... */
 
-  PRBool first_part_written_p;  /* State used for the `Show Attachments As
+  bool first_part_written_p;  /* State used for the `Show Attachments As
                    Links' kludge. */
 
-  PRBool post_header_html_run_p; /* Whether we've run the
+  bool post_header_html_run_p; /* Whether we've run the
                    options->generate_post_header_html_fn */
 
-  PRBool first_data_written_p;  /* State used for Mozilla lazy-stream-
+  bool first_data_written_p;  /* State used for Mozilla lazy-stream-
                    creation evilness. */
 
-  PRBool decrypted_p; /* If options->dexlate_p is true, then this
+  bool decrypted_p; /* If options->dexlate_p is true, then this
                         will be set to indicate whether any
                         dexlateion did in fact occur.
                       */
   nsTArray<nsCString> partsToStrip; /* if we're stripping parts, what parts to strip */
   nsTArray<nsCString> detachToFiles; /* if we're detaching parts, where each part was detached to */
-  PRBool strippingPart;
+  bool strippingPart;
   nsCString detachedFilePath;       /* if we've detached this part, filepath of detached part */
 };
 
@@ -419,20 +387,20 @@ extern int MimeObject_output_init(MimeObject *obj, const char *content_type);
 
 /* The `user_visible_p' argument says whether the output that has just been
    written will cause characters or images to show up on the screen, that
-   is, it should be PR_FALSE if the stuff being written is merely structural
+   is, it should be false if the stuff being written is merely structural
    HTML or whitespace ("<P>", "</TABLE>", etc.)  This information is used
    when making the decision of whether a separating <HR> is needed.
  */
-extern int MimeObject_write(MimeObject *, const char *data, PRInt32 length,
-                            PRBool user_visible_p);
+extern int MimeObject_write(MimeObject *, const char *data, int32_t length,
+                            bool user_visible_p);
 extern int MimeOptions_write(MimeDisplayOptions *, nsCString &name,
-                             const char *data, PRInt32 length,
-                             PRBool user_visible_p);
+                             const char *data, int32_t length,
+                             bool user_visible_p);
 
 /* Writes out the right kind of HR (or rather, queues it for writing.) */
 extern int MimeObject_write_separator(MimeObject *);
 
-extern PRBool MimeObjectIsMessageBody(MimeObject *obj);
+extern bool MimeObjectIsMessageBody(MimeObject *obj);
 
 /* This is the data tagged to contexts and the declaration needs to be
    in a header file since more than mimemoz.c needs to see it now...

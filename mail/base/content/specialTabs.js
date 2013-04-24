@@ -1,48 +1,17 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://gre/modules/XPCOMUtils.jsm");
 Components.utils.import("resource://gre/modules/Services.jsm");
 Components.utils.import("resource://gre/modules/AddonManager.jsm");
+Components.utils.import("resource:///modules/StringBundle.js");
 
 function tabProgressListener(aTab, aStartsBlank) {
   this.mTab = aTab;
   this.mBrowser = aTab.browser;
   this.mBlank = aStartsBlank;
+  this.mProgressListener = null;
 }
 
 tabProgressListener.prototype =
@@ -50,6 +19,7 @@ tabProgressListener.prototype =
   mTab: null,
   mBrowser: null,
   mBlank: null,
+  mProgressListener: null,
 
   // cache flags for correct status bar update after tab switching
   mStateFlags: 0,
@@ -59,20 +29,35 @@ tabProgressListener.prototype =
   // count of open requests (should always be 0 or 1)
   mRequestCount: 0,
 
+  addProgressListener: function tPL_addProgressListener(aProgressListener) {
+    this.mProgressListener = aProgressListener;
+  },
+
   onProgressChange: function tPL_onProgressChange(aWebProgress, aRequest,
                                                   aCurSelfProgress,
                                                   aMaxSelfProgress,
                                                   aCurTotalProgress,
                                                   aMaxTotalProgress) {
+    if (this.mProgressListener)
+      this.mProgressListener.onProgressChange(aWebProgress, aRequest,
+        aCurSelfProgress, aMaxSelfProgress, aCurTotalProgress,
+        aMaxTotalProgress);
   },
   onProgressChange64: function tPL_onProgressChange64(aWebProgress, aRequest,
                                                       aCurSelfProgress,
                                                       aMaxSelfProgress,
                                                       aCurTotalProgress,
                                                       aMaxTotalProgress) {
+    if (this.mProgressListener)
+      this.mProgressListener.onProgressChange64(aWebProgress, aRequest,
+        aCurSelfProgress, aMaxSelfProgress, aCurTotalProgress,
+        aMaxTotalProgress);
   },
   onLocationChange: function tPL_onLocationChange(aWebProgress, aRequest,
-                                                  aLocationURI) {
+                                                  aLocationURI, aFlags) {
+    if (this.mProgressListener)
+      this.mProgressListener.onLocationChange(aWebProgress, aRequest,
+        aLocationURI, aFlags);
     // onLocationChange is called for both the top-level content
     // and the subframes.
     if (aWebProgress.DOMWindow == this.mBrowser.contentWindow) {
@@ -99,6 +84,10 @@ tabProgressListener.prototype =
   },
   onStateChange: function tPL_onStateChange(aWebProgress, aRequest, aStateFlags,
                                             aStatus) {
+    if (this.mProgressListener)
+      this.mProgressListener.onStateChange(aWebProgress, aRequest, aStateFlags,
+        aStatus);
+
     if (!aRequest)
       return;
 
@@ -148,12 +137,20 @@ tabProgressListener.prototype =
   },
   onStatusChange: function tPL_onStatusChange(aWebProgress, aRequest, aStatus,
                                               aMessage) {
+    if (this.mProgressListener)
+      this.mProgressListener.onStatusChange(aWebProgress, aRequest, aStatus,
+        aMessage);
   },
   onSecurityChange: function tPL_onSecurityChange(aWebProgress, aRequest,
                                                   aState) {
+    if (this.mProgressListener)
+      this.mProgressListener.onSecurityChange(aWebProgress, aRequest, aState);
   },
   onRefreshAttempted: function tPL_OnRefreshAttempted(aWebProgress, aURI,
                                                       aDelay, aSameURI) {
+    if (this.mProgressListener)
+      this.mProgressListener.onRefreshAttempted(aWebProgress, aURI, aDelay,
+        aSameURI);
   },
   QueryInterface: XPCOMUtils.generateQI([Components.interfaces.nsIWebProgressListener,
                                          Components.interfaces.nsIWebProgressListener2,
@@ -245,6 +242,206 @@ const DOMLinkHandler = {
   }
 };
 
+const kTelemetryPrompted    = "toolkit.telemetry.prompted";
+const kTelemetryEnabled     = "toolkit.telemetry.enabled";
+const kTelemetryServerOwner = "toolkit.telemetry.server_owner";
+
+var contentTabBaseType = {
+  inContentWhitelist: ['about:addons'],
+  shouldSwitchTo: function onSwitchTo({contentPage: aContentPage}) {
+    let tabmail = document.getElementById("tabmail");
+    let tabInfo = tabmail.tabInfo;
+
+    // Remove any anchors - especially for the about: pages, we just want
+    // to re-use the same tab.
+    let regEx = new RegExp("#.*");
+
+    let contentUrl = aContentPage.replace(regEx, "");
+
+    for (let selectedIndex = 0; selectedIndex < tabInfo.length;
+         ++selectedIndex) {
+      if (tabInfo[selectedIndex].mode.name == this.name &&
+          tabInfo[selectedIndex].browser.currentURI.spec
+                                .replace(regEx, "") == contentUrl) {
+        // Ensure we go to the correct location on the page.
+        tabInfo[selectedIndex].browser
+                              .setAttribute("src", aContentPage);
+        return selectedIndex;
+      }
+    }
+    return -1;
+  },
+
+  closeTab: function onTabClosed(aTab) {
+    aTab.browser.removeEventListener("DOMTitleChanged",
+                                     aTab.titleListener, true);
+    aTab.browser.removeEventListener("DOMWindowClose",
+                                     aTab.closeListener, true);
+    aTab.browser.removeEventListener("DOMLinkAdded", DOMLinkHandler, false);
+    gPluginHandler.removeEventListeners(aTab.browser);
+    aTab.browser.webProgress.removeProgressListener(aTab.filter);
+    aTab.filter.removeProgressListener(aTab.progressListener);
+    aTab.browser.destroy();
+  },
+
+  saveTabState: function onSaveTabState(aTab) {
+    aTab.browser.setAttribute("type", "content-targetable");
+  },
+
+  showTab: function onShowTab(aTab) {
+    aTab.browser.setAttribute("type", "content-primary");
+  },
+
+  getBrowser: function getBrowser(aTab) {
+    return aTab.browser;
+  },
+
+  hideChromeForLocation: function hideChromeForLocation(aLocation) {
+    return this.inContentWhitelist.indexOf(aLocation) != -1;
+  },
+
+  /* _setUpLoadListener attaches a load listener to the tab browser that
+   * checks the loaded URL to see if it matches the inContentWhitelist.
+   * If so, then we apply the disablechrome attribute to the contentTab
+   * container.
+   */
+  _setUpLoadListener: function setUpLoadListener(aTab) {
+    let self = this;
+
+    function onLoad(aEvent) {
+      let doc = aEvent.originalTarget;
+      if (self.hideChromeForLocation(doc.defaultView.location.href)) {
+        aTab.root.setAttribute("disablechrome", "true");
+      } else {
+        doc.documentElement.removeAttribute("disablechrome");
+      }
+    }
+
+    aTab.loadListener = onLoad;
+    aTab.browser.addEventListener("load", aTab.loadListener, true);
+  },
+
+  // Internal function used to set up the title listener on a content tab.
+  _setUpTitleListener: function setUpTitleListener(aTab) {
+    function onDOMTitleChanged(aEvent) {
+      aTab.title = aTab.browser.contentTitle;
+      document.getElementById("tabmail").setTabTitle(aTab);
+    }
+    // Save the function we'll use as listener so we can remove it later.
+    aTab.titleListener = onDOMTitleChanged;
+    // Add the listener.
+    aTab.browser.addEventListener("DOMTitleChanged", aTab.titleListener, true);
+  },
+
+    /**
+     * Internal function used to set up the close window listener on a content
+     * tab.
+     */
+  _setUpCloseWindowListener: function setUpCloseWindowListener(aTab) {
+    function onDOMWindowClose(aEvent) {
+      if (!aEvent.isTrusted)
+        return;
+
+      // Redirect any window.close events to closing the tab. As a 3-pane tab
+      // must be open, we don't need to worry about being the last tab open.
+      document.getElementById("tabmail").closeTab(aTab);
+      aEvent.preventDefault();
+    }
+    // Save the function we'll use as listener so we can remove it later.
+    aTab.closeListener = onDOMWindowClose;
+    // Add the listener.
+    aTab.browser.addEventListener("DOMWindowClose", aTab.closeListener, true);
+  },
+
+  supportsCommand: function supportsCommand(aCommand, aTab) {
+    switch (aCommand) {
+      case "cmd_fullZoomReduce":
+      case "cmd_fullZoomEnlarge":
+      case "cmd_fullZoomReset":
+      case "cmd_fullZoomToggle":
+      case "cmd_find":
+      case "cmd_findAgain":
+      case "cmd_findPrevious":
+      case "cmd_printSetup":
+      case "cmd_print":
+      case "button_print":
+      case "cmd_stop":
+      case "cmd_reload":
+      // XXX print preview not currently supported - bug 497994 to implement.
+      // case "cmd_printpreview":
+        return true;
+      default:
+        return false;
+    }
+  },
+
+  isCommandEnabled: function isCommandEnabled(aCommand, aTab) {
+    switch (aCommand) {
+      case "cmd_fullZoomReduce":
+      case "cmd_fullZoomEnlarge":
+      case "cmd_fullZoomReset":
+      case "cmd_fullZoomToggle":
+      case "cmd_find":
+      case "cmd_findAgain":
+      case "cmd_findPrevious":
+      case "cmd_printSetup":
+      case "cmd_print":
+      case "button_print":
+      // XXX print preview not currently supported - bug 497994 to implement.
+      // case "cmd_printpreview":
+        return true;
+      case "cmd_reload":
+        return aTab.reloadEnabled;
+      case "cmd_stop":
+        return aTab.busy;
+      default:
+        return false;
+    }
+  },
+
+  doCommand: function doCommand(aCommand, aTab) {
+    switch (aCommand) {
+      case "cmd_fullZoomReduce":
+        ZoomManager.reduce();
+        break;
+      case "cmd_fullZoomEnlarge":
+        ZoomManager.enlarge();
+        break;
+      case "cmd_fullZoomReset":
+        ZoomManager.reset();
+        break;
+      case "cmd_fullZoomToggle":
+        ZoomManager.toggleZoom();
+        break;
+      case "cmd_find":
+        aTab.findbar.onFindCommand();
+        break;
+      case "cmd_findAgain":
+        aTab.findbar.onFindAgainCommand(false);
+        break;
+      case "cmd_findPrevious":
+        aTab.findbar.onFindAgainCommand(true);
+        break;
+      case "cmd_printSetup":
+        PrintUtils.showPageSetup();
+        break;
+      case "cmd_print":
+        PrintUtils.print();
+        break;
+      // XXX print preview not currently supported - bug 497994 to implement.
+      //case "cmd_printpreview":
+      //  PrintUtils.printPreview();
+      //  break;
+      case "cmd_stop":
+        aTab.browser.stop();
+        break;
+      case "cmd_reload":
+        aTab.browser.reload();
+        break;
+    }
+  },
+};
+
 var specialTabs = {
   _kAboutRightsVersion: 1,
   get _protocolSvc() {
@@ -299,23 +496,37 @@ var specialTabs = {
     tabmail.registerTabType(this.contentTabType);
     tabmail.registerTabType(this.chromeTabType);
 
-    // If we've upgraded:
+    // If we've upgraded (note: always get these values so that we set
+    // the mstone preference for the new version):
     let [fromVer, toVer] = this.getApplicationUpgradeVersions(prefs);
 
-    // Only show what's new tab if this is actually an upgraded version,
-    // not just a new installation/profile.
-    if (fromVer && ((fromVer[0] != toVer[0]) || (fromVer[1] != toVer[1])))
-      this.showWhatsNewPage();
+    // Although this might not be really necessary because of the version checks, we'll
+    // check this pref anyway and clear it so that we are consistent with what Firefox
+    // actually does. It will help developers switching between branches without updating.
+    if (Services.prefs.prefHasUserValue("app.update.postupdate")) {
+      // Only show what's new tab if this is actually an upgraded version,
+      // not just a new installation/profile (and don't show if the major version
+      // hasn't changed).
+      if (fromVer && ((fromVer[0] != toVer[0]) || (fromVer[1] != toVer[1]))) {
+          // showWhatsNewPage checks the details of the update manager before
+          // showing the page.
+          this.showWhatsNewPage();
+      }
+      Services.prefs.clearUserPref("app.update.postupdate");
+    }
 
     // Show the about rights notification if we need to.
     if (this.shouldShowAboutRightsNotification(prefs))
       this.showAboutRightsNotification(prefs);
+    else if (this.shouldShowTelemetryNotification(prefs))
+      this.showTelemetryNotification(prefs);
   },
 
   /**
    * A tab to show content pages.
    */
   contentTabType: {
+    __proto__: contentTabBaseType,
     name: "contentTab",
     perTabPanel: "vbox",
     lastBrowserId: 0,
@@ -331,29 +542,7 @@ var specialTabs = {
         maxTabs: 10
       }
     },
-    shouldSwitchTo: function onSwitchTo({contentPage: aContentPage}) {
-      let tabmail = document.getElementById("tabmail");
-      let tabInfo = tabmail.tabInfo;
 
-      // Remove any anchors - especially for the about: pages, we just want
-      // to re-use the same tab.
-      let regEx = new RegExp("#.*");
-
-      let contentUrl = aContentPage.replace(regEx, "");
-
-      for (let selectedIndex = 0; selectedIndex < tabInfo.length;
-           ++selectedIndex) {
-        if (tabInfo[selectedIndex].mode.name == this.name &&
-            tabInfo[selectedIndex].browser.currentURI.spec
-                                  .replace(regEx, "") == contentUrl) {
-          // Ensure we go to the correct location on the page.
-          tabInfo[selectedIndex].browser
-                                .setAttribute("src", aContentPage);
-          return selectedIndex;
-        }
-      }
-      return -1;
-    },
     /**
      * This is the internal function used by content tabs to open a new tab. To
      * open a contentTab, use specialTabs.openTab("contentTab", aArgs)
@@ -378,10 +567,16 @@ var specialTabs = {
       clone.setAttribute("id", "contentTab" + this.lastBrowserId);
       clone.setAttribute("collapsed", false);
 
+      let toolbox = clone.firstChild;
+      toolbox.setAttribute("id", "contentTabToolbox" + this.lastBrowserId);
+      toolbox.firstChild.setAttribute("id", "contentTabToolbar" + this.lastBrowserId);
+
       aTab.panel.appendChild(clone);
+      aTab.root = clone;
 
       // Start setting up the browser.
       aTab.browser = aTab.panel.getElementsByTagName("browser")[0];
+      aTab.toolbar = aTab.panel.getElementsByClassName("contentTabToolbar")[0];
 
       // As we're opening this tab, showTab may not get called, so set
       // the type according to if we're opening in background or not.
@@ -401,6 +596,7 @@ var specialTabs = {
       aTab.tabNode.setAttribute("onerror", "this.removeAttribute('image');");
 
       aTab.browser.addEventListener("DOMLinkAdded", DOMLinkHandler, false);
+      gPluginHandler.addEventListeners(aTab.browser);
 
       // Now initialise the find bar.
       aTab.findbar = aTab.panel.getElementsByTagName("findbar")[0];
@@ -411,11 +607,14 @@ var specialTabs = {
       aTab.reloadEnabled = false;
 
       // Now set up the listeners.
+      this._setUpLoadListener(aTab);
       this._setUpTitleListener(aTab);
       this._setUpCloseWindowListener(aTab);
+
       if ("onLoad" in aArgs) {
         aTab.browser.addEventListener("load", function _contentTab_onLoad (event) {
           aArgs.onLoad(event, aTab.browser);
+          aTab.browser.removeEventListener("load", _contentTab_onLoad, true);
         }, true);
       }
 
@@ -429,6 +628,9 @@ var specialTabs = {
       aTab.progressListener = new tabProgressListener(aTab, false);
 
       filter.addProgressListener(aTab.progressListener, Components.interfaces.nsIWebProgress.NOTIFY_ALL);
+
+      if ("onListener" in aArgs)
+        aArgs.onListener(aTab.browser, aTab.progressListener);
 
       // Initialize our unit testing variables.
       aTab.pageLoading = false;
@@ -449,22 +651,6 @@ var specialTabs = {
       return !(docShell && docShell.contentViewer
         && !docShell.contentViewer.permitUnload());
     },
-    closeTab: function onTabClosed(aTab) {
-      aTab.browser.removeEventListener("DOMTitleChanged",
-                                       aTab.titleListener, true);
-      aTab.browser.removeEventListener("DOMWindowClose",
-                                       aTab.closeListener, true);
-      aTab.browser.removeEventListener("DOMLinkAdded", DOMLinkHandler, false);
-      aTab.browser.webProgress.removeProgressListener(aTab.filter);
-      aTab.filter.removeProgressListener(aTab.progressListener);
-      aTab.browser.destroy();
-    },
-    saveTabState: function onSaveTabState(aTab) {
-      aTab.browser.setAttribute("type", "content-targetable");
-    },
-    showTab: function onShowTab(aTab) {
-      aTab.browser.setAttribute("type", "content-primary");
-    },
     persistTab: function onPersistTab(aTab) {
       if (aTab.browser.currentURI.spec == "about:blank")
         return null;
@@ -481,126 +667,6 @@ var specialTabs = {
                                        clickHandler: aPersistedState.clickHandler,
                                        background: true } );
     },
-    supportsCommand: function supportsCommand(aCommand, aTab) {
-      switch (aCommand) {
-        case "cmd_fullZoomReduce":
-        case "cmd_fullZoomEnlarge":
-        case "cmd_fullZoomReset":
-        case "cmd_fullZoomToggle":
-        case "cmd_find":
-        case "cmd_findAgain":
-        case "cmd_findPrevious":
-        case "cmd_printSetup":
-        case "cmd_print":
-        case "button_print":
-        case "cmd_stop":
-        case "cmd_reload":
-        // XXX print preview not currently supported - bug 497994 to implement.
-        // case "cmd_printpreview":
-          return true;
-        default:
-          return false;
-      }
-    },
-    isCommandEnabled: function isCommandEnabled(aCommand, aTab) {
-      switch (aCommand) {
-        case "cmd_fullZoomReduce":
-        case "cmd_fullZoomEnlarge":
-        case "cmd_fullZoomReset":
-        case "cmd_fullZoomToggle":
-        case "cmd_find":
-        case "cmd_findAgain":
-        case "cmd_findPrevious":
-        case "cmd_printSetup":
-        case "cmd_print":
-        case "button_print":
-        // XXX print preview not currently supported - bug 497994 to implement.
-        // case "cmd_printpreview":
-          return true;
-        case "cmd_reload":
-          return aTab.reloadEnabled;
-        case "cmd_stop":
-          return aTab.busy;
-        default:
-          return false;
-      }
-    },
-    doCommand: function isCommandEnabled(aCommand, aTab) {
-      switch (aCommand) {
-        case "cmd_fullZoomReduce":
-          ZoomManager.reduce();
-          break;
-        case "cmd_fullZoomEnlarge":
-          ZoomManager.enlarge();
-          break;
-        case "cmd_fullZoomReset":
-          ZoomManager.reset();
-          break;
-        case "cmd_fullZoomToggle":
-          ZoomManager.toggleZoom();
-          break;
-        case "cmd_find":
-          aTab.findbar.onFindCommand();
-          break;
-        case "cmd_findAgain":
-          aTab.findbar.onFindAgainCommand(false);
-          break;
-        case "cmd_findPrevious":
-          aTab.findbar.onFindAgainCommand(true);
-          break;
-        case "cmd_printSetup":
-          PrintUtils.showPageSetup();
-          break;
-        case "cmd_print":
-          PrintUtils.print();
-          break;
-        // XXX print preview not currently supported - bug 497994 to implement.
-        //case "cmd_printpreview":
-        //  PrintUtils.printPreview();
-        //  break;
-        case "cmd_stop":
-          aTab.browser.stop();
-          break;
-        case "cmd_reload":
-          aTab.browser.reload();
-          break;
-      }
-    },
-    getBrowser: function getBrowser(aTab) {
-      return aTab.browser;
-    },
-    // Internal function used to set up the title listener on a content tab.
-    _setUpTitleListener: function setUpTitleListener(aTab) {
-      function onDOMTitleChanged(aEvent) {
-        aTab.title = aTab.browser.contentTitle;
-        document.getElementById("tabmail").setTabTitle(aTab);
-      }
-      // Save the function we'll use as listener so we can remove it later.
-      aTab.titleListener = onDOMTitleChanged;
-      // Add the listener.
-      aTab.browser.addEventListener("DOMTitleChanged",
-                                    aTab.titleListener, true);
-    },
-    /**
-     * Internal function used to set up the close window listener on a content
-     * tab.
-     */
-    _setUpCloseWindowListener: function setUpCloseWindowListener(aTab) {
-      function onDOMWindowClose(aEvent) {
-        if (!aEvent.isTrusted)
-          return;
-
-        // Redirect any window.close events to closing the tab. As a 3-pane tab
-        // must be open, we don't need to worry about being the last tab open.
-        document.getElementById("tabmail").closeTab(aTab);
-        aEvent.preventDefault();
-      }
-      // Save the function we'll use as listener so we can remove it later.
-      aTab.closeListener = onDOMWindowClose;
-      // Add the listener.
-      aTab.browser.addEventListener("DOMWindowClose",
-                                    aTab.closeListener, true);
-    }
   },
 
   /**
@@ -615,6 +681,8 @@ var specialTabs = {
   splitVersion: function(version) {
     let re = /^(\d+)\.(\d+)\.?(.*)$/;
     let fields = re.exec(version);
+    if (fields === null)
+      return null;
     /* First element of the array from regex match is the entire string; drop that */
     fields.shift();
     return fields;
@@ -649,9 +717,105 @@ var specialTabs = {
    * Shows the what's new page in a content tab.
    */
   showWhatsNewPage: function onShowWhatsNewPage() {
+    let um = Components.classes["@mozilla.org/updates/update-manager;1"]
+               .getService(Components.interfaces.nsIUpdateManager);
+
+    try {
+      // If the updates.xml file is deleted then getUpdateAt will throw.
+      var update = um.getUpdateAt(0)
+                     .QueryInterface(Components.interfaces.nsIPropertyBag);
+    } catch (x) {
+      Cu.reportError("Unable to find update: " + x);
+      return;
+    }
+
+    let actions = update.getProperty("actions");
+    if (actions && actions.indexOf("silent") != -1)
+      return;
+
     openWhatsNew();
   },
 
+  /**
+   * Looks at the existing prefs and determines if we should suggest the user
+   * enables telemetry or not.
+   *
+   * This is controlled by the pref toolkit.telemetry.prompted
+   */
+  shouldShowTelemetryNotification: function(prefs) {
+    // For a transitional period (expected end in mid-2013) we allow the pref
+    // kTelemetryPrompted to be bool or int and reset it to bool.
+    // See bug 807848 for more details.
+    try {
+      if (prefs.getIntPref(kTelemetryPrompted) > 0) {
+        prefs.clearUserPref(kTelemetryPrompted);
+        prefs.setBoolPref(kTelemetryPrompted, true);
+        return false;
+      }
+    } catch (e) {
+      try {
+        if (prefs.getBoolPref(kTelemetryPrompted))
+          return false;
+      } catch (e) { }
+    }
+    try {
+      // toolkit has decided that the pref should have no default value
+      if (prefs.getBoolPref(kTelemetryEnabled))
+        return false;
+    } catch (e) { }
+    return true;
+  },
+
+  showTelemetryNotification: function(prefs) {
+    var notifyBox = document.getElementById("mail-notification-box");
+
+    var brandBundle =
+      new StringBundle("chrome://branding/locale/brand.properties");
+    var telemetryBundle =
+      new StringBundle("chrome://messenger/locale/telemetry.properties");
+
+    var productName = brandBundle.get("brandFullName");
+    var serverOwner = prefs.getCharPref(kTelemetryServerOwner);
+    var telemetryText = telemetryBundle.get("telemetryText", [productName, serverOwner]);
+
+    var buttons = [
+      {
+        label:     telemetryBundle.get("telemetryYesButtonLabel"),
+        accessKey: telemetryBundle.get("telemetryYesButtonAccessKey"),
+        popup:     null,
+        callback:  function(aNotificationBar, aButton) {
+          prefs.setBoolPref(kTelemetryEnabled, true);
+        }
+      },
+      {
+        label:     telemetryBundle.get("telemetryNoButtonLabel"),
+        accessKey: telemetryBundle.get("telemetryNoButtonAccessKey"),
+        popup:     null,
+        callback:  function(aNotificationBar, aButton) {}
+      }
+    ];
+
+    // Set pref to indicate we've shown the notification.
+    prefs.setBoolPref(kTelemetryPrompted, true);
+
+    var notification = notifyBox.appendNotification(telemetryText, "telemetry", null, notifyBox.PRIORITY_INFO_LOW, buttons);
+    notification.persistence = 3; // arbitrary number, just so bar sticks around for a bit
+
+    let XULNS = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
+    let link = notification.ownerDocument.createElementNS(XULNS, "label");
+    link.className = "text-link telemetry-text-link";
+    link.setAttribute("value", telemetryBundle.get("telemetryLinkLabel"));
+    link.addEventListener('click', function() {
+      openPrivacyPolicy('tab');
+      // Remove the notification on which the user clicked
+      notification.parentNode.removeNotification(notification, true);
+      // Add a new notification to that tab, with no "Learn more" link
+      notifyBox.appendNotification(telemetryText, "telemetry", null, notifyBox.PRIORITY_INFO_LOW, buttons);
+    }, false);
+
+    let description = notification.ownerDocument.getAnonymousElementByAttribute(notification, "anonid", "messageText");
+    description.appendChild(link);
+  },
   /**
    * Looks at the existing prefs and determines if we should show about:rights
    * or not.
@@ -724,7 +888,7 @@ var specialTabs = {
   aboutClickHandler: function aboutClickHandler(aEvent) {
     // Don't handle events that: a) aren't trusted, b) have already been
     // handled or c) aren't left-click.
-    if (!aEvent.isTrusted || aEvent.getPreventDefault() || aEvent.button)
+    if (!aEvent.isTrusted || aEvent.defaultPrevented || aEvent.button)
       return true;
 
     let href = hRefForClickEvent(aEvent, true);
@@ -736,6 +900,7 @@ var specialTabs = {
         openLinkExternally(href);
       }
     }
+    return false;
   },
 
   /**
@@ -746,7 +911,7 @@ var specialTabs = {
   defaultClickHandler: function defaultClickHandler(aEvent) {
     // Don't handle events that: a) aren't trusted, b) have already been
     // handled or c) aren't left-click.
-    if (!aEvent.isTrusted || aEvent.getPreventDefault() || aEvent.button)
+    if (!aEvent.isTrusted || aEvent.defaultPrevented || aEvent.button)
       return true;
 
     let href = hRefForClickEvent(aEvent, true);
@@ -763,6 +928,7 @@ var specialTabs = {
         openLinkExternally(href);
       }
     }
+    return false;
   },
 
   /**
@@ -783,7 +949,7 @@ var specialTabs = {
   siteClickHandler: function siteClickHandler(aEvent, aSiteRegexp) {
     // Don't handle events that: a) aren't trusted, b) have already been
     // handled or c) aren't left-click.
-    if (!aEvent.isTrusted || aEvent.getPreventDefault() || aEvent.button)
+    if (!aEvent.isTrusted || aEvent.defaultPrevented || aEvent.button)
       return true;
 
     let href = hRefForClickEvent(aEvent, true);
@@ -800,6 +966,7 @@ var specialTabs = {
         openLinkExternally(href);
       }
     }
+    return false;
   },
 
   chromeTabType: {
@@ -818,29 +985,10 @@ var specialTabs = {
         maxTabs: 10
       }
     },
-    shouldSwitchTo: function onSwitchTo({chromePage: achromePage}) {
-      let tabmail = document.getElementById("tabmail");
-      let tabInfo = tabmail.tabInfo;
 
-      // Remove any anchors - especially for the about: pages, we just want
-      // to re-use the same tab.
-      let regEx = new RegExp("#.*");
+    shouldSwitchTo: function ({ chromePage: x })
+      contentTabBaseType.shouldSwitchTo({ contentPage: x }),
 
-      let contentUrl = achromePage.replace(regEx, "");
-
-      for (let selectedIndex = 0; selectedIndex < tabInfo.length;
-           ++selectedIndex) {
-        if (tabInfo[selectedIndex].mode.name == this.name &&
-            tabInfo[selectedIndex].browser.currentURI.spec
-                                  .replace(regEx, "") == contentUrl) {
-          // Ensure we go to the correct location on the page.
-          tabInfo[selectedIndex].browser
-                                .setAttribute("src", achromePage);
-          return selectedIndex;
-        }
-      }
-      return -1;
-    },
     /**
      * This is the internal function used by chrome tabs to open a new tab. To
      * open a chromeTab, use specialTabs.openTab("chromeTab", aArgs)
@@ -864,6 +1012,10 @@ var specialTabs = {
 
       clone.setAttribute("id", "chromeTab" + this.lastBrowserId);
       clone.setAttribute("collapsed", false);
+
+      let toolbox = clone.firstChild;
+      toolbox.setAttribute("id", "chromeTabToolbox" + this.lastBrowserId);
+      toolbox.firstChild.setAttribute("id", "chromeTabToolbar" + this.lastBrowserId);
 
       aTab.panel.appendChild(clone);
 
@@ -897,6 +1049,7 @@ var specialTabs = {
       if ("onLoad" in aArgs) {
         aTab.browser.addEventListener("load", function _chromeTab_onLoad (event) {
           aArgs.onLoad(event, aTab.browser);
+          aTab.browser.removeEventListener("load", _chromeTab_onLoad, true);
         }, true);
       }
 
@@ -915,6 +1068,7 @@ var specialTabs = {
         && !docShell.contentViewer.permitUnload());
     },
     closeTab: function onTabClosed(aTab) {
+      aTab.browser.removeEventListener("load", aTab.loadListener, true);
       aTab.browser.removeEventListener("DOMTitleChanged",
                                        aTab.titleListener, true);
       aTab.browser.removeEventListener("DOMWindowClose",
@@ -1283,8 +1437,8 @@ var specialTabs = {
    */
   setTabIcon: function(aTab, aIcon) {
     if (aIcon && this.mFaviconService)
-      this.mFaviconService.setAndLoadFaviconForPage(aTab.browser.currentURI,
-                                                    makeURI(aIcon), false);
+      this.mFaviconService.setAndFetchFaviconForPage(aTab.browser.currentURI,
+                                                     makeURI(aIcon), false);
 
     // Save this off so we know about it later,
     aTab.browser.mIconURL = aIcon;

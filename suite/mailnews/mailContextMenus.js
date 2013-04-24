@@ -1,51 +1,17 @@
 /* -*- Mode: javascript; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jan Varga <varga@ku.sk>
- *   Hakan Waara <hwaara@chello.se>
- *   Markus Hossner <markushossner@gmx.de>
- *   Ian Neal <iann_bugzilla@blueyonder.co.uk>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 //NOTE: gMessengerBundle must be defined and set or this Overlay won't work
 
-// Function to change the highlighted row back to the row that is currently
-// outline/dotted without loading the contents of either rows.  This is
-// triggered when the context menu for a given row is hidden/closed
-// (onpopuphiding).
+/**
+ * Function to change the highlighted row back to the row that is currently
+ * outline/dotted without loading the contents of either rows. This is
+ * triggered when the context menu for a given row is hidden/closed
+ * (onpopuphiding).
+ * @param tree the tree element to restore selection for
+ */
 function RestoreSelectionWithoutContentLoad(tree)
 {
     // If a delete or move command had been issued, then we should
@@ -94,16 +60,29 @@ function RestoreSelectionWithoutContentLoad(tree)
     gRightMouseButtonDown = false;
 }
 
-function MailContextOnPopupHiding()
+/**
+ * Function to clear out the global nsContextMenu, and in the case when we
+ * are a threadpane context menu, restore the selection so that a right-click
+ * on a non-selected row doesn't move the selection.
+ * @param aTarget the target of the popup event
+ */
+function MailContextOnPopupHiding(aTarget)
 {
+  gContextMenu.hiding();
   gContextMenu = null;
-  if (InThreadPane())
+  if (InThreadPane(aTarget))
     RestoreSelectionWithoutContentLoad(GetThreadTree());
 }
 
-function InThreadPane()
+/**
+ * Determines whether the context menu was triggered by a node that's a child
+ * of the threadpane by looking for an ancestor node with id="threadTree".
+ * @param aTarget the target of the popup event
+ * @return true if the popupNode is a child of the threadpane, otherwise false
+ */
+function InThreadPane(aTarget)
 {
-  var node = document.popupNode;
+  var node = aTarget.triggerNode;
   while (node)
   {
     if (node.id == "threadTree")
@@ -113,9 +92,14 @@ function InThreadPane()
   return false;
 }
 
+/**
+ * Function to set up the global nsContextMenu, and the mailnews overlay.
+ * @param aTarget the target of the popup event
+ * @return true always
+ */
 function FillMailContextMenu(aTarget)
 {
-  var inThreadPane = InThreadPane();
+  var inThreadPane = InThreadPane(aTarget);
   gContextMenu = new nsContextMenu(aTarget, getBrowser());
   // Need to call nsContextMenu's initItems to hide what is not used.
   gContextMenu.initItems();
@@ -175,7 +159,9 @@ function FillMailContextMenu(aTarget)
                  oneOrMore && msgFolder && msgFolder.canDeleteMessages);
 
   // Copy is available as long as something is selected.
-  ShowMenuItem("mailContext-copyMenu", showMailItems && oneOrMore);
+  var canCopy = showMailItems && oneOrMore && (!gMessageDisplay.isDummy ||
+                                               window.arguments[0].scheme == "file");
+  ShowMenuItem("mailContext-copyMenu", canCopy);
   ShowMenuItem("mailContext-tags", showMailItems && oneOrMore);
   ShowMenuItem("mailContext-mark", showMailItems && oneOrMore);
   ShowMenuItem("mailContext-saveAs", showMailItems && oneOrMore);
@@ -314,10 +300,9 @@ function FillFolderPaneContextMenu()
 
 function SetupRenameMenuItem(msgFolder, numSelected, isServer, serverType, specialFolder)
 {
-  var isSpecialFolder = !(specialFolder == "none" || (specialFolder == "Junk" && CanRenameDeleteJunkMail(msgFolder.URI))
-                                                  || (specialFolder == "Virtual"));
-  let canRename = msgFolder.canRename;
-  ShowMenuItem("folderPaneContext-rename", (numSelected <= 1) && !isServer && !isSpecialFolder && canRename);
+  var canRename = (specialFolder == "Junk") ?
+                  CanRenameDeleteJunkMail(msgFolder.URI) : msgFolder.canRename;
+  ShowMenuItem("folderPaneContext-rename", (numSelected <= 1) && canRename);
   EnableMenuItem("folderPaneContext-rename", !isServer && msgFolder.isCommandEnabled("cmd_renameFolder"));
 
   if (canRename)
@@ -327,15 +312,15 @@ function SetupRenameMenuItem(msgFolder, numSelected, isServer, serverType, speci
 function SetupRemoveMenuItem(msgFolder, numSelected, isServer, serverType, specialFolder)
 {
   var isMail = serverType != 'nntp';
-  var isSpecialFolder = !(specialFolder == "none" || (specialFolder == "Junk" && CanRenameDeleteJunkMail(msgFolder.URI))
-                                                  || (specialFolder == "Virtual"));
-  //Can't currently delete Accounts or special folders.
-  var showRemove = (numSelected <=1) && (isMail && !isSpecialFolder) && !isServer;
+  var canDelete = (specialFolder == "Junk") ?
+                  CanRenameDeleteJunkMail(msgFolder.URI) : msgFolder.deletable;
+
+  var showRemove = (numSelected <=1) && isMail && canDelete;
 
   ShowMenuItem("folderPaneContext-remove", showRemove);
   if (showRemove)
     EnableMenuItem("folderPaneContext-remove", msgFolder.isCommandEnabled("cmd_delete"));
-  if (isMail && !isSpecialFolder)
+  if (canDelete)
     SetMenuItemLabel("folderPaneContext-remove", gMessengerBundle.getString("removeFolder"));
 }
 
@@ -430,11 +415,11 @@ function ShowSeparator(aSeparatorID)
 }
 
 // message pane context menu helper methods
-function AddNodeToAddressBook(emailAddressNode)
+function AddContact(aEmailAddressNode)
 {
-  if (emailAddressNode)
-    AddEmailToAddressBook(emailAddressNode.getAttribute("emailAddress"),
-                          emailAddressNode.getAttribute("displayName"));
+  if (aEmailAddressNode)
+    AddEmailToAddressBook(aEmailAddressNode.getAttribute("emailAddress"),
+                          aEmailAddressNode.getAttribute("displayName"));
 }
 
 function AddEmailToAddressBook(primaryEmail, displayName)
@@ -442,6 +427,17 @@ function AddEmailToAddressBook(primaryEmail, displayName)
     window.openDialog("chrome://messenger/content/addressbook/abNewCardDialog.xul",
                       "", "chrome,resizable=no,titlebar,modal,centerscreen",
                       {primaryEmail:primaryEmail, displayName:displayName});
+}
+
+function EditContact(aEmailAddressNode)
+{
+  if (aEmailAddressNode.cardDetails.card)
+  {
+    window.openDialog("chrome://messenger/content/addressbook/abEditCardDialog.xul",
+                      "", "chrome,resizable=no,modal,titlebar,centerscreen",
+                      { abURI: aEmailAddressNode.cardDetails.book.URI,
+                        card: aEmailAddressNode.cardDetails.card });
+  }
 }
 
 // SendMailToNode takes the email address title button, extracts
@@ -479,11 +475,19 @@ function CopyEmailAddress(emailAddressNode)
 // show the message id in the context menu
 function FillMessageIdContextMenu(messageIdNode)
 {
-  if (messageIdNode)
-  {
-    document.getElementById("messageIdContext-messageIdTarget")
-            .setAttribute("label", messageIdNode.getAttribute("messageid"));
-  }
+  var msgId = messageIdNode.getAttribute("messageid");
+  document.getElementById("messageIdContext-messageIdTarget")
+          .setAttribute("label", msgId);
+
+  // We don't want to show "Open Message For ID" for the same message
+  // we're viewing.
+  var currentMsgId = "<" + gFolderDisplay.selectedMessage.messageId + ">";
+  document.getElementById("messageIdContext-openMessageForMsgId")
+          .hidden = (currentMsgId == msgId);
+
+  // We don't want to show "Open Browser With Message-ID" for non-nntp messages.
+  document.getElementById("messageIdContext-openBrowserWithMsgId")
+          .hidden = !gFolderDisplay.selectedMessageIsNews;
 }
 
 function GetMessageIdFromNode(messageIdNode, cleanMessageId)
@@ -688,7 +692,8 @@ function CopyMessageUrl()
     var hdr = gDBView.hdrForFirstSelectedMessage;
     var server = hdr.folder.server;
 
-    var url = (server.socketType == Components.interfaces.nsIMsgIncomingServer.useSSL) ?
+    // TODO let backend construct URL and return as attribute
+    var url = (server.socketType == Components.interfaces.nsMsgSocketType.SSL) ?
               "snews://" : "news://";
     url += server.hostName + ":" + server.port + "/" + hdr.messageId;
     CopyString(url);
@@ -703,5 +708,5 @@ function CopyString(aString)
 {
   Components.classes["@mozilla.org/widget/clipboardhelper;1"]
             .getService(Components.interfaces.nsIClipboardHelper)
-            .copyString(aString);
+            .copyString(aString, document);
 }

@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <stdio.h>
 #include "nsISupports.h"
@@ -364,7 +331,7 @@ static const char *t9lhs = "@a";
 static const char *t9rhs = "`a";
 
 bool CharByCharCompareEqual(const char *a, const char *b,
-                            PRUint32 aLen, PRUint32 bLen)
+                            uint32_t aLen, uint32_t bLen)
 {
   // Do basically a CaseInsensitiveCompare(), but using
   // CaseInsensitiveUTF8CharsEqual().
@@ -372,11 +339,11 @@ bool CharByCharCompareEqual(const char *a, const char *b,
   const char *aEnd = a + aLen;
   const char *bEnd = b + bLen;
   while (a < aEnd && b < bEnd) {
-    PRBool err;
+    bool err;
     if (!CaseInsensitiveUTF8CharsEqual(a, b, aEnd, bEnd, &a, &b, &err) || err)
-      return PR_FALSE;
+      return false;
   }
-  return PR_TRUE;
+  return true;
 }
 
 void TestCaseConversion()
@@ -413,7 +380,7 @@ void TestCaseConversion()
       printf("\tFailed!! result unexpected %d\n", i);
   }
 
-  printf("Test 4 - ToUpper(PRUnichar*, PRUnichar*, PRUint32):\n");
+  printf("Test 4 - ToUpper(PRUnichar*, PRUnichar*, uint32_t):\n");
   ToUpperCase(t2data, buf, T2LEN);
   for(i = 0; i < T2LEN; i++)
   {
@@ -424,7 +391,7 @@ void TestCaseConversion()
      }
   }
 
-  printf("Test 5 - ToLower(PRUnichar*, PRUnichar*, PRUint32):\n");
+  printf("Test 5 - ToLower(PRUnichar*, PRUnichar*, uint32_t):\n");
   ToLowerCase(t3data, buf, T3LEN);
   for(i = 0; i < T3LEN; i++)
   {
@@ -473,19 +440,19 @@ void TestCaseConversion()
 
 static void FuzzOneInvalidCaseConversion()
 {
-  PRUint32 aLen = rand() % 32;
-  PRUint32 bLen = rand() % 32;
+  uint32_t aLen = rand() % 32;
+  uint32_t bLen = rand() % 32;
 
   // We could use a static length-32 buffer for these, but then Valgrind
   // wouldn't be able to detect errors.
   unsigned char *aBuf = (unsigned char*)malloc(aLen * sizeof(unsigned char));
   unsigned char *bBuf = (unsigned char*)malloc(bLen * sizeof(unsigned char));
 
-  for (PRUint32 i = 0; i < aLen; i++) {
+  for (uint32_t i = 0; i < aLen; i++) {
     aBuf[i] = rand() & 0xff;
   }
 
-  for (PRUint32 i = 0; i < bLen; i++) {
+  for (uint32_t i = 0; i < bLen; i++) {
     bBuf[i] = rand() & 0xff;
   }
 
@@ -507,7 +474,7 @@ static void FuzzCaseConversion()
   srand(0);
 
   printf("Fuzzing invalid UTF8 data...\n");
-  for (PRUint32 i = 0; i < 100000; i++) {
+  for (uint32_t i = 0; i < 100000; i++) {
     FuzzOneInvalidCaseConversion();
   }
 
@@ -516,13 +483,13 @@ static void FuzzCaseConversion()
   printf("===========================\n");
 }
 
-static void TestEntityConversion(PRUint32 version)
+static void TestEntityConversion(uint32_t version)
 {
   printf("==============================\n");
   printf("Start nsIEntityConverter Test \n");
   printf("==============================\n");
 
-  PRUint32 i;
+  uint32_t i;
   nsString inString;
   PRUnichar uChar;
   nsresult res;
@@ -538,13 +505,13 @@ static void TestEntityConversion(PRUint32 version)
   if (NS_FAILED(res)) {printf("\tFailed!! return value != NS_OK\n"); return;}
 
   const PRUnichar *data;
-  PRUint32 length = NS_StringGetData(inString, &data);
+  uint32_t length = NS_StringGetData(inString, &data);
 
   // convert char by char
   for (i = 0; i < length; i++) {
-    char *entity = NULL;
+    char *entity = nullptr;
     res = entityConv->ConvertToEntity(data[i], version, &entity);
-    if (NS_SUCCEEDED(res) && NULL != entity) {
+    if (NS_SUCCEEDED(res) && entity) {
       printf("%c %s\n", data[i], entity);
       nsMemory::Free(entity);
     }
@@ -553,7 +520,7 @@ static void TestEntityConversion(PRUint32 version)
   // convert at once as a string
   PRUnichar *entities;
   res = entityConv->ConvertToEntities(inString.get(), version, &entities);
-  if (NS_SUCCEEDED(res) && NULL != entities) {
+  if (NS_SUCCEEDED(res) && entities) {
     for (PRUnichar *centity = entities; *centity; ++centity) {
       printf("%c", (char) *centity);
       if (';' == (char) *centity)
@@ -580,10 +547,10 @@ static void TestSaveAsCharset()
   char *outString;
   
   const PRUnichar *data;
-  PRUint32 length = NS_StringGetData(inString, &data);
+  uint32_t length = NS_StringGetData(inString, &data);
 
   // first, dump input string
-  for (PRUint32 i = 0; i < length; i++) {
+  for (uint32_t i = 0; i < length; i++) {
     printf("%c ", data[i]);
   }
   printf("\n");
@@ -598,7 +565,7 @@ static void TestSaveAsCharset()
   if (NS_FAILED(res)) {printf("\tFailed!! return value != NS_OK\n");}
   res = saveAsCharset->Convert(inString.get(), &outString);
   if (NS_FAILED(res)) {printf("\tFailed!! return value != NS_OK\n");}
-  if (NULL == outString) {printf("\tFailed!! output null\n");}
+  if (!outString) {printf("\tFailed!! output null\n");}
   else {printf("%s\n", outString); nsMemory::Free(outString);}
 
   printf("ISO-2022-JP attr_plainTextDefault entityNone\n");
@@ -608,11 +575,11 @@ static void TestSaveAsCharset()
   if (NS_FAILED(res)) {printf("\tFailed!! return value != NS_OK\n");}
   res = saveAsCharset->Convert(inString.get(), &outString);
   if (NS_FAILED(res)) {printf("\tFailed!! return value != NS_OK\n");}
-  if (NULL == outString) {printf("\tFailed!! output null\n");}
+  if (!outString) {printf("\tFailed!! output null\n");}
   else {printf("%s\n", outString); nsMemory::Free(outString);}
   if (NS_ERROR_UENC_NOMAPPING == res) {
     outString = ToNewUTF8String(inString);
-    if (NULL == outString) {printf("\tFailed!! output null\n");}
+    if (!outString) {printf("\tFailed!! output null\n");}
     else {printf("Fall back to UTF-8: %s\n", outString); nsMemory::Free(outString);}
   }
 
@@ -623,7 +590,7 @@ static void TestSaveAsCharset()
   if (NS_FAILED(res)) {printf("\tFailed!! return value != NS_OK\n");}
   res = saveAsCharset->Convert(inString.get(), &outString);
   if (NS_FAILED(res)) {printf("\tFailed!! return value != NS_OK\n");}
-  if (NULL == outString) {printf("\tFailed!! output null\n");}
+  if (!outString) {printf("\tFailed!! output null\n");}
   else {printf("%s\n", outString); nsMemory::Free(outString);}
 
   printf("ISO-2022-JP attr_FallbackEscapeU entityNone\n");
@@ -633,7 +600,7 @@ static void TestSaveAsCharset()
   if (NS_FAILED(res)) {printf("\tFailed!! return value != NS_OK\n");}
   res = saveAsCharset->Convert(inString.get(), &outString);
   if (NS_FAILED(res)) {printf("\tFailed!! return value != NS_OK\n");}
-  if (NULL == outString) {printf("\tFailed!! output null\n");}
+  if (!outString) {printf("\tFailed!! output null\n");}
   else {printf("%s\n", outString); nsMemory::Free(outString);}
 
   printf("ISO-8859-1 attr_htmlTextDefault html40Latin1\n");
@@ -643,7 +610,7 @@ static void TestSaveAsCharset()
   if (NS_FAILED(res)) {printf("\tFailed!! return value != NS_OK\n");}
   res = saveAsCharset->Convert(inString.get(), &outString);
   if (NS_ERROR_UENC_NOMAPPING != res && NS_FAILED(res)) {printf("\tFailed!! return value != NS_OK\n");}
-  if (NULL == outString) {printf("\tFailed!! output null\n");}
+  if (!outString) {printf("\tFailed!! output null\n");}
   else {printf("%s\n", outString); nsMemory::Free(outString);}
 
   printf("ISO-8859-1 attr_FallbackHexNCR+attr_EntityAfterCharsetConv html40Latin1 \n");
@@ -654,7 +621,7 @@ static void TestSaveAsCharset()
   if (NS_FAILED(res)) {printf("\tFailed!! return value != NS_OK\n");}
   res = saveAsCharset->Convert(inString.get(), &outString);
   if (NS_ERROR_UENC_NOMAPPING != res && NS_FAILED(res)) {printf("\tFailed!! return value != NS_OK\n");}
-  if (NULL == outString) {printf("\tFailed!! output null\n");}
+  if (!outString) {printf("\tFailed!! output null\n");}
   else {printf("%s\n", outString); nsMemory::Free(outString);}
 
 
@@ -692,12 +659,12 @@ void TestNormalization()
    printf("==============================\n");
    printf("Start nsIUnicodeNormalizer Test \n");
    printf("==============================\n");
-   nsIUnicodeNormalizer *t = NULL;
+   nsIUnicodeNormalizer *t = nullptr;
    nsresult res;
    res = CallGetService(kUnicodeNormalizerCID, &t);
            
    printf("Test 1 - GetService():\n");
-   if(NS_FAILED(res) || ( t == NULL ) ) {
+   if(NS_FAILED(res) || !t) {
      printf("\t1st Norm GetService failed\n");
    } else {
      NS_RELEASE(t);
@@ -705,10 +672,10 @@ void TestNormalization()
 
    res = CallGetService(kUnicodeNormalizerCID, &t);
            
-   if(NS_FAILED(res) || ( t == NULL ) ) {
+   if(NS_FAILED(res) || !t) {
      printf("\t2nd GetService failed\n");
    } else {
-    printf("Test 2 - NormalizeUnicode(PRUint32, const nsAString&, nsAString&):\n");
+    printf("Test 2 - NormalizeUnicode(uint32_t, const nsAString&, nsAString&):\n");
     nsAutoString resultStr;
     res =  t->NormalizeUnicodeNFD(nsDependentString(normStr), resultStr);
     if (resultStr.Equals(nsDependentString(nfdForm))) {
@@ -728,7 +695,7 @@ void TestNormalization()
 
 int main(int argc, char** argv) {
    
-   nsresult rv = NS_InitXPCOM2(nsnull, nsnull, nsnull);
+   nsresult rv = NS_InitXPCOM2(nullptr, nullptr, nullptr);
    if (NS_FAILED(rv)) {
       printf("NS_InitXPCOM2 failed\n");
       return 1;

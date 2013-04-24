@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifdef MOZ_LOGGING
 // sorry, this has to be before the pre-compiled header
@@ -68,6 +35,8 @@ PRLogModuleInfo *MAILBOX;
 #include "nsMsgUtils.h"
 #include "nsIMsgWindow.h"
 #include "nsIMimeHeaders.h"
+#include "nsIMsgPluggableStore.h"
+#include "nsISeekableStream.h"
 
 #include "nsIMsgMdnGenerator.h"
 
@@ -85,7 +54,7 @@ PRLogModuleInfo *MAILBOX;
 nsMailboxProtocol::nsMailboxProtocol(nsIURI * aURI)
     : nsMsgProtocol(aURI)
 {
-  m_lineStreamBuffer =nsnull;
+  m_lineStreamBuffer =nullptr;
 
   // initialize the pr log if it hasn't been initialiezed already
   if (!MAILBOX)
@@ -98,7 +67,7 @@ nsMailboxProtocol::~nsMailboxProtocol()
   delete m_lineStreamBuffer;
 }
 
-nsresult nsMailboxProtocol::OpenMultipleMsgTransport(PRUint32 offset, PRInt32 size)
+nsresult nsMailboxProtocol::OpenMultipleMsgTransport(uint64_t offset, int32_t size)
 {
   nsresult rv;
 
@@ -107,14 +76,14 @@ nsresult nsMailboxProtocol::OpenMultipleMsgTransport(PRUint32 offset, PRInt32 si
   NS_ENSURE_SUCCESS(rv, rv);
 
   // XXX 64-bit
-  rv = serv->CreateInputTransport(m_multipleMsgMoveCopyStream, PRInt64(offset),
-                                  PRInt64(size), PR_FALSE,
+  rv = serv->CreateInputTransport(m_multipleMsgMoveCopyStream, int64_t(offset),
+                                  int64_t(size), false,
                                   getter_AddRefs(m_transport));
 
   return rv;
 }
 
-nsresult nsMailboxProtocol::OpenFileSocketForReuse(nsIURI * aURL, PRUint32 aStartPosition, PRInt32 aReadCount)
+nsresult nsMailboxProtocol::OpenFileSocketForReuse(nsIURI * aURL, uint64_t aStartPosition, int32_t aReadCount)
 {
   NS_ENSURE_ARG_POINTER(aURL);
 
@@ -131,11 +100,11 @@ nsresult nsMailboxProtocol::OpenFileSocketForReuse(nsIURI * aURL, PRUint32 aStar
 
   m_multipleMsgMoveCopyStream = do_QueryInterface(fileStream, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
-  fileStream->Init(file,  PR_RDONLY, 0664, PR_FALSE);  //just have to read the messages
+  fileStream->Init(file,  PR_RDONLY, 0664, false);  //just have to read the messages
 
   rv = OpenMultipleMsgTransport(aStartPosition, aReadCount);
 
-  m_socketIsOpen = PR_FALSE;
+  m_socketIsOpen = false;
   return rv;
 }
 
@@ -157,7 +126,7 @@ nsresult nsMailboxProtocol::Initialize(nsIURI * aURL)
       {
         mailnewsUrl->GetMsgWindow(getter_AddRefs(window));
         if (window)
-          window->SetStopped(PR_FALSE);
+          window->SetStopped(false);
       }
 
       if (m_mailboxAction == nsIMailboxUrl::ActionParseMailbox)
@@ -167,7 +136,7 @@ nsresult nsMailboxProtocol::Initialize(nsIURI * aURL)
         GetFileFromURL(aURL, getter_AddRefs(file));
         if (file)
         {
-          PRInt64 fileSize = 0;
+          int64_t fileSize = 0;
           file->GetFileSize(&fileSize);
           mailnewsUrl->SetMaxProgress(fileSize);
         }
@@ -179,10 +148,7 @@ nsresult nsMailboxProtocol::Initialize(nsIURI * aURL)
         // we need to specify a byte range to read in so we read in JUST the message we want.
         rv = SetupMessageExtraction();
         if (NS_FAILED(rv)) return rv;
-        nsMsgKey aMsgKey;
-        PRUint32 aMsgSize = 0;
-        rv = m_runningUrl->GetMessageKey(&aMsgKey);
-        NS_ASSERTION(NS_SUCCEEDED(rv), "oops....i messed something up");
+        uint32_t aMsgSize = 0;
         rv = m_runningUrl->GetMessageSize(&aMsgSize);
         NS_ASSERTION(NS_SUCCEEDED(rv), "oops....i messed something up");
         SetContentLength(aMsgSize);
@@ -190,19 +156,64 @@ nsresult nsMailboxProtocol::Initialize(nsIURI * aURL)
 
         if (RunningMultipleMsgUrl())
         {
-          rv = OpenFileSocketForReuse(aURL, (PRUint32) aMsgKey, aMsgSize);
+          rv = OpenFileSocketForReuse(aURL, m_msgOffset, aMsgSize);
           // if we're running multiple msg url, we clear the event sink because the multiple
           // msg urls will handle setting the progress.
-          mProgressEventSink = nsnull;
+          mProgressEventSink = nullptr;
         }
         else
-          rv = OpenFileSocket(aURL, (PRUint32) aMsgKey, aMsgSize);
+        {
+          nsCOMPtr<nsIMsgIncomingServer> server;
+          nsCOMPtr<nsIMsgDBHdr> msgHdr;
+          nsCOMPtr<nsIMsgFolder> folder;
+          nsCOMPtr<nsIMsgMessageUrl> msgUrl = do_QueryInterface(m_runningUrl, &rv);
+          NS_ENSURE_SUCCESS(rv,rv);
+          rv = msgUrl->GetMessageHeader(getter_AddRefs(msgHdr));
+          if (msgHdr)
+          {
+            msgHdr->GetFolder(getter_AddRefs(folder));
+            if (folder)
+              folder->GetServer(getter_AddRefs(server));
+          }
+          if (server)
+          {
+            nsCOMPtr<nsIMsgPluggableStore> msgStore;
+            rv = server->GetMsgStore(getter_AddRefs(msgStore));
+            NS_ENSURE_SUCCESS(rv, rv);
+
+            if (NS_SUCCEEDED(rv) && msgHdr)
+            {
+              nsCOMPtr<nsIInputStream> stream;
+              int64_t offset = 0;
+              bool reusable = false;
+
+              rv = folder->GetMsgInputStream(msgHdr, &reusable, getter_AddRefs(stream));
+              NS_ENSURE_SUCCESS(rv, rv);
+              nsCOMPtr<nsISeekableStream> seekableStream(do_QueryInterface(stream, &rv));
+              NS_ENSURE_SUCCESS(rv, rv);
+              seekableStream->Tell(&offset);
+              // create input stream transport
+              nsCOMPtr<nsIStreamTransportService> sts =
+                  do_GetService(NS_STREAMTRANSPORTSERVICE_CONTRACTID, &rv);
+              if (NS_FAILED(rv)) return rv;
+              m_readCount = aMsgSize;
+              rv = sts->CreateInputTransport(stream, offset,
+                                             int64_t(aMsgSize), true,
+                                             getter_AddRefs(m_transport));
+
+              m_socketIsOpen = false;
+             
+            }
+          }
+          else // must be a .eml file
+            rv = OpenFileSocket(aURL, 0, aMsgSize);
+        }
         NS_ASSERTION(NS_SUCCEEDED(rv), "oops....i messed something up");
       }
     }
   }
   
-  m_lineStreamBuffer = new nsMsgLineStreamBuffer(OUTPUT_BUFFER_SIZE, PR_TRUE);
+  m_lineStreamBuffer = new nsMsgLineStreamBuffer(OUTPUT_BUFFER_SIZE, true);
   
   m_nextState = MAILBOX_READ_FOLDER;
   m_initialState = MAILBOX_READ_FOLDER;
@@ -230,16 +241,16 @@ NS_IMETHODIMP nsMailboxProtocol::OnStartRequest(nsIRequest *request, nsISupports
   return nsMsgProtocol::OnStartRequest(request, ctxt);
 }
 
-PRBool nsMailboxProtocol::RunningMultipleMsgUrl()
+bool nsMailboxProtocol::RunningMultipleMsgUrl()
 {
   if (m_mailboxAction == nsIMailboxUrl::ActionCopyMessage || m_mailboxAction == nsIMailboxUrl::ActionMoveMessage)
   {
-    PRUint32 numMoveCopyMsgs;
+    uint32_t numMoveCopyMsgs;
     nsresult rv = m_runningUrl->GetNumMoveCopyMsgs(&numMoveCopyMsgs);
     if (NS_SUCCEEDED(rv) && numMoveCopyMsgs > 1)
-      return PR_TRUE;
+      return true;
   }
-  return PR_FALSE;
+  return false;
 }
 
 // stop binding is a "notification" informing us that the stream associated with aURL is going away. 
@@ -256,7 +267,7 @@ NS_IMETHODIMP nsMailboxProtocol::OnStopRequest(nsIRequest *request, nsISupports 
     DoneReadingMessage();
   }
   // I'm not getting cancel status - maybe the load group still has the status.
-  PRBool stopped = PR_FALSE;
+  bool stopped = false;
   if (m_runningUrl)
   {
     nsCOMPtr <nsIMsgMailNewsUrl> mailnewsUrl = do_QueryInterface(m_runningUrl);
@@ -270,8 +281,8 @@ NS_IMETHODIMP nsMailboxProtocol::OnStopRequest(nsIRequest *request, nsISupports 
     
     if (!stopped && NS_SUCCEEDED(aStatus) && (m_mailboxAction == nsIMailboxUrl::ActionCopyMessage || m_mailboxAction == nsIMailboxUrl::ActionMoveMessage))
     {
-      PRUint32 numMoveCopyMsgs;
-      PRUint32 curMoveCopyMsgIndex;
+      uint32_t numMoveCopyMsgs;
+      uint32_t curMoveCopyMsgIndex;
       rv = m_runningUrl->GetNumMoveCopyMsgs(&numMoveCopyMsgs);
       if (NS_SUCCEEDED(rv) && numMoveCopyMsgs > 0)
       {
@@ -292,8 +303,7 @@ NS_IMETHODIMP nsMailboxProtocol::OnStopRequest(nsIRequest *request, nsISupports 
           rv = m_runningUrl->GetMoveCopyMsgHdrForIndex(curMoveCopyMsgIndex, getter_AddRefs(nextMsg));
           if (NS_SUCCEEDED(rv) && nextMsg)
           {
-            PRUint32 msgSize = 0;
-            nsMsgKey msgKey;
+            uint32_t msgSize = 0;
             nsCOMPtr <nsIMsgFolder> msgFolder;
             nextMsg->GetFolder(getter_AddRefs(msgFolder));
             NS_ASSERTION(msgFolder, "couldn't get folder for next msg in multiple msg local copy");
@@ -307,7 +317,8 @@ NS_IMETHODIMP nsMailboxProtocol::OnStopRequest(nsIRequest *request, nsISupports 
                 msgUrl->SetOriginalSpec(uri.get());
                 msgUrl->SetUri(uri.get());
                 
-                nextMsg->GetMessageKey(&msgKey);
+                uint64_t msgOffset;
+                nextMsg->GetMessageOffset(&msgOffset);
                 nextMsg->GetMessageSize(&msgSize);
                 // now we have to seek to the right position in the file and
                 // basically re-initialize the transport with the correct message size.
@@ -321,7 +332,7 @@ NS_IMETHODIMP nsMailboxProtocol::OnStopRequest(nsIRequest *request, nsISupports 
                 m_inputStream = 0;
                 m_outputStream = 0;
                 
-                rv = OpenMultipleMsgTransport(msgKey, msgSize);
+                rv = OpenMultipleMsgTransport(msgOffset, msgSize);
                 if (NS_SUCCEEDED(rv))
                 {
                   if (!m_inputStream)
@@ -341,8 +352,8 @@ NS_IMETHODIMP nsMailboxProtocol::OnStopRequest(nsIRequest *request, nsISupports 
                 
                 NS_ASSERTION(NS_SUCCEEDED(rv), "AsyncRead failed");
                 if (m_loadGroup)
-                  m_loadGroup->RemoveRequest(static_cast<nsIRequest *>(this), nsnull, aStatus);
-                m_socketIsOpen = PR_TRUE; // mark the channel as open
+                  m_loadGroup->RemoveRequest(static_cast<nsIRequest *>(this), nullptr, aStatus);
+                m_socketIsOpen = true; // mark the channel as open
                 return aStatus;
               }
             }
@@ -376,7 +387,7 @@ NS_IMETHODIMP nsMailboxProtocol::OnStopRequest(nsIRequest *request, nsISupports 
   if (m_multipleMsgMoveCopyStream)
   {
     m_multipleMsgMoveCopyStream->Close();
-    m_multipleMsgMoveCopyStream = nsnull;
+    m_multipleMsgMoveCopyStream = nullptr;
   }
   nsMsgProtocol::OnStopRequest(request, ctxt, aStatus);
   return CloseSocket(); 
@@ -386,7 +397,7 @@ NS_IMETHODIMP nsMailboxProtocol::OnStopRequest(nsIRequest *request, nsISupports 
 // End of nsIStreamListenerSupport
 //////////////////////////////////////////////////////////////////////////////////////////////
 
-PRInt32 nsMailboxProtocol::DoneReadingMessage()
+int32_t nsMailboxProtocol::DoneReadingMessage()
 {
   nsresult rv = NS_OK;
   // and close the article file if it was open....
@@ -397,7 +408,7 @@ PRInt32 nsMailboxProtocol::DoneReadingMessage()
   return rv;
 }
 
-PRInt32 nsMailboxProtocol::SetupMessageExtraction()
+nsresult nsMailboxProtocol::SetupMessageExtraction()
 {
   // Determine the number of bytes we are going to need to read out of the 
   // mailbox url....
@@ -407,7 +418,7 @@ PRInt32 nsMailboxProtocol::SetupMessageExtraction()
   NS_ASSERTION(m_runningUrl, "Not running a url");
   if (m_runningUrl)
   {
-    PRUint32 messageSize = 0;
+    uint32_t messageSize = 0;
     m_runningUrl->GetMessageSize(&messageSize);
     if (!messageSize)
     {
@@ -418,9 +429,10 @@ PRInt32 nsMailboxProtocol::SetupMessageExtraction()
       {
         msgHdr->GetMessageSize(&messageSize);
         m_runningUrl->SetMessageSize(messageSize);
+        msgHdr->GetMessageOffset(&m_msgOffset);
       }
       else
-        NS_ASSERTION(PR_FALSE, "couldn't get message header");
+        NS_ASSERTION(false, "couldn't get message header");
     }
   }
   return rv;
@@ -446,7 +458,7 @@ nsresult nsMailboxProtocol::LoadUrl(nsIURI * aURL, nsISupports * aConsumer)
       // find out from the url what action we are supposed to perform...
       rv = m_runningUrl->GetMailboxAction(&m_mailboxAction);
       
-      PRBool convertData = PR_FALSE;
+      bool convertData = false;
 
       // need to check if we're fetching an rfc822 part in order to
       // quote a message.
@@ -469,7 +481,7 @@ nsresult nsMailboxProtocol::LoadUrl(nsIURI * aURL, nsISupports * aConsumer)
         // when fetching a part, we need to insert a converter into the listener chain order to
         // force just the part out of the message. Our channel listener is the consumer we'll
         // pass in to AsyncConvertData.
-        convertData = PR_TRUE;
+        convertData = true;
         consumer = m_channelListener;
       }
       if (convertData)
@@ -507,7 +519,7 @@ nsresult nsMailboxProtocol::LoadUrl(nsIURI * aURL, nsISupports * aConsumer)
               messageUrl->GetMessageFile(getter_AddRefs(m_tempMessageFile));
               MsgNewBufferedFileOutputStream(getter_AddRefs(m_msgFileOutputStream), m_tempMessageFile, -1, 00600);
 
-              PRBool addDummyEnvelope = PR_FALSE;
+              bool addDummyEnvelope = false;
               messageUrl->GetAddDummyEnvelope(&addDummyEnvelope);
               if (addDummyEnvelope)
                 SetFlag(MAILBOX_MSG_PARSE_FIRST_LINE);
@@ -539,7 +551,7 @@ nsresult nsMailboxProtocol::LoadUrl(nsIURI * aURL, nsISupports * aConsumer)
   return rv;
 }
 
-PRInt32 nsMailboxProtocol::ReadFolderResponse(nsIInputStream * inputStream, PRUint32 sourceOffset, PRUint32 length)
+int32_t nsMailboxProtocol::ReadFolderResponse(nsIInputStream * inputStream, uint32_t sourceOffset, uint32_t length)
 {
   // okay we are doing a folder read in 8K chunks of a mail folder....
   // this is almost too easy....we can just forward the data in this stream on to our
@@ -551,7 +563,7 @@ PRInt32 nsMailboxProtocol::ReadFolderResponse(nsIInputStream * inputStream, PRUi
   if (m_mailboxParser)
   {
     nsCOMPtr <nsIURI> url = do_QueryInterface(m_runningUrl);
-    rv = m_mailboxParser->OnDataAvailable(nsnull, url, inputStream, sourceOffset, length); // let the parser deal with it...
+    rv = m_mailboxParser->OnDataAvailable(nullptr, url, inputStream, sourceOffset, length); // let the parser deal with it...
   }
   if (NS_FAILED(rv))
   {
@@ -570,10 +582,10 @@ PRInt32 nsMailboxProtocol::ReadFolderResponse(nsIInputStream * inputStream, PRUi
   return 0; 
 }
 
-PRInt32 nsMailboxProtocol::ReadMessageResponse(nsIInputStream * inputStream, PRUint32 sourceOffset, PRUint32 length)
+int32_t nsMailboxProtocol::ReadMessageResponse(nsIInputStream * inputStream, uint32_t sourceOffset, uint32_t length)
 {
-  char *line = nsnull;
-  PRUint32 status = 0;
+  char *line = nullptr;
+  uint32_t status = 0;
   nsresult rv = NS_OK;
   mCurrentProgress += length;
   
@@ -587,66 +599,54 @@ PRInt32 nsMailboxProtocol::ReadMessageResponse(nsIInputStream * inputStream, PRU
   }
   else
   {
-    PRBool pauseForMoreData = PR_FALSE;
-    PRBool canonicalLineEnding = PR_FALSE;
+    bool pauseForMoreData = false;
+    bool canonicalLineEnding = false;
     nsCOMPtr<nsIMsgMessageUrl> msgurl = do_QueryInterface(m_runningUrl);
     
     if (msgurl)
       msgurl->GetCanonicalLineEnding(&canonicalLineEnding);
-    do
+
+    while ((line = m_lineStreamBuffer->ReadNextLine(inputStream, status, pauseForMoreData)) &&
+           !pauseForMoreData)
     {
-      char *saveLine;
-      saveLine = line = m_lineStreamBuffer->ReadNextLine(inputStream, status, pauseForMoreData);
-      
-      if (!line || (line[0] == '.' && line[1] == 0))
+      /* When we're sending this line to a converter (ie,
+      it's a message/rfc822) use the local line termination
+      convention, not CRLF.  This makes text articles get
+      saved with the local line terminators.  Since SMTP
+      and NNTP mandate the use of CRLF, it is expected that
+      the local system will convert that to the local line
+      terminator as it is read.
+      */
+      // mscott - the firstline hack is aimed at making sure we don't write
+      // out the dummy header when we are trying to display the message.
+      // The dummy header is the From line with the date tag on it.
+      if (m_msgFileOutputStream && TestFlag(MAILBOX_MSG_PARSE_FIRST_LINE))
       {
-        // we reached the end of the message!
-        ClearFlag(MAILBOX_PAUSE_FOR_READ);
-      } // otherwise process the line
-      else
-      {
-        if (line[0] == '.')
-          line++; // skip over the '.'
-        
-        /* When we're sending this line to a converter (ie,
-        it's a message/rfc822) use the local line termination
-        convention, not CRLF.  This makes text articles get
-        saved with the local line terminators.  Since SMTP
-        and NNTP mandate the use of CRLF, it is expected that
-        the local system will convert that to the local line
-        terminator as it is read.
-        */
-        // mscott - the firstline hack is aimed at making sure we don't write
-        // out the dummy header when we are trying to display the message.
-        // The dummy header is the From line with the date tag on it.
-        if (m_msgFileOutputStream && TestFlag(MAILBOX_MSG_PARSE_FIRST_LINE))
-        {
-          PRUint32 count = 0;
-          if (line)
-            rv = m_msgFileOutputStream->Write(line, PL_strlen(line),
-            &count);
-          if (NS_FAILED(rv)) break;
-          
-          if (canonicalLineEnding)
-            rv = m_msgFileOutputStream->Write(CRLF, 2, &count);
-          else
-            rv = m_msgFileOutputStream->Write(MSG_LINEBREAK,
-            MSG_LINEBREAK_LEN, &count);
-          
-          if (NS_FAILED(rv)) break;
-        }
+        uint32_t count = 0;
+        rv = m_msgFileOutputStream->Write(line, PL_strlen(line), &count);
+        if (NS_FAILED(rv))
+          break;
+
+        if (canonicalLineEnding)
+          rv = m_msgFileOutputStream->Write(CRLF, 2, &count);
         else
-          SetFlag(MAILBOX_MSG_PARSE_FIRST_LINE);
-      } 
-      PR_Free(saveLine);
+          rv = m_msgFileOutputStream->Write(MSG_LINEBREAK,
+                                            MSG_LINEBREAK_LEN, &count);
+
+        if (NS_FAILED(rv))
+          break;
+      }
+      else
+        SetFlag(MAILBOX_MSG_PARSE_FIRST_LINE);
+      PR_Free(line);
     }
-    while (line && !pauseForMoreData);
+    PR_Free(line);
   }
   
   SetFlag(MAILBOX_PAUSE_FOR_READ); // wait for more data to become available...
   if (mProgressEventSink && m_runningUrl)
   {
-    PRInt64 maxProgress;
+    int64_t maxProgress;
     nsCOMPtr<nsIMsgMailNewsUrl> mailnewsUrl(do_QueryInterface(m_runningUrl));
     mailnewsUrl->GetMaxProgress(&maxProgress);
     mProgressEventSink->OnProgress(this, m_channelContext,
@@ -665,10 +665,10 @@ PRInt32 nsMailboxProtocol::ReadMessageResponse(nsIInputStream * inputStream, PRU
  *
  * returns zero or more if the transfer needs to be continued.
  */
-nsresult nsMailboxProtocol::ProcessProtocolState(nsIURI * url, nsIInputStream * inputStream, PRUint32 offset, PRUint32 length)
+nsresult nsMailboxProtocol::ProcessProtocolState(nsIURI * url, nsIInputStream * inputStream, uint32_t offset, uint32_t length)
 {
   nsresult rv = NS_OK;
-  PRInt32 status = 0;
+  int32_t status = 0;
   ClearFlag(MAILBOX_PAUSE_FOR_READ); /* already paused; reset */
   
   while(!TestFlag(MAILBOX_PAUSE_FOR_READ))
@@ -677,13 +677,13 @@ nsresult nsMailboxProtocol::ProcessProtocolState(nsIURI * url, nsIInputStream * 
     switch(m_nextState) 
     {
     case MAILBOX_READ_MESSAGE:
-      if (inputStream == nsnull)
+      if (inputStream == nullptr)
         SetFlag(MAILBOX_PAUSE_FOR_READ);
       else
         status = ReadMessageResponse(inputStream, offset, length);
       break;
     case MAILBOX_READ_FOLDER:
-      if (inputStream == nsnull)
+      if (inputStream == nullptr)
         SetFlag(MAILBOX_PAUSE_FOR_READ);   // wait for file socket to read in the next chunk...
       else
         status = ReadFolderResponse(inputStream, offset, length);
@@ -693,7 +693,7 @@ nsresult nsMailboxProtocol::ProcessProtocolState(nsIURI * url, nsIInputStream * 
       {
         nsCOMPtr <nsIMsgMailNewsUrl> anotherUrl = do_QueryInterface(m_runningUrl);
         rv = m_nextState == MAILBOX_DONE ? NS_OK : NS_ERROR_FAILURE;
-        anotherUrl->SetUrlState(PR_FALSE, rv);
+        anotherUrl->SetUrlState(false, rv);
         m_nextState = MAILBOX_FREE;
       }
       break;
@@ -726,9 +726,9 @@ nsresult nsMailboxProtocol::CloseSocket()
 {
   // how do you force a release when closing the connection??
   nsMsgProtocol::CloseSocket(); 
-  m_runningUrl = nsnull;
-  m_mailboxParser = nsnull;
-  return 0;
+  m_runningUrl = nullptr;
+  m_mailboxParser = nullptr;
+  return NS_OK;
 }
 
 // vim: ts=2 sw=2

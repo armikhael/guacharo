@@ -1,43 +1,11 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Red Hat, Inc.
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Kai Engert <kengert@redhat.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsMemory.h"
 #include "nsAutoPtr.h"
 #include "nsCertVerificationThread.h"
+#include "nsThreadUtils.h"
 
 using namespace mozilla;
 
@@ -45,20 +13,44 @@ nsCertVerificationThread *nsCertVerificationThread::verification_thread_singleto
 
 NS_IMPL_THREADSAFE_ISUPPORTS1(nsCertVerificationResult, nsICertVerificationResult)
 
+namespace {
+class DispatchCertVerificationResult : public nsRunnable
+{
+public:
+  DispatchCertVerificationResult(nsICertVerificationListener* aListener,
+                                 nsIX509Cert3* aCert,
+                                 nsICertVerificationResult* aResult)
+    : mListener(aListener)
+    , mCert(aCert)
+    , mResult(aResult)
+  { }
+
+  NS_IMETHOD Run() {
+    mListener->Notify(mCert, mResult);
+    return NS_OK;
+  }
+
+private:
+  nsCOMPtr<nsICertVerificationListener> mListener;
+  nsCOMPtr<nsIX509Cert3> mCert;
+  nsCOMPtr<nsICertVerificationResult> mResult;
+};
+} // anonymous namespace
+
 void nsCertVerificationJob::Run()
 {
   if (!mListener || !mCert)
     return;
 
-  PRUint32 verified;
-  PRUint32 count;
+  uint32_t verified;
+  uint32_t count;
   PRUnichar **usages;
 
   nsCOMPtr<nsICertVerificationResult> ires;
   nsRefPtr<nsCertVerificationResult> vres = new nsCertVerificationResult;
   if (vres)
   {
-    nsresult rv = mCert->GetUsagesArray(PR_FALSE, // do not ignore OCSP
+    nsresult rv = mCert->GetUsagesArray(false, // do not ignore OCSP
                                         &verified,
                                         &count,
                                         &usages);
@@ -74,7 +66,8 @@ void nsCertVerificationJob::Run()
   }
   
   nsCOMPtr<nsIX509Cert3> c3 = do_QueryInterface(mCert);
-  mListener->Notify(c3, ires);
+  nsCOMPtr<nsIRunnable> r = new DispatchCertVerificationResult(mListener, c3, ires);
+  NS_DispatchToMainThread(r);
 }
 
 void nsSMimeVerificationJob::Run()
@@ -94,7 +87,7 @@ void nsSMimeVerificationJob::Run()
 }
 
 nsCertVerificationThread::nsCertVerificationThread()
-: mJobQ(nsnull)
+: mJobQ(nullptr)
 {
   NS_ASSERTION(!verification_thread_singleton, 
                "nsCertVerificationThread is a singleton, caller attempts"
@@ -105,7 +98,7 @@ nsCertVerificationThread::nsCertVerificationThread()
 
 nsCertVerificationThread::~nsCertVerificationThread()
 {
-  verification_thread_singleton = nsnull;
+  verification_thread_singleton = nullptr;
 }
 
 nsresult nsCertVerificationThread::addJob(nsBaseVerificationJob *aJob)
@@ -126,9 +119,9 @@ nsresult nsCertVerificationThread::addJob(nsBaseVerificationJob *aJob)
 
 void nsCertVerificationThread::Run(void)
 {
-  while (PR_TRUE) {
+  while (true) {
 
-    nsBaseVerificationJob *job = nsnull;
+    nsBaseVerificationJob *job = nullptr;
 
     {
       MutexAutoLock threadLock(verification_thread_singleton->mMutex);
@@ -166,7 +159,7 @@ void nsCertVerificationThread::Run(void)
 }
 
 nsCertVerificationResult::nsCertVerificationResult()
-: mRV(0),
+: mRV(NS_OK),
   mVerified(0),
   mCount(0),
   mUsages(0)
@@ -182,8 +175,8 @@ nsCertVerificationResult::~nsCertVerificationResult()
 }
 
 NS_IMETHODIMP
-nsCertVerificationResult::GetUsagesArrayResult(PRUint32 *aVerified,
-                                               PRUint32 *aCount,
+nsCertVerificationResult::GetUsagesArrayResult(uint32_t *aVerified,
+                                               uint32_t *aCount,
                                                PRUnichar ***aUsages)
 {
   if (NS_FAILED(mRV))

@@ -1,41 +1,8 @@
 /* -*- Mode: C++; c-basic-offset: 2; indent-tabs-mode: nil; tab-width: 8 -*- */
 /* vim: set sw=4 ts=8 et tw=80 ft=cpp : */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla DOM Storage.
- *
- * The Initial Developer of the Original Code is
- *   The Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Josh Matthews <josh@joshmatthews.net> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "StorageParent.h"
 #include "mozilla/dom/PContentParent.h"
@@ -50,11 +17,11 @@ namespace dom {
 StorageParent::StorageParent(const StorageConstructData& aData)
 {
   if (aData.type() == StorageConstructData::Tnull_t) {
-    mStorage = new DOMStorageImpl(nsnull);
+    mStorage = new DOMStorageImpl(nullptr);
   } else {
     const StorageClone& clone = aData.get_StorageClone();
     StorageParent* other = static_cast<StorageParent*>(clone.actorParent());
-    mStorage = new DOMStorageImpl(nsnull, *other->mStorage.get());
+    mStorage = new DOMStorageImpl(nullptr, *other->mStorage.get());
     mStorage->CloneFrom(clone.callerSecure(), other->mStorage);
   }
 }
@@ -63,15 +30,23 @@ bool
 StorageParent::RecvInit(const bool& aUseDB,
                         const bool& aCanUseChromePersist,
                         const bool& aSessionOnly,
+                        const bool& aPrivate,
                         const nsCString& aDomain,
                         const nsCString& aScopeDBKey,
                         const nsCString& aQuotaDomainDBKey,
                         const nsCString& aQuotaETLDplus1DomainDBKey,
-                        const PRUint32& aStorageType)
+                        const uint32_t& aStorageType)
 {
-  mStorage->InitFromChild(aUseDB, aCanUseChromePersist, aSessionOnly, aDomain,
+  mStorage->InitFromChild(aUseDB, aCanUseChromePersist, aSessionOnly, aPrivate, aDomain,
                           aScopeDBKey, aQuotaDomainDBKey, aQuotaETLDplus1DomainDBKey,
                           aStorageType);
+  return true;
+}
+
+bool
+StorageParent::RecvUpdatePrivateState(const bool& aEnabled)
+{
+  mStorage->PrivateModeChanged(aEnabled);
   return true;
 }
 
@@ -86,7 +61,7 @@ StorageParent::RecvGetKeys(const bool& aCallerSecure, InfallibleTArray<nsString>
 
 bool
 StorageParent::RecvGetLength(const bool& aCallerSecure, const bool& aSessionOnly,
-                             PRUint32* aLength, nsresult* rv)
+                             uint32_t* aLength, nsresult* rv)
 {
   mStorage->SetSessionOnly(aSessionOnly);
   *rv = mStorage->GetLength(aCallerSecure, aLength);
@@ -95,7 +70,7 @@ StorageParent::RecvGetLength(const bool& aCallerSecure, const bool& aSessionOnly
 
 bool
 StorageParent::RecvGetKey(const bool& aCallerSecure, const bool& aSessionOnly,
-                          const PRUint32& aIndex, nsString* aKey, nsresult* rv)
+                          const uint32_t& aIndex, nsString* aKey, nsresult* rv)
 {
   mStorage->SetSessionOnly(aSessionOnly);
   *rv = mStorage->GetKey(aCallerSecure, aIndex, *aKey);
@@ -150,7 +125,7 @@ StorageParent::RecvRemoveValue(const bool& aCallerSecure, const bool& aSessionOn
 
 bool
 StorageParent::RecvClear(const bool& aCallerSecure, const bool& aSessionOnly,
-                         PRInt32* aOldCount, nsresult* rv)
+                         int32_t* aOldCount, nsresult* rv)
 {
   mStorage->SetSessionOnly(aSessionOnly);
   *rv = mStorage->Clear(aCallerSecure, aOldCount);
@@ -159,7 +134,7 @@ StorageParent::RecvClear(const bool& aCallerSecure, const bool& aSessionOnly,
 
 bool
 StorageParent::RecvGetDBValue(const nsString& aKey, nsString* aValue,
-                              PRBool* aSecure, nsresult* rv)
+                              bool* aSecure, nsresult* rv)
 {
   *rv = mStorage->GetDBValue(aKey, *aValue, aSecure);
   return true;
@@ -167,14 +142,14 @@ StorageParent::RecvGetDBValue(const nsString& aKey, nsString* aValue,
 
 bool
 StorageParent::RecvSetDBValue(const nsString& aKey, const nsString& aValue,
-                              const PRBool& aSecure, nsresult* rv)
+                              const bool& aSecure, nsresult* rv)
 {
   *rv = mStorage->SetDBValue(aKey, aValue, aSecure);
   return true;
 }
 
 bool
-StorageParent::RecvSetSecure(const nsString& aKey, const PRBool& aSecure,
+StorageParent::RecvSetSecure(const nsString& aKey, const bool& aSecure,
                              nsresult* rv)
 {
   *rv = mStorage->SetSecure(aKey, aSecure);

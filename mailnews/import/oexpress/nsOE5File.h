@@ -1,45 +1,15 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsOE5File_h___
 #define nsOE5File_h___
 
-#include "nsString.h"
+#include "nsStringGlue.h"
 #include "nsIFile.h"
+#include "nsIMsgFolder.h"
+#include <windows.h>
 
 class nsIInputStream;
 
@@ -47,28 +17,32 @@ class nsOE5File
 {
 public:
     /* pFile must already be open for reading. */
-  static PRBool  VerifyLocalMailFile( nsIFile *pFile);
+  static bool    VerifyLocalMailFile(nsIFile *pFile);
     /* pFile must NOT be open for reading   */
-  static PRBool  IsLocalMailFile( nsIFile *pFile);
+  static bool    IsLocalMailFile(nsIFile *pFile);
 
-  static PRBool  ReadIndex( nsIInputStream *pFile, PRUint32 **ppIndex, PRUint32 *pSize);
+  static bool    ReadIndex(nsIInputStream *pFile, uint32_t **ppIndex, uint32_t *pSize);
 
-  static nsresult  ImportMailbox( PRUint32 *pBytesDone, PRBool *pAbort, nsString& name, nsIFile *inFile, nsIFile *pDestination, PRUint32 *pCount);
+  static nsresult ImportMailbox(uint32_t *pBytesDone, bool *pAbort,
+                                nsString& name, nsIFile *inFile,
+                                nsIMsgFolder *pDstFolder, uint32_t *pCount);
+
+  static void FileTimeToPRTime(const FILETIME *filetime, PRTime *prtm);
 
 private:
   typedef struct {
-    PRUint32 *  pIndex;
-    PRUint32  count;
-    PRUint32  alloc;
+    uint32_t *  pIndex;
+    uint32_t  count;
+    uint32_t  alloc;
   } PRUint32Array;
 
   static const char *m_pFromLineSep;
 
-  static PRBool  ReadBytes(nsIInputStream *stream, void *pBuffer, PRUint32 offset, PRUint32 bytes);
-  static PRUint32 ReadMsgIndex(nsIInputStream *file, PRUint32 offset, PRUint32Array *pArray);
-  static void  ConvertIndex(nsIInputStream *pFile, char *pBuffer, PRUint32 *pIndex,
-                            PRUint32 size, PRUint32 *pFlags, PRUint64 *pTime);
-  static PRBool  IsFromLine(char *pLine, PRUint32 len);
+  static bool    ReadBytes(nsIInputStream *stream, void *pBuffer, uint32_t offset, uint32_t bytes);
+  static uint32_t ReadMsgIndex(nsIInputStream *file, uint32_t offset, PRUint32Array *pArray);
+  static void  ConvertIndex(nsIInputStream *pFile, char *pBuffer, uint32_t *pIndex,
+                            uint32_t size, uint32_t *pFlags, uint64_t *pTime);
+  static bool    IsFromLine(char *pLine, uint32_t len);
 
 
 };

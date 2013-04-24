@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 20; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Corporation code.
- *
- * The Initial Developer of the Original Code is Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Vladimir Vukicevic <vladimir@pobox.com>
- *   Bas Schouten <bschouten@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "CanvasLayerD3D10.h"
 
@@ -55,41 +22,39 @@ CanvasLayerD3D10::~CanvasLayerD3D10()
 void
 CanvasLayerD3D10::Initialize(const Data& aData)
 {
-  NS_ASSERTION(mSurface == nsnull, "BasicCanvasLayer::Initialize called twice!");
+  NS_ASSERTION(mSurface == nullptr, "BasicCanvasLayer::Initialize called twice!");
 
   if (aData.mSurface) {
     mSurface = aData.mSurface;
-    NS_ASSERTION(aData.mGLContext == nsnull && !aData.mDrawTarget,
+    NS_ASSERTION(aData.mGLContext == nullptr && !aData.mDrawTarget,
                  "CanvasLayer can't have both surface and GLContext/DrawTarget");
-    mNeedsYFlip = PR_FALSE;
-    mDataIsPremultiplied = PR_TRUE;
+    mNeedsYFlip = false;
+    mDataIsPremultiplied = true;
   } else if (aData.mGLContext) {
     NS_ASSERTION(aData.mGLContext->IsOffscreen(), "canvas gl context isn't offscreen");
     mGLContext = aData.mGLContext;
-    mCanvasFramebuffer = mGLContext->GetOffscreenFBO();
     mDataIsPremultiplied = aData.mGLBufferIsPremultiplied;
-    mNeedsYFlip = PR_TRUE;
+    mNeedsYFlip = true;
   } else if (aData.mDrawTarget) {
     mDrawTarget = aData.mDrawTarget;
+    mNeedsYFlip = false;
+    mDataIsPremultiplied = true;
     void *texture = mDrawTarget->GetNativeSurface(NATIVE_SURFACE_D3D10_TEXTURE);
 
-    if (!texture) {
-      // XXX - Once we have non-D2D drawtargets we should do something more sensible here.
-      NS_WARNING("Failed to get D3D10 texture from DrawTarget.");
+    if (texture) {
+      mTexture = static_cast<ID3D10Texture2D*>(texture);
+
+      NS_ASSERTION(aData.mGLContext == nullptr && aData.mSurface == nullptr,
+                   "CanvasLayer can't have both surface and GLContext/Surface");
+
+      mBounds.SetRect(0, 0, aData.mSize.width, aData.mSize.height);
+      device()->CreateShaderResourceView(mTexture, NULL, getter_AddRefs(mSRView));
       return;
-    }
-
-    mTexture = static_cast<ID3D10Texture2D*>(texture);
-
-    NS_ASSERTION(aData.mGLContext == nsnull && aData.mSurface == nsnull,
-                 "CanvasLayer can't have both surface and GLContext/Surface");
-
-    mNeedsYFlip = PR_FALSE;
-    mDataIsPremultiplied = PR_TRUE;
-
-    mBounds.SetRect(0, 0, aData.mSize.width, aData.mSize.height);
-    device()->CreateShaderResourceView(mTexture, NULL, getter_AddRefs(mSRView));
-    return;
+    } 
+    
+    // XXX we should store mDrawTarget and use it directly in UpdateSurface,
+    // bypassing Thebes
+    mSurface = gfxPlatform::GetPlatform()->GetThebesSurfaceForDrawTarget(mDrawTarget);
   } else {
     NS_ERROR("CanvasLayer created without mSurface, mDrawTarget or mGLContext?");
   }
@@ -100,7 +65,7 @@ CanvasLayerD3D10::Initialize(const Data& aData)
     void *data = mSurface->GetData(&gKeyD3D10Texture);
     if (data) {
       mTexture = static_cast<ID3D10Texture2D*>(data);
-      mIsD2DTexture = PR_TRUE;
+      mIsD2DTexture = true;
       device()->CreateShaderResourceView(mTexture, NULL, getter_AddRefs(mSRView));
       mHasAlpha =
         mSurface->GetContentType() == gfxASurface::CONTENT_COLOR_ALPHA;
@@ -108,18 +73,18 @@ CanvasLayerD3D10::Initialize(const Data& aData)
     }
   }
 
-  mIsD2DTexture = PR_FALSE;
-  mUsingSharedTexture = PR_FALSE;
+  mIsD2DTexture = false;
+  mUsingSharedTexture = false;
 
-  HANDLE shareHandle = mGLContext ? mGLContext->GetD3DShareHandle() : nsnull;
-  if (shareHandle) {
+  HANDLE shareHandle = mGLContext ? mGLContext->GetD3DShareHandle() : nullptr;
+  if (shareHandle && !mForceReadback) {
     HRESULT hr = device()->OpenSharedResource(shareHandle, __uuidof(ID3D10Texture2D), getter_AddRefs(mTexture));
     if (SUCCEEDED(hr))
-      mUsingSharedTexture = PR_TRUE;
+      mUsingSharedTexture = true;
   }
 
   if (mUsingSharedTexture) {
-    mNeedsYFlip = PR_FALSE;
+    mNeedsYFlip = true;
   } else {
     CD3D10_TEXTURE2D_DESC desc(DXGI_FORMAT_B8G8R8A8_UNORM, mBounds.width, mBounds.height, 1, 1);
     desc.Usage = D3D10_USAGE_DYNAMIC;
@@ -140,27 +105,21 @@ CanvasLayerD3D10::UpdateSurface()
 {
   if (!mDirty)
     return;
-  mDirty = PR_FALSE;
+  mDirty = false;
 
   if (mDrawTarget) {
     mDrawTarget->Flush();
-    return;
-  }
-
-  if (mIsD2DTexture) {
+  } else if (mIsD2DTexture) {
     mSurface->Flush();
     return;
-  }
-
-  if (mUsingSharedTexture) {
+  } else if (mUsingSharedTexture) {
     // need to sync on the d3d9 device
     if (mGLContext) {
       mGLContext->MakeCurrent();
-      mGLContext->fFinish();
+      mGLContext->GuaranteeResolve();
     }
     return;
   }
-
   if (mGLContext) {
     // WebGL reads entire surface.
     D3D10_MAPPED_TEXTURE2D map;
@@ -172,47 +131,32 @@ CanvasLayerD3D10::UpdateSurface()
       return;
     }
 
-    PRUint8 *destination;
-    if (map.RowPitch != mBounds.width * 4) {
-      destination = new PRUint8[mBounds.width * mBounds.height * 4];
+    const bool stridesMatch = map.RowPitch == mBounds.width * 4;
+
+    uint8_t *destination;
+    if (!stridesMatch) {
+      destination = GetTempBlob(mBounds.width * mBounds.height * 4);
     } else {
-      destination = (PRUint8*)map.pData;
+      DiscardTempBlob();
+      destination = (uint8_t*)map.pData;
     }
 
-    // We have to flush to ensure that any buffered GL operations are
-    // in the framebuffer before we read.
-    mGLContext->fFlush();
-
-    PRUint32 currentFramebuffer = 0;
-
-    mGLContext->fGetIntegerv(LOCAL_GL_FRAMEBUFFER_BINDING, (GLint*)&currentFramebuffer);
-
-    // Make sure that we read pixels from the correct framebuffer, regardless
-    // of what's currently bound.
-    if (currentFramebuffer != mCanvasFramebuffer)
-      mGLContext->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, mCanvasFramebuffer);
+    mGLContext->MakeCurrent();
 
     nsRefPtr<gfxImageSurface> tmpSurface =
       new gfxImageSurface(destination,
                           gfxIntSize(mBounds.width, mBounds.height),
                           mBounds.width * 4,
                           gfxASurface::ImageFormatARGB32);
-    mGLContext->ReadPixelsIntoImageSurface(0, 0,
-                                           mBounds.width, mBounds.height,
-                                           tmpSurface);
-    tmpSurface = nsnull;
+    mGLContext->ReadScreenIntoImageSurface(tmpSurface);
+    tmpSurface = nullptr;
 
-    // Put back the previous framebuffer binding.
-    if (currentFramebuffer != mCanvasFramebuffer)
-      mGLContext->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, currentFramebuffer);
-
-    if (map.RowPitch != mBounds.width * 4) {
+    if (!stridesMatch) {
       for (int y = 0; y < mBounds.height; y++) {
-        memcpy((PRUint8*)map.pData + map.RowPitch * y,
+        memcpy((uint8_t*)map.pData + map.RowPitch * y,
                destination + mBounds.width * 4 * y,
                mBounds.width * 4);
       }
-      delete [] destination;
     }
     mTexture->Unmap(0);
   } else if (mSurface) {
@@ -264,29 +208,14 @@ CanvasLayerD3D10::RenderLayer()
 
   SetEffectTransformAndOpacity();
 
-  ID3D10EffectTechnique *technique;
-
-  if (mDataIsPremultiplied) {
-    if (!mHasAlpha) {
-      if (mFilter == gfxPattern::FILTER_NEAREST) {
-        technique = effect()->GetTechniqueByName("RenderRGBLayerPremulPoint");
-      } else {
-        technique = effect()->GetTechniqueByName("RenderRGBLayerPremul");
-      }
-    } else {
-      if (mFilter == gfxPattern::FILTER_NEAREST) {
-        technique = effect()->GetTechniqueByName("RenderRGBALayerPremulPoint");
-      } else {
-        technique = effect()->GetTechniqueByName("RenderRGBALayerPremul");
-      }
-    }
-  } else {
-    if (mFilter == gfxPattern::FILTER_NEAREST) {
-      technique = effect()->GetTechniqueByName("RenderRGBALayerNonPremulPoint");
-    } else {
-      technique = effect()->GetTechniqueByName("RenderRGBALayerNonPremul");
-    }
-  }
+  uint8_t shaderFlags = 0;
+  shaderFlags |= LoadMaskTexture();
+  shaderFlags |= mDataIsPremultiplied
+                ? SHADER_PREMUL : SHADER_NON_PREMUL | SHADER_RGBA;
+  shaderFlags |= mHasAlpha ? SHADER_RGBA : SHADER_RGB;
+  shaderFlags |= mFilter == gfxPattern::FILTER_NEAREST
+                ? SHADER_POINT : SHADER_LINEAR;
+  ID3D10EffectTechnique* technique = SelectShader(shaderFlags);
 
   if (mSRView) {
     effect()->GetVariableByName("tRGB")->AsShaderResource()->SetResource(mSRView);

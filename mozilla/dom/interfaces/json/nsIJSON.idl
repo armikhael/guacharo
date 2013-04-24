@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Robert Sayre <sayrer@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "domstubs.idl"
 
@@ -48,7 +15,7 @@ interface nsIScriptGlobalObject;
 /**
  * Encode and decode JSON text.
  */
-[scriptable, uuid(a4d68b4e-0c0b-4c7c-b540-ef2f9834171f)]
+[scriptable, uuid(43845d58-1054-47fb-8be3-970b3f7bd7ea)]
 interface nsIJSON : nsISupports
 {
   /**
@@ -56,7 +23,8 @@ interface nsIJSON : nsISupports
    * The encode() method is only present for backward compatibility.
    * encode() is not a conforming JSON stringify implementation!
    */
-  [deprecated] AString encode(/* in JSObject value */);
+  [deprecated,implicit_jscontext,optional_argc]
+  AString encode([optional] in jsval value);
 
   /**
    * New users should use JSON.stringify.
@@ -65,19 +33,22 @@ interface nsIJSON : nsISupports
    * The encodeToStream() method is only present for backward compatibility.
    * encodeToStream() is not a conforming JSON stringify implementation!
    */
-  [deprecated] void encodeToStream(in nsIOutputStream stream,
-                                   in string charset,
-                                   in boolean writeBOM
-                                   /* in JSObject value */);
+  [deprecated,implicit_jscontext,optional_argc]
+  void encodeToStream(in nsIOutputStream stream,
+                      in string charset,
+                      in boolean writeBOM,
+                      [optional] in jsval value);
 
   /**
    * New users should use JSON.parse!
    * The decode() method is only present for backward compatibility.
    */
-  [deprecated] void /* JSObject */ decode(in AString str);
+  [deprecated,implicit_jscontext]
+  jsval decode(in AString str);
 
-  void /* JSObject */ decodeFromStream(in nsIInputStream stream,
-                                       in long contentLength);
+  [implicit_jscontext]
+  jsval decodeFromStream(in nsIInputStream stream,
+                         in long contentLength);
 
   [noscript] AString  encodeFromJSVal(in JSValPtr value, in JSContext cx);
 
@@ -97,11 +68,13 @@ interface nsIJSON : nsISupports
    *
    * @param str the string to parse
    */
-  void /* jsval */ legacyDecode(in AString str);
+  [implicit_jscontext]
+  jsval legacyDecode(in AString str);
 
   /* Identical to legacyDecode, but decode the contents of stream. */
-  void /* jsval */ legacyDecodeFromStream(in nsIInputStream stream,
-                                          in long contentLength);
+  [implicit_jscontext]
+  jsval legacyDecodeFromStream(in nsIInputStream stream,
+                               in long contentLength);
 
   /* Identical to legacyDecode, but decode into a jsval. */
   // Make sure you GCroot the result of this function before using it.

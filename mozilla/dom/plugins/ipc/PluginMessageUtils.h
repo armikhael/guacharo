@@ -1,40 +1,8 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  * vim: sw=4 ts=4 et :
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Plugin App.
- *
- * The Initial Developer of the Original Code is
- *   Chris Jones <jones.chris.g@gmail.com>
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef DOM_PLUGINS_PLUGINMESSAGEUTILS_H
 #define DOM_PLUGINS_PLUGINMESSAGEUTILS_H
@@ -43,6 +11,8 @@
 #include "base/message_loop.h"
 
 #include "mozilla/ipc/RPCChannel.h"
+#include "mozilla/ipc/CrossProcessMutex.h"
+#include "gfxipc/ShadowLayerUtils.h"
 
 #include "npapi.h"
 #include "npruntime.h"
@@ -66,6 +36,8 @@ using mac_plugin_interposing::NSCursorInfo;
 namespace mozilla {
 namespace plugins {
 
+using layers::SurfaceDescriptorX11;
+
 enum ScriptableObjectType
 {
   LocalObject,
@@ -82,6 +54,16 @@ std::string
 UnmungePluginDsoPath(const std::string& munged);
 
 extern PRLogModuleInfo* gPluginLog;
+
+const uint32_t kAllowAsyncDrawing = 0x1;
+
+inline bool IsDrawingModelAsync(int16_t aModel) {
+  return aModel == NPDrawingModelAsyncBitmapSurface
+#ifdef XP_WIN
+         || aModel == NPDrawingModelAsyncWindowsDXGISurface
+#endif
+         ;
+}
 
 #if defined(_MSC_VER)
 #define FULLFUNCTION __FUNCSIG__
@@ -110,7 +92,8 @@ typedef nsCString Buffer;
 
 struct NPRemoteWindow
 {
-  unsigned long window;
+  NPRemoteWindow();
+  uint64_t window;
   int32_t x;
   int32_t y;
   uint32_t width;
@@ -130,7 +113,7 @@ struct NPRemoteWindow
 typedef HWND NativeWindowHandle;
 #elif defined(MOZ_X11)
 typedef XID NativeWindowHandle;
-#elif defined(XP_MACOSX) || defined(ANDROID)
+#elif defined(XP_MACOSX) || defined(ANDROID) || defined(MOZ_WIDGET_QT)
 typedef intptr_t NativeWindowHandle; // never actually used, will always be 0
 #else
 #error Need NativeWindowHandle for this platform
@@ -138,15 +121,10 @@ typedef intptr_t NativeWindowHandle; // never actually used, will always be 0
 
 #ifdef XP_WIN
 typedef base::SharedMemoryHandle WindowsSharedMemoryHandle;
+typedef HANDLE DXGISharedSurfaceHandle;
 #else
 typedef mozilla::null_t WindowsSharedMemoryHandle;
-#endif
-
-#ifdef MOZ_CRASHREPORTER
-typedef CrashReporter::ThreadId NativeThreadId;
-#else
-// unused in this case
-typedef int32 NativeThreadId;
+typedef mozilla::null_t DXGISharedSurfaceHandle;
 #endif
 
 // XXX maybe not the best place for these. better one?
@@ -213,6 +191,7 @@ NPNVariableToString(NPNVariable aVar)
         VARSTR(NPNVSupportsWindowless);
 
         VARSTR(NPNVprivateModeBool);
+        VARSTR(NPNVdocumentOrigin);
 
     default: return "???";
     }
@@ -258,7 +237,7 @@ NullableString(const char* aString)
 {
     if (!aString) {
         nsCString str;
-        str.SetIsVoid(PR_TRUE);
+        str.SetIsVoid(true);
         return str;
     }
     return nsCString(aString);
@@ -357,13 +336,39 @@ struct ParamTraits<NPWindowType>
 };
 
 template <>
+struct ParamTraits<NPImageFormat>
+{
+  typedef NPImageFormat paramType;
+
+  static void Write(Message* aMsg, const paramType& aParam)
+  {
+    aMsg->WriteInt16(int16(aParam));
+  }
+
+  static bool Read(const Message* aMsg, void** aIter, paramType* aResult)
+  {
+    int16 result;
+    if (aMsg->ReadInt16(aIter, &result)) {
+      *aResult = paramType(result);
+      return true;
+    }
+    return false;
+  }
+
+  static void Log(const paramType& aParam, std::wstring* aLog)
+  {
+    aLog->append(StringPrintf(L"%d", int16(aParam)));
+  }
+};
+
+template <>
 struct ParamTraits<mozilla::plugins::NPRemoteWindow>
 {
   typedef mozilla::plugins::NPRemoteWindow paramType;
 
   static void Write(Message* aMsg, const paramType& aParam)
   {
-    aMsg->WriteULong(aParam.window);
+    aMsg->WriteUInt64(aParam.window);
     WriteParam(aMsg, aParam.x);
     WriteParam(aMsg, aParam.y);
     WriteParam(aMsg, aParam.width);
@@ -381,12 +386,12 @@ struct ParamTraits<mozilla::plugins::NPRemoteWindow>
 
   static bool Read(const Message* aMsg, void** aIter, paramType* aResult)
   {
-    unsigned long window;
+    uint64 window;
     int32_t x, y;
     uint32_t width, height;
     NPRect clipRect;
     NPWindowType type;
-    if (!(aMsg->ReadULong(aIter, &window) &&
+    if (!(aMsg->ReadUInt64(aIter, &window) &&
           ReadParam(aMsg, aIter, &x) &&
           ReadParam(aMsg, aIter, &y) &&
           ReadParam(aMsg, aIter, &width) &&
@@ -456,7 +461,7 @@ struct ParamTraits<NPString>
         return true;
       }
 
-      const char* messageBuffer = nsnull;
+      const char* messageBuffer = nullptr;
       nsAutoArrayPtr<char> newBuffer(new char[byteCount]);
       if (newBuffer && aMsg->ReadBytes(aIter, &messageBuffer, byteCount )) {
         memcpy((void*)messageBuffer, newBuffer.get(), byteCount);
@@ -524,7 +529,7 @@ struct ParamTraits<NPNSString*>
       return false;
     }
 
-    UniChar* buffer = nsnull;
+    UniChar* buffer = nullptr;
     if (length != 0) {
       if (!aMsg->ReadBytes(aIter, (const char**)&buffer, length * sizeof(UniChar)) ||
           !buffer) {
@@ -887,10 +892,10 @@ struct ParamTraits<NPCoordinateSpace>
 #  include "mozilla/plugins/NPEventWindows.h"
 #elif defined(XP_OS2)
 #  error Sorry, OS/2 is not supported
-#elif defined(XP_UNIX) && defined(MOZ_X11)
-#  include "mozilla/plugins/NPEventX11.h"
 #elif defined(ANDROID)
 #  include "mozilla/plugins/NPEventAndroid.h"
+#elif defined(XP_UNIX)
+#  include "mozilla/plugins/NPEventUnix.h"
 #else
 #  error Unsupported platform
 #endif

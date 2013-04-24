@@ -25,7 +25,6 @@
 
 var server;
 var daemon;
-var handler;
 var incomingServer;
 var pop3Service;
 const test = "Server which advertises CRAM-MD5, but closes the connection when it's tried";
@@ -90,17 +89,16 @@ function run_test() {
     do_test_pending();
 
     // Disable new mail notifications
-    var prefSvc = Components.classes["@mozilla.org/preferences-service;1"]
-      .getService(Components.interfaces.nsIPrefBranch);
-
-    prefSvc.setBoolPref("mail.biff.play_sound", false);
-    prefSvc.setBoolPref("mail.biff.show_alert", false);
-    prefSvc.setBoolPref("mail.biff.show_tray_icon", false);
-    prefSvc.setBoolPref("mail.biff.animate_dock_icon", false);
+    Services.prefs.setBoolPref("mail.biff.play_sound", false);
+    Services.prefs.setBoolPref("mail.biff.show_alert", false);
+    Services.prefs.setBoolPref("mail.biff.show_tray_icon", false);
+    Services.prefs.setBoolPref("mail.biff.animate_dock_icon", false);
 
     daemon = new pop3Daemon();
-    handler = new CRAMFail_handler(daemon);
-    server = new nsMailServer(handler);
+    function createHandler(d) {
+      return new CRAMFail_handler(d);
+    }
+    server = new nsMailServer(createHandler, daemon);
     server.start(POP3_PORT);
 
     incomingServer = createPop3ServerAndLocalFolders();

@@ -1,56 +1,17 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla SVG Project code.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "SVGPathSegUtils.h"
-#include "nsSVGElement.h"
-#include "nsSVGSVGElement.h"
 #include "nsSVGPathDataParser.h"
-#include "nsString.h"
-#include "nsSVGUtils.h"
 #include "nsContentUtils.h"
 #include "nsTextFormatter.h"
-#include "prdtoa.h"
-#include <limits>
-#include "nsMathUtils.h"
-#include "prtypes.h"
 
 using namespace mozilla;
 
 static const float PATH_SEG_LENGTH_TOLERANCE = 0.0000001f;
-static const PRUint32 MAX_RECURSION = 10;
+static const uint32_t MAX_RECURSION = 10;
 
 
 /* static */ void
@@ -61,13 +22,13 @@ SVGPathSegUtils::GetValueAsString(const float* aSeg, nsAString& aValue)
                      nsIDOMSVGPathSeg::PATHSEG_CURVETO_QUADRATIC_SMOOTH_REL);
   PR_STATIC_ASSERT(NS_SVG_PATH_SEG_MAX_ARGS == 7);
 
-  PRUint32 type = DecodeType(aSeg[0]);
+  uint32_t type = DecodeType(aSeg[0]);
   PRUnichar typeAsChar = GetPathSegTypeAsLetter(type);
 
   // Special case arcs:
   if (IsArcType(type)) {
-    PRBool largeArcFlag = aSeg[4] != 0.0f;
-    PRBool sweepFlag = aSeg[5] != 0.0f;
+    bool largeArcFlag = aSeg[4] != 0.0f;
+    bool sweepFlag = aSeg[5] != 0.0f;
     nsTextFormatter::ssprintf(aValue,
                               NS_LITERAL_STRING("%c%g,%g %g %d,%d %g,%g").get(),
                               typeAsChar, aSeg[1], aSeg[2], aSeg[3],
@@ -102,7 +63,7 @@ SVGPathSegUtils::GetValueAsString(const float* aSeg, nsAString& aValue)
       break;
 
     default:
-      NS_ABORT_IF_FALSE(PR_FALSE, "Unknown segment type");
+      NS_ABORT_IF_FALSE(false, "Unknown segment type");
       aValue = NS_LITERAL_STRING("<unknown-segment-type>").get();
       return;
     }
@@ -164,14 +125,14 @@ SplitCubicBezier(const gfxPoint* aCurve, gfxPoint* aLeft, gfxPoint* aRight)
 }
 
 static gfxFloat
-CalcBezLengthHelper(gfxPoint* aCurve, PRUint32 aNumPts,
-                    PRUint32 aRecursionCount,
+CalcBezLengthHelper(gfxPoint* aCurve, uint32_t aNumPts,
+                    uint32_t aRecursionCount,
                     void (*aSplit)(const gfxPoint*, gfxPoint*, gfxPoint*))
 {
   gfxPoint left[4];
   gfxPoint right[4];
   gfxFloat length = 0, dist;
-  for (PRUint32 i = 0; i < aNumPts - 1; i++) {
+  for (uint32_t i = 0; i < aNumPts - 1; i++) {
     length += CalcDistanceBetweenPoints(aCurve[i], aCurve[i+1]);
   }
   dist = CalcDistanceBetweenPoints(aCurve[0], aCurve[aNumPts - 1]);
@@ -452,7 +413,7 @@ TraverseArcRel(const float* aArgs, SVGPathTraversalState& aState)
 typedef void (*TraverseFunc)(const float*, SVGPathTraversalState&);
 
 static TraverseFunc gTraverseFuncTable[NS_SVG_PATH_SEG_TYPE_COUNT] = {
-  nsnull, //  0 == PATHSEG_UNKNOWN
+  nullptr, //  0 == PATHSEG_UNKNOWN
   TraverseClosePath,
   TraverseMovetoAbs,
   TraverseMovetoRel,
@@ -480,6 +441,6 @@ SVGPathSegUtils::TraversePathSegment(const float* aData,
 {
   PR_STATIC_ASSERT(NS_ARRAY_LENGTH(gTraverseFuncTable) ==
                      NS_SVG_PATH_SEG_TYPE_COUNT);
-  PRUint32 type = DecodeType(aData[0]);
+  uint32_t type = DecodeType(aData[0]);
   gTraverseFuncTable[type](aData + 1, aState);
 }

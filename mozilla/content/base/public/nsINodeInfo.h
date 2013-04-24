@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * nsINodeInfo is an interface to node info, such as name, prefix, namespace
@@ -55,20 +23,19 @@
 #ifndef nsINodeInfo_h___
 #define nsINodeInfo_h___
 
-#include "nsISupports.h"
-#include "nsIAtom.h"
-#include "nsINameSpaceManager.h"
-#include "nsNodeInfoManager.h"
-#include "nsCOMPtr.h"
+#include "nsCOMPtr.h"            // for member
+#include "nsIAtom.h"             // for member (in nsCOMPtr)
+#include "nsINameSpaceManager.h" // for kNameSpaceID_*
+#include "nsISupports.h"         // for base class
 
 #ifdef MOZILLA_INTERNAL_API
 #include "nsDOMString.h"
 #endif
 
-// Forward declarations
 class nsIDocument;
 class nsIURI;
 class nsIPrincipal;
+class nsNodeInfoManager;
 
 // IID for the nsINodeInfo interface
 #define NS_INODEINFO_IID      \
@@ -81,8 +48,8 @@ public:
   NS_DECLARE_STATIC_IID_ACCESSOR(NS_INODEINFO_IID)
 
   nsINodeInfo()
-    : mInner(nsnull, nsnull, kNameSpaceID_None, 0, nsnull),
-      mOwnerManager(nsnull)
+    : mInner(nullptr, nullptr, kNameSpaceID_None, 0, nullptr),
+      mOwnerManager(nullptr)
   {
   }
 
@@ -171,7 +138,7 @@ public:
    * Get the namespace ID for a node if the node has a namespace, if not this
    * returns kNameSpaceID_None.
    */
-  PRInt32 NamespaceID() const
+  int32_t NamespaceID() const
   {
     return mInner.mNamespaceID;
   }
@@ -180,7 +147,7 @@ public:
    * Get the nodetype for the node. Returns the values specified in nsIDOMNode
    * for nsIDOMNode.nodeType
    */
-  PRUint16 NodeType() const
+  uint16_t NodeType() const
   {
     return mInner.mNodeType;
   }
@@ -223,74 +190,74 @@ public:
    * name, name and prefix, name and prefix and namespace ID, or just
    * namespace ID.
    */
-  PRBool Equals(nsINodeInfo *aNodeInfo) const
+  bool Equals(nsINodeInfo *aNodeInfo) const
   {
     return aNodeInfo == this || aNodeInfo->Equals(mInner.mName, mInner.mPrefix,
                                                   mInner.mNamespaceID);
   }
 
-  PRBool NameAndNamespaceEquals(nsINodeInfo *aNodeInfo) const
+  bool NameAndNamespaceEquals(nsINodeInfo *aNodeInfo) const
   {
     return aNodeInfo == this || aNodeInfo->Equals(mInner.mName,
                                                   mInner.mNamespaceID);
   }
 
-  PRBool Equals(nsIAtom *aNameAtom) const
+  bool Equals(nsIAtom *aNameAtom) const
   {
     return mInner.mName == aNameAtom;
   }
 
-  PRBool Equals(nsIAtom *aNameAtom, nsIAtom *aPrefixAtom) const
+  bool Equals(nsIAtom *aNameAtom, nsIAtom *aPrefixAtom) const
   {
     return (mInner.mName == aNameAtom) && (mInner.mPrefix == aPrefixAtom);
   }
 
-  PRBool Equals(nsIAtom *aNameAtom, PRInt32 aNamespaceID) const
+  bool Equals(nsIAtom *aNameAtom, int32_t aNamespaceID) const
   {
     return ((mInner.mName == aNameAtom) &&
             (mInner.mNamespaceID == aNamespaceID));
   }
 
-  PRBool Equals(nsIAtom *aNameAtom, nsIAtom *aPrefixAtom,
-                PRInt32 aNamespaceID) const
+  bool Equals(nsIAtom *aNameAtom, nsIAtom *aPrefixAtom,
+                int32_t aNamespaceID) const
   {
     return ((mInner.mName == aNameAtom) &&
             (mInner.mPrefix == aPrefixAtom) &&
             (mInner.mNamespaceID == aNamespaceID));
   }
 
-  PRBool NamespaceEquals(PRInt32 aNamespaceID) const
+  bool NamespaceEquals(int32_t aNamespaceID) const
   {
     return mInner.mNamespaceID == aNamespaceID;
   }
 
-  PRBool Equals(const nsAString& aName) const
+  bool Equals(const nsAString& aName) const
   {
     return mInner.mName->Equals(aName);
   }
 
-  PRBool Equals(const nsAString& aName, const nsAString& aPrefix) const
+  bool Equals(const nsAString& aName, const nsAString& aPrefix) const
   {
     return mInner.mName->Equals(aName) &&
       (mInner.mPrefix ? mInner.mPrefix->Equals(aPrefix) : aPrefix.IsEmpty());
   }
 
-  PRBool Equals(const nsAString& aName, PRInt32 aNamespaceID) const
+  bool Equals(const nsAString& aName, int32_t aNamespaceID) const
   {
     return mInner.mNamespaceID == aNamespaceID &&
       mInner.mName->Equals(aName);
   }
 
-  PRBool Equals(const nsAString& aName, const nsAString& aPrefix,
-                PRInt32 aNamespaceID) const
+  bool Equals(const nsAString& aName, const nsAString& aPrefix,
+                int32_t aNamespaceID) const
   {
     return mInner.mName->Equals(aName) && mInner.mNamespaceID == aNamespaceID &&
       (mInner.mPrefix ? mInner.mPrefix->Equals(aPrefix) : aPrefix.IsEmpty());
   }
 
-  virtual PRBool NamespaceEquals(const nsAString& aNamespaceURI) const = 0;
+  virtual bool NamespaceEquals(const nsAString& aNamespaceURI) const = 0;
 
-  PRBool QualifiedNameEquals(nsIAtom* aNameAtom) const
+  bool QualifiedNameEquals(nsIAtom* aNameAtom) const
   {
     NS_PRECONDITION(aNameAtom, "Must have name atom");
     if (!GetPrefixAtom())
@@ -299,7 +266,7 @@ public:
     return aNameAtom->Equals(mQualifiedName);
   }
 
-  PRBool QualifiedNameEquals(const nsAString& aQualifiedName) const
+  bool QualifiedNameEquals(const nsAString& aQualifiedName) const
   {
     return mQualifiedName == aQualifiedName;
   }
@@ -331,27 +298,27 @@ protected:
   {
   public:
     nsNodeInfoInner()
-      : mName(nsnull), mPrefix(nsnull), mNamespaceID(kNameSpaceID_Unknown),
-        mNodeType(0), mNameString(nsnull), mExtraName(nsnull)
+      : mName(nullptr), mPrefix(nullptr), mNamespaceID(kNameSpaceID_Unknown),
+        mNodeType(0), mNameString(nullptr), mExtraName(nullptr)
     {
     }
-    nsNodeInfoInner(nsIAtom *aName, nsIAtom *aPrefix, PRInt32 aNamespaceID,
-                    PRUint16 aNodeType, nsIAtom* aExtraName)
+    nsNodeInfoInner(nsIAtom *aName, nsIAtom *aPrefix, int32_t aNamespaceID,
+                    uint16_t aNodeType, nsIAtom* aExtraName)
       : mName(aName), mPrefix(aPrefix), mNamespaceID(aNamespaceID),
-        mNodeType(aNodeType), mNameString(nsnull), mExtraName(aExtraName)
+        mNodeType(aNodeType), mNameString(nullptr), mExtraName(aExtraName)
     {
     }
     nsNodeInfoInner(const nsAString& aTmpName, nsIAtom *aPrefix,
-                    PRInt32 aNamespaceID, PRUint16 aNodeType)
-      : mName(nsnull), mPrefix(aPrefix), mNamespaceID(aNamespaceID),
-        mNodeType(aNodeType), mNameString(&aTmpName), mExtraName(nsnull)
+                    int32_t aNamespaceID, uint16_t aNodeType)
+      : mName(nullptr), mPrefix(aPrefix), mNamespaceID(aNamespaceID),
+        mNodeType(aNodeType), mNameString(&aTmpName), mExtraName(nullptr)
     {
     }
 
     nsIAtom*            mName;
     nsIAtom*            mPrefix;
-    PRInt32             mNamespaceID;
-    PRUint16            mNodeType; // As defined by nsIDOMNode.nodeType
+    int32_t             mNamespaceID;
+    uint16_t            mNodeType; // As defined by nsIDOMNode.nodeType
     const nsAString*    mNameString;
     nsIAtom*            mExtraName; // Only used by PIs and DocTypes
   };

@@ -1,40 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Mail Client.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Blake Winton <bwinton@latte.ca>
- *   Dan Mosedale <dmose@mozillamessaging.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * Test that we can add a tag to a message without messing up the header.
@@ -43,12 +9,14 @@ var MODULE_NAME = 'test-message-header';
 
 var RELATIVE_ROOT = '../shared-modules';
 var MODULE_REQUIRES = ['folder-display-helpers', 'window-helpers',
-                       'address-book-helpers'];
+                       'address-book-helpers', 'dom-helpers'];
 
 var elib = {};
 Cu.import('resource://mozmill/modules/elementslib.js', elib);
+Cu.import("resource:///modules/mailServices.js");
 
-var folder;
+var folder, folderMore;
+var gInterestingMessage;
 
 function setupModule(module) {
   let fdh = collector.getModule('folder-display-helpers');
@@ -57,26 +25,55 @@ function setupModule(module) {
   wh.installInto(module);
   let abh = collector.getModule('address-book-helpers');
   abh.installInto(module);
+  let dh = collector.getModule('dom-helpers');
+  dh.installInto(module);
 
   folder = create_folder("MessageWindowA");
+  folderMore = create_folder("MesageHeaderMoreButton");
 
   // create a message that has the interesting headers that commonly
   // show up in the message header pane for testing
-  let msg = create_message({cc: msgGen.makeNamesAndAddresses(20), // YYY
-                            subject: "This is a really, really, really, really, really, really, really, really, long subject.",
-                            clobberHeaders: {
-                              "Newsgroups": "alt.test",
-                              "Reply-To": "J. Doe <j.doe@momo.invalid>",
-                              "Content-Base": "http://example.com/",
-                              "Bcc": "Richard Roe <richard.roe@momo.invalid>"
-                            }});
+  gInterestingMessage = create_message({cc: msgGen.makeNamesAndAddresses(20), // YYY
+    subject: "This is a really, really, really, really, really, really, really, really, long subject.",
+    clobberHeaders: {
+      "Newsgroups": "alt.test",
+      "Reply-To": "J. Doe <j.doe@momo.invalid>",
+      "Content-Base": "http://example.com/",
+      "Bcc": "Richard Roe <richard.roe@momo.invalid>"
+    }});
 
-  add_message_to_folder(folder, msg);
+  add_message_to_folder(folder, gInterestingMessage);
+
+  // create a message that has more to and cc addresses than visible in the
+  // tooltip text of the more button
+  let msgMore1 = create_message({to: msgGen.makeNamesAndAddresses(40),
+                                 cc: msgGen.makeNamesAndAddresses(40)});
+  add_message_to_folder(folderMore, msgMore1);
+
+  // create a message that has more to and cc addresses than visible in the
+  // header
+  let msgMore2 = create_message({to: msgGen.makeNamesAndAddresses(20),
+                                 cc: msgGen.makeNamesAndAddresses(20)});
+  add_message_to_folder(folderMore, msgMore2);
 
   // create a message that has boring headers to be able to switch to and
   // back from, to force the more button to collapse again.
-  msg = create_message();
+  let msg = create_message();
   add_message_to_folder(folder, msg);
+}
+
+/**
+ * Helper function that takes an array of mail-emailaddress elements and
+ * returns the last one in the list that is not hidden. Returns null if no
+ * such element exists.
+ *
+ * @param aAddrs an array of mail-emailaddress elements.
+ */
+function get_last_visible_address(aAddrs) {
+  for (let i = aAddrs.length - 1; i >= 0; --i)
+    if (!aAddrs[i].hidden)
+      return aAddrs[i];
+  return null;
 }
 
 function test_add_tag_with_really_long_label() {
@@ -132,151 +129,6 @@ function test_add_tag_with_really_long_label() {
   mc.keypress(mc.eid("expandedHeadersNameColumn"), "1", {});
 }
 
-/**
- * @param headerName used for pretty-printing in exceptions
- * @param headerValueElement code to be eval()ed returning the DOM element
- *        with the data.
- * @param expectedName code to be eval()ed returning the expected value of
- *                     nsIAccessible.name for the DOM element in question
- * @param expectedRole the expected value for nsIAccessible.role
- */
-let headersToTest = [
-{
-  headerName: "Subject",
-  headerValueElement: "mc.a('expandedsubjectBox', {class: 'headerValue'})",
-  expectedName: "mc.e('expandedsubjectLabel').value.slice(0,-1) + ': ' + " +
-                "headerValueElement.textContent",
-  expectedRole: Ci.nsIAccessibleRole.ROLE_ENTRY
-},
-{
-  headerName: "Content-Base",
-  headerValueElement: "mc.a('expandedcontent-baseBox', {class: 'headerValue text-link headerValueUrl'})",
-  expectedName: "mc.e('expandedcontent-baseLabel').value.slice(0,-1) + ': ' + " +
-                "headerValueElement.textContent",
-  expectedRole: Ci.nsIAccessibleRole.ROLE_ENTRY
-},
-{
-  headerName: "From",
-  headerValueElement: "mc.window.document.getAnonymousElementByAttribute(" +
-                      "mc.a('expandedfromBox', {tagName: 'mail-emailaddress'})," +
-                      "'class', 'emailDisplayButton')",
-  expectedName: "mc.e('expandedfromLabel').value.slice(0,-1) + ': ' + " +
-                "headerValueElement.parentNode.getAttribute('fullAddress')",
-  expectedRole: Ci.nsIAccessibleRole.ROLE_ENTRY
-},
-{
-  headerName: "To",
-  headerValueElement: "mc.window.document.getAnonymousElementByAttribute(" +
-                      "mc.a('expandedtoBox', {tagName: 'mail-emailaddress'})," +
-                      "'class', 'emailDisplayButton')",
-  expectedName: "mc.e('expandedtoLabel').value.slice(0,-1) + ': ' + " +
-                "headerValueElement.parentNode.getAttribute('fullAddress')",
-  expectedRole: Ci.nsIAccessibleRole.ROLE_ENTRY
-},
-{
-  headerName: "Cc",
-  headerValueElement: "mc.window.document.getAnonymousElementByAttribute(" +
-                      "mc.a('expandedccBox', {tagName: 'mail-emailaddress'})," +
-                      "'class', 'emailDisplayButton')",
-  expectedName: "mc.e('expandedccLabel').value.slice(0,-1) + ': ' + " +
-                "headerValueElement.parentNode.getAttribute('fullAddress')",
-  expectedRole: Ci.nsIAccessibleRole.ROLE_ENTRY
-},
-{
-  headerName: "Bcc",
-  headerValueElement: "mc.window.document.getAnonymousElementByAttribute(" +
-                      "mc.a('expandedbccBox', {tagName: 'mail-emailaddress'})," +
-                      "'class', 'emailDisplayButton')",
-  expectedName: "mc.e('expandedbccLabel').value.slice(0,-1) + ': ' + " +
-                "headerValueElement.parentNode.getAttribute('fullAddress')",
-  expectedRole: Ci.nsIAccessibleRole.ROLE_ENTRY
-},
-{
-  headerName: "Reply-To",
-  headerValueElement: "mc.window.document.getAnonymousElementByAttribute(" +
-                      "mc.a('expandedreply-toBox', {tagName: 'mail-emailaddress'})," +
-                      "'class', 'emailDisplayButton')",
-  expectedName: "mc.e('expandedreply-toLabel').value.slice(0,-1) + ': ' + " +
-                "headerValueElement.parentNode.getAttribute('fullAddress')",
-  expectedRole: Ci.nsIAccessibleRole.ROLE_ENTRY
-},
-{
-  headerName: "Newsgroups",
-  headerValueElement: "mc.window.document.getAnonymousElementByAttribute(" +
-                      "mc.a('expandednewsgroupsBox', {tagName: 'mail-newsgroup'})," +
-                      "'class', 'newsgrouplabel')",
-  expectedName: "mc.e('expandednewsgroupsLabel').value.slice(0,-1) + ': ' + " +
-                "headerValueElement.parentNode.parentNode.getAttribute('newsgroup')",
-  expectedRole: Ci.nsIAccessibleRole.ROLE_ENTRY
-},
-{
-  headerName: "Tags",
-  headerValueElement: "mc.a('expandedtagsBox', {class: 'tagvalue blc-FF0000'})",
-  expectedName: "mc.e('expandedtagsLabel').value.slice(0,-1) + ': ' + " +
-                "headerValueElement.getAttribute('value')",
-  expectedRole: Ci.nsIAccessibleRole.ROLE_LABEL
-}
-];
-
-// used to get the accessible object for a DOM node
-let gAccRetrieval = Cc["@mozilla.org/accessibleRetrieval;1"].
-                    getService(Ci.nsIAccessibleRetrieval);
-
-/**
- * Use the information from aHeaderInfo to verify that screenreaders will
- * do the right thing with the given message header.
- *
- * @param {Object} aHeaderInfo  Information about how to do the verification;
- *                              See the comments above the headersToTest array
- *                              for details.
- */
-function verify_header_a11y(aHeaderInfo) {
-  // XXX Don't use eval here.
-  let headerValueElement = eval(aHeaderInfo.headerValueElement);
-
-  let headerAccessible = gAccRetrieval.getAccessibleFor(headerValueElement);
-  if (headerAccessible.role != aHeaderInfo.expectedRole) {
-    throw new Error("role for " + aHeaderInfo.headerName + " was " +
-                    headerAccessible.role + "; should have been " +
-                    aHeaderInfo.expectedRole);
-  }
-
-  // XXX Don't use eval here.
-  let expectedName = eval(aHeaderInfo.expectedName);
-  if (headerAccessible.name != expectedName) {
-    throw new Error("headerAccessible.name for " + aHeaderInfo.headerName +
-                    " was '" + headerAccessible.name + "'; expected '" +
-                    expectedName + "'");
-  }
-}
-
-/**
- * Test the accessibility attributes of the various message headers.
- *
- * XXX This test used to be after test_more_button_with_many_recipients,
- * however, there were some accessibility changes that it didn't seem to play
- * nicely with, and the toggling of the "more" button on the cc field was
- * causing this test to fail on the cc element. Tests with accessibilty
- * hardware/software showed that the code was working fine. Therefore the test
- * may be suspect.
- */
-function test_a11y_attrs() {
-  // skip this test on platforms that don't support accessibility
-  if (!("nsIAccessibleRole" in Components.interfaces))
-    return;
-
-  be_in_folder(folder);
-
-  // select and open the first message
-  let curMessage = select_click_row(0);
-
-  // make sure it loads
-  wait_for_message_display_completion(mc);
-  assert_selected_and_displayed(mc, curMessage);
-
-  headersToTest.forEach(verify_header_a11y);
-}
-
 function test_more_button_with_many_recipients()
 {
   // Start on the interesting message.
@@ -325,13 +177,12 @@ function test_clicking_star_opens_inline_contact_editor()
 {
   // Make sure we're in the right folder
   be_in_folder(folder);
-
   // Add a new message
   let msg = create_message();
   add_message_to_folder(folder, msg);
-
   // Open the latest message
   let curMessage = select_click_row(-1);
+  wait_for_message_display_completion(mc);
   // Make sure the star is clicked, and we add the
   // new contact to our address book
   let toDescription = mc.a('expandedtoBox', {class: "headerValue"});
@@ -344,13 +195,58 @@ function test_clicking_star_opens_inline_contact_editor()
   // Ok, if we're here, then the star has been clicked, and
   // the contact has been added to our AB.
   let addrs = toDescription.getElementsByTagName('mail-emailaddress');
-  let lastAddr = addrs[addrs.length-1];
+  let lastAddr = get_last_visible_address(addrs);
 
   // Click on the star, and ensure that the inline contact
   // editing panel opens
   mc.click(mc.aid(lastAddr, {class: 'emailStar'}));
   assert_equals(contactPanel.state, "open");
   contactPanel.hidePopup();
+}
+
+/**
+ * Ensure that the specified element is visible/hidden
+ *
+ * @param id the id of the element to check
+ * @param visible true if the element should be visible, false otherwise
+ */
+function assert_shown(id, visible) {
+   if (mc.e(id).hidden == visible)
+    throw new Error('"' + id + '" should be ' +
+                    (visible ? "visible" : "hidden"));
+}
+
+/**
+ * Test that clicking references context menu works properly.
+ */
+function test_msg_id_context_menu() {
+  let prefBranch = Cc["@mozilla.org/preferences-service;1"]
+    .getService(Ci.nsIPrefService).getBranch(null);
+  prefBranch.setBoolPref("mailnews.headers.showReferences", true);
+
+  // Add a new message
+  let msg = create_message({
+    clobberHeaders: {
+      "References": "<4880C986@example.com> <4880CAB2@example.com> <4880CC76@example.com>"
+    }});
+  add_message_to_folder(folder, msg);
+  be_in_folder(folder);
+
+  // Open the latest message.
+  let curMessage = select_click_row(-1);
+
+  // Right click to show the context menu.
+  mc.rightClick(mc.aid("expandedreferencesBox", {tagName: "mail-messageid"}));
+  wait_for_popup_to_open(mc.e("messageIdContext"));
+
+  // Ensure Open Message For ID is shown... and that Open Browser With Message-ID
+  // isn't shown.
+  assert_shown("messageIdContext-openMessageForMsgId", true);
+  assert_shown("messageIdContext-openBrowserWithMsgId", false);
+
+  close_popup(mc, mc.eid("messageIdContext"));
+
+  prefBranch.setBoolPref("mailnews.headers.showReferences", false);
 }
 
 /**
@@ -387,7 +283,7 @@ function test_address_book_switch_disabled_on_contact_in_mailing_list()
   // Ok, if we're here, then the star has been clicked, and
   // the contact has been added to our AB.
   let addrs = toDescription.getElementsByTagName('mail-emailaddress');
-  let lastAddr = addrs[addrs.length-1];
+  let lastAddr = get_last_visible_address(addrs);
 
   // Click on the star, and ensure that the inline contact
   // editing panel opens
@@ -409,7 +305,7 @@ function test_address_book_switch_disabled_on_contact_in_mailing_list()
   // address book it resides in, and then add that contact to the
   // mailing list
   addrs = toDescription.getElementsByTagName('mail-emailaddress');
-  let targetAddr = addrs[addrs.length-1].getAttribute("emailAddress");
+  let targetAddr = get_last_visible_address(addrs).getAttribute("emailAddress");
 
   let cards = get_cards_in_all_address_books_for_email(targetAddr);
 
@@ -554,6 +450,26 @@ function test_more_widget() {
   subtest_more_widget_display(toDescription);
   subtest_more_widget_click(toDescription);
   subtest_more_widget_star_click(toDescription);
+
+  let showNLinesPref = Services.prefs.getIntPref("mailnews.headers.show_n_lines_before_more");
+  Services.prefs.clearUserPref("mailnews.headers.show_n_lines_before_more");
+  change_to_header_normal_mode();
+  be_in_folder(folderMore);
+
+  // first test a message with so many addresses that they don't fit in the
+  // more widget's tooltip text
+  let msg = select_click_row(0);
+  wait_for_message_display_completion(mc);
+  assert_selected_and_displayed(mc, msg);
+  subtest_more_button_tooltip(msg);
+
+  // then test a message with so many addresses that they do fit in the
+  // more widget's tooltip text
+  msg = select_click_row(1);
+  wait_for_message_display_completion(mc);
+  assert_selected_and_displayed(mc, msg);
+  subtest_more_button_tooltip(msg);
+  Services.prefs.setIntPref("mailnews.headers.show_n_lines_before_more", showNLinesPref);
 }
 
 /**
@@ -692,7 +608,7 @@ function subtest_change_to_all_header_mode(toDescription) {
  */
 function subtest_more_widget_star_click(toDescription) {
   let addrs = toDescription.getElementsByTagName('mail-emailaddress');
-  let lastAddr = addrs[addrs.length-1];
+  let lastAddr = get_last_visible_address(addrs);
   ensure_no_card_exists(lastAddr.getAttribute("emailAddress"));
 
   // scroll to the bottom first so the address is in view
@@ -825,8 +741,8 @@ function test_toolbar_collapse_and_expand() {
     mc.window.resizeTo(1200, 600);
     // spin the event loop once
     mc.sleep(0);
-    if (expandedHeadersTopBox.clientHeight != shortHeight)
-      throw new Error("The header box should have returned to its wide size!");
+    mc.waitFor(function() expandedHeadersTopBox.clientHeight == shortHeight,
+               "The header box should have returned to its wide size!")
   }
   finally {
     // restore window to nominal dimensions; saving was not working out
@@ -837,48 +753,267 @@ function test_toolbar_collapse_and_expand() {
 }
 
 /**
- *  Make sure that opening the header toolbar customization dialog
- *  does not break the get messages button in main toolbar
+ * Test if the tooltip text of the more widget contains the correct addresses
+ * not shown in the header and the number of addresses also hidden in the
+ * tooltip text.
+ * @param aMsg the message for which the subtest should be performed
  */
-function test_get_msg_button_customize_header_toolbar(){
-  be_in_folder(folder);
+function subtest_more_button_tooltip(aMsg) {
+  // check for more indicator number of the more widget
+  let addresses = {};
+  let fullNames = {};
+  let names = {};
+  let numAddrsCC = MailServices.headerParser.parseHeadersWithArray(
+    aMsg.ccList, addresses, names, fullNames);
+  let numAddrsTo = MailServices.headerParser.parseHeadersWithArray(
+    aMsg.recipients, addresses, names, fullNames);
 
-  // select and open the first message
-  let curMessage = select_click_row(0);
+  let shownToAddrNum = get_number_of_addresses_in_header("expandedtoBox");
+  let shownCCAddrNum = get_number_of_addresses_in_header("expandedccBox");
 
-  // make sure it loads
-  wait_for_message_display_completion(mc);
-  assert_selected_and_displayed(mc, curMessage);
+  // first check the number of addresses in the more widget
+  let hiddenCCAddrsNum = numAddrsCC - shownCCAddrNum;
+  let hiddenToAddrsNum = numAddrsTo - shownToAddrNum;
 
-  // It is necessary to press the Get Message Button to get the popup menu populated
-  mc.click(mc.aid("button-getmsg", {class: "toolbarbutton-menubutton-dropmarker"}));
-  mc.ewait("button-getAllNewMsgSeparator");
+  let moreNumberTo = get_number_of_more_button("expandedtoBox");
+  assert_not_equals(NaN, moreNumberTo);
+  assert_equals(hiddenToAddrsNum, moreNumberTo);
 
-  var getMailButtonPopup = mc.eid("button-getMsgPopup").node;
-  var originalServerCount = getMailButtonPopup.childElementCount;
+  let moreNumberCC = get_number_of_more_button("expandedccBox");
+  assert_not_equals(NaN, moreNumberCC);
+  assert_equals(hiddenCCAddrsNum, moreNumberCC);
 
-  // Open customization dialog, because it broke the Get Message Button popup menu
-  // see https://bugzilla.mozilla.org/show_bug.cgi?id=565045
-  mc.click(mc.eid("CustomizeHeaderToolbar"));
-  let toolbox = mc.eid("header-view-toolbox").node;
+  subtest_addresses_in_tooltip_text(aMsg.recipients, "expandedtoBox",
+                                    shownToAddrNum, hiddenToAddrsNum);
+  subtest_addresses_in_tooltip_text(aMsg.ccList, "expandedccBox",
+                                    shownCCAddrNum, hiddenCCAddrsNum);
+}
 
-  // Due to differences between OS X and Windows/Linux versions
-  // the "done" button of the customization dialog cannot be
-  // accessed directly
-  toolbox.customizeDone();
+/**
+ * Return the number of addresses visible in headerBox.
+ * @param aHeaderBox the id of the header box element for which to look for
+ *                   visible addresses
+ * @return           the number of visible addresses in the header box
+ */
+function get_number_of_addresses_in_header(aHeaderBox) {
+  let headerBoxElement = mc.a(aHeaderBox, {class: "headerValue"});
+  let addrs = headerBoxElement.getElementsByTagName('mail-emailaddress');
+  let addrNum = 0;
+  for (let i = 0; i < addrs.length; i++) {
+    // check that the address is really visible and not just a cached
+    // element
+    if (element_visible_recursive(addrs[i]))
+      addrNum += 1;
+  }
+  return addrNum;
+}
 
-  // Press the Get Message Button to populate popup menu again
-  mc.click(mc.aid("button-getmsg", {class: "toolbarbutton-menubutton-dropmarker"}));
-  mc.ewait("button-getAllNewMsgSeparator");
+/**
+ * Return the number shown in the more widget.
+ * @param aHeaderBox the id of the header box element for which to look for
+ *                   the number in the more widget
+ * @return           the number shown in the more widget
+ */
+function get_number_of_more_button(aHeaderBox) {
+  let moreNumber = 0;
+  let headerBoxElement = mc.e(aHeaderBox);
+  let moreIndicator = headerBoxElement.more;
+  if (element_visible_recursive(moreIndicator)) {
+    let moreText = moreIndicator.getAttribute("value");
+    let moreSplit = moreText.split(" ");
+    moreNumber = parseInt(moreSplit[0])
+  }
+  return moreNumber;
+}
 
-  getMailButtonPopup = mc.eid("button-getMsgPopup").node;
-  var finalServerCount = getMailButtonPopup.childElementCount;
+/**
+ * Check if hidden addresses are part of more tooltip text.
+ * @param aRecipients     an array containing the addresses to look for in the
+ *                        header or the tooltip text
+ * @param aHeaderBox      the id of the header box element for which to look
+ *                        for hidden addresses
+ * @param aShownAddrsNum  the number of addresses shown in the header
+ * @param aHiddenAddrsNum the number of addresses not shown in the header
+ */
+function subtest_addresses_in_tooltip_text(aRecipients, aHeaderBox,
+                                           aShownAddrsNum, aHiddenAddrsNum) {
+  // check for more indicator number of the more widget
+  let addresses = {};
+  let fullNames = {};
+  let names = {};
+  let numAddresses = MailServices.headerParser.parseHeadersWithArray(
+      aRecipients, addresses, names, fullNames);
 
-  if (originalServerCount != finalServerCount) {
-    throw new Error("number of entries in Get Message Button popup menu after " +
-                    "header toolbar customization " +
-                    finalServerCount + " <> as before: " +
-                    originalServerCount);
+  let headerBoxElement = mc.e(aHeaderBox);
+  let moreIndicator = headerBoxElement.more;
+  let tooltipText = moreIndicator.getAttribute("tooltiptext");
+  let maxTooltipAddrsNum = headerBoxElement.maxAddressesInMoreTooltipValue;
+  let addrsNumInTooltip = 0;
+
+  for (let i = aShownAddrsNum; (i < numAddresses) &&
+                               (i < maxTooltipAddrsNum + aShownAddrsNum); i++) {
+    assert_true(tooltipText.indexOf(fullNames.value[i]) != -1, fullNames.value[i]);
+    addrsNumInTooltip += 1;
+  }
+
+  if (aHiddenAddrsNum < maxTooltipAddrsNum) {
+    assert_equals(aHiddenAddrsNum, addrsNumInTooltip);
+  }
+  else {
+    assert_equals(maxTooltipAddrsNum, addrsNumInTooltip);
+    // check if ", and X more" shows the correct number
+    let moreTooltipSplit = tooltipText.split(", ");
+    let words = mc.window.document
+                         .getElementById("bundle_messenger")
+                         .getString("headerMoreAddrsTooltip");
+    let remainingAddresses = numAddresses - aShownAddrsNum - maxTooltipAddrsNum;
+    let moreForm = mc.window.PluralForm.get(remainingAddresses, words)
+                            .replace("#1", remainingAddresses);
+    assert_equals(moreForm, ", " + moreTooltipSplit[moreTooltipSplit.length - 1]);
   }
 }
 
+// Some platforms (notably Mac) don't have a11y, so disable these tests there.
+if ("nsIAccessibleRole" in Ci) {
+  /**
+   * @param headerName used for pretty-printing in exceptions
+   * @param headerValueElement code to be eval()ed returning the DOM element
+   *        with the data.
+   * @param expectedName code to be eval()ed returning the expected value of
+   *                     nsIAccessible.name for the DOM element in question
+   * @param expectedRole the expected value for nsIAccessible.role
+   */
+  let headersToTest = [
+  {
+    headerName: "Subject",
+    headerValueElement: "mc.a('expandedsubjectBox', {class: 'headerValue'})",
+    expectedName: "mc.e('expandedsubjectLabel').value.slice(0,-1) + ': ' + " +
+                  "headerValueElement.textContent",
+    expectedRole: Ci.nsIAccessibleRole.ROLE_ENTRY
+  },
+  {
+    headerName: "Content-Base",
+    headerValueElement: "mc.a('expandedcontent-baseBox', {class: 'headerValue text-link headerValueUrl'})",
+    expectedName: "mc.e('expandedcontent-baseLabel').value.slice(0,-1) + ': ' + " +
+                  "headerValueElement.textContent",
+    expectedRole: Ci.nsIAccessibleRole.ROLE_ENTRY
+  },
+  {
+    headerName: "From",
+    headerValueElement: "mc.window.document.getAnonymousElementByAttribute(" +
+                        "mc.a('expandedfromBox', {tagName: 'mail-emailaddress'})," +
+                        "'class', 'emailDisplayButton')",
+    expectedName: "mc.e('expandedfromLabel').value.slice(0,-1) + ': ' + " +
+                  "headerValueElement.parentNode.getAttribute('fullAddress')",
+    expectedRole: Ci.nsIAccessibleRole.ROLE_ENTRY
+  },
+  {
+    headerName: "To",
+    headerValueElement: "mc.window.document.getAnonymousElementByAttribute(" +
+                        "mc.a('expandedtoBox', {tagName: 'mail-emailaddress'})," +
+                        "'class', 'emailDisplayButton')",
+    expectedName: "mc.e('expandedtoLabel').value.slice(0,-1) + ': ' + " +
+                  "headerValueElement.parentNode.getAttribute('fullAddress')",
+    expectedRole: Ci.nsIAccessibleRole.ROLE_ENTRY
+  },
+  {
+    headerName: "Cc",
+    headerValueElement: "mc.window.document.getAnonymousElementByAttribute(" +
+                        "mc.a('expandedccBox', {tagName: 'mail-emailaddress'})," +
+                        "'class', 'emailDisplayButton')",
+    expectedName: "mc.e('expandedccLabel').value.slice(0,-1) + ': ' + " +
+                  "headerValueElement.parentNode.getAttribute('fullAddress')",
+    expectedRole: Ci.nsIAccessibleRole.ROLE_ENTRY
+  },
+  {
+    headerName: "Bcc",
+    headerValueElement: "mc.window.document.getAnonymousElementByAttribute(" +
+                        "mc.a('expandedbccBox', {tagName: 'mail-emailaddress'})," +
+                        "'class', 'emailDisplayButton')",
+    expectedName: "mc.e('expandedbccLabel').value.slice(0,-1) + ': ' + " +
+                  "headerValueElement.parentNode.getAttribute('fullAddress')",
+    expectedRole: Ci.nsIAccessibleRole.ROLE_ENTRY
+  },
+  {
+    headerName: "Reply-To",
+    headerValueElement: "mc.window.document.getAnonymousElementByAttribute(" +
+                        "mc.a('expandedreply-toBox', {tagName: 'mail-emailaddress'})," +
+                        "'class', 'emailDisplayButton')",
+    expectedName: "mc.e('expandedreply-toLabel').value.slice(0,-1) + ': ' + " +
+                  "headerValueElement.parentNode.getAttribute('fullAddress')",
+    expectedRole: Ci.nsIAccessibleRole.ROLE_ENTRY
+  },
+  {
+    headerName: "Newsgroups",
+    headerValueElement: "mc.window.document.getAnonymousElementByAttribute(" +
+                        "mc.a('expandednewsgroupsBox', {tagName: 'mail-newsgroup'})," +
+                        "'class', 'newsgrouplabel')",
+    expectedName: "mc.e('expandednewsgroupsLabel').value.slice(0,-1) + ': ' + " +
+                  "headerValueElement.parentNode.parentNode.getAttribute('newsgroup')",
+    expectedRole: Ci.nsIAccessibleRole.ROLE_ENTRY
+  },
+  {
+    headerName: "Tags",
+    headerValueElement: "mc.a('expandedtagsBox', {class: 'tagvalue blc-FF0000'})",
+    expectedName: "mc.e('expandedtagsLabel').value.slice(0,-1) + ': ' + " +
+                  "headerValueElement.getAttribute('value')",
+    expectedRole: Ci.nsIAccessibleRole.ROLE_LABEL
+  }
+  ];
+
+  // used to get the accessible object for a DOM node
+  let gAccRetrieval = Cc["@mozilla.org/accessibleRetrieval;1"].
+                      getService(Ci.nsIAccessibleRetrieval);
+
+  /**
+   * Use the information from aHeaderInfo to verify that screenreaders will
+   * do the right thing with the given message header.
+   *
+   * @param {Object} aHeaderInfo  Information about how to do the verification;
+   *                              See the comments above the headersToTest array
+   *                              for details.
+   */
+  function verify_header_a11y(aHeaderInfo) {
+    // XXX Don't use eval here.
+    let headerValueElement = eval(aHeaderInfo.headerValueElement);
+
+    let headerAccessible = gAccRetrieval.getAccessibleFor(headerValueElement)
+    if (headerAccessible.role != aHeaderInfo.expectedRole) {
+      throw new Error("role for " + aHeaderInfo.headerName + " was " +
+                      headerAccessible.role + "; should have been " +
+                      aHeaderInfo.expectedRole);
+    }
+
+    // XXX Don't use eval here.
+    let expectedName = eval(aHeaderInfo.expectedName);
+    if (headerAccessible.name != expectedName) {
+      throw new Error("headerAccessible.name for " + aHeaderInfo.headerName +
+                      " was '" + headerAccessible.name + "'; expected '" +
+                      expectedName + "'");
+    }
+  }
+
+  /**
+   * Test the accessibility attributes of the various message headers.
+   *
+   * XXX This test used to be after test_more_button_with_many_recipients,
+   * however, there were some accessibility changes that it didn't seem to play
+   * nicely with, and the toggling of the "more" button on the cc field was
+   * causing this test to fail on the cc element. Tests with accessibilty
+   * hardware/software showed that the code was working fine. Therefore the test
+   * may be suspect.
+   */
+  function test_a11y_attrs() {
+    be_in_folder(folder);
+
+    // select and open the interesting message
+    
+    let curMessage = select_click_row(mc.dbView.findIndexOfMsgHdr(
+                                        gInterestingMessage, false));
+
+    // make sure it loads
+    assert_selected_and_displayed(mc, curMessage);
+
+    headersToTest.forEach(verify_header_a11y);
+  }
+} // if ("nsIAccessibleRole" in Ci)

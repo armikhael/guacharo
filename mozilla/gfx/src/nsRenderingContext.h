@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 20; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is thebes gfx
- *
- * The Initial Developer of the Original Code is
- * mozilla.org.
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Vladimir Vukicevic <vladimir@pobox.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef NSRENDERINGCONTEXT__H__
 #define NSRENDERINGCONTEXT__H__
@@ -45,6 +12,7 @@
 #include "nsColor.h"
 #include "nsCoord.h"
 #include "gfxContext.h"
+#include "mozilla/gfx/UserData.h"
 
 struct nsPoint;
 class nsIntRegion;
@@ -58,6 +26,9 @@ typedef enum {
 
 class nsRenderingContext
 {
+    typedef mozilla::gfx::UserData UserData;
+    typedef mozilla::gfx::UserDataKey UserDataKey;
+
 public:
     nsRenderingContext() : mP2A(0.) {}
     // ~nsRenderingContext() {}
@@ -70,7 +41,7 @@ public:
     // These accessors will never return null.
     gfxContext *ThebesContext() { return mThebes; }
     nsDeviceContext *DeviceContext() { return mDeviceContext; }
-    PRUint32 AppUnitsPerDevPixel() { return mP2A; }
+    uint32_t AppUnitsPerDevPixel() { return NSToIntRound(mP2A); }
 
     // Graphics state
 
@@ -103,49 +74,59 @@ public:
     void DrawRect(const nsRect& aRect);
     void DrawRect(nscoord aX, nscoord aY, nscoord aWidth, nscoord aHeight);
     void DrawEllipse(nscoord aX, nscoord aY, nscoord aWidth, nscoord aHeight);
-    void DrawEllipse(const nsRect& aRect);
 
     void FillRect(const nsRect& aRect);
     void FillRect(nscoord aX, nscoord aY, nscoord aWidth, nscoord aHeight);
-    void FillPolygon(const nsPoint aPoints[], PRInt32 aNumPoints);
+    void FillPolygon(const nsPoint aPoints[], int32_t aNumPoints);
 
     void FillEllipse(const nsRect& aRect);
     void FillEllipse(nscoord aX, nscoord aY, nscoord aWidth, nscoord aHeight);
 
     void InvertRect(const nsRect& aRect);
-    void InvertRect(nscoord aX, nscoord aY, nscoord aWidth, nscoord aHeight);
 
     // Text
 
     void SetFont(nsFontMetrics *aFontMetrics);
     nsFontMetrics *FontMetrics() { return mFontMetrics; } // may be null
 
-    void SetTextRunRTL(PRBool aIsRTL);
+    void SetTextRunRTL(bool aIsRTL);
 
     nscoord GetWidth(char aC);
     nscoord GetWidth(PRUnichar aC);
     nscoord GetWidth(const nsString& aString);
     nscoord GetWidth(const char* aString);
-    nscoord GetWidth(const char* aString, PRUint32 aLength);
-    nscoord GetWidth(const PRUnichar *aString, PRUint32 aLength);
+    nscoord GetWidth(const char* aString, uint32_t aLength);
+    nscoord GetWidth(const PRUnichar *aString, uint32_t aLength);
 
     nsBoundingMetrics GetBoundingMetrics(const PRUnichar *aString,
-                                         PRUint32 aLength);
+                                         uint32_t aLength);
 
     void DrawString(const nsString& aString, nscoord aX, nscoord aY);
-    void DrawString(const char *aString, PRUint32 aLength,
+    void DrawString(const char *aString, uint32_t aLength,
                     nscoord aX, nscoord aY);
-    void DrawString(const PRUnichar *aString, PRUint32 aLength,
+    void DrawString(const PRUnichar *aString, uint32_t aLength,
                     nscoord aX, nscoord aY);
 
+    void AddUserData(UserDataKey *key, void *userData, void (*destroy)(void*)) {
+      mUserData.Add(key, userData, destroy);
+    }
+    void *GetUserData(UserDataKey *key) {
+      return mUserData.Get(key);
+    }
+    void *RemoveUserData(UserDataKey *key) {
+      return mUserData.Remove(key);
+    }
+
 protected:
-    PRInt32 GetMaxChunkLength();
+    int32_t GetMaxChunkLength();
 
     nsRefPtr<gfxContext> mThebes;
     nsRefPtr<nsDeviceContext> mDeviceContext;
     nsRefPtr<nsFontMetrics> mFontMetrics;
 
     double mP2A; // cached app units per device pixel value
+
+    UserData mUserData;
 };
 
 #endif  // NSRENDERINGCONTEXT__H__

@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Global Database.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Andrew Sutherland <asutherland@asutherland.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * General testing of the JS Mime Emitter to make sure it doesn't choke on any
@@ -66,6 +33,11 @@ const scenarios = gMessageScenarioFactory = new MessageScenarioFactory(msgGen);
 
 Components.utils.import("resource:///modules/gloda/mimemsg.js");
 
+// While we're at it, we'll also test the correctness of the GlodaAttachment
+// representation, esp. its "I just need the part information to rebuild the
+// URLs" claim.
+Components.utils.import("resource:///modules/gloda/fundattr.js");
+
 var partText = new SyntheticPartLeaf("I am text! Woo!");
 var partHtml = new SyntheticPartLeaf(
   "<html><head></head><body>I am HTML! Woo! </body></html>",
@@ -81,6 +53,14 @@ var partEnriched = new SyntheticPartLeaf(
 );
 var partAlternative = new SyntheticPartMultiAlternative([partText, partHtml]);
 var partMailingListFooter = new SyntheticPartLeaf("I am an annoying footer!");
+
+// We need to make sure a part that has content-disposition: attachment, even
+// though it doesn't have any filename, still is treated as an attachment.
+var tachNoFilename = {
+  body: "I like Bordeaux wine",
+  contentType: "text/plain",
+  disposition: "attachment",
+};
 
 // This is an external attachment, i.e. a mime part that basically says "go find
 // the attachment on disk, assuming it still exists, here's the path to the file
@@ -478,6 +458,9 @@ var partTachNestedMessages = [
 
 var attMessagesParams = [
   {
+    attachments: [tachNoFilename],
+  },
+  {
     attachments: [tachExternal],
   },
   {
@@ -499,6 +482,10 @@ var attMessagesParams = [
 ];
 
 var expectedAttachmentsInfo = [
+  {
+    allAttachmentsContentTypes: ["text/plain"],
+    allUserAttachmentsContentTypes: ["text/plain"],
+  },
   {
     allAttachmentsContentTypes: ["image/png"],
     allUserAttachmentsContentTypes: ["image/png"],
@@ -544,6 +531,17 @@ function test_attachments_correctness () {
         do_check_eq(aMimeMsg.allUserAttachments.length, expected.allUserAttachmentsContentTypes.length);
         for each (let [j, att] in Iterator(aMimeMsg.allUserAttachments))
           do_check_eq(att.contentType, expected.allUserAttachmentsContentTypes[j]);
+
+        // Test
+        for each (let [, att] in Iterator(aMimeMsg.allUserAttachments)) {
+          let uri = aMsgHdr.folder.getUriForMsg(aMsgHdr);
+          let glodaAttachment =
+            GlodaFundAttr.glodaAttFromMimeAtt({ folderMessageURI: uri }, att);
+          // The GlodaAttachment appends the filename, which is not always
+          // present
+          do_check_eq(glodaAttachment.url.indexOf(att.url), 0);
+        }
+
       } catch (e) {
         dump(aMimeMsg.prettyString()+"\n");
         do_throw(e);
@@ -560,16 +558,16 @@ var bogusMessage = msgGen.makeMessage({ body: { body: "whatever" } });
 bogusMessage._contentType = "woooooo"; // Breaking abstraction boundaries. Bad.
 
 let weirdMessageInfos = [
-  // This message has a malformed part as an attachment, so it will end up as a
-  // MimeUnknown part. Previously, libmime would emit notifications for this to
-  // be treated as an attachment, name Part 1.2. Now it's not the case anymore,
-  // so we should ensure this message has no attachments.
+  // This message has an unnamed part as an attachment (with
+  // Content-Disposition: inline and which is displayable inline). Previously,
+  // libmime would emit notifications for this to be treated as an attachment,
+  // name Part 1.2. Now it's not the case anymore, so we should ensure this
+  // message has no attachments.
   {
-    name: 'MimeUnknown attachment (actually, a message)',
-    bodyPart: new SyntheticPartMultiMixed([
-      partHtml,
-      bogusMessage,
-    ]),
+    name: 'test message with part 1.2 attachment',
+    attachments: [{ body: 'attachment',
+                    filename: '',
+                    format: '' }],
   },
 ];
 
@@ -606,6 +604,11 @@ var tests = [
 var gInbox;
 
 function run_test() {
+  do_register_cleanup(function() {
+    const Cu = Components.utils;
+    Cu.import("resource:///modules/gloda/datastore.js");
+    GlodaDatastore.shutdown();
+  });
   // use mbox injection because the fake server chokes sometimes right now
   gInbox = configure_message_injection({mode: "local"});
   async_run_tests(tests);

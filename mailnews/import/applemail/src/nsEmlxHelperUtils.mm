@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mailnews import code.
- *
- * The Initial Developer of the Original Code is 
- * Håkan Waara <hwaara@gmail.com>.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsEmlxHelperUtils.h"
 #include "nsIFileStreams.h"
@@ -54,7 +22,7 @@
 
 nsresult nsEmlxHelperUtils::ConvertToMozillaStatusFlags(const char *aXMLBufferStart, 
                                                         const char *aXMLBufferEnd, 
-                                                        PRUint32 *aMozillaStatusFlags)
+                                                        uint32_t *aMozillaStatusFlags)
 {
   // create a NSData wrapper around the buffer, so we can use the Cocoa call below
   NSData *metadata = 
@@ -71,7 +39,7 @@ nsresult nsEmlxHelperUtils::ConvertToMozillaStatusFlags(const char *aXMLBufferSt
     return NS_ERROR_FAILURE;
 
   // find the <flags>...</flags> value and convert to int
-  const PRUint32 emlxMessageFlags = [[(NSDictionary *)plist objectForKey:@"flags"] intValue];
+  const uint32_t emlxMessageFlags = [[(NSDictionary *)plist objectForKey:@"flags"] intValue];
 
   if (emlxMessageFlags == 0)
     return NS_ERROR_FAILURE;
@@ -137,7 +105,7 @@ nsresult nsEmlxHelperUtils::ConvertToMboxRD(const char *aMessageBufferStart, con
   return NS_OK;
 }
 
-nsresult nsEmlxHelperUtils::AddEmlxMessageToStream(nsILocalFile *aMessage, nsIOutputStream *aOut)
+nsresult nsEmlxHelperUtils::AddEmlxMessageToStream(nsIFile *aMessage, nsIOutputStream *aOut)
 {
   NS_OBJC_BEGIN_TRY_ABORT_BLOCK_NSRESULT;
 
@@ -157,7 +125,7 @@ nsresult nsEmlxHelperUtils::AddEmlxMessageToStream(nsILocalFile *aMessage, nsIOu
   }
 
   char *startOfMessageData = NULL;
-  PRUint32 actualBytesWritten = 0;
+  uint32_t actualBytesWritten = 0;
 
   // The anatomy of an EMLX file:
   //
@@ -169,7 +137,7 @@ nsresult nsEmlxHelperUtils::AddEmlxMessageToStream(nsILocalFile *aMessage, nsIOu
 
   // read the first line of the emlx file, which is a number of how many bytes ahead the actual
   // message data is. 
-  PRUint64 numberOfBytesToRead = strtol((char *)[data bytes], &startOfMessageData, 10);
+  uint64_t numberOfBytesToRead = strtol((char *)[data bytes], &startOfMessageData, 10);
   if (numberOfBytesToRead <= 0 || !startOfMessageData) {
     [pool release];
     return NS_ERROR_FAILURE;
@@ -196,11 +164,11 @@ nsresult nsEmlxHelperUtils::AddEmlxMessageToStream(nsILocalFile *aMessage, nsIOu
   const char *startOfXMLMetadata = startOfMessageData + numberOfBytesToRead;
   const char *endOfXMLMetadata = (char *)[data bytes] + [data length];
 
-  PRUint32 x_mozilla_flags = 0;
+  uint32_t x_mozilla_flags = 0;
   ConvertToMozillaStatusFlags(startOfXMLMetadata, endOfXMLMetadata, &x_mozilla_flags);
 
   // write the X-Mozilla-Status header according to which flags we've gathered above.
-  PRUint32 dummyRv;
+  uint32_t dummyRv;
   nsCAutoString buf(PR_smprintf(X_MOZILLA_STATUS_FORMAT MSG_LINEBREAK, x_mozilla_flags));
   NS_ASSERTION(!buf.IsEmpty(), "printf error with X-Mozilla-Status header");
   if (buf.IsEmpty()) {
@@ -223,9 +191,14 @@ nsresult nsEmlxHelperUtils::AddEmlxMessageToStream(nsILocalFile *aMessage, nsIOu
   }
   
   // write out empty X-Mozilla_status2 header
-  char x_mozilla_status_2[40];
-  PR_snprintf(x_mozilla_status_2, sizeof(x_mozilla_status_2), X_MOZILLA_STATUS2_FORMAT MSG_LINEBREAK, 0);
-  rv = aOut->Write(x_mozilla_status_2, strlen(x_mozilla_status_2), &dummyRv);
+  buf.Adopt(PR_smprintf(X_MOZILLA_STATUS2_FORMAT MSG_LINEBREAK, 0));
+  NS_ASSERTION(!buf.IsEmpty(), "printf error with X-Mozilla-Status2 header");
+  if (buf.IsEmpty()) {
+    [pool release];
+    return NS_ERROR_OUT_OF_MEMORY;
+  }
+
+  rv = aOut->Write(buf.get(), buf.Length(), &dummyRv);
   if (NS_FAILED(rv)) {
     [pool release];
     return rv;
@@ -241,7 +214,7 @@ nsresult nsEmlxHelperUtils::AddEmlxMessageToStream(nsILocalFile *aMessage, nsIOu
 
   // write the actual message data.
   if (convertedData.IsEmpty())
-    rv = aOut->Write(startOfMessageData, (PRUint32)numberOfBytesToRead, &actualBytesWritten);
+    rv = aOut->Write(startOfMessageData, (uint32_t)numberOfBytesToRead, &actualBytesWritten);
   else {
     IMPORT_LOG1("Escaped From-lines in %s!", path.get());
     rv = aOut->Write(convertedData.get(), convertedData.Length(), &actualBytesWritten);

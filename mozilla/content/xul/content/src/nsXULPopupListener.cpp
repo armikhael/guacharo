@@ -1,43 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Original Author: David W. Hyatt (hyatt@netscape.com)
- *   Dean Tessman <dean_tessman@hotmail.com>
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *   Robert O'Callahan <roc+moz@cs.cmu.edu>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
   This file provides the implementation for xul popup listener which
@@ -60,9 +24,7 @@
 #include "nsIDOMWindow.h"
 #include "nsIDOMXULDocument.h"
 #include "nsIDocument.h"
-#include "nsIDOMNSUIEvent.h"
 #include "nsIDOMEventTarget.h"
-#include "nsIDOMNSEvent.h"
 #include "nsServiceManagerUtils.h"
 #include "nsIPrincipal.h"
 #include "nsIScriptSecurityManager.h"
@@ -79,18 +41,19 @@
 #include "nsFocusManager.h"
 #include "nsPIDOMWindow.h"
 #include "nsIViewManager.h"
-#include "nsDOMError.h"
+#include "nsError.h"
+#include "nsMenuFrame.h"
 
 using namespace mozilla;
 
 // on win32 and os/2, context menus come up on mouse up. On other platforms,
 // they appear on mouse down. Certain bits of code care about this difference.
-#if !defined(XP_WIN) && !defined(XP_OS2)
+#if defined(XP_WIN) || defined(XP_OS2)
 #define NS_CONTEXT_MENU_IS_MOUSEUP 1
 #endif
 
-nsXULPopupListener::nsXULPopupListener(nsIDOMElement *aElement, PRBool aIsContext)
-  : mElement(aElement), mPopupContent(nsnull), mIsContext(aIsContext)
+nsXULPopupListener::nsXULPopupListener(nsIDOMElement *aElement, bool aIsContext)
+  : mElement(aElement), mPopupContent(nullptr), mIsContext(aIsContext)
 {
 }
 
@@ -121,18 +84,11 @@ nsXULPopupListener::HandleEvent(nsIDOMEvent* aEvent)
        (eventType.EqualsLiteral("contextmenu") && mIsContext)))
     return NS_OK;
 
-  PRUint16 button;
+  uint16_t button;
 
   nsCOMPtr<nsIDOMMouseEvent> mouseEvent = do_QueryInterface(aEvent);
   if (!mouseEvent) {
     //non-ui event passed in.  bad things.
-    return NS_OK;
-  }
-
-  // check if someone has attempted to prevent this action.
-  nsCOMPtr<nsIDOMNSUIEvent> nsUIEvent;
-  nsUIEvent = do_QueryInterface(mouseEvent);
-  if (!nsUIEvent) {
     return NS_OK;
   }
 
@@ -159,18 +115,18 @@ nsXULPopupListener::HandleEvent(nsIDOMEvent* aEvent)
     }
   }
 
-  PRBool preventDefault;
-  nsUIEvent->GetPreventDefault(&preventDefault);
+  bool preventDefault;
+  mouseEvent->GetPreventDefault(&preventDefault);
   if (preventDefault && targetNode && mIsContext) {
     // Someone called preventDefault on a context menu.
     // Let's make sure they are allowed to do so.
-    PRBool eventEnabled =
-      Preferences::GetBool("dom.event.contextmenu.enabled", PR_TRUE);
+    bool eventEnabled =
+      Preferences::GetBool("dom.event.contextmenu.enabled", true);
     if (!eventEnabled) {
       // If the target node is for plug-in, we should not open XUL context
       // menu on windowless plug-ins.
       nsCOMPtr<nsIObjectLoadingContent> olc = do_QueryInterface(targetNode);
-      PRUint32 type;
+      uint32_t type;
       if (olc && NS_SUCCEEDED(olc->GetDisplayedType(&type)) &&
           type == nsIObjectLoadingContent::TYPE_PLUGIN) {
         return NS_OK;
@@ -187,7 +143,7 @@ nsXULPopupListener::HandleEvent(nsIDOMEvent* aEvent)
         if (node->NodePrincipal() != system) {
           // This isn't chrome.  Cancel the preventDefault() and
           // let the event go forth.
-          preventDefault = PR_FALSE;
+          preventDefault = false;
         }
       }
     }
@@ -205,12 +161,10 @@ nsXULPopupListener::HandleEvent(nsIDOMEvent* aEvent)
   // submenu of an already-showing popup.  We don't need to do anything at all.
   nsCOMPtr<nsIContent> targetContent = do_QueryInterface(target);
   if (!mIsContext) {
-    nsIAtom *tag = targetContent ? targetContent->Tag() : nsnull;
+    nsIAtom *tag = targetContent ? targetContent->Tag() : nullptr;
     if (tag == nsGkAtoms::menu || tag == nsGkAtoms::menuitem)
       return NS_OK;
   }
-
-  nsCOMPtr<nsIDOMNSEvent> nsevent = do_QueryInterface(aEvent);
 
   if (mIsContext) {
 #ifndef NS_CONTEXT_MENU_IS_MOUSEUP
@@ -259,7 +213,7 @@ nsXULPopupListener::FireFocusOnTargetContent(nsIDOMNode* aTargetNode)
     if (!targetFrame) return NS_ERROR_FAILURE;
 
     const nsStyleUserInterface* ui = targetFrame->GetStyleUserInterface();
-    PRBool suppressBlur = (ui->mUserFocus == NS_STYLE_USER_FOCUS_IGNORE);
+    bool suppressBlur = (ui->mUserFocus == NS_STYLE_USER_FOCUS_IGNORE);
 
     nsCOMPtr<nsIDOMElement> element;
     nsCOMPtr<nsIContent> newFocus = do_QueryInterface(content);
@@ -267,8 +221,8 @@ nsXULPopupListener::FireFocusOnTargetContent(nsIDOMNode* aTargetNode)
     nsIFrame* currFrame = targetFrame;
     // Look for the nearest enclosing focusable frame.
     while (currFrame) {
-        PRInt32 tabIndexUnused;
-        if (currFrame->IsFocusable(&tabIndexUnused, PR_TRUE)) {
+        int32_t tabIndexUnused;
+        if (currFrame->IsFocusable(&tabIndexUnused, true)) {
           newFocus = currFrame->GetContent();
           nsCOMPtr<nsIDOMElement> domElement(do_QueryInterface(newFocus));
           if (domElement) {
@@ -313,26 +267,24 @@ nsXULPopupListener::ClosePopup()
     // fire events during destruction.  
     nsXULPopupManager* pm = nsXULPopupManager::GetInstance();
     if (pm)
-      pm->HidePopup(mPopupContent, PR_FALSE, PR_TRUE, PR_TRUE);
-    mPopupContent = nsnull;  // release the popup
+      pm->HidePopup(mPopupContent, false, true, true);
+    mPopupContent = nullptr;  // release the popup
   }
 } // ClosePopup
 
-static void
-GetImmediateChild(nsIContent* aContent, nsIAtom *aTag, nsIContent** aResult) 
+static already_AddRefed<nsIContent>
+GetImmediateChild(nsIContent* aContent, nsIAtom *aTag) 
 {
-  *aResult = nsnull;
-  PRInt32 childCount = aContent->GetChildCount();
-  for (PRInt32 i = 0; i < childCount; i++) {
-    nsIContent *child = aContent->GetChildAt(i);
+  for (nsIContent* child = aContent->GetFirstChild();
+       child;
+       child = child->GetNextSibling()) {
     if (child->Tag() == aTag) {
-      *aResult = child;
-      NS_ADDREF(*aResult);
-      return;
+      NS_ADDREF(child);
+      return child;
     }
   }
 
-  return;
+  return nullptr;
 }
 
 //
@@ -386,9 +338,7 @@ nsXULPopupListener::LaunchPopup(nsIDOMEvent* aEvent, nsIContent* aTargetContent)
   nsCOMPtr<nsIDOMElement> popupElement;
 
   if (identifier.EqualsLiteral("_child")) {
-    nsCOMPtr<nsIContent> popup;
-
-    GetImmediateChild(content, nsGkAtoms::menupopup, getter_AddRefs(popup));
+    nsCOMPtr<nsIContent> popup = GetImmediateChild(content, nsGkAtoms::menupopup);
     if (popup)
       popupElement = do_QueryInterface(popup);
     else {
@@ -396,7 +346,7 @@ nsXULPopupListener::LaunchPopup(nsIDOMEvent* aEvent, nsIContent* aTargetContent)
       nsCOMPtr<nsIDOMNodeList> list;
       nsDoc->GetAnonymousNodes(mElement, getter_AddRefs(list));
       if (list) {
-        PRUint32 ctr,listLength;
+        uint32_t ctr,listLength;
         nsCOMPtr<nsIDOMNode> node;
         list->GetLength(&listLength);
         for (ctr = 0; ctr < listLength; ctr++) {
@@ -429,8 +379,8 @@ nsXULPopupListener::LaunchPopup(nsIDOMEvent* aEvent, nsIContent* aTargetContent)
   nsCOMPtr<nsIContent> popup = do_QueryInterface(popupElement);
   nsIContent* parent = popup->GetParent();
   if (parent) {
-    nsIFrame* frame = parent->GetPrimaryFrame();
-    if (frame && frame->GetType() == nsGkAtoms::menuFrame)
+    nsMenuFrame* menu = do_QueryFrame(parent->GetPrimaryFrame());
+    if (menu)
       return NS_OK;
   }
 
@@ -448,10 +398,10 @@ nsXULPopupListener::LaunchPopup(nsIDOMEvent* aEvent, nsIContent* aTargetContent)
        (mPopupContent->HasAttr(kNameSpaceID_None, nsGkAtoms::popupanchor) &&
         mPopupContent->HasAttr(kNameSpaceID_None, nsGkAtoms::popupalign)))) {
     pm->ShowPopup(mPopupContent, content, EmptyString(), 0, 0,
-                  PR_FALSE, PR_TRUE, PR_FALSE, aEvent);
+                  false, true, false, aEvent);
   }
   else {
-    PRInt32 xPos = 0, yPos = 0;
+    int32_t xPos = 0, yPos = 0;
     nsCOMPtr<nsIDOMMouseEvent> mouseEvent = do_QueryInterface(aEvent);
     mouseEvent->GetScreenX(&xPos);
     mouseEvent->GetScreenY(&yPos);

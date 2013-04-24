@@ -1,45 +1,15 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * The Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Kohei Yoshino <kohei.yoshino@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var MODULE_NAME = "test-mail-account-setup-wizard";
 
 var RELATIVE_ROOT = "../shared-modules";
 var MODULE_REQUIRES = ["folder-display-helpers", "window-helpers",
                        "account-manager-helpers", "keyboard-helpers" ];
+
+Components.utils.import("resource://gre/modules/Services.jsm");
+Components.utils.import("resource:///modules/mailServices.js");
 
 var mozmill = {};
 Components.utils.import("resource://mozmill/modules/mozmill.js", mozmill);
@@ -83,14 +53,13 @@ function remove_account(amc) {
   try {
     // Remove the account and incoming server
     let serverId = incoming.serverURI;
-    Cc["@mozilla.org/messenger/account-manager;1"]
-      .getService(Ci.nsIMsgAccountManager).removeAccount(account);
+    MailServices.accounts.removeAccount(account);
     if (serverId in win.accountArray)
       delete win.accountArray[serverId];
     win.selectServer(null, null);
 
     // Remove the outgoing server
-    win.smtpService.deleteSmtpServer(outgoing);
+    MailServices.smtp.deleteSmtpServer(outgoing);
     win.replaceWithDefaultSmtpServer(outgoing.key);
   } catch (ex) {
     throw new Error("failure to remove account: " + ex + "\n");
@@ -99,10 +68,9 @@ function remove_account(amc) {
 
 function test_mail_account_setup() {
   // Set the pref to load a local autoconfig file.
-  let pref = Cc["@mozilla.org/preferences-service;1"].getService(Ci.nsIPrefBranch);
   let pref_name = "mailnews.auto_config_url";
   let url = collector.addHttpResource("../account/xml", "autoconfig");
-  pref.setCharPref(pref_name, url);
+  Services.prefs.setCharPref(pref_name, url);
 
   // Force .com MIME-Type to text/xml
   collector.httpd.registerContentType("com", "text/xml");
@@ -122,8 +90,9 @@ function test_mail_account_setup() {
     let config = null;
 
     // XXX: This should probably use a notification, once we fix bug 561143.
-    awc.waitForEval("subject._currentConfig != null", 8000, 600,
-                    awc.window.gEmailConfigWizard);
+    awc.waitFor(function () (awc.window.gEmailConfigWizard._currentConfig != null),
+                "Timeout waiting for current config to become non-null",
+                8000, 600);
     config = awc.window.gEmailConfigWizard.getConcreteConfig();
 
     // Open the advanced settings (Account Manager) to create the account
@@ -132,16 +101,17 @@ function test_mail_account_setup() {
     open_advanced_settings_from_account_wizard(subtest_verify_account, awc);
 
     // Clean up
-    pref.clearUserPref(pref_name);
+    Services.prefs.clearUserPref(pref_name);
   });
 }
 
 function subtest_verify_account(amc) {
-  amc.waitForEval("subject.currentAccount != null", 6000, 600, amc.window);
+  amc.waitFor(function () (amc.window.currentAccount != null),
+              "Timeout waiting for currentAccount to become non-null");
   account = amc.window.currentAccount;
   let identity = account.defaultIdentity;
   incoming = account.incomingServer;
-  outgoing = amc.window.smtpService.getServerByKey(identity.smtpServerKey);
+  outgoing = MailServices.smtp.getServerByKey(identity.smtpServerKey);
 
   let config = {
     "incoming server username": {
@@ -184,10 +154,9 @@ function subtest_verify_account(amc) {
  **/
 function test_bad_password_uses_old_settings() {
   // Set the pref to load a local autoconfig file.
-  let pref = Cc["@mozilla.org/preferences-service;1"].getService(Ci.nsIPrefBranch);
   let pref_name = "mailnews.auto_config_url";
   let url = collector.addHttpResource("../account/xml", "autoconfig");
-  pref.setCharPref(pref_name, url);
+  Services.prefs.setCharPref(pref_name, url);
 
   // Force .com MIME-Type to text/xml
   collector.httpd.registerContentType("com", "text/xml");
@@ -208,12 +177,14 @@ function test_bad_password_uses_old_settings() {
 
       let config = null;
 
-      awc.waitForEval("subject.disabled == false && subject.hidden == false",
-                      8000, 600, awc.e("create_button"));
+      awc.waitFor(function () (this.disabled == false && this.hidden == false),
+                  "Timeout waiting for create button to be visible and active",
+                  8000, 600, awc.e("create_button"));
       awc.e("create_button").click();
 
-      awc.waitForEval("subject.disabled == false", 8000, 600,
-                      awc.e("create_button"));
+      awc.waitFor(function () (this.disabled == false),
+                  "Timeout waiting for create button to be visible and active",
+                  8000, 600, awc.e("create_button"));
       awc.e("create_button").click();
       awc.e("manual-edit_button").click();
 
@@ -225,7 +196,7 @@ function test_bad_password_uses_old_settings() {
                     "incoming server changed!");
     } finally {
       // Clean up
-      pref.clearUserPref(pref_name);
+      Services.prefs.clearUserPref(pref_name);
       awc.e("cancel_button").click();
     }
   });
@@ -240,14 +211,11 @@ function test_remember_password() {
  * signon.rememberSignons set to "aPrefValue"
  */
 function remember_password_test(aPrefValue) {
-  let pref = Cc["@mozilla.org/preferences-service;1"]
-      .getService(Ci.nsIPrefBranch);
-
   // save the pref for backup purpose
   let rememberSignons_pref_save =
-      pref.getBoolPref("signon.rememberSignons", true);
+      Services.prefs.getBoolPref("signon.rememberSignons", true);
 
-  pref.setBoolPref("signon.rememberSignons", aPrefValue);
+  Services.prefs.setBoolPref("signon.rememberSignons", aPrefValue);
 
   // without this, it breaks the test, don't know why
   mc.sleep(0);
@@ -274,7 +242,7 @@ function remember_password_test(aPrefValue) {
       awc.keypress(password, 'VK_DELETE', {});
 
       // restore the saved signon.rememberSignons value
-      pref.setBoolPref("signon.rememberSignons", rememberSignons_pref_save);
+      Services.prefs.setBoolPref("signon.rememberSignons", rememberSignons_pref_save);
     } finally {
       // close the wizard
       awc.e("cancel_button").click();

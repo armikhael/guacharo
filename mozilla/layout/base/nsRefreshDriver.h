@@ -1,39 +1,7 @@
 /* vim: set shiftwidth=2 tabstop=8 autoindent cindent expandtab: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is nsRefreshDriver.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   L. David Baron <dbaron@dbaron.org>, Mozilla Corporation (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * Code to notify things that animate before a refresh, at an appropriate
@@ -50,10 +18,14 @@
 #include "nsTObserverArray.h"
 #include "nsTArray.h"
 #include "nsAutoPtr.h"
+#include "nsTHashtable.h"
+#include "nsHashKeys.h"
+#include "mozilla/Attributes.h"
 
 class nsPresContext;
 class nsIPresShell;
 class nsIDocument;
+class imgIRequest;
 
 /**
  * An abstract base class to be implemented by callers wanting to be
@@ -74,7 +46,7 @@ public:
   virtual void WillRefresh(mozilla::TimeStamp aTime) = 0;
 };
 
-class nsRefreshDriver : public nsITimerCallback {
+class nsRefreshDriver MOZ_FINAL : public nsITimerCallback {
 public:
   nsRefreshDriver(nsPresContext *aPresContext);
   ~nsRefreshDriver();
@@ -91,7 +63,7 @@ public:
    * Methods for testing, exposed via nsIDOMWindowUtils.  See
    * nsIDOMWindowUtils.advanceTimeAndRefresh for description.
    */
-  void AdvanceTimeAndRefresh(PRInt64 aMilliseconds);
+  void AdvanceTimeAndRefresh(int64_t aMilliseconds);
   void RestoreNormalRefresh();
 
   /**
@@ -105,7 +77,7 @@ public:
   /**
    * Same thing, but in microseconds since the epoch.
    */
-  PRInt64 MostRecentRefreshEpochTime() const;
+  int64_t MostRecentRefreshEpochTime() const;
 
   /**
    * Add / remove refresh observers.  Returns whether the operation
@@ -123,57 +95,76 @@ public:
    * The refresh driver does NOT own a reference to these observers;
    * they must remove themselves before they are destroyed.
    */
-  PRBool AddRefreshObserver(nsARefreshObserver *aObserver,
+  bool AddRefreshObserver(nsARefreshObserver *aObserver,
                             mozFlushType aFlushType);
-  PRBool RemoveRefreshObserver(nsARefreshObserver *aObserver,
+  bool RemoveRefreshObserver(nsARefreshObserver *aObserver,
                                mozFlushType aFlushType);
+
+  /**
+   * Add/Remove imgIRequest versions of observers.
+   *
+   * These are used for hooking into the refresh driver for
+   * controlling animated images.
+   *
+   * @note The refresh driver owns a reference to these listeners.
+   *
+   * @note Technically, imgIRequest objects are not nsARefreshObservers, but
+   * for controlling animated image repaint events, we subscribe the
+   * imgIRequests to the nsRefreshDriver for notification of paint events.
+   *
+   * @returns whether the operation succeeded, or void in the case of removal.
+   */
+  bool AddImageRequest(imgIRequest* aRequest);
+  void RemoveImageRequest(imgIRequest* aRequest);
+  void ClearAllImageRequests();
 
   /**
    * Add / remove presshells that we should flush style and layout on
    */
-  PRBool AddStyleFlushObserver(nsIPresShell* aShell) {
+  bool AddStyleFlushObserver(nsIPresShell* aShell) {
     NS_ASSERTION(!mStyleFlushObservers.Contains(aShell),
 		 "Double-adding style flush observer");
-    PRBool appended = mStyleFlushObservers.AppendElement(aShell) != nsnull;
+    bool appended = mStyleFlushObservers.AppendElement(aShell) != nullptr;
     EnsureTimerStarted(false);
     return appended;
   }
   void RemoveStyleFlushObserver(nsIPresShell* aShell) {
     mStyleFlushObservers.RemoveElement(aShell);
   }
-  PRBool AddLayoutFlushObserver(nsIPresShell* aShell) {
+  bool AddLayoutFlushObserver(nsIPresShell* aShell) {
     NS_ASSERTION(!IsLayoutFlushObserver(aShell),
 		 "Double-adding layout flush observer");
-    PRBool appended = mLayoutFlushObservers.AppendElement(aShell) != nsnull;
+    bool appended = mLayoutFlushObservers.AppendElement(aShell) != nullptr;
     EnsureTimerStarted(false);
     return appended;
   }
   void RemoveLayoutFlushObserver(nsIPresShell* aShell) {
     mLayoutFlushObservers.RemoveElement(aShell);
   }
-  PRBool IsLayoutFlushObserver(nsIPresShell* aShell) {
+  bool IsLayoutFlushObserver(nsIPresShell* aShell) {
     return mLayoutFlushObservers.Contains(aShell);
   }
 
   /**
-   * Add a document for which we should fire a MozBeforePaint event.
+   * Remember whether our presshell's view manager needs a flush
    */
-  PRBool ScheduleBeforePaintEvent(nsIDocument* aDocument);
+  void ScheduleViewManagerFlush() {
+    mViewManagerFlushIsPending = true;
+    EnsureTimerStarted(false);
+  }
+  void RevokeViewManagerFlush() {
+    mViewManagerFlushIsPending = false;
+  }
 
   /**
-   * Add a document for which we have nsIAnimationFrameListeners
+   * Add a document for which we have nsIFrameRequestCallbacks
    */
-  void ScheduleAnimationFrameListeners(nsIDocument* aDocument);
+  void ScheduleFrameRequestCallbacks(nsIDocument* aDocument);
 
   /**
-   * Remove a document for which we should fire a MozBeforePaint event.
+   * Remove a document for which we have nsIFrameRequestCallbacks
    */
-  void RevokeBeforePaintEvent(nsIDocument* aDocument);
-
-  /**
-   * Remove a document for which we have nsIAnimationFrameListeners
-   */
-  void RevokeAnimationFrameListeners(nsIDocument* aDocument);
+  void RevokeFrameRequestCallbacks(nsIDocument* aDocument);
 
   /**
    * Tell the refresh driver that it is done driving refreshes and
@@ -182,7 +173,7 @@ public:
    */
   void Disconnect() {
     StopTimer();
-    mPresContext = nsnull;
+    mPresContext = nullptr;
   }
 
   /**
@@ -212,31 +203,41 @@ public:
   /**
    * Check whether the given observer is an observer for the given flush type
    */
-  PRBool IsRefreshObserver(nsARefreshObserver *aObserver,
+  bool IsRefreshObserver(nsARefreshObserver *aObserver,
 			   mozFlushType aFlushType);
 #endif
 
+  /**
+   * Default interval the refresh driver uses, in ms.
+   */
+  static int32_t DefaultInterval();
+
 private:
   typedef nsTObserverArray<nsARefreshObserver*> ObserverArray;
+  typedef nsTHashtable<nsISupportsHashKey> RequestTable;
 
   void EnsureTimerStarted(bool aAdjustingTimer);
   void StopTimer();
-  PRUint32 ObserverCount() const;
+
+  uint32_t ObserverCount() const;
+  uint32_t ImageRequestCount() const;
+  static PLDHashOperator ImageRequestEnumerator(nsISupportsHashKey* aEntry,
+                                          void* aUserArg);
   void UpdateMostRecentRefresh();
   ObserverArray& ArrayFor(mozFlushType aFlushType);
   // Trigger a refresh immediately, if haven't been disconnected or frozen.
   void DoRefresh();
 
-  PRInt32 GetRefreshTimerInterval() const;
-  PRInt32 GetRefreshTimerType() const;
+  int32_t GetRefreshTimerInterval() const;
+  int32_t GetRefreshTimerType() const;
 
-  bool HaveAnimationFrameListeners() const {
-    return mAnimationFrameListenerDocs.Length() != 0;
+  bool HaveFrameRequestCallbacks() const {
+    return mFrameRequestCallbackDocs.Length() != 0;
   }
 
   nsCOMPtr<nsITimer> mTimer;
   mozilla::TimeStamp mMostRecentRefresh; // only valid when mTimer non-null
-  PRInt64 mMostRecentRefreshEpochTime;   // same thing as mMostRecentRefresh,
+  int64_t mMostRecentRefreshEpochTime;   // same thing as mMostRecentRefresh,
                                          // but in microseconds since the epoch.
 
   nsPresContext *mPresContext; // weak; pres context passed in constructor
@@ -249,19 +250,25 @@ private:
      a precise timer.  If mTimer is null, this boolean's value can be
      anything.  */
   bool mTimerIsPrecise;
+  bool mViewManagerFlushIsPending;
 
   // separate arrays for each flush type we support
   ObserverArray mObservers[3];
+  RequestTable mRequests;
+
   nsAutoTArray<nsIPresShell*, 16> mStyleFlushObservers;
   nsAutoTArray<nsIPresShell*, 16> mLayoutFlushObservers;
   // nsTArray on purpose, because we want to be able to swap.
-  nsTArray< nsCOMPtr<nsIDocument> > mBeforePaintTargets;
-  // nsTArray on purpose, because we want to be able to swap.
-  nsTArray<nsIDocument*> mAnimationFrameListenerDocs;
+  nsTArray<nsIDocument*> mFrameRequestCallbackDocs;
 
   // This is the last interval we used for our timer.  May be 0 if we
   // haven't computed a timer interval yet.
-  mutable PRInt32 mLastTimerInterval;
+  mutable int32_t mLastTimerInterval;
+
+  // Helper struct for processing image requests
+  struct ImageRequestParameters {
+      mozilla::TimeStamp ts;
+  };
 };
 
 #endif /* !defined(nsRefreshDriver_h_) */

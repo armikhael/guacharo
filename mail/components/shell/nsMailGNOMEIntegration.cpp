@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Mozilla GNOME integration code.
- *
- * The Initial Developer of the Original Code is
- * IBM Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Brian Ryner <bryner@brianryner.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsMailGNOMEIntegration.h"
 #include "nsIGConfService.h"
@@ -52,6 +19,7 @@
 #include "nsEmbedCID.h"
 #include "nsMemory.h"
 #include "nsIStringBundle.h"
+#include "mozilla/Services.h"
 
 #include <glib.h>
 #include <limits.h>
@@ -71,9 +39,22 @@ static const char* const sFeedProtocols[] = {
   "feed"
 };
 
+struct AppTypeAssociation {
+  uint16_t type;
+  const char * const *protocols;
+  const char *mimeType;
+  const char *extensions;
+};
+
+static const AppTypeAssociation sAppTypes[] = {
+  { nsIShellService::MAIL, sMailProtocols, "message/rfc822", "eml" },
+  { nsIShellService::NEWS, sNewsProtocols },
+  { nsIShellService::RSS,  sFeedProtocols, "application/rss+xml", "rss" }
+};
+
 nsMailGNOMEIntegration::nsMailGNOMEIntegration(): 
-                          mCheckedThisSession(PR_FALSE),
-                          mAppIsInPath(PR_FALSE)
+                          mCheckedThisSession(false),
+                          mAppIsInPath(false)
 {}
 
 nsresult
@@ -91,7 +72,7 @@ nsMailGNOMEIntegration::Init()
 
   // Check G_BROKEN_FILENAMES.  If it's set, then filenames in glib use
   // the locale encoding.  If it's not set, they use UTF-8.
-  mUseLocaleFilenames = PR_GetEnv("G_BROKEN_FILENAMES") != nsnull;
+  mUseLocaleFilenames = PR_GetEnv("G_BROKEN_FILENAMES") != nullptr;
 
   if (GetAppPathFromLauncher())
       return NS_OK;
@@ -110,74 +91,79 @@ nsMailGNOMEIntegration::Init()
 
 NS_IMPL_ISUPPORTS1(nsMailGNOMEIntegration, nsIShellService)
 
-PRBool
+bool
 nsMailGNOMEIntegration::GetAppPathFromLauncher()
 {
   gchar *tmp;
 
   const char *launcher = PR_GetEnv("MOZ_APP_LAUNCHER");
   if (!launcher)
-    return PR_FALSE;
+    return false;
 
   if (g_path_is_absolute(launcher)) {
     mAppPath = launcher;
     tmp = g_path_get_basename(launcher);
     gchar *fullpath = g_find_program_in_path(tmp);
     if (fullpath && mAppPath.Equals(fullpath)) {
-      mAppIsInPath = PR_TRUE;
+      mAppIsInPath = true;
     }
     g_free(fullpath);
   } else {
     tmp = g_find_program_in_path(launcher);
     if (!tmp)
-      return PR_FALSE;
+      return false;
     mAppPath = tmp;
-    mAppIsInPath = PR_TRUE;
+    mAppIsInPath = true;
   }
 
   g_free(tmp);
-  return PR_TRUE;
+  return true;
 }
 
 NS_IMETHODIMP
-nsMailGNOMEIntegration::IsDefaultClient(PRBool aStartupCheck, PRUint16 aApps, PRBool * aIsDefaultClient)
+nsMailGNOMEIntegration::IsDefaultClient(bool aStartupCheck, uint16_t aApps, bool * aIsDefaultClient)
 {
-  *aIsDefaultClient = PR_TRUE;
-  if (aApps & nsIShellService::MAIL)
-    *aIsDefaultClient &= checkDefault(sMailProtocols, NS_ARRAY_LENGTH(sMailProtocols));
-  if (aApps & nsIShellService::NEWS)
-    *aIsDefaultClient &= checkDefault(sNewsProtocols, NS_ARRAY_LENGTH(sNewsProtocols));
-  if (aApps & nsIShellService::RSS)
-    *aIsDefaultClient &= checkDefault(sFeedProtocols, NS_ARRAY_LENGTH(sFeedProtocols));
+  *aIsDefaultClient = true;
+
+  for (unsigned int i = 0; i < NS_ARRAY_LENGTH(sAppTypes); i++) {
+    if (aApps & sAppTypes[i].type)
+      *aIsDefaultClient &= checkDefault(sAppTypes[i].protocols,
+                                        NS_ARRAY_LENGTH(sAppTypes[i].protocols));
+  }
   
   // If this is the first mail window, maintain internal state that we've
   // checked this session (so that subsequent window opens don't show the 
   // default client dialog).
   if (aStartupCheck)
-    mCheckedThisSession = PR_TRUE;
+    mCheckedThisSession = true;
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsMailGNOMEIntegration::SetDefaultClient(PRBool aForAllUsers, PRUint16 aApps)
+nsMailGNOMEIntegration::SetDefaultClient(bool aForAllUsers, uint16_t aApps)
 {
   nsresult rv = NS_OK;
-  if (aApps & nsIShellService::MAIL)
-    rv |= MakeDefault(sMailProtocols, NS_ARRAY_LENGTH(sMailProtocols));
-  if (aApps & nsIShellService::NEWS)
-    rv |= MakeDefault(sNewsProtocols, NS_ARRAY_LENGTH(sNewsProtocols));
-  if (aApps & nsIShellService::RSS)
-    rv |= MakeDefault(sFeedProtocols, NS_ARRAY_LENGTH(sFeedProtocols));
-  
+  for (unsigned int i = 0; i < NS_ARRAY_LENGTH(sAppTypes); i++) {
+    if (aApps & sAppTypes[i].type) {
+      nsresult tmp = MakeDefault(sAppTypes[i].protocols,
+                                 NS_ARRAY_LENGTH(sAppTypes[i].protocols),
+                                 sAppTypes[i].mimeType,
+                                 sAppTypes[i].extensions);
+      if (NS_FAILED(tmp)) {
+        rv = tmp;
+      }
+    }
+  }
+
   return rv;	
 }
 
 NS_IMETHODIMP
-nsMailGNOMEIntegration::GetShouldCheckDefaultClient(PRBool* aResult)
+nsMailGNOMEIntegration::GetShouldCheckDefaultClient(bool* aResult)
 {
   if (mCheckedThisSession) 
   {
-    *aResult = PR_FALSE;
+    *aResult = false;
     return NS_OK;
   }
 
@@ -186,13 +172,13 @@ nsMailGNOMEIntegration::GetShouldCheckDefaultClient(PRBool* aResult)
 }
 
 NS_IMETHODIMP
-nsMailGNOMEIntegration::SetShouldCheckDefaultClient(PRBool aShouldCheck)
+nsMailGNOMEIntegration::SetShouldCheckDefaultClient(bool aShouldCheck)
 {
   nsCOMPtr<nsIPrefBranch> prefs(do_GetService(NS_PREFSERVICE_CONTRACTID));
   return prefs->SetBoolPref("mail.shell.checkDefaultClient", aShouldCheck);
 }
 
-PRBool
+bool
 nsMailGNOMEIntegration::KeyMatchesAppName(const char *aKeyValue) const
 {
   gchar *commandPath;
@@ -200,7 +186,7 @@ nsMailGNOMEIntegration::KeyMatchesAppName(const char *aKeyValue) const
     gchar *nativePath = g_filename_from_utf8(aKeyValue, -1, NULL, NULL, NULL);
     if (!nativePath) {
       NS_ERROR("Error converting path to filesystem encoding");
-      return PR_FALSE;
+      return false;
     }
 
     commandPath = g_find_program_in_path(nativePath);
@@ -210,14 +196,14 @@ nsMailGNOMEIntegration::KeyMatchesAppName(const char *aKeyValue) const
   }
 
   if (!commandPath)
-    return PR_FALSE;
+    return false;
 
-  PRBool matches = mAppPath.Equals(commandPath);
+  bool matches = mAppPath.Equals(commandPath);
   g_free(commandPath);
   return matches;
 }
 
-PRBool
+bool
 nsMailGNOMEIntegration::CheckHandlerMatchesAppName(const nsACString &handler) const
 {
   gint argc;
@@ -228,19 +214,19 @@ nsMailGNOMEIntegration::CheckHandlerMatchesAppName(const nsACString &handler) co
     command.Assign(argv[0]);
     g_strfreev(argv);
   } else {
-    return PR_FALSE;
+    return false;
   }
 
   return KeyMatchesAppName(command.get());
 }
 
-PRBool
+bool
 nsMailGNOMEIntegration::checkDefault(const char* const *aProtocols, unsigned int aLength)
 {
   nsCOMPtr<nsIGConfService> gconf = do_GetService(NS_GCONFSERVICE_CONTRACTID);
   nsCOMPtr<nsIGIOService> giovfs = do_GetService(NS_GIOSERVICE_CONTRACTID);
 
-  PRBool enabled;
+  bool enabled;
   nsCAutoString handler;
   nsresult rv;
 
@@ -250,7 +236,7 @@ nsMailGNOMEIntegration::checkDefault(const char* const *aProtocols, unsigned int
       rv = gconf->GetAppForProtocol(nsDependentCString(aProtocols[i]),
                                     &enabled, handler);
       if (NS_SUCCEEDED(rv) && (!CheckHandlerMatchesAppName(handler) || !enabled)) {
-        return PR_FALSE;
+        return false;
       }
     }
 
@@ -260,21 +246,23 @@ nsMailGNOMEIntegration::checkDefault(const char* const *aProtocols, unsigned int
       rv = giovfs->GetAppForURIScheme(nsDependentCString(aProtocols[i]),
                                       getter_AddRefs(app));
       if (NS_FAILED(rv) || !app) {
-        return PR_FALSE;
+        return false;
       }
       rv = app->GetCommand(handler);
       if (NS_SUCCEEDED(rv) && !CheckHandlerMatchesAppName(handler)) {
-        return PR_FALSE;
+        return false;
       }
     }
   }
 
-  return PR_TRUE;
+  return true;
 }
 
 nsresult
 nsMailGNOMEIntegration::MakeDefault(const char* const *aProtocols,
-                                    unsigned int aLength)
+                                    unsigned int aProtocolsLength,
+                                    const char *aMimeType,
+                                    const char *aExtensions)
 {
   nsCAutoString appKeyValue;
   nsCOMPtr<nsIGConfService> gconf = do_GetService(NS_GCONFSERVICE_CONTRACTID);
@@ -292,7 +280,7 @@ nsMailGNOMEIntegration::MakeDefault(const char* const *aProtocols,
 
   nsresult rv;
   if (gconf) {
-    for (unsigned int i = 0; i < aLength; ++i) {
+    for (unsigned int i = 0; i < aProtocolsLength; ++i) {
       rv = gconf->SetAppForProtocol(nsDependentCString(aProtocols[i]),
                                     appKeyValue);
       NS_ENSURE_SUCCESS(rv, rv);
@@ -301,8 +289,8 @@ nsMailGNOMEIntegration::MakeDefault(const char* const *aProtocols,
 
   if (giovfs) {
     nsCOMPtr<nsIStringBundleService> bundleService =
-      do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-    NS_ENSURE_SUCCESS(rv, rv);
+      mozilla::services::GetStringBundleService();
+    NS_ENSURE_TRUE(bundleService, NS_ERROR_UNEXPECTED);
 
     nsCOMPtr<nsIStringBundle> brandBundle;
     rv = bundleService->CreateBundle(BRAND_PROPERTIES, getter_AddRefs(brandBundle));
@@ -319,8 +307,14 @@ nsMailGNOMEIntegration::MakeDefault(const char* const *aProtocols,
     rv = giovfs->CreateAppFromCommand(mAppPath, id, getter_AddRefs(app));
     NS_ENSURE_SUCCESS(rv, rv);
 
-    for (unsigned int i = 0; i < aLength; ++i) {
+    for (unsigned int i = 0; i < aProtocolsLength; ++i) {
       rv = app->SetAsDefaultForURIScheme(nsDependentCString(aProtocols[i]));
+      NS_ENSURE_SUCCESS(rv, rv);
+      if (aMimeType)
+        rv = app->SetAsDefaultForMimeType(nsDependentCString(aMimeType));
+      NS_ENSURE_SUCCESS(rv, rv);
+      if (aExtensions)
+        rv = app->SetAsDefaultForFileExtensions(nsDependentCString(aExtensions));
       NS_ENSURE_SUCCESS(rv, rv);
     }
   }

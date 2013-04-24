@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-  */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Blake Ross (blake@blakeross.com)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef _MDB_
 #include "mdb.h"
@@ -144,7 +111,7 @@ morkTableRowCursor::CloseTableRowCursor(morkEnv* ev)
 /*virtual*/ mdb_err
 morkTableRowCursor::GetCount(nsIMdbEnv* mev, mdb_count* outCount)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mdb_count count = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -160,7 +127,7 @@ morkTableRowCursor::GetCount(nsIMdbEnv* mev, mdb_count* outCount)
 /*virtual*/ mdb_err
 morkTableRowCursor::GetSeed(nsIMdbEnv* mev, mdb_seed* outSeed)
 {
-  NS_ASSERTION(PR_FALSE, "not implemented");
+  NS_ASSERTION(false, "not implemented");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -202,7 +169,7 @@ morkTableRowCursor::GetDoFailOnSeedOutOfSync(nsIMdbEnv* mev, mdb_bool* outFail)
 NS_IMETHODIMP
 morkTableRowCursor::GetTable(nsIMdbEnv* mev, nsIMdbTable** acqTable)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbTable* outTable = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -225,7 +192,7 @@ morkTableRowCursor::NextRowOid( // get row id of next row in the table
   mdbOid* outOid, // out row oid
   mdb_pos* outRowPos)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mork_pos pos = -1;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -249,7 +216,7 @@ morkTableRowCursor::PrevRowOid( // get row id of previous row in the table
   mdbOid* outOid, // out row oid
   mdb_pos* outRowPos)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mork_pos pos = -1;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -275,7 +242,7 @@ morkTableRowCursor::NextRow( // get row cells from table for cells already in ro
   nsIMdbRow** acqRow, // acquire next row in table
   mdb_pos* outRowPos)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbRow* outRow = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -302,7 +269,7 @@ morkTableRowCursor::PrevRow( // get row cells from table for cells already in ro
   nsIMdbRow** acqRow, // acquire previous row in table
   mdb_pos* outRowPos)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbRow* outRow = 0;
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -331,7 +298,7 @@ NS_IMETHODIMP
 morkTableRowCursor::CanHaveDupRowMembers(nsIMdbEnv* mev, // cursor might hold dups?
   mdb_bool* outCanHaveDups)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mdb_bool canHaveDups = mdbBool_kFalse;
   
   morkEnv* ev = morkEnv::FromMdbEnv(mev);
@@ -371,7 +338,7 @@ morkTableRowCursor::MakeUniqueCursor( // clone cursor, removing duplicate rows
   // delay calling MakeUniqueCursor() when possible, until a user interface
   // element actually demands the creation of an explicit set representation.
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbTableRowCursor* outCursor = 0;
   
   morkEnv* ev = morkEnv::FromMdbEnv(mev);

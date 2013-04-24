@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Seth Spitzer <sspitzer@netscape.com>
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"  // for pre-compiled headers
 #include "nsISimpleEnumerator.h"
@@ -44,7 +10,7 @@
 #include "nsAbBaseCID.h"
 #include "nsAbAddressCollector.h"
 #include "nsIPrefService.h"
-#include "nsIPrefBranch2.h"
+#include "nsIPrefBranch.h"
 #include "nsIMsgHeaderParser.h"
 #include "nsStringGlue.h"
 #include "prmem.h"
@@ -63,7 +29,7 @@ nsAbAddressCollector::nsAbAddressCollector()
 nsAbAddressCollector::~nsAbAddressCollector()
 {
   nsresult rv;
-  nsCOMPtr<nsIPrefBranch2> pPrefBranchInt(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
+  nsCOMPtr<nsIPrefBranch> pPrefBranchInt(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
   if (NS_SUCCEEDED(rv))
     pPrefBranchInt->RemoveObserver(PREF_MAIL_COLLECT_ADDRESSBOOK, this);
 }
@@ -79,20 +45,20 @@ nsAbAddressCollector::GetCardFromProperty(const char *aName,
 {
   nsresult rv;
   nsCOMPtr<nsIAbManager> abManager(do_GetService(NS_ABMANAGER_CONTRACTID, &rv));
-  NS_ENSURE_SUCCESS(rv, nsnull);
+  NS_ENSURE_SUCCESS(rv, nullptr);
 
   nsCOMPtr<nsISimpleEnumerator> enumerator;
   rv = abManager->GetDirectories(getter_AddRefs(enumerator));
-  NS_ENSURE_SUCCESS(rv, nsnull);
+  NS_ENSURE_SUCCESS(rv, nullptr);
 
-  PRBool hasMore;
+  bool hasMore;
   nsCOMPtr<nsISupports> supports;
   nsCOMPtr<nsIAbDirectory> directory;
-  nsIAbCard *result = nsnull;
+  nsIAbCard *result = nullptr;
   while (NS_SUCCEEDED(enumerator->HasMoreElements(&hasMore)) && hasMore)
   {
     rv = enumerator->GetNext(getter_AddRefs(supports));
-    NS_ENSURE_SUCCESS(rv, nsnull);
+    NS_ENSURE_SUCCESS(rv, nullptr);
 
     directory = do_QueryInterface(supports, &rv);
     if (NS_FAILED(rv))
@@ -100,7 +66,7 @@ nsAbAddressCollector::GetCardFromProperty(const char *aName,
 
     // Some implementations may return NS_ERROR_NOT_IMPLEMENTED here,
     // so just catch the value and continue.
-    if (NS_FAILED(directory->GetCardFromProperty(aName, aValue, PR_TRUE,
+    if (NS_FAILED(directory->GetCardFromProperty(aName, aValue, true,
                                                  &result)))
       continue;
 
@@ -111,13 +77,13 @@ nsAbAddressCollector::GetCardFromProperty(const char *aName,
       return result;
     }
   }
-  return nsnull;
+  return nullptr;
 }
 
 NS_IMETHODIMP
 nsAbAddressCollector::CollectAddress(const nsACString &aAddresses,
-                                     PRBool aCreateCard,
-                                     PRUint32 aSendFormat)
+                                     bool aCreateCard,
+                                     uint32_t aSendFormat)
 {
   // If we've not got a valid directory, no point in going any further
   if (!mDirectory)
@@ -125,7 +91,7 @@ nsAbAddressCollector::CollectAddress(const nsACString &aAddresses,
 
   // note that we're now setting the whole recipient list,
   // not just the pretty name of the first recipient.
-  PRUint32 numAddresses;
+  uint32_t numAddresses;
   char *names;
   char *addresses;
 
@@ -142,13 +108,13 @@ nsAbAddressCollector::CollectAddress(const nsACString &aAddresses,
   char *curNamePtr = names;
   char *curAddressPtr = addresses;
 
-  for (PRUint32 i = 0; i < numAddresses; i++)
+  for (uint32_t i = 0; i < numAddresses; i++)
   {
     nsDependentCString curAddress(curAddressPtr);
     curAddressPtr += curAddress.Length() + 1;
 
     nsCString unquotedName;
-    rv = pHeader->UnquotePhraseOrAddr(curNamePtr, PR_FALSE,
+    rv = pHeader->UnquotePhraseOrAddr(curNamePtr, false,
                                       getter_Copies(unquotedName));
     curNamePtr += strlen(curNamePtr) + 1;
     NS_ASSERTION(NS_SUCCEEDED(rv), "failed to unquote name");
@@ -162,7 +128,7 @@ nsAbAddressCollector::CollectAddress(const nsACString &aAddresses,
       continue;
 
     CollectSingleAddress(curAddress, unquotedName, aCreateCard, aSendFormat,
-                         PR_FALSE);
+                         false);
   }
 
   PR_FREEIF(addresses);
@@ -173,16 +139,16 @@ nsAbAddressCollector::CollectAddress(const nsACString &aAddresses,
 NS_IMETHODIMP
 nsAbAddressCollector::CollectSingleAddress(const nsACString &aEmail,
                                            const nsACString &aDisplayName,
-                                           PRBool aCreateCard,
-                                           PRUint32 aSendFormat,
-                                           PRBool aSkipCheckExisting)
+                                           bool aCreateCard,
+                                           uint32_t aSendFormat,
+                                           bool aSkipCheckExisting)
 {
   if (!mDirectory)
     return NS_OK;
 
   nsresult rv;
   nsCOMPtr<nsIAbCard> card;
-  PRBool emailAddressIn2ndEmailColumn = PR_FALSE;
+  bool emailAddressIn2ndEmailColumn = false;
 
   nsCOMPtr<nsIAbDirectory> originDirectory;
 
@@ -197,7 +163,7 @@ nsAbAddressCollector::CollectSingleAddress(const nsACString &aEmail,
       card = GetCardFromProperty(k2ndEmailProperty, aEmail,
                                  getter_AddRefs(originDirectory));
       if (card)
-        emailAddressIn2ndEmailColumn = PR_TRUE;
+        emailAddressIn2ndEmailColumn = true;
     }
   }
 
@@ -224,7 +190,7 @@ nsAbAddressCollector::CollectSingleAddress(const nsACString &aEmail,
   {
     // It could be that the origin directory is read-only, so don't try and
     // write to it if it is.
-    PRBool readOnly;
+    bool readOnly;
     rv = originDirectory->GetReadOnly(&readOnly);
     NS_ENSURE_SUCCESS(rv, rv);
 
@@ -232,7 +198,7 @@ nsAbAddressCollector::CollectSingleAddress(const nsACString &aEmail,
       return NS_OK;
 
     // address is already in the AB, so update the names
-    PRBool modifiedCard = PR_FALSE;
+    bool modifiedCard = false;
 
     nsString displayName;
     card->GetDisplayName(displayName);
@@ -242,7 +208,7 @@ nsAbAddressCollector::CollectSingleAddress(const nsACString &aEmail,
 
     if (aSendFormat != nsIAbPreferMailFormat::unknown)
     {
-      PRUint32 currentFormat;
+      uint32_t currentFormat;
       rv = card->GetPropertyAsUint32(kPreferMailFormatProperty,
                                      &currentFormat);
       NS_ASSERTION(NS_SUCCEEDED(rv), "failed to get preferred mail format");
@@ -251,7 +217,7 @@ nsAbAddressCollector::CollectSingleAddress(const nsACString &aEmail,
       if (currentFormat == nsIAbPreferMailFormat::unknown &&
           NS_SUCCEEDED(card->SetPropertyAsUint32(kPreferMailFormatProperty,
                                                  aSendFormat)))
-        modifiedCard = PR_TRUE;
+        modifiedCard = true;
     }
 
     if (modifiedCard)
@@ -269,45 +235,48 @@ nsAbAddressCollector::AutoCollectScreenName(nsIAbCard *aCard,
   if (!aCard)
     return;
 
-  PRInt32 atPos = aEmail.FindChar('@');
+  int32_t atPos = aEmail.FindChar('@');
   if (atPos == -1)
     return;
 
   const nsACString& domain = Substring(aEmail, atPos + 1);
 
+  if (domain.IsEmpty())
+    return;
   // username in 
   // username@aol.com (America Online)
   // username@cs.com (Compuserve)
   // username@netscape.net (Netscape webmail)
   // are all AIM screennames.  autocollect that info.
-  if (!domain.IsEmpty() &&
-      (domain.Equals("aol.com") || domain.Equals("cs.com") ||
-       domain.Equals("netscape.net")))
+  if (domain.Equals("aol.com") || domain.Equals("cs.com") ||
+      domain.Equals("netscape.net"))
     aCard->SetPropertyAsAUTF8String(kScreenNameProperty, Substring(aEmail, 0, atPos));
+  else if (domain.Equals("gmail.com") || domain.Equals("googlemail.com"))
+    aCard->SetPropertyAsAUTF8String(kGtalkProperty, Substring(aEmail, 0, atPos));
 }
 
 // Returns true if the card was modified successfully.
-PRBool
+bool
 nsAbAddressCollector::SetNamesForCard(nsIAbCard *aSenderCard,
                                       const nsACString &aFullName)
 {
   nsCString firstName;
   nsCString lastName;
-  PRBool modifiedCard = PR_FALSE;
+  bool modifiedCard = false;
 
   if (NS_SUCCEEDED(aSenderCard->SetDisplayName(NS_ConvertUTF8toUTF16(aFullName))))
-    modifiedCard = PR_TRUE;
+    modifiedCard = true;
 
   // Now split up the full name.
   SplitFullName(nsCString(aFullName), firstName, lastName);
 
   if (!firstName.IsEmpty() &&
       NS_SUCCEEDED(aSenderCard->SetFirstName(NS_ConvertUTF8toUTF16(firstName))))
-    modifiedCard = PR_TRUE;
+    modifiedCard = true;
 
   if (!lastName.IsEmpty() &&
       NS_SUCCEEDED(aSenderCard->SetLastName(NS_ConvertUTF8toUTF16(lastName))))
-    modifiedCard = PR_TRUE;
+    modifiedCard = true;
 
   if (modifiedCard)
     aSenderCard->SetPropertyAsBool("PreferDisplayName", false);
@@ -333,7 +302,7 @@ NS_IMETHODIMP
 nsAbAddressCollector::Observe(nsISupports *aSubject, const char *aTopic,
                               const PRUnichar *aData)
 {
-  nsCOMPtr<nsIPrefBranch2> prefBranch = do_QueryInterface(aSubject);
+  nsCOMPtr<nsIPrefBranch> prefBranch = do_QueryInterface(aSubject);
   if (!prefBranch) {
     NS_ASSERTION(prefBranch, "failed to get prefs");
     return NS_OK;
@@ -348,11 +317,11 @@ nsresult
 nsAbAddressCollector::Init(void)
 {
   nsresult rv;
-  nsCOMPtr<nsIPrefBranch2> prefBranch(do_GetService(NS_PREFSERVICE_CONTRACTID,
-                                                    &rv));
+  nsCOMPtr<nsIPrefBranch> prefBranch(do_GetService(NS_PREFSERVICE_CONTRACTID,
+                                                   &rv));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = prefBranch->AddObserver(PREF_MAIL_COLLECT_ADDRESSBOOK, this, PR_FALSE);
+  rv = prefBranch->AddObserver(PREF_MAIL_COLLECT_ADDRESSBOOK, this, false);
   NS_ENSURE_SUCCESS(rv, rv);
 
   SetUpAbFromPrefs(prefBranch);
@@ -374,7 +343,7 @@ nsAbAddressCollector::SetUpAbFromPrefs(nsIPrefBranch *aPrefBranch)
   if (abURI == mABURI)
     return;
 
-  mDirectory = nsnull;
+  mDirectory = nullptr;
   mABURI = abURI;
 
   nsresult rv;
@@ -384,7 +353,7 @@ nsAbAddressCollector::SetUpAbFromPrefs(nsIPrefBranch *aPrefBranch)
   rv = abManager->GetDirectory(mABURI, getter_AddRefs(mDirectory));
   NS_ENSURE_SUCCESS(rv, );
 
-  PRBool readOnly;
+  bool readOnly;
   rv = mDirectory->GetReadOnly(&readOnly);
   NS_ENSURE_SUCCESS(rv, );
 
@@ -394,6 +363,6 @@ nsAbAddressCollector::SetUpAbFromPrefs(nsIPrefBranch *aPrefBranch)
   {
     NS_ERROR("Address Collection book preferences is set to a read-only book. "
              "Address collection will not take place.");
-    mDirectory = nsnull;
+    mDirectory = nullptr;
   }
 }

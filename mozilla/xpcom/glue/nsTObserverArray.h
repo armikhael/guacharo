@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla.org code.
- *
- * The Initial Developer of the Original Code is Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jonas Sicking <jonas@sicking.cc> (Original Author)
- *   Daniel Witte <dwitte@stanford.edu>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsTObserverArray_h___
 #define nsTObserverArray_h___
@@ -53,9 +20,9 @@
 
 class NS_COM_GLUE nsTObserverArray_base {
   public:
-    typedef PRUint32 index_type;
-    typedef PRUint32 size_type;
-    typedef PRInt32  diff_type;
+    typedef uint32_t index_type;
+    typedef uint32_t size_type;
+    typedef int32_t  diff_type;
 
   protected:
     class Iterator_base {
@@ -76,11 +43,11 @@ class NS_COM_GLUE nsTObserverArray_base {
     };
 
     nsTObserverArray_base()
-      : mIterators(nsnull) {
+      : mIterators(nullptr) {
     }
 
     ~nsTObserverArray_base() {
-      NS_ASSERTION(mIterators == nsnull, "iterators outlasting array");
+      NS_ASSERTION(mIterators == nullptr, "iterators outlasting array");
     }
 
     /**
@@ -100,7 +67,7 @@ class NS_COM_GLUE nsTObserverArray_base {
     mutable Iterator_base* mIterators;
 };
 
-template<class T, PRUint32 N>
+template<class T, uint32_t N>
 class nsAutoTObserverArray : protected nsTObserverArray_base {
   public:
     typedef T           elem_type;
@@ -119,7 +86,7 @@ class nsAutoTObserverArray : protected nsTObserverArray_base {
     }
 
     // @return True if the array is empty or false otherwise.
-    PRBool IsEmpty() const {
+    bool IsEmpty() const {
       return mArray.IsEmpty();
     }
 
@@ -158,9 +125,9 @@ class nsAutoTObserverArray : protected nsTObserverArray_base {
     // for the first element in this array that is equal to the given element.
     // 'operator==' must be defined for elem_type.
     // @param item   The item to search for.
-    // @return       PR_TRUE if the element was found.
+    // @return       true if the element was found.
     template<class Item>
-    PRBool Contains(const Item& item) const {
+    bool Contains(const Item& item) const {
       return IndexOf(item) != array_type::NoIndex;
     }
 
@@ -178,14 +145,39 @@ class nsAutoTObserverArray : protected nsTObserverArray_base {
     //
     // Mutation methods
     //
+  
+    // Insert a given element at the given index.
+    // @param index  The index at which to insert item.
+    // @param item   The item to insert,
+    // @return       A pointer to the newly inserted element, or a null on DOM
+    template<class Item>
+    elem_type *InsertElementAt(index_type aIndex, const Item& aItem) {
+      elem_type* item = mArray.InsertElementAt(aIndex, aItem);
+      AdjustIterators(aIndex, 1);
+      return item;
+    }
+
+    // Same as above but without copy constructing.
+    // This is useful to avoid temporaries.
+    elem_type* InsertElementAt(index_type aIndex) {
+      elem_type* item = mArray.InsertElementAt(aIndex);
+      AdjustIterators(aIndex, 1);
+      return item;
+    }
 
     // Prepend an element to the array unless it already exists in the array.
     // 'operator==' must be defined for elem_type.
     // @param item   The item to prepend.
-    // @return       PR_TRUE if the element was found, or inserted successfully.
+    // @return       true if the element was found, or inserted successfully.
     template<class Item>
-    PRBool PrependElementUnlessExists(const Item& item) {
-      return Contains(item) || mArray.InsertElementAt(0, item) != nsnull;
+    bool PrependElementUnlessExists(const Item& item) {
+      if (Contains(item)) {
+        return true;
+      }
+      
+      bool inserted = mArray.InsertElementAt(0, item) != nullptr;
+      AdjustIterators(0, 1);
+      return inserted;
     }
 
     // Append an element to the array.
@@ -205,10 +197,10 @@ class nsAutoTObserverArray : protected nsTObserverArray_base {
     // Append an element to the array unless it already exists in the array.
     // 'operator==' must be defined for elem_type.
     // @param item   The item to append.
-    // @return       PR_TRUE if the element was found, or inserted successfully.
+    // @return       true if the element was found, or inserted successfully.
     template<class Item>
-    PRBool AppendElementUnlessExists(const Item& item) {
-      return Contains(item) || AppendElement(item) != nsnull;
+    bool AppendElementUnlessExists(const Item& item) {
+      return Contains(item) || AppendElement(item) != nullptr;
     }
 
     // Remove an element from the array.
@@ -223,16 +215,16 @@ class nsAutoTObserverArray : protected nsTObserverArray_base {
     // and destroy" the first element that is equal to the given element.
     // 'operator==' must be defined for elem_type.
     // @param item  The item to search for.
-    // @return PR_TRUE if the element was found and removed.
+    // @return true if the element was found and removed.
     template<class Item>
-    PRBool RemoveElement(const Item& item) {
+    bool RemoveElement(const Item& item) {
       index_type index = mArray.IndexOf(item, 0);
       if (index == array_type::NoIndex)
-        return PR_FALSE;
+        return false;
 
       mArray.RemoveElementAt(index);
       AdjustIterators(index, -1);
-      return PR_TRUE;
+      return true;
     }
 
     // Removes all observers and collapses all iterators to the beginning of
@@ -241,6 +233,12 @@ class nsAutoTObserverArray : protected nsTObserverArray_base {
     void Clear() {
       mArray.Clear();
       ClearIterators();
+    }
+
+    // Returns the number of bytes on the heap taken up by this object, not
+    // including sizeof(*this).
+    size_t SizeOfExcludingThis(nsMallocSizeOfFun mallocSizeOf) const {
+      return mArray.SizeOfExcludingThis(mallocSizeOf);
     }
 
     //
@@ -291,16 +289,16 @@ class nsAutoTObserverArray : protected nsTObserverArray_base {
           : Iterator(aPos, aArray) {
         }
 
-        PRBool operator <(const ForwardIterator& aOther) const {
+        bool operator <(const ForwardIterator& aOther) const {
           NS_ASSERTION(&this->mArray == &aOther.mArray,
                        "not iterating the same array");
           return base_type::mPosition < aOther.mPosition;
         }
 
-        // Returns PR_TRUE if there are more elements to iterate.
-        // This must precede a call to GetNext(). If PR_FALSE is
+        // Returns true if there are more elements to iterate.
+        // This must precede a call to GetNext(). If false is
         // returned, GetNext() must not be called.
-        PRBool HasMore() const {
+        bool HasMore() const {
           return base_type::mPosition < base_type::mArray.Length();
         }
 
@@ -325,10 +323,10 @@ class nsAutoTObserverArray : protected nsTObserverArray_base {
             mEnd(aArray, aArray.Length()) {
         }
 
-        // Returns PR_TRUE if there are more elements to iterate.
-        // This must precede a call to GetNext(). If PR_FALSE is
+        // Returns true if there are more elements to iterate.
+        // This must precede a call to GetNext(). If false is
         // returned, GetNext() must not be called.
-        PRBool HasMore() const {
+        bool HasMore() const {
           return *this < mEnd;
         }
 

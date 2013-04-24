@@ -1,4 +1,8 @@
 <?xml version="1.0"?>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
 
 <!DOCTYPE overlay SYSTEM "chrome://navigator-platform/locale/platformNavigationBindings.dtd">
 
@@ -25,6 +29,9 @@
     <key id="key_fullScreen" keycode="VK_F11" command="View:FullScreen"/>
     <key id="key_newTabWithTargetBg" keycode="VK_INSERT" command="cmd_newTabWithTarget"/>
     <key id="key_newTabWithTargetFg" keycode="VK_INSERT" modifiers="alt" command="cmd_newTabWithTarget"/>
+
+    <!-- Location bar -->
+    <key keycode="VK_F6" oncommand="focusNextFrame(event);" modifiers="shift any"/>
   </keyset>
 
 </overlay>

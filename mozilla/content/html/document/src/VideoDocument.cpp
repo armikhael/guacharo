@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla code.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "MediaDocument.h"
 #include "nsGkAtoms.h"
@@ -55,8 +23,9 @@ public:
                                      nsILoadGroup*       aLoadGroup,
                                      nsISupports*        aContainer,
                                      nsIStreamListener** aDocListener,
-                                     PRBool              aReset = PR_TRUE,
-                                     nsIContentSink*     aSink = nsnull);
+                                     bool                aReset = true,
+                                     nsIContentSink*     aSink = nullptr);
+  virtual void SetScriptGlobalObject(nsIScriptGlobalObject* aScriptGlobalObject);
 
 protected:
 
@@ -75,7 +44,7 @@ VideoDocument::StartDocumentLoad(const char*         aCommand,
                                  nsILoadGroup*       aLoadGroup,
                                  nsISupports*        aContainer,
                                  nsIStreamListener** aDocListener,
-                                 PRBool              aReset,
+                                 bool                aReset,
                                  nsIContentSink*     aSink)
 {
   nsresult rv =
@@ -84,8 +53,6 @@ VideoDocument::StartDocumentLoad(const char*         aCommand,
   NS_ENSURE_SUCCESS(rv, rv);
 
   mStreamListener = new MediaDocumentStreamListener(this);
-  if (!mStreamListener)
-    return NS_ERROR_OUT_OF_MEMORY;
 
   // Create synthetic document
   rv = CreateSyntheticVideoDocument(aChannel,
@@ -94,6 +61,23 @@ VideoDocument::StartDocumentLoad(const char*         aCommand,
 
   NS_ADDREF(*aDocListener = mStreamListener);
   return rv;
+}
+
+void
+VideoDocument::SetScriptGlobalObject(nsIScriptGlobalObject* aScriptGlobalObject)
+{
+  // Set the script global object on the superclass before doing
+  // anything that might require it....
+  MediaDocument::SetScriptGlobalObject(aScriptGlobalObject);
+
+  if (aScriptGlobalObject) {
+    if (!nsContentUtils::IsChildOfSameType(this) &&
+        GetReadyStateEnum() != nsIDocument::READYSTATE_COMPLETE) {
+      LinkStylesheet(NS_LITERAL_STRING("resource://gre/res/TopLevelVideoDocument.css"));
+      LinkStylesheet(NS_LITERAL_STRING("chrome://global/skin/TopLevelVideoDocument.css"));
+    }
+    BecomeInteractive();
+  }
 }
 
 nsresult
@@ -112,7 +96,7 @@ VideoDocument::CreateSyntheticVideoDocument(nsIChannel* aChannel,
 
   // make content
   nsCOMPtr<nsINodeInfo> nodeInfo;
-  nodeInfo = mNodeInfoManager->GetNodeInfo(nsGkAtoms::video, nsnull,
+  nodeInfo = mNodeInfoManager->GetNodeInfo(nsGkAtoms::video, nullptr,
                                            kNameSpaceID_XHTML,
                                            nsIDOMNode::ELEMENT_NODE);
   NS_ENSURE_TRUE(nodeInfo, NS_ERROR_FAILURE);
@@ -122,8 +106,8 @@ VideoDocument::CreateSyntheticVideoDocument(nsIChannel* aChannel,
                                                             NOT_FROM_PARSER));
   if (!element)
     return NS_ERROR_OUT_OF_MEMORY;
-  element->SetAutoplay(PR_TRUE);
-  element->SetControls(PR_TRUE);
+  element->SetAutoplay(true);
+  element->SetControls(true);
   element->LoadWithChannel(aChannel, aListener);
   UpdateTitle(aChannel);
 
@@ -132,10 +116,10 @@ VideoDocument::CreateSyntheticVideoDocument(nsIChannel* aChannel,
     // not have margins
     element->SetAttr(kNameSpaceID_None, nsGkAtoms::style,
         NS_LITERAL_STRING("position:absolute; top:0; left:0; width:100%; height:100%"),
-        PR_TRUE);
+        true);
   }
 
-  return body->AppendChildTo(element, PR_FALSE);
+  return body->AppendChildTo(element, false);
 }
 
 void
@@ -156,9 +140,6 @@ nsresult
 NS_NewVideoDocument(nsIDocument** aResult)
 {
   mozilla::dom::VideoDocument* doc = new mozilla::dom::VideoDocument();
-  if (!doc) {
-    return NS_ERROR_OUT_OF_MEMORY;
-  }
 
   NS_ADDREF(doc);
   nsresult rv = doc->Init();

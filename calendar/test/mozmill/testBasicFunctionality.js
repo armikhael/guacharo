@@ -1,45 +1,18 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Mozmill Test Code.
- *
- * The Initial Developer of the Original Code is Merike Sell.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var calUtils = require("./shared-modules/calendar-utils");
-var modalDialog = require("./shared-modules/modal-dialog");
+const MODULE_NAME = "testBasicFunctionality";
+const RELATIVE_ROOT = "./shared-modules";
+const MODULE_REQUIRES = ["calendar-utils", "window-helpers"];
 
-var sleep = 500;
+var calUtils = require("shared-modules/calendar-utils");
+const TIMEOUT_MODAL_DIALOG = 30000;
 
+var modalDialog;
 var setupModule = function(module) {
   controller = mozmill.getMail3PaneController();
+  modalDialog = collector.getModule('window-helpers');
 }
 
 var testSmokeTest = function () {
@@ -92,25 +65,19 @@ var testSmokeTest = function () {
     + 'anon({"anonid":"calendar-task-tree"})/{"tooltip":"taskTreeTooltip"}'));
   
   // create test calendar
-  var md = new modalDialog.modalDialog(controller.window);
-  md.start(handleDialog);
+  modalDialog.plan_for_modal_dialog("Calendar:NewCalendarWizard", handleNewCalendarWizard);
   let calendarList = new elementslib.Lookup(controller.window.document, path 
     + '/id("ltnSidebar")/id("calendar-panel")/id("calendar-list-pane")/id("calendar-listtree-pane")/'
     + 'id("calendar-list-tree-widget")/anon({"anonid":"tree"})/anon({"anonid":"treechildren"})');
   controller.doubleClick(calendarList, 0, calendarList.getNode().boxObject.height); // bottom left
+  modalDialog.wait_for_modal_dialog("Calendar:NewCalendarWizard", TIMEOUT_MODAL_DIALOG);
 }
 
-var handleDialog = function(controller) {
-  let wizardPath = '/id("calendar-wizard")/anon({"anonid":"Buttons"})/'
-    + 'anon({"class":"wizard-buttons-box-1"})/{"class":"wizard-buttons-box-2"}/'
-    + 'anon({"anonid":"WizardButtonDeck"})/';
-  
+function handleNewCalendarWizard(controller) {
+  let docEl = controller.window.document.documentElement;
   // click next
-  controller.waitForElement(new elementslib.Lookup(controller.window.document, wizardPath
-    + '[1]/{"dlgtype":"next"}'));
-  controller.click(new elementslib.Lookup(controller.window.document, wizardPath
-    + '[1]/{"dlgtype":"next"}'));
-  
+  docEl.getButton("next").doCommand();
+
   // set calendar name
   let calendarNameTextBox = new elementslib.Lookup(controller.window.document, '/id("calendar-wizard")/'
     + '{"pageid":"customizePage"}/[1]/id("customize-rows")/id("customize-name-row")/'
@@ -119,12 +86,10 @@ var handleDialog = function(controller) {
   controller.type(calendarNameTextBox, "Mozmill");
   
   // click next
-  controller.waitThenClick(new elementslib.Lookup(controller.window.document, wizardPath
-    + '[1]/{"dlgtype":"next"}'));
+  docEl.getButton("next").doCommand();
   
   // click finish
-  controller.waitThenClick(new elementslib.Lookup(controller.window.document, wizardPath
-    + '/[0]/{"dlgtype":"finish"}'));
+  docEl.getButton("finish").doCommand();
 }
 
 var teardownTest = function(module) {

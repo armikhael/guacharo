@@ -40,6 +40,9 @@ chrome/US.jar
 #endif
 components/accessibility-atk.xpt
 components/airbag.xpt
+#ifdef XP_MACOSX
+  components/libalerts_s.dylib
+#endif
 components/bookmarks.xpt
 components/downloadmanager.xpt
 components/compreg.dat
@@ -57,6 +60,7 @@ components/nsBackgroundUpdateService.js
 components/nsCloseAllWindows.js
 components/nsComposerCmdLineHandler.js
 components/nsDownloadProgressListener.js
+components/nsDropbox.js
 components/nsExtensionManager.js
 components/nsInterfaceInfoToIDL.js
 components/nsLDAPPrefsService.js
@@ -84,6 +88,7 @@ components/signonviewer.xpt
 components/thunderbird.xpt
 components/@DLL_PREFIX@spellchecker@DLL_SUFFIX@
 components/spellchk.dll
+components/uconvd.dll
 components/@DLL_PREFIX@wallet@DLL_SUFFIX@
 components/wallet.xpt
 components/walleteditor.xpt
@@ -159,6 +164,43 @@ greprefs/all.js
 greprefs/security-prefs.js
 greprefs/xpinstall.js
 greprefs/
+hyphenation/
+hyphenation/hyph_af.dic
+hyphenation/hyph_bg.dic
+hyphenation/hyph_ca.dic
+hyphenation/hyph_cy.dic
+hyphenation/hyph_da.dic
+hyphenation/hyph_de-1901.dic
+hyphenation/hyph_de-1996.dic
+hyphenation/hyph_de-CH.dic
+hyphenation/hyph_en_US.dic
+hyphenation/hyph_eo.dic
+hyphenation/hyph_es.dic
+hyphenation/hyph_et.dic
+hyphenation/hyph_fi.dic
+hyphenation/hyph_fr.dic
+hyphenation/hyph_gl.dic
+hyphenation/hyph_hr.dic
+hyphenation/hyph_hsb.dic
+hyphenation/hyph_hu.dic
+hyphenation/hyph_ia.dic
+hyphenation/hyph_is.dic
+hyphenation/hyph_it.dic
+hyphenation/hyph_kmr.dic
+hyphenation/hyph_la.dic
+hyphenation/hyph_lt.dic
+hyphenation/hyph_mn.dic
+hyphenation/hyph_nb.dic
+hyphenation/hyph_nl.dic
+hyphenation/hyph_nn.dic
+hyphenation/hyph_pt.dic
+hyphenation/hyph_ru.dic
+hyphenation/hyph_sh.dic
+hyphenation/hyph_sl.dic
+hyphenation/hyph_sv.dic
+hyphenation/hyph_tr.dic
+hyphenation/hyph_uk.dic
+
 #ifdef MOZ_WIDGET_GTK2
   icons/mozicon128.png
   icons/mozicon16.xpm
@@ -219,6 +261,28 @@ LICENSE.txt
 modules/JSON.jsm
 modules/quickSearchManager.js
 mozilla-runtime@BIN_SUFFIX@
+#ifdef XP_WIN
+  #if _MSC_VER != 1400
+    Microsoft.VC80.CRT.manifest
+    msvcm80.dll
+    msvcp80.dll
+    msvcr80.dll
+  #endif
+  #if _MSC_VER != 1500
+    Microsoft.VC90.CRT.manifest
+    msvcm90.dll
+    msvcp90.dll
+    msvcr90.dll
+  #endif
+  #if _MSC_VER != 1600
+    msvcp100.dll
+    msvcr100.dll
+  #endif
+  #if _MSC_VER != 1700
+    msvcp110.dll
+    msvcr110.dll
+  #endif
+#endif
 #ifdef XP_MACOSX
   ../Plug-Ins/PrintPDE.plugin/Contents/Info.plist
   ../Plug-Ins/PrintPDE.plugin/Contents/MacOS/PrintPDE
@@ -287,23 +351,11 @@ uninstall/uninstall.exe
 #endif
 .autoreg
 component.reg
-#ifdef XP_MACOSX
-#ifndef MOZ_MEMORY_DARWIN
 @DLL_PREFIX@jemalloc@DLL_SUFFIX@
-#endif
-#else
-@DLL_PREFIX@jemalloc@DLL_SUFFIX@
-#endif
+@DLL_PREFIX@mozutils@DLL_SUFFIX@
 #ifdef XP_WIN
-  #ifdef MOZ_MEMORY
-    Microsoft.VC80.CRT.manifest
-    msvcm80.dll
-    msvcp80.dll
-    msvcr80.dll
-  #else
-    mozcrt19.dll
-    mozcpp19.dll
-  #endif
+  mozcrt19.dll
+  mozcpp19.dll
 #endif
 #ifdef MOZ_STATIC_JS
 @DLL_PREFIX@mozjs@DLL_SUFFIX@
@@ -338,6 +390,7 @@ regxpcom.exe
 # ****************************************************************************
 
 #ifdef MOZ_OMNIJAR
+  omni.jar
   chrome/@AB_CD@.jar
   chrome/@AB_CD@.manifest
   chrome/classic.jar
@@ -539,6 +592,7 @@ regxpcom.exe
   modules/quickFilterManager.js
   modules/searchSpec.js
   modules/sessionStoreManager.js
+  modules/summaryFrameManager.js
   modules/templateUtils.js
   modules/traceHelper.js
   modules/utils.js
@@ -589,6 +643,7 @@ regxpcom.exe
 #else
   components/binary.manifest
   omni.jar
+  omni.ja
 #endif
 
 # ****************************************************************************
@@ -1125,3 +1180,7 @@ components/xmlextras.xpt
 # ****************************************************************************
 # * End of XPTs at the time we started linking them on Linux and Mac.        *
 # ****************************************************************************
+#ifndef MOZ_MAINTENANCE_SERVICE
+maintenanceservice.exe
+maintenanceservice_installer.exe
+#endif

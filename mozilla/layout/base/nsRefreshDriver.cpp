@@ -1,45 +1,15 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set shiftwidth=2 tabstop=8 autoindent cindent expandtab: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is nsRefreshDriver.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   L. David Baron <dbaron@dbaron.org>, Mozilla Corporation (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * Code to notify things that animate before a refresh, at an appropriate
  * refresh rate.  (Perhaps temporary, until replaced by compositor.)
  */
+
+#include "mozilla/Util.h"
 
 #include "nsRefreshDriver.h"
 #include "nsPresContext.h"
@@ -53,6 +23,8 @@
 #include "jsapi.h"
 #include "nsContentUtils.h"
 #include "mozilla/Preferences.h"
+#include "nsIViewManager.h"
+#include "sampler.h"
 
 using mozilla::TimeStamp;
 using mozilla::TimeDuration;
@@ -62,29 +34,36 @@ using namespace mozilla;
 #define DEFAULT_FRAME_RATE 60
 #define DEFAULT_THROTTLED_FRAME_RATE 1
 
-static PRBool sPrecisePref;
+static bool sPrecisePref;
 
 /* static */ void
 nsRefreshDriver::InitializeStatics()
 {
   Preferences::AddBoolVarCache(&sPrecisePref,
                                "layout.frame_rate.precise",
-                               PR_FALSE);
+                               false);
 }
+
+/* static */ int32_t
+nsRefreshDriver::DefaultInterval()
+{
+  return NSToIntRound(1000.0 / DEFAULT_FRAME_RATE);
+}
+
 // Compute the interval to use for the refresh driver timer, in
 // milliseconds
-PRInt32
+int32_t
 nsRefreshDriver::GetRefreshTimerInterval() const
 {
   const char* prefName =
     mThrottled ? "layout.throttled_frame_rate" : "layout.frame_rate";
-  PRInt32 rate = Preferences::GetInt(prefName, -1);
+  int32_t rate = Preferences::GetInt(prefName, -1);
   if (rate <= 0) {
     // TODO: get the rate from the platform
     rate = mThrottled ? DEFAULT_THROTTLED_FRAME_RATE : DEFAULT_FRAME_RATE;
   }
   NS_ASSERTION(rate > 0, "Must have positive rate here");
-  PRInt32 interval = NSToIntRound(1000.0/rate);
+  int32_t interval = NSToIntRound(1000.0/rate);
   if (mThrottled) {
     interval = NS_MAX(interval, mLastTimerInterval * 2);
   }
@@ -92,13 +71,13 @@ nsRefreshDriver::GetRefreshTimerInterval() const
   return interval;
 }
 
-PRInt32
+int32_t
 nsRefreshDriver::GetRefreshTimerType() const
 {
   if (mThrottled) {
     return nsITimer::TYPE_ONE_SHOT;
   }
-  if (HaveAnimationFrameListeners() || sPrecisePref) {
+  if (HaveFrameRequestCallbacks() || sPrecisePref) {
     return nsITimer::TYPE_REPEATING_PRECISE_CAN_SKIP;
   }
   return nsITimer::TYPE_REPEATING_SLACK;
@@ -110,8 +89,10 @@ nsRefreshDriver::nsRefreshDriver(nsPresContext *aPresContext)
     mThrottled(false),
     mTestControllingRefreshes(false),
     mTimerIsPrecise(false),
+    mViewManagerFlushIsPending(false),
     mLastTimerInterval(0)
 {
+  mRequests.Init();
 }
 
 nsRefreshDriver::~nsRefreshDriver()
@@ -124,14 +105,14 @@ nsRefreshDriver::~nsRefreshDriver()
 // Method for testing.  See nsIDOMWindowUtils.advanceTimeAndRefresh
 // for description.
 void
-nsRefreshDriver::AdvanceTimeAndRefresh(PRInt64 aMilliseconds)
+nsRefreshDriver::AdvanceTimeAndRefresh(int64_t aMilliseconds)
 {
   mTestControllingRefreshes = true;
   mMostRecentRefreshEpochTime += aMilliseconds * 1000;
   mMostRecentRefresh += TimeDuration::FromMilliseconds(aMilliseconds);
   nsCxPusher pusher;
   if (pusher.PushNull()) {
-    Notify(nsnull);
+    Notify(nullptr);
     pusher.Pop();
   }
 }
@@ -142,7 +123,7 @@ nsRefreshDriver::RestoreNormalRefresh()
   mTestControllingRefreshes = false;
   nsCxPusher pusher;
   if (pusher.PushNull()) {
-    Notify(nsnull); // will call UpdateMostRecentRefresh()
+    Notify(nullptr); // will call UpdateMostRecentRefresh()
     pusher.Pop();
   }
 }
@@ -155,7 +136,7 @@ nsRefreshDriver::MostRecentRefresh() const
   return mMostRecentRefresh;
 }
 
-PRInt64
+int64_t
 nsRefreshDriver::MostRecentRefreshEpochTime() const
 {
   const_cast<nsRefreshDriver*>(this)->EnsureTimerStarted(false);
@@ -163,24 +144,47 @@ nsRefreshDriver::MostRecentRefreshEpochTime() const
   return mMostRecentRefreshEpochTime;
 }
 
-PRBool
+bool
 nsRefreshDriver::AddRefreshObserver(nsARefreshObserver *aObserver,
                                     mozFlushType aFlushType)
 {
   ObserverArray& array = ArrayFor(aFlushType);
-  PRBool success = array.AppendElement(aObserver) != nsnull;
+  bool success = array.AppendElement(aObserver) != nullptr;
 
   EnsureTimerStarted(false);
 
   return success;
 }
 
-PRBool
+bool
 nsRefreshDriver::RemoveRefreshObserver(nsARefreshObserver *aObserver,
                                        mozFlushType aFlushType)
 {
   ObserverArray& array = ArrayFor(aFlushType);
   return array.RemoveElement(aObserver);
+}
+
+bool
+nsRefreshDriver::AddImageRequest(imgIRequest* aRequest)
+{
+  if (!mRequests.PutEntry(aRequest)) {
+    return false;
+  }
+
+  EnsureTimerStarted(false);
+
+  return true;
+}
+
+void
+nsRefreshDriver::RemoveImageRequest(imgIRequest* aRequest)
+{
+  mRequests.RemoveEntry(aRequest);
+}
+
+void nsRefreshDriver::ClearAllImageRequests()
+{
+  mRequests.Clear();
 }
 
 void
@@ -207,14 +211,14 @@ nsRefreshDriver::EnsureTimerStarted(bool aAdjustingTimer)
     return;
   }
 
-  PRInt32 timerType = GetRefreshTimerType();
+  int32_t timerType = GetRefreshTimerType();
   mTimerIsPrecise = (timerType == nsITimer::TYPE_REPEATING_PRECISE_CAN_SKIP);
 
   nsresult rv = mTimer->InitWithCallback(this,
                                          GetRefreshTimerInterval(),
                                          timerType);
   if (NS_FAILED(rv)) {
-    mTimer = nsnull;
+    mTimer = nullptr;
   }
 }
 
@@ -226,25 +230,32 @@ nsRefreshDriver::StopTimer()
   }
 
   mTimer->Cancel();
-  mTimer = nsnull;
+  mTimer = nullptr;
 }
 
-PRUint32
+uint32_t
 nsRefreshDriver::ObserverCount() const
 {
-  PRUint32 sum = 0;
-  for (PRUint32 i = 0; i < NS_ARRAY_LENGTH(mObservers); ++i) {
+  uint32_t sum = 0;
+  for (uint32_t i = 0; i < ArrayLength(mObservers); ++i) {
     sum += mObservers[i].Length();
   }
+
   // Even while throttled, we need to process layout and style changes.  Style
   // changes can trigger transitions which fire events when they complete, and
   // layout changes can affect media queries on child documents, triggering
   // style changes, etc.
   sum += mStyleFlushObservers.Length();
   sum += mLayoutFlushObservers.Length();
-  sum += mBeforePaintTargets.Length();
-  sum += mAnimationFrameListenerDocs.Length();
+  sum += mFrameRequestCallbackDocs.Length();
+  sum += mViewManagerFlushIsPending;
   return sum;
+}
+
+uint32_t
+nsRefreshDriver::ImageRequestCount() const
+{
+  return mRequests.Count();
 }
 
 void
@@ -270,8 +281,8 @@ nsRefreshDriver::ArrayFor(mozFlushType aFlushType)
     case Flush_Display:
       return mObservers[2];
     default:
-      NS_ABORT_IF_FALSE(PR_FALSE, "bad flush type");
-      return *static_cast<ObserverArray*>(nsnull);
+      NS_ABORT_IF_FALSE(false, "bad flush type");
+      return *static_cast<ObserverArray*>(nullptr);
   }
 }
 
@@ -288,6 +299,8 @@ NS_IMPL_ISUPPORTS1(nsRefreshDriver, nsITimerCallback)
 NS_IMETHODIMP
 nsRefreshDriver::Notify(nsITimer *aTimer)
 {
+  SAMPLE_LABEL("nsRefreshDriver", "Notify");
+
   NS_PRECONDITION(!mFrozen, "Why are we notified while frozen?");
   NS_PRECONDITION(mPresContext, "Why are we notified after disconnection?");
   NS_PRECONDITION(!nsContentUtils::GetCurrentJSContext(),
@@ -301,7 +314,7 @@ nsRefreshDriver::Notify(nsITimer *aTimer)
   UpdateMostRecentRefresh();
 
   nsCOMPtr<nsIPresShell> presShell = mPresContext->GetPresShell();
-  if (!presShell || ObserverCount() == 0) {
+  if (!presShell || (ObserverCount() == 0 && ImageRequestCount() == 0)) {
     // Things are being destroyed, or we no longer have any observers.
     // We don't want to stop the timer when observers are initially
     // removed, because sometimes observers can be added and removed
@@ -319,7 +332,7 @@ nsRefreshDriver::Notify(nsITimer *aTimer)
    * the pres context, which will cause our |mPresContext| to become
    * null.  If this happens, we must stop notifying observers.
    */
-  for (PRUint32 i = 0; i < NS_ARRAY_LENGTH(mObservers); ++i) {
+  for (uint32_t i = 0; i < ArrayLength(mObservers); ++i) {
     ObserverArray::EndLimitedIterator etor(mObservers[i]);
     while (etor.HasMore()) {
       nsRefPtr<nsARefreshObserver> obs = etor.GetNext();
@@ -330,42 +343,29 @@ nsRefreshDriver::Notify(nsITimer *aTimer)
         return NS_OK;
       }
     }
+
     if (i == 0) {
-      // Don't just loop while we have things in mBeforePaintTargets,
-      // the whole point is that event handlers should readd the
-      // target as needed.
-      nsTArray< nsCOMPtr<nsIDocument> > targets;
-      targets.SwapElements(mBeforePaintTargets);
-      for (PRUint32 i = 0; i < targets.Length(); ++i) {
-        targets[i]->BeforePaintEventFiring();
+      // Grab all of our frame request callbacks up front.
+      nsIDocument::FrameRequestCallbackList frameRequestCallbacks;
+      for (uint32_t i = 0; i < mFrameRequestCallbackDocs.Length(); ++i) {
+        mFrameRequestCallbackDocs[i]->
+          TakeFrameRequestCallbacks(frameRequestCallbacks);
       }
-
-      // Also grab all of our animation frame listeners up front.
-      nsIDocument::AnimationListenerList animationListeners;
-      for (PRUint32 i = 0; i < mAnimationFrameListenerDocs.Length(); ++i) {
-        mAnimationFrameListenerDocs[i]->
-          TakeAnimationFrameListeners(animationListeners);
-      }
-      // OK, now reset mAnimationFrameListenerDocs so they can be
+      // OK, now reset mFrameRequestCallbackDocs so they can be
       // readded as needed.
-      mAnimationFrameListenerDocs.Clear();
+      mFrameRequestCallbackDocs.Clear();
 
-      PRInt64 eventTime = mMostRecentRefreshEpochTime / PR_USEC_PER_MSEC;
-      for (PRUint32 i = 0; i < targets.Length(); ++i) {
-        nsEvent ev(PR_TRUE, NS_BEFOREPAINT);
-        ev.time = eventTime;
-        nsEventDispatcher::Dispatch(targets[i], nsnull, &ev);
-      }
-
-      for (PRUint32 i = 0; i < animationListeners.Length(); ++i) {
-        animationListeners[i]->OnBeforePaint(eventTime);
+      int64_t eventTime = mMostRecentRefreshEpochTime / PR_USEC_PER_MSEC;
+      for (uint32_t i = 0; i < frameRequestCallbacks.Length(); ++i) {
+        nsAutoMicroTask mt;
+        frameRequestCallbacks[i]->Sample(eventTime);
       }
 
       // This is the Flush_Style case.
       if (mPresContext && mPresContext->GetPresShell()) {
         nsAutoTArray<nsIPresShell*, 16> observers;
         observers.AppendElements(mStyleFlushObservers);
-        for (PRUint32 j = observers.Length();
+        for (uint32_t j = observers.Length();
              j && mPresContext && mPresContext->GetPresShell(); --j) {
           // Make sure to not process observers which might have been removed
           // during previous iterations.
@@ -374,7 +374,7 @@ nsRefreshDriver::Notify(nsITimer *aTimer)
             continue;
           NS_ADDREF(shell);
           mStyleFlushObservers.RemoveElement(shell);
-          shell->FrameConstructor()->mObservingRefreshDriver = PR_FALSE;
+          shell->FrameConstructor()->mObservingRefreshDriver = false;
           shell->FlushPendingNotifications(Flush_Style);
           NS_RELEASE(shell);
         }
@@ -384,7 +384,7 @@ nsRefreshDriver::Notify(nsITimer *aTimer)
       if (mPresContext && mPresContext->GetPresShell()) {
         nsAutoTArray<nsIPresShell*, 16> observers;
         observers.AppendElements(mLayoutFlushObservers);
-        for (PRUint32 j = observers.Length();
+        for (uint32_t j = observers.Length();
              j && mPresContext && mPresContext->GetPresShell(); --j) {
           // Make sure to not process observers which might have been removed
           // during previous iterations.
@@ -393,13 +393,36 @@ nsRefreshDriver::Notify(nsITimer *aTimer)
             continue;
           NS_ADDREF(shell);
           mLayoutFlushObservers.RemoveElement(shell);
-          shell->mReflowScheduled = PR_FALSE;
-          shell->mSuppressInterruptibleReflows = PR_FALSE;
+          shell->mReflowScheduled = false;
+          shell->mSuppressInterruptibleReflows = false;
           shell->FlushPendingNotifications(Flush_InterruptibleLayout);
           NS_RELEASE(shell);
         }
       }
     }
+  }
+
+  /*
+   * Perform notification to imgIRequests subscribed to listen
+   * for refresh events.
+   */
+
+  ImageRequestParameters parms = {mMostRecentRefresh};
+  if (mRequests.Count()) {
+    mRequests.EnumerateEntries(nsRefreshDriver::ImageRequestEnumerator, &parms);
+    EnsureTimerStarted(false);
+  }
+
+  if (mViewManagerFlushIsPending) {
+#ifdef DEBUG_INVALIDATIONS
+    printf("Starting ProcessPendingUpdates\n");
+#endif
+    mViewManagerFlushIsPending = false;
+    nsCOMPtr<nsIViewManager> vm = mPresContext->GetPresShell()->GetViewManager();
+    vm->ProcessPendingUpdates();
+#ifdef DEBUG_INVALIDATIONS
+    printf("Ending ProcessPendingUpdates\n");
+#endif
   }
 
   if (mThrottled ||
@@ -422,6 +445,24 @@ nsRefreshDriver::Notify(nsITimer *aTimer)
   return NS_OK;
 }
 
+PLDHashOperator
+nsRefreshDriver::ImageRequestEnumerator(nsISupportsHashKey* aEntry,
+                                        void* aUserArg)
+{
+  ImageRequestParameters* parms =
+    static_cast<ImageRequestParameters*> (aUserArg);
+  mozilla::TimeStamp mostRecentRefresh = parms->ts;
+  imgIRequest* req = static_cast<imgIRequest*>(aEntry->GetKey());
+  NS_ABORT_IF_FALSE(req, "Unable to retrieve the image request");
+  nsCOMPtr<imgIContainer> image;
+  req->GetImage(getter_AddRefs(image));
+  if (image) {
+    image->RequestRefresh(mostRecentRefresh);
+  }
+
+  return PL_DHASH_NEXT;
+}
+
 void
 nsRefreshDriver::Freeze()
 {
@@ -435,7 +476,7 @@ nsRefreshDriver::Thaw()
 {
   NS_ASSERTION(mFrozen, "Thaw called on an unfrozen refresh driver");
   mFrozen = false;
-  if (ObserverCount()) {
+  if (ObserverCount() || ImageRequestCount()) {
     // FIXME: This isn't quite right, since our EnsureTimerStarted call
     // updates our mMostRecentRefresh, but the DoRefresh call won't run
     // and notify our observers until we get back to the event loop.
@@ -464,12 +505,12 @@ nsRefreshDriver::DoRefresh()
 {
   // Don't do a refresh unless we're in a state where we should be refreshing.
   if (!mFrozen && mPresContext && mTimer) {
-    Notify(nsnull);
+    Notify(nullptr);
   }
 }
 
 #ifdef DEBUG
-PRBool
+bool
 nsRefreshDriver::IsRefreshObserver(nsARefreshObserver *aObserver,
                                    mozFlushType aFlushType)
 {
@@ -478,39 +519,22 @@ nsRefreshDriver::IsRefreshObserver(nsARefreshObserver *aObserver,
 }
 #endif
 
-PRBool
-nsRefreshDriver::ScheduleBeforePaintEvent(nsIDocument* aDocument)
-{
-  NS_ASSERTION(mBeforePaintTargets.IndexOf(aDocument) ==
-               mBeforePaintTargets.NoIndex,
-               "Shouldn't have a paint event posted for this document");
-  PRBool appended = mBeforePaintTargets.AppendElement(aDocument) != nsnull;
-  EnsureTimerStarted(false);
-  return appended;
-}
-
 void
-nsRefreshDriver::ScheduleAnimationFrameListeners(nsIDocument* aDocument)
+nsRefreshDriver::ScheduleFrameRequestCallbacks(nsIDocument* aDocument)
 {
-  NS_ASSERTION(mAnimationFrameListenerDocs.IndexOf(aDocument) ==
-               mAnimationFrameListenerDocs.NoIndex,
+  NS_ASSERTION(mFrameRequestCallbackDocs.IndexOf(aDocument) ==
+               mFrameRequestCallbackDocs.NoIndex,
                "Don't schedule the same document multiple times");
-  mAnimationFrameListenerDocs.AppendElement(aDocument);
+  mFrameRequestCallbackDocs.AppendElement(aDocument);
   // No need to worry about restarting our timer in precise mode if it's
   // already running; that will happen automatically when it fires.
   EnsureTimerStarted(false);
 }
 
 void
-nsRefreshDriver::RevokeBeforePaintEvent(nsIDocument* aDocument)
+nsRefreshDriver::RevokeFrameRequestCallbacks(nsIDocument* aDocument)
 {
-  mBeforePaintTargets.RemoveElement(aDocument);
-}
-
-void
-nsRefreshDriver::RevokeAnimationFrameListeners(nsIDocument* aDocument)
-{
-  mAnimationFrameListenerDocs.RemoveElement(aDocument);
+  mFrameRequestCallbackDocs.RemoveElement(aDocument);
   // No need to worry about restarting our timer in slack mode if it's already
   // running; that will happen automatically when it fires.
 }

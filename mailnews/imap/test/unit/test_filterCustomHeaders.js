@@ -28,7 +28,7 @@ var tests = [
 function run_test()
 {
 
-// Create a test filter.
+  // Create a test filter.
   let filterList = gIMAPIncomingServer.getFilterList(null);
   let filter = filterList.createFilter("test list-id");
   let searchTerm = filter.createTerm();
@@ -53,6 +53,7 @@ function run_test()
 }
 
 function setupTest() {
+  Services.prefs.setBoolPref("mail.server.default.autosync_offline_stores", false);
   let file = do_get_file("../../../data/bugmail19");
   let msgfileuri = Services.io.newFileURI(file).QueryInterface(Ci.nsIFileURL);
 
@@ -70,13 +71,6 @@ function checkFilterResults() {
 
 // Cleanup
 function endTest() {
+  gIMAPServer.performTest("UID STORE");
   teardownIMAPPump();
-}
-
-// get the first message header found in a folder
-function firstMsgHdr(folder) {
-  let enumerator = folder.msgDatabase.EnumerateMessages();
-  if (enumerator.hasMoreElements())
-    return enumerator.getNext().QueryInterface(Ci.nsIMsgDBHdr);
-  return null;
 }

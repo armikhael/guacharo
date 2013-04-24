@@ -1,46 +1,13 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"
 
 #include "nsIWebProgress.h"
 #include "nsIXULBrowserWindow.h"
 #include "nsMsgStatusFeedback.h"
-#include "nsIDocumentViewer.h"
 #include "nsIDocument.h"
 #include "nsIDOMElement.h"
 #include "nsIDocShell.h"
@@ -54,19 +21,20 @@
 #include "nsIMsgHdr.h"
 #include "nsIMsgFolder.h"
 #include "nsServiceManagerUtils.h"
+#include "mozilla/Services.h"
 
 #define MSGFEEDBACK_TIMER_INTERVAL 500
 
 nsMsgStatusFeedback::nsMsgStatusFeedback() :
-  m_lastPercent(0)
+  m_lastPercent(0),
+  m_lastProgressTime(0)
 {
-  LL_I2L(m_lastProgressTime, 0);
 
   nsresult rv;
   nsCOMPtr<nsIStringBundleService> bundleService =
-    do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
+    mozilla::services::GetStringBundleService();
 
-  if (NS_SUCCEEDED(rv))
+  if (bundleService)
     bundleService->CreateBundle("chrome://messenger/locale/messenger.properties",
                                 getter_AddRefs(mBundle));
 
@@ -75,7 +43,7 @@ nsMsgStatusFeedback::nsMsgStatusFeedback() :
 
 nsMsgStatusFeedback::~nsMsgStatusFeedback()
 {
-  mBundle = nsnull;
+  mBundle = nullptr;
 }
 
 NS_IMPL_THREADSAFE_ADDREF(nsMsgStatusFeedback)
@@ -96,12 +64,12 @@ NS_INTERFACE_MAP_END
 NS_IMETHODIMP
 nsMsgStatusFeedback::OnProgressChange(nsIWebProgress* aWebProgress,
                                       nsIRequest* aRequest,
-                                      PRInt32 aCurSelfProgress,
-                                      PRInt32 aMaxSelfProgress, 
-                                      PRInt32 aCurTotalProgress,
-                                      PRInt32 aMaxTotalProgress)
+                                      int32_t aCurSelfProgress,
+                                      int32_t aMaxSelfProgress, 
+                                      int32_t aCurTotalProgress,
+                                      int32_t aMaxTotalProgress)
 {
-  PRInt32 percentage = 0;
+  int32_t percentage = 0;
   if (aMaxTotalProgress > 0)
   {
     percentage =  (aCurTotalProgress * 100) / aMaxTotalProgress;
@@ -115,7 +83,7 @@ nsMsgStatusFeedback::OnProgressChange(nsIWebProgress* aWebProgress,
 NS_IMETHODIMP
 nsMsgStatusFeedback::OnStateChange(nsIWebProgress* aWebProgress,
                                    nsIRequest* aRequest,
-                                   PRUint32 aProgressStateFlags,
+                                   uint32_t aProgressStateFlags,
                                    nsresult aStatus)
 {
   nsresult rv;
@@ -147,7 +115,7 @@ nsMsgStatusFeedback::OnStateChange(nsIWebProgress* aWebProgress,
         if (mailnewsUrl)
         {
           // get the url type
-          PRBool messageDisplayUrl;
+          bool messageDisplayUrl;
           mailnewsUrl->IsUrlType(nsIMsgMailNewsUrl::eDisplay, &messageDisplayUrl);
 
           if (messageDisplayUrl)
@@ -193,7 +161,8 @@ nsMsgStatusFeedback::OnStateChange(nsIWebProgress* aWebProgress,
 
 NS_IMETHODIMP nsMsgStatusFeedback::OnLocationChange(nsIWebProgress* aWebProgress,
                                                     nsIRequest* aRequest,
-                                                    nsIURI* aLocation)
+                                                    nsIURI* aLocation,
+                                                    uint32_t aFlags)
 {
    return NS_OK;
 }
@@ -211,7 +180,7 @@ nsMsgStatusFeedback::OnStatusChange(nsIWebProgress* aWebProgress,
 NS_IMETHODIMP 
 nsMsgStatusFeedback::OnSecurityChange(nsIWebProgress *aWebProgress, 
                                     nsIRequest *aRequest, 
-                                    PRUint32 state)
+                                    uint32_t state)
 {
     return NS_OK;
 }
@@ -237,7 +206,7 @@ nsMsgStatusFeedback::SetStatusString(const nsAString& aStatus)
 }
 
 NS_IMETHODIMP
-nsMsgStatusFeedback::ShowProgress(PRInt32 aPercentage)
+nsMsgStatusFeedback::ShowProgress(int32_t aPercentage)
 {
   // if the percentage hasn't changed...OR if we are going from 0 to 100% in one step
   // then don't bother....just fall out....
@@ -246,18 +215,11 @@ nsMsgStatusFeedback::ShowProgress(PRInt32 aPercentage)
   
   m_lastPercent = aPercentage;
 
-  PRInt64 nowMS;
-  LL_I2L(nowMS, 0);
+  int64_t nowMS = 0;
   if (aPercentage < 100)	// always need to do 100%
   {
-    int64 minIntervalBetweenProgress;
-
-    LL_I2L(minIntervalBetweenProgress, 250);
-    int64 diffSinceLastProgress;
-    LL_I2L(nowMS, PR_IntervalToMilliseconds(PR_IntervalNow()));
-    LL_SUB(diffSinceLastProgress, nowMS, m_lastProgressTime); // r = a - b
-    LL_SUB(diffSinceLastProgress, diffSinceLastProgress, minIntervalBetweenProgress); // r = a - b
-    if (!LL_GE_ZERO(diffSinceLastProgress))
+    nowMS = PR_IntervalToMilliseconds(PR_IntervalNow());
+    if (nowMS < m_lastProgressTime + 250)
       return NS_OK;
   }
 
@@ -294,20 +256,21 @@ NS_IMETHODIMP nsMsgStatusFeedback::SetWrappedStatusFeedback(nsIMsgStatusFeedback
 }
 
 NS_IMETHODIMP nsMsgStatusFeedback::OnProgress(nsIRequest *request, nsISupports* ctxt, 
-                                          PRUint64 aProgress, PRUint64 aProgressMax)
+                                          uint64_t aProgress, uint64_t aProgressMax)
 {
   // XXX: What should the nsIWebProgress be?
   // XXX: this truncates 64-bit to 32-bit
-  return OnProgressChange(nsnull, request, PRInt32(aProgress), PRInt32(aProgressMax), 
-                          PRInt32(aProgress) /* current total progress */, PRInt32(aProgressMax) /* max total progress */);
+  return OnProgressChange(nullptr, request, int32_t(aProgress), int32_t(aProgressMax), 
+                          int32_t(aProgress) /* current total progress */, int32_t(aProgressMax) /* max total progress */);
 }
 
 NS_IMETHODIMP nsMsgStatusFeedback::OnStatus(nsIRequest *request, nsISupports* ctxt, 
                                             nsresult aStatus, const PRUnichar* aStatusArg)
 {
   nsresult rv;
-  nsCOMPtr<nsIStringBundleService> sbs = do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
+  nsCOMPtr<nsIStringBundleService> sbs =
+    mozilla::services::GetStringBundleService();
+  NS_ENSURE_TRUE(sbs, NS_ERROR_UNEXPECTED);
   nsString str;
   rv = sbs->FormatStatusMessage(aStatus, aStatusArg, getter_Copies(str));
   NS_ENSURE_SUCCESS(rv, rv);

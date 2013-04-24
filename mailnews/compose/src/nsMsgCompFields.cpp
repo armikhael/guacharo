@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *   Olivier Parniere BT Global Services / Etat francais Ministere de la Defense
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsMsgCompFields.h"
 #include "nsMsgI18N.h"
@@ -56,25 +22,25 @@ NS_IMPL_THREADSAFE_ISUPPORTS1(nsMsgCompFields, nsIMsgCompFields)
 
 nsMsgCompFields::nsMsgCompFields()
 {
-  PRInt16 i;
+  int16_t i;
   for (i = 0; i < MSG_MAX_HEADERS; i ++)
-    m_headers[i] = nsnull;
+    m_headers[i] = nullptr;
 
   m_body.Truncate();
 
-  m_attachVCard = PR_FALSE;
-  m_forcePlainText = PR_FALSE;
-  m_useMultipartAlternative = PR_FALSE;
-  m_returnReceipt = PR_FALSE;
+  m_attachVCard = false;
+  m_forcePlainText = false;
+  m_useMultipartAlternative = false;
+  m_returnReceipt = false;
   m_receiptHeaderType = nsIMsgMdnGenerator::eDntType;
-  m_DSN = PR_FALSE;
-  m_bodyIsAsciiOnly = PR_FALSE;
-  m_forceMsgEncoding = PR_FALSE;
-  m_needToCheckCharset = PR_TRUE;
+  m_DSN = false;
+  m_bodyIsAsciiOnly = false;
+  m_forceMsgEncoding = false;
+  m_needToCheckCharset = true;
 
   // Get the default charset from pref, use this as a mail charset.
   nsString charset;
-  NS_GetLocalizedUnicharPreferenceWithDefault(nsnull, "mailnews.send_default_charset", 
+  NS_GetLocalizedUnicharPreferenceWithDefault(nullptr, "mailnews.send_default_charset", 
                                               NS_LITERAL_STRING("ISO-8859-1"), charset);
 
   LossyCopyUTF16toASCII(charset, m_DefaultCharacterSet); // Charsets better be ASCII
@@ -83,7 +49,7 @@ nsMsgCompFields::nsMsgCompFields()
 
 nsMsgCompFields::~nsMsgCompFields()
 {
-  PRInt16 i;
+  int16_t i;
   for (i = 0; i < MSG_MAX_HEADERS; i ++)
     PR_FREEIF(m_headers[i]);
 }
@@ -93,7 +59,7 @@ nsresult nsMsgCompFields::SetAsciiHeader(MsgHeaderID header, const char *value)
   NS_ASSERTION(header >= 0 && header < MSG_MAX_HEADERS,
                "Invalid message header index!");
 
-  int rv = NS_OK;
+  nsresult rv = NS_OK;
   char* old = m_headers[header]; /* Done with careful paranoia, in case the
                                     value given is the old value (or worse,
                                     a substring of the old value, as does
@@ -108,7 +74,7 @@ nsresult nsMsgCompFields::SetAsciiHeader(MsgHeaderID header, const char *value)
            rv = NS_ERROR_OUT_OF_MEMORY;
     }
     else 
-      m_headers[header] = nsnull;
+      m_headers[header] = nullptr;
 
     PR_FREEIF(old);
   }
@@ -385,99 +351,99 @@ NS_IMETHODIMP nsMsgCompFields::GetDraftId(char **_retval)
   return *_retval ? NS_OK : NS_ERROR_OUT_OF_MEMORY;
 }
 
-NS_IMETHODIMP nsMsgCompFields::SetReturnReceipt(PRBool value)
+NS_IMETHODIMP nsMsgCompFields::SetReturnReceipt(bool value)
 {
   m_returnReceipt = value;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgCompFields::GetReturnReceipt(PRBool *_retval)
+NS_IMETHODIMP nsMsgCompFields::GetReturnReceipt(bool *_retval)
 {
   *_retval = m_returnReceipt;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgCompFields::SetReceiptHeaderType(PRInt32 value)
+NS_IMETHODIMP nsMsgCompFields::SetReceiptHeaderType(int32_t value)
 {
     m_receiptHeaderType = value;
     return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgCompFields::GetReceiptHeaderType(PRInt32 *_retval)
+NS_IMETHODIMP nsMsgCompFields::GetReceiptHeaderType(int32_t *_retval)
 {
     *_retval = m_receiptHeaderType;
     return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgCompFields::SetDSN(PRBool value)
+NS_IMETHODIMP nsMsgCompFields::SetDSN(bool value)
 {
   m_DSN = value;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgCompFields::GetDSN(PRBool *_retval)
+NS_IMETHODIMP nsMsgCompFields::GetDSN(bool *_retval)
 {
   NS_ENSURE_ARG_POINTER(_retval);
   *_retval = m_DSN;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgCompFields::SetAttachVCard(PRBool value)
+NS_IMETHODIMP nsMsgCompFields::SetAttachVCard(bool value)
 {
   m_attachVCard = value;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgCompFields::GetAttachVCard(PRBool *_retval)
+NS_IMETHODIMP nsMsgCompFields::GetAttachVCard(bool *_retval)
 {
   *_retval = m_attachVCard;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgCompFields::SetForcePlainText(PRBool value)
+NS_IMETHODIMP nsMsgCompFields::SetForcePlainText(bool value)
 {
   m_forcePlainText = value;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgCompFields::GetForcePlainText(PRBool *_retval)
+NS_IMETHODIMP nsMsgCompFields::GetForcePlainText(bool *_retval)
 {
   *_retval = m_forcePlainText;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgCompFields::SetForceMsgEncoding(PRBool value)
+NS_IMETHODIMP nsMsgCompFields::SetForceMsgEncoding(bool value)
 {
   m_forceMsgEncoding = value;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgCompFields::GetForceMsgEncoding(PRBool *_retval)
+NS_IMETHODIMP nsMsgCompFields::GetForceMsgEncoding(bool *_retval)
 {
   NS_ENSURE_ARG_POINTER(_retval);
   *_retval = m_forceMsgEncoding;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgCompFields::SetUseMultipartAlternative(PRBool value)
+NS_IMETHODIMP nsMsgCompFields::SetUseMultipartAlternative(bool value)
 {
   m_useMultipartAlternative = value;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgCompFields::GetUseMultipartAlternative(PRBool *_retval)
+NS_IMETHODIMP nsMsgCompFields::GetUseMultipartAlternative(bool *_retval)
 {
   *_retval = m_useMultipartAlternative;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgCompFields::SetBodyIsAsciiOnly(PRBool value)
+NS_IMETHODIMP nsMsgCompFields::SetBodyIsAsciiOnly(bool value)
 {
   m_bodyIsAsciiOnly = value;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgCompFields::GetBodyIsAsciiOnly(PRBool *_retval)
+NS_IMETHODIMP nsMsgCompFields::GetBodyIsAsciiOnly(bool *_retval)
 {
   NS_ENSURE_ARG_POINTER(_retval);
 
@@ -520,12 +486,12 @@ NS_IMETHODIMP nsMsgCompFields::GetAttachments(nsISimpleEnumerator * *aAttachment
 /* void addAttachment (in nsIMsgAttachment attachment); */
 NS_IMETHODIMP nsMsgCompFields::AddAttachment(nsIMsgAttachment *attachment)
 {
-  PRInt32 attachmentCount = m_attachments.Count();
+  int32_t attachmentCount = m_attachments.Count();
 
   //Don't add twice the same attachment.
   nsCOMPtr<nsIMsgAttachment> element;
-  PRBool sameUrl;
-  for (PRInt32 i = 0; i < attachmentCount; i ++)
+  bool sameUrl;
+  for (int32_t i = 0; i < attachmentCount; i ++)
   {
     m_attachments[i]->EqualsUrl(attachment, &sameUrl);
     if (sameUrl)
@@ -539,11 +505,11 @@ NS_IMETHODIMP nsMsgCompFields::AddAttachment(nsIMsgAttachment *attachment)
 /* void removeAttachment (in nsIMsgAttachment attachment); */
 NS_IMETHODIMP nsMsgCompFields::RemoveAttachment(nsIMsgAttachment *attachment)
 {
-  PRInt32 attachmentCount = m_attachments.Count();
+  int32_t attachmentCount = m_attachments.Count();
 
   nsCOMPtr<nsIMsgAttachment> element;
-  PRBool sameUrl;
-  for (PRInt32 i = 0; i < attachmentCount; i ++)
+  bool sameUrl;
+  for (int32_t i = 0; i < attachmentCount; i ++)
   {
     m_attachments[i]->EqualsUrl(attachment, &sameUrl);
     if (sameUrl)
@@ -568,15 +534,15 @@ NS_IMETHODIMP nsMsgCompFields::RemoveAttachments()
 // This method is called during the creation of a new window.
 NS_IMETHODIMP
 nsMsgCompFields::SplitRecipients(const nsAString &aRecipients,
-                                 PRBool aEmailAddressOnly,
-                                 PRUint32 *aLength,
+                                 bool aEmailAddressOnly,
+                                 uint32_t *aLength,
                                  PRUnichar*** aResult)
 {
   NS_ENSURE_ARG_POINTER(aLength);
   NS_ENSURE_ARG_POINTER(aResult);
 
   *aLength = 0;
-  *aResult = nsnull;
+  *aResult = nullptr;
 
   nsresult rv;
   nsCOMPtr<nsIMsgHeaderParser> parser =
@@ -589,13 +555,13 @@ nsMsgCompFields::SplitRecipients(const nsAString &aRecipients,
 
   char * names;
   char * addresses;
-  PRUint32 numAddresses;
+  uint32_t numAddresses;
 
   rv = parser->ParseHeaderAddresses(NS_ConvertUTF16toUTF8(aRecipients).get(),
                                     &names, &addresses, &numAddresses);
   if (NS_SUCCEEDED(rv))
   {
-    PRUint32 i = 0;
+    uint32_t i = 0;
     char * pNames = names;
     char * pAddresses = addresses;
     PRUnichar** result = (PRUnichar**) NS_Alloc(sizeof(PRUnichar*) * numAddresses);
@@ -610,7 +576,7 @@ nsMsgCompFields::SplitRecipients(const nsAString &aRecipients,
       {
         nsCString decodedName;
         converter->DecodeMimeHeaderToCharPtr(pNames, GetCharacterSet(),
-                                             PR_FALSE, PR_TRUE,
+                                             false, true,
                                              getter_Copies(decodedName));
         rv = parser->MakeFullAddressString((!decodedName.IsEmpty() ?
                                             decodedName.get() : pNames),
@@ -668,7 +634,7 @@ nsresult nsMsgCompFields::SplitRecipientsEx(const nsAString &recipients,
   nsCAutoString recipientsStr;
   char *names;
   char *addresses;
-  PRUint32 numAddresses;
+  uint32_t numAddresses;
       
   CopyUTF16toUTF8(recipients, recipientsStr);
   rv = parser->ParseHeaderAddresses(recipientsStr.get(), &names,
@@ -678,11 +644,11 @@ nsresult nsMsgCompFields::SplitRecipientsEx(const nsAString &recipients,
     char *pNames = names;
     char *pAddresses = addresses;
 
-    for (PRUint32 i = 0; i < numAddresses; ++i)
+    for (uint32_t i = 0; i < numAddresses; ++i)
     {
       nsCString fullAddress;
       nsCString decodedName;
-      converter->DecodeMimeHeaderToCharPtr(pNames, GetCharacterSet(), PR_FALSE, PR_TRUE, 
+      converter->DecodeMimeHeaderToCharPtr(pNames, GetCharacterSet(), false, true, 
                                            getter_Copies(decodedName));
       rv = parser->MakeFullAddressString((!decodedName.IsEmpty() ? 
                                           decodedName.get() : pNames), 
@@ -724,7 +690,7 @@ NS_IMETHODIMP nsMsgCompFields::ConvertBodyToPlainText()
     rv = GetBody(body);
     if (NS_SUCCEEDED(rv))
     {
-      rv = ConvertBufToPlainText(body, UseFormatFlowed(GetCharacterSet()));
+      rv = ConvertBufToPlainText(body, UseFormatFlowed(GetCharacterSet()), true);
       if (NS_SUCCEEDED(rv))
         rv = SetBody(body);
     }
@@ -753,12 +719,12 @@ NS_IMETHODIMP nsMsgCompFields::GetDefaultCharacterSet(char * *aDefaultCharacterS
   return *aDefaultCharacterSet ? NS_OK : NS_ERROR_OUT_OF_MEMORY; 
 }
 
-NS_IMETHODIMP nsMsgCompFields::CheckCharsetConversion(char **fallbackCharset, PRBool *_retval)
+NS_IMETHODIMP nsMsgCompFields::CheckCharsetConversion(char **fallbackCharset, bool *_retval)
 {
   NS_ENSURE_ARG_POINTER(_retval);
 
   nsCAutoString headers;
-  for (PRInt16 i = 0; i < MSG_MAX_HEADERS; i++)
+  for (int16_t i = 0; i < MSG_MAX_HEADERS; i++)
     headers.Append(m_headers[i]);
 
   // charset conversion check
@@ -768,14 +734,14 @@ NS_IMETHODIMP nsMsgCompFields::CheckCharsetConversion(char **fallbackCharset, PR
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgCompFields::GetNeedToCheckCharset(PRBool *_retval)
+NS_IMETHODIMP nsMsgCompFields::GetNeedToCheckCharset(bool *_retval)
 {
   NS_ENSURE_ARG_POINTER(_retval);
   *_retval = m_needToCheckCharset;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgCompFields::SetNeedToCheckCharset(PRBool aCheck)
+NS_IMETHODIMP nsMsgCompFields::SetNeedToCheckCharset(bool aCheck)
 {
   m_needToCheckCharset = aCheck;
   return NS_OK;

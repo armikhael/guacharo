@@ -1,42 +1,10 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * vim: sw=4 ts=4 sts=4 et
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   IBM Corp.
- *   Fredrik Holmqvist <thesuckiestemail@yahoo.se>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "mozilla/Util.h"
 
 #include "nsCOMPtr.h"
 #include "nsAutoPtr.h"
@@ -61,7 +29,7 @@
 #include <stdlib.h>
 #include <sys/param.h>
 #include "prenv.h"
-#ifdef XP_MACOSX
+#ifdef MOZ_WIDGET_COCOA
 #include <CoreServices/CoreServices.h>
 #include <Carbon/Carbon.h>
 #endif
@@ -72,13 +40,15 @@
 #include "SpecialSystemDirectory.h"
 #include "nsAppFileLocationProvider.h"
 
+using namespace mozilla;
+
 #define COMPONENT_DIRECTORY     NS_LITERAL_CSTRING("components")
 
 // define home directory
 // For Windows platform, We are choosing Appdata folder as HOME
 #if defined (XP_WIN)
 #define HOME_DIR NS_WIN_APPDATA_DIR
-#elif defined (XP_MACOSX)
+#elif defined (MOZ_WIDGET_COCOA)
 #define HOME_DIR NS_OSX_HOME_DIR
 #elif defined (XP_UNIX)
 #define HOME_DIR NS_UNIX_HOME_DIR
@@ -88,11 +58,11 @@
 
 //----------------------------------------------------------------------------------------
 nsresult 
-nsDirectoryService::GetCurrentProcessDirectory(nsILocalFile** aFile)
+nsDirectoryService::GetCurrentProcessDirectory(nsIFile** aFile)
 //----------------------------------------------------------------------------------------
 {
     NS_ENSURE_ARG_POINTER(aFile);
-    *aFile = nsnull;
+    *aFile = nullptr;
     
    //  Set the component registry location:
     if (!gService)
@@ -101,14 +71,14 @@ nsDirectoryService::GetCurrentProcessDirectory(nsILocalFile** aFile)
     nsresult rv; 
  
     nsCOMPtr<nsIProperties> dirService;
-    rv = nsDirectoryService::Create(nsnull, 
+    rv = nsDirectoryService::Create(nullptr, 
                                     NS_GET_IID(nsIProperties), 
                                     getter_AddRefs(dirService));  // needs to be around for life of product
 
     if (dirService)
     {
-      nsCOMPtr <nsILocalFile> aLocalFile;
-      dirService->Get(NS_XPCOM_INIT_CURRENT_PROCESS_DIR, NS_GET_IID(nsILocalFile), getter_AddRefs(aLocalFile));
+      nsCOMPtr <nsIFile> aLocalFile;
+      dirService->Get(NS_XPCOM_INIT_CURRENT_PROCESS_DIR, NS_GET_IID(nsIFile), getter_AddRefs(aLocalFile));
       if (aLocalFile)
       {
         *aFile = aLocalFile;
@@ -119,16 +89,17 @@ nsDirectoryService::GetCurrentProcessDirectory(nsILocalFile** aFile)
 
     nsLocalFile* localFile = new nsLocalFile;
 
-    if (localFile == nsnull)
+    if (localFile == nullptr)
         return NS_ERROR_OUT_OF_MEMORY;
     NS_ADDREF(localFile);
 
 
 
 #ifdef XP_WIN
-    PRUnichar buf[MAX_PATH];
-    if ( ::GetModuleFileNameW(0, buf, sizeof(buf)) )
-    {
+    PRUnichar buf[MAX_PATH + 1];
+    SetLastError(ERROR_SUCCESS);
+    if (GetModuleFileNameW(0, buf, mozilla::ArrayLength(buf)) &&
+        GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
         // chop off the executable name by finding the rightmost backslash
         PRUnichar* lastSlash = wcsrchr(buf, L'\\');
         if (lastSlash)
@@ -139,22 +110,22 @@ nsDirectoryService::GetCurrentProcessDirectory(nsILocalFile** aFile)
         return NS_OK;
     }
 
-#elif defined(XP_MACOSX)
+#elif defined(MOZ_WIDGET_COCOA)
     // Works even if we're not bundled.
     CFBundleRef appBundle = CFBundleGetMainBundle();
-    if (appBundle != nsnull)
+    if (appBundle != nullptr)
     {
         CFURLRef bundleURL = CFBundleCopyExecutableURL(appBundle);
-        if (bundleURL != nsnull)
+        if (bundleURL != nullptr)
         {
             CFURLRef parentURL = CFURLCreateCopyDeletingLastPathComponent(kCFAllocatorDefault, bundleURL);
             if (parentURL)
             {
-                // Pass PR_TRUE for the "resolveAgainstBase" arg to CFURLGetFileSystemRepresentation.
+                // Pass true for the "resolveAgainstBase" arg to CFURLGetFileSystemRepresentation.
                 // This will resolve the relative portion of the CFURL against it base, giving a full
                 // path, which CFURLCopyFileSystemPath doesn't do.
                 char buffer[PATH_MAX];
-                if (CFURLGetFileSystemRepresentation(parentURL, PR_TRUE, (UInt8 *)buffer, sizeof(buffer)))
+                if (CFURLGetFileSystemRepresentation(parentURL, true, (UInt8 *)buffer, sizeof(buffer)))
                 {
 #ifdef DEBUG_conrad
                     printf("nsDirectoryService - CurrentProcessDir is: %s\n", buffer);
@@ -208,12 +179,12 @@ nsDirectoryService::GetCurrentProcessDirectory(nsILocalFile** aFile)
         }
     }
 #if defined(DEBUG)
-    static PRBool firstWarning = PR_TRUE;
+    static bool firstWarning = true;
 
     if((!moz5 || !*moz5) && firstWarning) {
         // Warn that MOZILLA_FIVE_HOME not set, once.
         printf("Warning: MOZILLA_FIVE_HOME not set.\n");
-        firstWarning = PR_FALSE;
+        firstWarning = false;
     }
 #endif /* DEBUG */
 
@@ -244,10 +215,10 @@ nsDirectoryService::GetCurrentProcessDirectory(nsILocalFile** aFile)
     return NS_ERROR_FAILURE;
 } // GetCurrentProcessDirectory()
 
-nsDirectoryService* nsDirectoryService::gService = nsnull;
+nsDirectoryService* nsDirectoryService::gService = nullptr;
 
 nsDirectoryService::nsDirectoryService() :
-    mHashtable(256, PR_TRUE)
+    mHashtable(256, true)
 {
 }
 
@@ -265,7 +236,7 @@ nsDirectoryService::Create(nsISupports *outer, REFNSIID aIID, void **aResult)
     return gService->QueryInterface(aIID, aResult);
 }
 
-#define DIR_ATOM(name_, value_) nsIAtom* nsDirectoryService::name_ = nsnull;
+#define DIR_ATOM(name_, value_) nsIAtom* nsDirectoryService::name_ = nullptr;
 #include "nsDirectoryServiceAtomList.h"
 #undef DIR_ATOM
 
@@ -302,14 +273,16 @@ nsDirectoryService::RealInit()
     if (NS_FAILED(rv))
         return rv;
 
-    NS_RegisterStaticAtoms(directory_atoms, NS_ARRAY_LENGTH(directory_atoms));
+    NS_RegisterStaticAtoms(directory_atoms);
     
     // Let the list hold the only reference to the provider.
     nsAppFileLocationProvider *defaultProvider = new nsAppFileLocationProvider;
     if (!defaultProvider)
         return NS_ERROR_OUT_OF_MEMORY;
-    // AppendElement returns PR_TRUE for success.
-    rv = ((nsDirectoryService*) self)->mProviders->AppendElement(defaultProvider) ? NS_OK : NS_ERROR_FAILURE;
+    // AppendElement returns true for success.
+    rv = static_cast<bool>(((nsDirectoryService*) self)
+                           ->mProviders->AppendElement(defaultProvider))
+        ? NS_OK : NS_ERROR_FAILURE;
     if (NS_FAILED(rv))
         return rv;
 
@@ -317,12 +290,12 @@ nsDirectoryService::RealInit()
     return NS_OK;
 }
 
-PRBool
+bool
 nsDirectoryService::ReleaseValues(nsHashKey* key, void* data, void* closure)
 {
     nsISupports* value = (nsISupports*)data;
     NS_IF_RELEASE(value);
-    return PR_TRUE;
+    return true;
 }
 
 nsDirectoryService::~nsDirectoryService()
@@ -346,7 +319,7 @@ nsDirectoryService::Undefine(const char* prop)
  }
 
 NS_IMETHODIMP
-nsDirectoryService::GetKeys(PRUint32 *count, char ***keys)
+nsDirectoryService::GetKeys(uint32_t *count, char ***keys)
 {
     return NS_ERROR_NOT_IMPLEMENTED;
 }
@@ -356,17 +329,17 @@ struct FileData
   FileData(const char* aProperty,
            const nsIID& aUUID) :
     property(aProperty),
-    data(nsnull),
-    persistent(PR_TRUE),
+    data(nullptr),
+    persistent(true),
     uuid(aUUID) {}
     
   const char*   property;
   nsISupports*  data;
-  PRBool        persistent;
+  bool          persistent;
   const nsIID&  uuid;
 };
 
-static PRBool FindProviderFile(nsISupports* aElement, void *aData)
+static bool FindProviderFile(nsISupports* aElement, void *aData)
 {
   nsresult rv;
   FileData* fileData = (FileData*)aData;
@@ -393,7 +366,7 @@ static PRBool FindProviderFile(nsISupports* aElement, void *aData)
                   NS_ADDREF(fileData->data = newFiles);
               }
                   
-              fileData->persistent = PR_FALSE; // Enumerators can never be persistent
+              fileData->persistent = false; // Enumerators can never be persistent
               return rv == NS_SUCCESS_AGGREGATE_RESULT;
           }
       }
@@ -405,11 +378,11 @@ static PRBool FindProviderFile(nsISupports* aElement, void *aData)
       {
           rv = prov->GetFile(fileData->property, &fileData->persistent, (nsIFile **)&fileData->data);
           if (NS_SUCCEEDED(rv) && fileData->data)
-              return PR_FALSE;
+              return false;
       }
   }
 
-  return PR_TRUE;
+  return true;
 }
 
 NS_IMETHODIMP
@@ -468,7 +441,7 @@ nsDirectoryService::Set(const char* prop, nsISupports* value)
     NS_ENSURE_ARG(prop);
 
     nsCStringKey key(prop);
-    if (mHashtable.Exists(&key) || value == nsnull)
+    if (mHashtable.Exists(&key) || value == nullptr)
         return NS_ERROR_FAILURE;
 
     nsCOMPtr<nsIFile> ourFile;
@@ -486,11 +459,11 @@ nsDirectoryService::Set(const char* prop, nsISupports* value)
 }
 
 NS_IMETHODIMP
-nsDirectoryService::Has(const char *prop, PRBool *_retval)
+nsDirectoryService::Has(const char *prop, bool *_retval)
 {
     NS_ENSURE_ARG(prop);
 
-    *_retval = PR_FALSE;
+    *_retval = false;
     nsCOMPtr<nsIFile> value;
     nsresult rv = Get(prop, NS_GET_IID(nsIFile), getter_AddRefs(value));
     if (NS_FAILED(rv))
@@ -498,7 +471,7 @@ nsDirectoryService::Has(const char *prop, PRBool *_retval)
     
     if (value)
     {
-        *_retval = PR_TRUE;
+        *_retval = true;
     }
     
     return rv;
@@ -516,8 +489,9 @@ nsDirectoryService::RegisterProvider(nsIDirectoryServiceProvider *prov)
     nsCOMPtr<nsISupports> supports = do_QueryInterface(prov, &rv);
     if (NS_FAILED(rv)) return rv;
 
-    // AppendElement returns PR_TRUE for success.
-    return mProviders->AppendElement(supports) ? NS_OK : NS_ERROR_FAILURE;
+    // AppendElement returns true for success.
+    return static_cast<bool>(mProviders->AppendElement(supports))
+        ? NS_OK : NS_ERROR_FAILURE;
 }
 
 void
@@ -536,7 +510,7 @@ nsDirectoryService::RegisterCategoryProviders()
     if (!strings)
         return;
 
-    PRBool more;
+    bool more;
     while (NS_SUCCEEDED(strings->HasMore(&more)) && more) {
         nsCAutoString entry;
         strings->GetNext(entry);
@@ -564,8 +538,9 @@ nsDirectoryService::UnregisterProvider(nsIDirectoryServiceProvider *prov)
     nsCOMPtr<nsISupports> supports = do_QueryInterface(prov, &rv);
     if (NS_FAILED(rv)) return rv;
 
-    // RemoveElement returns PR_TRUE for success.
-    return mProviders->RemoveElement(supports) ? NS_OK : NS_ERROR_FAILURE;
+    // RemoveElement returns true for success.
+    return static_cast<bool>(mProviders->RemoveElement(supports))
+        ? NS_OK : NS_ERROR_FAILURE;
 }
 
 // DO NOT ADD ANY LOCATIONS TO THIS FUNCTION UNTIL YOU TALK TO: dougt@netscape.com.
@@ -574,13 +549,13 @@ nsDirectoryService::UnregisterProvider(nsIDirectoryServiceProvider *prov)
 // your application.  
 
 NS_IMETHODIMP
-nsDirectoryService::GetFile(const char *prop, PRBool *persistent, nsIFile **_retval)
+nsDirectoryService::GetFile(const char *prop, bool *persistent, nsIFile **_retval)
 {
-    nsCOMPtr<nsILocalFile> localFile;
+    nsCOMPtr<nsIFile> localFile;
     nsresult rv = NS_ERROR_FAILURE;
 
-    *_retval = nsnull;
-    *persistent = PR_TRUE;
+    *_retval = nullptr;
+    *persistent = true;
 
     nsCOMPtr<nsIAtom> inAtom = do_GetAtom(prop);
 
@@ -615,7 +590,7 @@ nsDirectoryService::GetFile(const char *prop, PRBool *persistent, nsIFile **_ret
         rv = GetSpecialSystemDirectory(OS_CurrentWorkingDirectory, getter_AddRefs(localFile)); 
     }
        
-#if defined(XP_MACOSX)
+#if defined(MOZ_WIDGET_COCOA)
     else if (inAtom == nsDirectoryService::sDirectory)
     {
         rv = GetOSXFolderType(kClassicDomain, kSystemFolderType, getter_AddRefs(localFile));
@@ -852,6 +827,10 @@ nsDirectoryService::GetFile(const char *prop, PRBool *persistent, nsIFile **_ret
     {
         rv = GetSpecialSystemDirectory(Win_Common_Desktopdirectory, getter_AddRefs(localFile)); 
     }
+    else if (inAtom == nsDirectoryService::sCommon_AppData)
+    {
+        rv = GetSpecialSystemDirectory(Win_Common_AppData, getter_AddRefs(localFile)); 
+    }
     else if (inAtom == nsDirectoryService::sAppdata)
     {
         rv = GetSpecialSystemDirectory(Win_Appdata, getter_AddRefs(localFile)); 
@@ -890,43 +869,43 @@ nsDirectoryService::GetFile(const char *prop, PRBool *persistent, nsIFile **_ret
              inAtom == nsDirectoryService::sOS_DesktopDirectory)
     {
         rv = GetSpecialSystemDirectory(Unix_XDG_Desktop, getter_AddRefs(localFile));
-        *persistent = PR_FALSE;
+        *persistent = false;
     }
     else if (inAtom == nsDirectoryService::sXDGDocuments)
     {
         rv = GetSpecialSystemDirectory(Unix_XDG_Documents, getter_AddRefs(localFile));
-        *persistent = PR_FALSE;
+        *persistent = false;
     }
     else if (inAtom == nsDirectoryService::sXDGDownload ||
              inAtom == nsDirectoryService::sDefaultDownloadDirectory)
     {
         rv = GetSpecialSystemDirectory(Unix_XDG_Download, getter_AddRefs(localFile));
-        *persistent = PR_FALSE;
+        *persistent = false;
     }
     else if (inAtom == nsDirectoryService::sXDGMusic)
     {
         rv = GetSpecialSystemDirectory(Unix_XDG_Music, getter_AddRefs(localFile));
-        *persistent = PR_FALSE;
+        *persistent = false;
     }
     else if (inAtom == nsDirectoryService::sXDGPictures)
     {
         rv = GetSpecialSystemDirectory(Unix_XDG_Pictures, getter_AddRefs(localFile));
-        *persistent = PR_FALSE;
+        *persistent = false;
     }
     else if (inAtom == nsDirectoryService::sXDGPublicShare)
     {
         rv = GetSpecialSystemDirectory(Unix_XDG_PublicShare, getter_AddRefs(localFile));
-        *persistent = PR_FALSE;
+        *persistent = false;
     }
     else if (inAtom == nsDirectoryService::sXDGTemplates)
     {
         rv = GetSpecialSystemDirectory(Unix_XDG_Templates, getter_AddRefs(localFile));
-        *persistent = PR_FALSE;
+        *persistent = false;
     }
     else if (inAtom == nsDirectoryService::sXDGVideos)
     {
         rv = GetSpecialSystemDirectory(Unix_XDG_Videos, getter_AddRefs(localFile));
-        *persistent = PR_FALSE;
+        *persistent = false;
     }
 #elif defined (XP_OS2)
     else if (inAtom == nsDirectoryService::sSystemDirectory)
@@ -960,7 +939,7 @@ NS_IMETHODIMP
 nsDirectoryService::GetFiles(const char *prop, nsISimpleEnumerator **_retval)
 {
     NS_ENSURE_ARG_POINTER(_retval);
-    *_retval = nsnull;
+    *_retval = nullptr;
         
     return NS_ERROR_FAILURE;
 }

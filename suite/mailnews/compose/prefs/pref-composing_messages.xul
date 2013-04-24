@@ -1,41 +1,8 @@
 <?xml version="1.0"?>
 
-<!-- ***** BEGIN LICENSE BLOCK *****
-   - Version: MPL 1.1/GPL 2.0/LGPL 2.1
-   -
-   - The contents of this file are subject to the Mozilla Public License Version
-   - 1.1 (the "License"); you may not use this file except in compliance with
-   - the License. You may obtain a copy of the License at
-   - http://www.mozilla.org/MPL/
-   -
-   - Software distributed under the License is distributed on an "AS IS" basis,
-   - WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-   - for the specific language governing rights and limitations under the
-   - License.
-   -
-   - The Original Code is Mozilla Communicator.
-   -
-   - The Initial Developer of the Original Code is
-   - Netscape Communications Corp.
-   - Portions created by the Initial Developer are Copyright (C) 2000
-   - the Initial Developer. All Rights Reserved.
-   -
-   - Contributor(s):
-   -   Bruno Escherl <aqualon@aquachan.de>
-   -
-   - Alternatively, the contents of this file may be used under the terms of
-   - either the GNU General Public License Version 2 or later (the "GPL"), or
-   - the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-   - in which case the provisions of the GPL or the LGPL are applicable instead
-   - of those above. If you wish to allow use of your version of this file only
-   - under the terms of either the GPL or the LGPL, and not to allow others to
-   - use your version of this file under the terms of the MPL, indicate your
-   - decision by deleting the provisions above and replace them with the notice
-   - and other provisions required by the LGPL or the GPL. If you do not delete
-   - the provisions above, a recipient may use your version of this file under
-   - the terms of any one of the MPL, the GPL or the LGPL.
-   -
-   - ***** END LICENSE BLOCK ***** -->
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
 
 <!DOCTYPE overlay [
 <!ENTITY % pref-composing_messagesDTD SYSTEM "chrome://messenger/locale/messengercompose/pref-composing_messages.dtd">
@@ -49,11 +16,6 @@
             label="&pref.composing.messages.title;"
             script="chrome://messenger/content/messengercompose/pref-composing_messages.js"
             onpaneload="this.PopulateFonts();">
-
-    <stringbundle id="languageBundle"
-                  src="chrome://global/locale/languageNames.properties"/>
-    <stringbundle id="regionBundle"
-                  src="chrome://global/locale/regionNames.properties"/>
 
     <preferences id="composing_messages_preferences">
       <preference id="mail.forward_message_mode"
@@ -75,16 +37,6 @@
       <preference id="mailnews.wraplength"
                   name="mailnews.wraplength"
                   type="int"/>
-      <preference id="mail.SpellCheckBeforeSend"
-                  name="mail.SpellCheckBeforeSend"
-                  type="bool"/>
-      <preference id="mail.spellcheck.inline"
-                  name="mail.spellcheck.inline"
-                  type="bool"/>
-      <preference id="spellchecker.dictionary"
-                  name="spellchecker.dictionary"
-                  type="string"
-                  onchange="SelectLanguage(event.target)"/>
       <preference id="msgcompose.font_face"
                   name="msgcompose.font_face"
                   type="string"/>
@@ -97,6 +49,9 @@
       <preference id="msgcompose.background_color"
                   name="msgcompose.background_color"
                   type="string"/>
+      <preference id="mailnews.reply_header_type"
+                  name="mailnews.reply_header_type"
+                  type="int"/>
     </preferences>
 
     <groupbox>
@@ -153,39 +108,28 @@
                  aria-labelledby="wrapOutLabel wrapLength wrapOutEnd"/>
         <label id="wrapOutEnd" value="&char.label;"/>
       </hbox>
+      <hbox align="center">
+        <label id="selectHeaderType"
+               value="&selectHeaderType.label;"
+               accesskey="&selectHeaderType.accesskey;"
+               control="mailNewsReplyList"/>
+        <menulist id="mailNewsReplyList"
+                  preference="mailnews.reply_header_type">
+          <menupopup>
+            <menuitem value="0"
+                      label="&noReplyOption.label;"/>
+            <menuitem value="1"
+                      label="&authorWroteOption.label;"/>
+            <menuitem value="2"
+                      label="&onDateAuthorWroteOption.label;"/>
+            <menuitem value="3"
+                      label="&authorWroteOnDateOption.label;"/>
+          </menupopup>
+        </menulist>
+      </hbox>
     </groupbox>
   
     <!-- Composing Mail -->
-    <groupbox id="spellingGroup" align="start">
-      <caption label="&spellingHeader.label;"/>
-      <vbox align="start">
-        <checkbox id="spellCheckBeforeSend"
-                  label="&spellCheck.label;"
-                  accesskey="&spellCheck.accesskey;"
-                  preference="mail.SpellCheckBeforeSend"/>
-        <checkbox id="inlineSpellCheck"
-                  label="&spellCheckInline.label;"
-                  accesskey="&spellCheckInline.accesskey;"
-                  preference="mail.spellcheck.inline"/>
-      </vbox>
-  
-      <separator class="thin"/>
-  
-      <hbox align="center" pack="start">
-        <label value="&languagePopup.label;"
-               accesskey="&languagePopup.accessKey;"
-               control="languageMenuList"/>
-        <menulist id="languageMenuList"
-                  preference="spellchecker.dictionary">
-          <menupopup onpopupshowing="InitLanguageMenu();">
-            <!-- dynamic content populated by JS -->
-            <menuseparator/>
-            <menuitem value="more-cmd" label="&moreDictionaries.label;"/>
-          </menupopup>
-        </menulist>
-        <spring flex="1"/>
-      </hbox>
-    </groupbox>
  
     <groupbox align="start">
       <caption label="&defaultMessagesHeader.label;"/>

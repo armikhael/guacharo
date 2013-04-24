@@ -1,43 +1,11 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * CMS decoding.
  *
- * $Id: cmsdecode.c,v 1.9.66.4 2011/03/15 17:51:01 emaldona%redhat.com Exp $
+ * $Id: cmsdecode.c,v 1.15 2012/04/25 14:50:08 gerv%gerv.net Exp $
  */
 
 #include "cmslocal.h"
@@ -60,6 +28,8 @@ struct NSSCMSDecoderContextStr {
     int				error;
     NSSCMSContentCallback	cb;
     void *			cb_arg;
+    PRBool			first_decoded;
+    PRBool			need_indefinite_finish;
 };
 
 struct NSSCMSDecoderDataStr {
@@ -316,6 +286,11 @@ nss_cms_before_data(NSSCMSDecoderContext *p7dcx)
     */
     childp7dcx->cb = p7dcx->cb;
     childp7dcx->cb_arg = p7dcx->cb_arg;
+    childp7dcx->first_decoded = PR_FALSE;
+    childp7dcx->need_indefinite_finish = PR_FALSE;
+    if (childtype == SEC_OID_PKCS7_SIGNED_DATA) {
+	childp7dcx->first_decoded = PR_TRUE;
+    }
 
     /* now set up the parent to hand decoded data to the next level decoder */
     p7dcx->cb = (NSSCMSContentCallback)NSS_CMSDecoder_Update;
@@ -348,6 +323,13 @@ nss_cms_after_data(NSSCMSDecoderContext *p7dcx)
     if (p7dcx->childp7dcx != NULL) {
 	childp7dcx = p7dcx->childp7dcx;
 	if (childp7dcx->dcx != NULL) {
+	    /* we started and indefinite sequence somewhere, not complete it */
+	    if (childp7dcx->need_indefinite_finish) {
+		static const char lbuf[2] = { 0, 0 };
+		NSS_CMSDecoder_Update(childp7dcx, lbuf, sizeof(lbuf));
+		childp7dcx->need_indefinite_finish = PR_FALSE;
+	    }
+
 	    if (SEC_ASN1DecoderFinish(childp7dcx->dcx) != SECSuccess) {
 		/* do what? free content? */
 		rv = SECFailure;
@@ -647,7 +629,8 @@ NSS_CMSDecoder_Start(PRArenaPool *poolp,
 
     p7dcx->cb = cb;
     p7dcx->cb_arg = cb_arg;
-
+    p7dcx->first_decoded = PR_FALSE;
+    p7dcx->need_indefinite_finish = PR_FALSE;
     return p7dcx;
 }
 
@@ -658,16 +641,37 @@ SECStatus
 NSS_CMSDecoder_Update(NSSCMSDecoderContext *p7dcx, const char *buf, 
                       unsigned long len)
 {
-    SECStatus rv;
+    SECStatus rv = SECSuccess;
     if (p7dcx->dcx != NULL && p7dcx->error == 0) {	
     	/* if error is set already, don't bother */
-	rv = SEC_ASN1DecoderUpdate(p7dcx->dcx, buf, len);
-	if (rv != SECSuccess) {
-	    p7dcx->error = PORT_GetError();
-	    PORT_Assert (p7dcx->error);
-	    if (p7dcx->error == 0)
-		p7dcx->error = -1;
+	if ((p7dcx->type == SEC_OID_PKCS7_SIGNED_DATA) 
+		&& (p7dcx->first_decoded==PR_TRUE)
+		&& (buf[0] == SEC_ASN1_INTEGER)) {
+	    /* Microsoft Windows 2008 left out the Sequence wrapping in some
+	     * of their kerberos replies. If we are here, we most likely are
+	     * dealing with one of those replies. Supply the Sequence wrap
+	     * as indefinite encoding (since we don't know the total length
+	     * yet) */
+	     static const char lbuf[2] = 
+		{ SEC_ASN1_SEQUENCE|SEC_ASN1_CONSTRUCTED, 0x80 };
+	     rv = SEC_ASN1DecoderUpdate(p7dcx->dcx, lbuf, sizeof(lbuf));
+	     if (rv != SECSuccess) {
+		goto loser;
+	    }
+	    /* ok, we're going to need the indefinite finish when we are done */
+	    p7dcx->need_indefinite_finish = PR_TRUE;
 	}
+	
+	rv = SEC_ASN1DecoderUpdate(p7dcx->dcx, buf, len);
+    }
+
+loser:
+    p7dcx->first_decoded = PR_FALSE;
+    if (rv != SECSuccess) {
+	p7dcx->error = PORT_GetError();
+	PORT_Assert (p7dcx->error);
+	if (p7dcx->error == 0)
+	    p7dcx->error = -1;
     }
 
     if (p7dcx->error == 0)

@@ -1,58 +1,30 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim:expandtab:shiftwidth=2:tabstop=2:
  */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is IBM Corporation
- * Portions created by the Initial Developer are Copyright (C) 2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Aaron Leventhal <aleventh@us.ibm.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsARIAMap.h"
 
-#include "nsIAccessibleRole.h"
+#include "nsAccUtils.h"
+#include "nsCoreUtils.h"
+#include "Role.h"
 #include "States.h"
 
-#include "nsAccessibilityAtoms.h"
-#include "nsIContent.h"
+#include "nsAttrName.h"
+#include "nsWhitespaceTokenizer.h"
 
+using namespace mozilla;
 using namespace mozilla::a11y;
+using namespace mozilla::a11y::aria;
 
 /**
  *  This list of WAI-defined roles are currently hardcoded.
  *  Eventually we will most likely be loading an RDF resource that contains this information
  *  Using RDF will also allow for role extensibility. See bug 280138.
  *
- *  Definition of nsRoleMapEntry and nsStateMapEntry contains comments explaining this table.
+ *  Definition of nsRoleMapEntry contains comments explaining this table.
  *
  *  When no nsIAccessibleRole enum mapping exists for an ARIA role, the
  *  role will be exposed via the object attribute "xml-roles".
@@ -62,57 +34,58 @@ using namespace mozilla::a11y;
  *    banner, contentinfo, main, navigation, note, search, secondary, seealso, breadcrumbs
  */
 
-nsRoleMapEntry nsARIAMap::gWAIRoleMap[] = 
+static nsRoleMapEntry sWAIRoleMaps[] =
 {
-  {
-    "alert",
-    nsIAccessibleRole::ROLE_ALERT,
+  { // alert
+    &nsGkAtoms::alert,
+    roles::ALERT,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
     kNoReqStates
   },
-  {
-    "alertdialog",
-    nsIAccessibleRole::ROLE_DIALOG,
+  { // alertdialog
+    &nsGkAtoms::alertdialog,
+    roles::DIALOG,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
     kNoReqStates
   },
-  {
-    "application",
-    nsIAccessibleRole::ROLE_APPLICATION,
+  { // application
+    &nsGkAtoms::application,
+    roles::APPLICATION,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
     kNoReqStates
   },
-  {
-    "article",
-    nsIAccessibleRole::ROLE_DOCUMENT,
+  { // article
+    &nsGkAtoms::article,
+    roles::DOCUMENT,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
-    states::READONLY
+    kNoReqStates,
+    eReadonlyUntilEditable
   },
-  {
-    "button",
-    nsIAccessibleRole::ROLE_PUSHBUTTON,
+  { // button
+    &nsGkAtoms::button,
+    roles::PUSHBUTTON,
     kUseMapRole,
     eNoValue,
-    eClickAction,
+    ePressAction,
     eNoLiveAttr,
     kNoReqStates,
     eARIAPressed
   },
-  {
-    "checkbox",
-    nsIAccessibleRole::ROLE_CHECKBUTTON,
+  { // checkbox
+    &nsGkAtoms::checkbox,
+    roles::CHECKBUTTON,
     kUseMapRole,
     eNoValue,
     eCheckUncheckAction,
@@ -121,9 +94,9 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     eARIACheckableMixed,
     eARIAReadonly
   },
-  {
-    "columnheader",
-    nsIAccessibleRole::ROLE_COLUMNHEADER,
+  { // columnheader
+    &nsGkAtoms::columnheader,
+    roles::COLUMNHEADER,
     kUseMapRole,
     eNoValue,
     eSortAction,
@@ -132,47 +105,57 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     eARIASelectable,
     eARIAReadonly
   },
-  {
-    "combobox",
-    nsIAccessibleRole::ROLE_COMBOBOX,
+  { // combobox
+    &nsGkAtoms::combobox,
+    roles::COMBOBOX,
     kUseMapRole,
-    eHasValueMinMax,
+    eNoValue,
     eOpenCloseAction,
     eNoLiveAttr,
     states::COLLAPSED | states::HASPOPUP,
     eARIAAutoComplete,
     eARIAReadonly
   },
-  {
-    "dialog",
-    nsIAccessibleRole::ROLE_DIALOG,
+  { // dialog
+    &nsGkAtoms::dialog,
+    roles::DIALOG,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
     kNoReqStates
   },
-  {
-    "directory",
-    nsIAccessibleRole::ROLE_LIST,
+  { // directory
+    &nsGkAtoms::directory,
+    roles::LIST,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
     kNoReqStates
   },
-  {
-    "document",
-    nsIAccessibleRole::ROLE_DOCUMENT,
+  { // document
+    &nsGkAtoms::document,
+    roles::DOCUMENT,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
-    states::READONLY
+    kNoReqStates,
+    eReadonlyUntilEditable
   },
-  {
-    "grid",
-    nsIAccessibleRole::ROLE_TABLE,
+  { // form
+    &nsGkAtoms::form,
+    roles::FORM,
+    kUseMapRole,
+    eNoValue,
+    eNoAction,
+    eNoLiveAttr,
+    kNoReqStates
+  },
+  { // grid
+    &nsGkAtoms::grid,
+    roles::TABLE,
     kUseMapRole,
     eNoValue,
     eNoAction,
@@ -181,9 +164,9 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     eARIAMultiSelectable,
     eARIAReadonly
   },
-  {
-    "gridcell",
-    nsIAccessibleRole::ROLE_GRID_CELL,
+  { // gridcell
+    &nsGkAtoms::gridcell,
+    roles::GRID_CELL,
     kUseMapRole,
     eNoValue,
     eNoAction,
@@ -192,64 +175,54 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     eARIASelectable,
     eARIAReadonly
   },
-  {
-    "group",
-    nsIAccessibleRole::ROLE_GROUPING,
+  { // group
+    &nsGkAtoms::group,
+    roles::GROUPING,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
     kNoReqStates
   },
-  {
-    "heading",
-    nsIAccessibleRole::ROLE_HEADING,
+  { // heading
+    &nsGkAtoms::heading,
+    roles::HEADING,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
     kNoReqStates
   },
-  {
-    "img",
-    nsIAccessibleRole::ROLE_GRAPHIC,
+  { // img
+    &nsGkAtoms::img,
+    roles::GRAPHIC,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
     kNoReqStates
   },
-  {
-    "label",
-    nsIAccessibleRole::ROLE_LABEL,
-    kUseMapRole,
-    eNoValue,
-    eNoAction,
-    eNoLiveAttr,
-    kNoReqStates
-  },
-  {
-    "link",
-    nsIAccessibleRole::ROLE_LINK,
+  { // link
+    &nsGkAtoms::link,
+    roles::LINK,
     kUseMapRole,
     eNoValue,
     eJumpAction,
     eNoLiveAttr,
     states::LINKED
   },
-  {
-    "list",
-    nsIAccessibleRole::ROLE_LIST,
+  { // list
+    &nsGkAtoms::list,
+    roles::LIST,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
-    states::READONLY,
-    eARIAMultiSelectable
+    states::READONLY
   },
-  {
-    "listbox",
-    nsIAccessibleRole::ROLE_LISTBOX,
+  { // listbox
+    &nsGkAtoms::listbox,
+    roles::LISTBOX,
     kUseMapRole,
     eNoValue,
     eNoAction,
@@ -258,47 +231,45 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     eARIAMultiSelectable,
     eARIAReadonly
   },
-  {
-    "listitem",
-    nsIAccessibleRole::ROLE_LISTITEM,
+  { // listitem
+    &nsGkAtoms::listitem,
+    roles::LISTITEM,
     kUseMapRole,
     eNoValue,
     eNoAction, // XXX: should depend on state, parent accessible
     eNoLiveAttr,
-    states::READONLY,
-    eARIASelectable,
-    eARIACheckedMixed
+    states::READONLY
   },
-  {
-    "log",
-    nsIAccessibleRole::ROLE_NOTHING,
+  { // log
+    &nsGkAtoms::log_,
+    roles::NOTHING,
     kUseNativeRole,
     eNoValue,
     eNoAction,
     ePoliteLiveAttr,
     kNoReqStates
   },
-  {
-    "marquee",
-    nsIAccessibleRole::ROLE_ANIMATION,
+  { // marquee
+    &nsGkAtoms::marquee,
+    roles::ANIMATION,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eOffLiveAttr,
     kNoReqStates
   },
-  {
-    "math",
-    nsIAccessibleRole::ROLE_FLAT_EQUATION,
+  { // math
+    &nsGkAtoms::math,
+    roles::FLAT_EQUATION,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
     kNoReqStates
   },
-  {
-    "menu",
-    nsIAccessibleRole::ROLE_MENUPOPUP,
+  { // menu
+    &nsGkAtoms::menu,
+    roles::MENUPOPUP,
     kUseMapRole,
     eNoValue,
     eNoAction, // XXX: technically accessibles of menupopup role haven't
@@ -306,18 +277,18 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     eNoLiveAttr,
     kNoReqStates
   },
-  {
-    "menubar",
-    nsIAccessibleRole::ROLE_MENUBAR,
+  { // menubar
+    &nsGkAtoms::menubar,
+    roles::MENUBAR,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
     kNoReqStates
   },
-  {
-    "menuitem",
-    nsIAccessibleRole::ROLE_MENUITEM,
+  { // menuitem
+    &nsGkAtoms::menuitem,
+    roles::MENUITEM,
     kUseMapRole,
     eNoValue,
     eClickAction,
@@ -325,9 +296,9 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     kNoReqStates,
     eARIACheckedMixed
   },
-  {
-    "menuitemcheckbox",
-    nsIAccessibleRole::ROLE_CHECK_MENU_ITEM,
+  { // menuitemcheckbox
+    &nsGkAtoms::menuitemcheckbox,
+    roles::CHECK_MENU_ITEM,
     kUseMapRole,
     eNoValue,
     eClickAction,
@@ -335,9 +306,9 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     kNoReqStates,
     eARIACheckableMixed
   },
-  {
-    "menuitemradio",
-    nsIAccessibleRole::ROLE_RADIO_MENU_ITEM,
+  { // menuitemradio
+    &nsGkAtoms::menuitemradio,
+    roles::RADIO_MENU_ITEM,
     kUseMapRole,
     eNoValue,
     eClickAction,
@@ -345,9 +316,18 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     kNoReqStates,
     eARIACheckableBool
   },
-  {
-    "option",
-    nsIAccessibleRole::ROLE_OPTION,
+  { // note
+    &nsGkAtoms::note_,
+    roles::NOTE,
+    kUseMapRole,
+    eNoValue,
+    eNoAction,
+    eNoLiveAttr,
+    kNoReqStates
+  },
+  { // option
+    &nsGkAtoms::option,
+    roles::OPTION,
     kUseMapRole,
     eNoValue,
     eSelectAction,
@@ -356,27 +336,28 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     eARIASelectable,
     eARIACheckedMixed
   },
-  {
-    "presentation",
-    nsIAccessibleRole::ROLE_NOTHING,
+  { // presentation
+    &nsGkAtoms::presentation,
+    roles::NOTHING,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
     kNoReqStates
   },
-  {
-    "progressbar",
-    nsIAccessibleRole::ROLE_PROGRESSBAR,
+  { // progressbar
+    &nsGkAtoms::progressbar,
+    roles::PROGRESSBAR,
     kUseMapRole,
     eHasValueMinMax,
     eNoAction,
     eNoLiveAttr,
-    states::READONLY
+    states::READONLY,
+    eIndeterminateIfNoValue
   },
-  {
-    "radio",
-    nsIAccessibleRole::ROLE_RADIOBUTTON,
+  { // radio
+    &nsGkAtoms::radio,
+    roles::RADIOBUTTON,
     kUseMapRole,
     eNoValue,
     eSelectAction,
@@ -384,27 +365,27 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     kNoReqStates,
     eARIACheckableBool
   },
-  {
-    "radiogroup",
-    nsIAccessibleRole::ROLE_GROUPING,
+  { // radiogroup
+    &nsGkAtoms::radiogroup,
+    roles::GROUPING,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
     kNoReqStates
   },
-  {
-    "region",
-    nsIAccessibleRole::ROLE_PANE,
+  { // region
+    &nsGkAtoms::region,
+    roles::PANE,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
     kNoReqStates
   },
-  {
-    "row",
-    nsIAccessibleRole::ROLE_ROW,
+  { // row
+    &nsGkAtoms::row,
+    roles::ROW,
     kUseMapRole,
     eNoValue,
     eNoAction,
@@ -412,9 +393,9 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     kNoReqStates,
     eARIASelectable
   },
-  {
-    "rowheader",
-    nsIAccessibleRole::ROLE_ROWHEADER,
+  { // rowheader
+    &nsGkAtoms::rowheader,
+    roles::ROWHEADER,
     kUseMapRole,
     eNoValue,
     eSortAction,
@@ -423,9 +404,9 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     eARIASelectable,
     eARIAReadonly
   },
-  {
-    "scrollbar",
-    nsIAccessibleRole::ROLE_SCROLLBAR,
+  { // scrollbar
+    &nsGkAtoms::scrollbar,
+    roles::SCROLLBAR,
     kUseMapRole,
     eHasValueMinMax,
     eNoAction,
@@ -434,18 +415,30 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     eARIAOrientation,
     eARIAReadonly
   },
-  {
-    "separator",
-    nsIAccessibleRole::ROLE_SEPARATOR,
+  { // separator
+    &nsGkAtoms::separator_,
+    roles::SEPARATOR,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
-    kNoReqStates
+    kNoReqStates,
+    eARIAOrientation
   },
-  {
-    "slider",
-    nsIAccessibleRole::ROLE_SLIDER,
+  { // slider
+    &nsGkAtoms::slider,
+    roles::SLIDER,
+    kUseMapRole,
+    eHasValueMinMax,
+    eNoAction,
+    eNoLiveAttr,
+    kNoReqStates,
+    eARIAOrientation,
+    eARIAReadonly
+  },
+  { // spinbutton
+    &nsGkAtoms::spinbutton,
+    roles::SPINBUTTON,
     kUseMapRole,
     eHasValueMinMax,
     eNoAction,
@@ -453,28 +446,18 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     kNoReqStates,
     eARIAReadonly
   },
-  {
-    "spinbutton",
-    nsIAccessibleRole::ROLE_SPINBUTTON,
-    kUseMapRole,
-    eHasValueMinMax,
-    eNoAction,
-    eNoLiveAttr,
-    kNoReqStates,
-    eARIAReadonly
-  },
-  {
-    "status",
-    nsIAccessibleRole::ROLE_STATUSBAR,
+  { // status
+    &nsGkAtoms::status,
+    roles::STATUSBAR,
     kUseMapRole,
     eNoValue,
     eNoAction,
     ePoliteLiveAttr,
     kNoReqStates
   },
-  {
-    "tab",
-    nsIAccessibleRole::ROLE_PAGETAB,
+  { // tab
+    &nsGkAtoms::tab,
+    roles::PAGETAB,
     kUseMapRole,
     eNoValue,
     eSwitchAction,
@@ -482,27 +465,27 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     kNoReqStates,
     eARIASelectable
   },
-  {
-    "tablist",
-    nsIAccessibleRole::ROLE_PAGETABLIST,
+  { // tablist
+    &nsGkAtoms::tablist,
+    roles::PAGETABLIST,
     kUseMapRole,
     eNoValue,
     eNoAction,
     ePoliteLiveAttr,
     kNoReqStates
   },
-  {
-    "tabpanel",
-    nsIAccessibleRole::ROLE_PROPERTYPAGE,
+  { // tabpanel
+    &nsGkAtoms::tabpanel,
+    roles::PROPERTYPAGE,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
     kNoReqStates
   },
-  {
-    "textbox",
-    nsIAccessibleRole::ROLE_ENTRY,
+  { // textbox
+    &nsGkAtoms::textbox,
+    roles::ENTRY,
     kUseMapRole,
     eNoValue,
     eActivateAction,
@@ -512,36 +495,36 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     eARIAMultiline,
     eARIAReadonlyOrEditable
   },
-  {
-    "timer",
-    nsIAccessibleRole::ROLE_NOTHING,
+  { // timer
+    &nsGkAtoms::timer,
+    roles::NOTHING,
     kUseNativeRole,
     eNoValue,
     eNoAction,
     eOffLiveAttr,
     kNoReqStates
   },
-  {
-    "toolbar",
-    nsIAccessibleRole::ROLE_TOOLBAR,
+  { // toolbar
+    &nsGkAtoms::toolbar,
+    roles::TOOLBAR,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
     kNoReqStates
   },
-  {
-    "tooltip",
-    nsIAccessibleRole::ROLE_TOOLTIP,
+  { // tooltip
+    &nsGkAtoms::tooltip,
+    roles::TOOLTIP,
     kUseMapRole,
     eNoValue,
     eNoAction,
     eNoLiveAttr,
     kNoReqStates
   },
-  {
-    "tree",
-    nsIAccessibleRole::ROLE_OUTLINE,
+  { // tree
+    &nsGkAtoms::tree,
+    roles::OUTLINE,
     kUseMapRole,
     eNoValue,
     eNoAction,
@@ -550,9 +533,9 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     eARIAReadonly,
     eARIAMultiSelectable
   },
-  {
-    "treegrid",
-    nsIAccessibleRole::ROLE_TREE_TABLE,
+  { // treegrid
+    &nsGkAtoms::treegrid,
+    roles::TREE_TABLE,
     kUseMapRole,
     eNoValue,
     eNoAction,
@@ -561,9 +544,9 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
     eARIAReadonly,
     eARIAMultiSelectable
   },
-  {
-    "treeitem",
-    nsIAccessibleRole::ROLE_OUTLINEITEM,
+  { // treeitem
+    &nsGkAtoms::treeitem,
+    roles::OUTLINEITEM,
     kUseMapRole,
     eNoValue,
     eActivateAction, // XXX: should expose second 'expand/collapse' action based
@@ -575,11 +558,9 @@ nsRoleMapEntry nsARIAMap::gWAIRoleMap[] =
   }
 };
 
-PRUint32 nsARIAMap::gWAIRoleMapLength = NS_ARRAY_LENGTH(nsARIAMap::gWAIRoleMap);
-
-nsRoleMapEntry nsARIAMap::gLandmarkRoleMap = {
-  "",
-  nsIAccessibleRole::ROLE_NOTHING,
+static nsRoleMapEntry sLandmarkRoleMap = {
+  &nsGkAtoms::_empty,
+  roles::NOTHING,
   kUseNativeRole,
   eNoValue,
   eNoAction,
@@ -588,8 +569,8 @@ nsRoleMapEntry nsARIAMap::gLandmarkRoleMap = {
 };
 
 nsRoleMapEntry nsARIAMap::gEmptyRoleMap = {
-  "",
-  nsIAccessibleRole::ROLE_NOTHING,
+  &nsGkAtoms::_empty,
+  roles::NOTHING,
   kUseMapRole,
   eNoValue,
   eNoAction,
@@ -597,89 +578,12 @@ nsRoleMapEntry nsARIAMap::gEmptyRoleMap = {
   kNoReqStates
 };
 
-nsStateMapEntry nsARIAMap::gWAIStateMap[] = {
-  // eARIANone
-  nsStateMapEntry(),
-
-  // eARIAAutoComplete
-  nsStateMapEntry(&nsAccessibilityAtoms::aria_autocomplete,
-                  "inline", states::SUPPORTS_AUTOCOMPLETION,
-                  "list", states::HASPOPUP | states::SUPPORTS_AUTOCOMPLETION,
-                  "both", states::HASPOPUP | states::SUPPORTS_AUTOCOMPLETION),
-
-  // eARIABusy
-  nsStateMapEntry(&nsAccessibilityAtoms::aria_busy,
-                  "true", states::BUSY,
-                  "error", states::INVALID),
-
-  // eARIACheckableBool
-  nsStateMapEntry(&nsAccessibilityAtoms::aria_checked, kBoolType,
-                  states::CHECKABLE, states::CHECKED, 0, PR_TRUE),
-
-  // eARIACheckableMixed
-  nsStateMapEntry(&nsAccessibilityAtoms::aria_checked, kMixedType,
-                  states::CHECKABLE, states::CHECKED, 0, PR_TRUE),
-
-  // eARIACheckedMixed
-  nsStateMapEntry(&nsAccessibilityAtoms::aria_checked, kMixedType,
-                  states::CHECKABLE, states::CHECKED, 0),
-
-  // eARIADisabled
-  nsStateMapEntry(&nsAccessibilityAtoms::aria_disabled, kBoolType,
-                  0, states::UNAVAILABLE),
-
-  // eARIAExpanded
-  nsStateMapEntry(&nsAccessibilityAtoms::aria_expanded, kBoolType,
-                  0, states::EXPANDED, states::COLLAPSED),
-
-  // eARIAHasPopup
-  nsStateMapEntry(&nsAccessibilityAtoms::aria_haspopup, kBoolType,
-                  0, states::HASPOPUP),
-
-  // eARIAInvalid
-  nsStateMapEntry(&nsAccessibilityAtoms::aria_invalid, kBoolType,
-                  0, states::INVALID),
-
-  // eARIAMultiline
-  nsStateMapEntry(&nsAccessibilityAtoms::aria_multiline, kBoolType,
-                  0, states::MULTI_LINE, states::SINGLE_LINE, PR_TRUE),
-
-  // eARIAMultiSelectable
-  nsStateMapEntry(&nsAccessibilityAtoms::aria_multiselectable, kBoolType,
-                  0, states::MULTISELECTABLE | states::EXTSELECTABLE),
-
-  // eARIAOrientation
-  nsStateMapEntry(&nsAccessibilityAtoms::aria_orientation, eUseFirstState,
-                  "vertical", states::VERTICAL,
-                  "horizontal", states::HORIZONTAL),
-
-  // eARIAPressed
-  nsStateMapEntry(&nsAccessibilityAtoms::aria_pressed, kMixedType,
-                  states::CHECKABLE, states::PRESSED),
-
-  // eARIAReadonly
-  nsStateMapEntry(&nsAccessibilityAtoms::aria_readonly, kBoolType,
-                  0, states::READONLY),
-
-  // eARIAReadonlyOrEditable
-  nsStateMapEntry(&nsAccessibilityAtoms::aria_readonly, kBoolType,
-                  0, states::READONLY, states::EDITABLE, PR_TRUE),
-
-  // eARIARequired
-  nsStateMapEntry(&nsAccessibilityAtoms::aria_required, kBoolType,
-                  0, states::REQUIRED),
-
-  // eARIASelectable
-  nsStateMapEntry(&nsAccessibilityAtoms::aria_selected, kBoolType,
-                  states::SELECTABLE, states::SELECTED, 0, PR_TRUE)
-};
-
 /**
  * Universal (Global) states:
  * The following state rules are applied to any accessible element,
  * whether there is an ARIA role or not:
  */
-eStateMapEntryID nsARIAMap::gWAIUnivStateMap[] = {
+static const EStateRule sWAIUnivStateMap[] = {
   eARIABusy,
   eARIADisabled,
   eARIAExpanded,  // Currently under spec review but precedent exists
@@ -696,192 +600,124 @@ eStateMapEntryID nsARIAMap::gWAIUnivStateMap[] = {
  * @note ARIA attributes that don't have any flags are not included here
  */
 nsAttributeCharacteristics nsARIAMap::gWAIUnivAttrMap[] = {
-  {&nsAccessibilityAtoms::aria_activedescendant,  ATTR_BYPASSOBJ                 },
-  {&nsAccessibilityAtoms::aria_atomic,                             ATTR_VALTOKEN },
-  {&nsAccessibilityAtoms::aria_busy,                               ATTR_VALTOKEN },
-  {&nsAccessibilityAtoms::aria_checked,           ATTR_BYPASSOBJ | ATTR_VALTOKEN }, /* exposes checkable obj attr */
-  {&nsAccessibilityAtoms::aria_controls,          ATTR_BYPASSOBJ                 },
-  {&nsAccessibilityAtoms::aria_describedby,       ATTR_BYPASSOBJ                 },
-  {&nsAccessibilityAtoms::aria_disabled,          ATTR_BYPASSOBJ | ATTR_VALTOKEN },
-  {&nsAccessibilityAtoms::aria_dropeffect,                         ATTR_VALTOKEN },
-  {&nsAccessibilityAtoms::aria_expanded,          ATTR_BYPASSOBJ | ATTR_VALTOKEN },
-  {&nsAccessibilityAtoms::aria_flowto,            ATTR_BYPASSOBJ                 },  
-  {&nsAccessibilityAtoms::aria_grabbed,                            ATTR_VALTOKEN },
-  {&nsAccessibilityAtoms::aria_haspopup,          ATTR_BYPASSOBJ | ATTR_VALTOKEN },
-  {&nsAccessibilityAtoms::aria_hidden,                             ATTR_VALTOKEN },/* always expose obj attr */
-  {&nsAccessibilityAtoms::aria_invalid,           ATTR_BYPASSOBJ | ATTR_VALTOKEN },
-  {&nsAccessibilityAtoms::aria_label,             ATTR_BYPASSOBJ                 },
-  {&nsAccessibilityAtoms::aria_labelledby,        ATTR_BYPASSOBJ                 },
-  {&nsAccessibilityAtoms::aria_level,             ATTR_BYPASSOBJ                 }, /* handled via groupPosition */
-  {&nsAccessibilityAtoms::aria_live,                               ATTR_VALTOKEN },
-  {&nsAccessibilityAtoms::aria_multiline,         ATTR_BYPASSOBJ | ATTR_VALTOKEN },
-  {&nsAccessibilityAtoms::aria_multiselectable,   ATTR_BYPASSOBJ | ATTR_VALTOKEN },
-  {&nsAccessibilityAtoms::aria_owns,              ATTR_BYPASSOBJ                 },
-  {&nsAccessibilityAtoms::aria_orientation,                        ATTR_VALTOKEN },
-  {&nsAccessibilityAtoms::aria_posinset,          ATTR_BYPASSOBJ                 }, /* handled via groupPosition */
-  {&nsAccessibilityAtoms::aria_pressed,           ATTR_BYPASSOBJ | ATTR_VALTOKEN },
-  {&nsAccessibilityAtoms::aria_readonly,          ATTR_BYPASSOBJ | ATTR_VALTOKEN },
-  {&nsAccessibilityAtoms::aria_relevant,          ATTR_BYPASSOBJ                 },
-  {&nsAccessibilityAtoms::aria_required,          ATTR_BYPASSOBJ | ATTR_VALTOKEN },
-  {&nsAccessibilityAtoms::aria_selected,          ATTR_BYPASSOBJ | ATTR_VALTOKEN },
-  {&nsAccessibilityAtoms::aria_setsize,           ATTR_BYPASSOBJ                 }, /* handled via groupPosition */
-  {&nsAccessibilityAtoms::aria_sort,                               ATTR_VALTOKEN },
-  {&nsAccessibilityAtoms::aria_valuenow,          ATTR_BYPASSOBJ                 },
-  {&nsAccessibilityAtoms::aria_valuemin,          ATTR_BYPASSOBJ                 },
-  {&nsAccessibilityAtoms::aria_valuemax,          ATTR_BYPASSOBJ                 },
-  {&nsAccessibilityAtoms::aria_valuetext,         ATTR_BYPASSOBJ                 }
+  {&nsGkAtoms::aria_activedescendant,  ATTR_BYPASSOBJ                 },
+  {&nsGkAtoms::aria_atomic,                             ATTR_VALTOKEN },
+  {&nsGkAtoms::aria_busy,                               ATTR_VALTOKEN },
+  {&nsGkAtoms::aria_checked,           ATTR_BYPASSOBJ | ATTR_VALTOKEN }, /* exposes checkable obj attr */
+  {&nsGkAtoms::aria_controls,          ATTR_BYPASSOBJ                 },
+  {&nsGkAtoms::aria_describedby,       ATTR_BYPASSOBJ                 },
+  {&nsGkAtoms::aria_disabled,          ATTR_BYPASSOBJ | ATTR_VALTOKEN },
+  {&nsGkAtoms::aria_dropeffect,                         ATTR_VALTOKEN },
+  {&nsGkAtoms::aria_expanded,          ATTR_BYPASSOBJ | ATTR_VALTOKEN },
+  {&nsGkAtoms::aria_flowto,            ATTR_BYPASSOBJ                 },  
+  {&nsGkAtoms::aria_grabbed,                            ATTR_VALTOKEN },
+  {&nsGkAtoms::aria_haspopup,          ATTR_BYPASSOBJ | ATTR_VALTOKEN },
+  {&nsGkAtoms::aria_hidden,                             ATTR_VALTOKEN },/* always expose obj attr */
+  {&nsGkAtoms::aria_invalid,           ATTR_BYPASSOBJ | ATTR_VALTOKEN },
+  {&nsGkAtoms::aria_label,             ATTR_BYPASSOBJ                 },
+  {&nsGkAtoms::aria_labelledby,        ATTR_BYPASSOBJ                 },
+  {&nsGkAtoms::aria_level,             ATTR_BYPASSOBJ                 }, /* handled via groupPosition */
+  {&nsGkAtoms::aria_live,                               ATTR_VALTOKEN },
+  {&nsGkAtoms::aria_multiline,         ATTR_BYPASSOBJ | ATTR_VALTOKEN },
+  {&nsGkAtoms::aria_multiselectable,   ATTR_BYPASSOBJ | ATTR_VALTOKEN },
+  {&nsGkAtoms::aria_owns,              ATTR_BYPASSOBJ                 },
+  {&nsGkAtoms::aria_orientation,                        ATTR_VALTOKEN },
+  {&nsGkAtoms::aria_posinset,          ATTR_BYPASSOBJ                 }, /* handled via groupPosition */
+  {&nsGkAtoms::aria_pressed,           ATTR_BYPASSOBJ | ATTR_VALTOKEN },
+  {&nsGkAtoms::aria_readonly,          ATTR_BYPASSOBJ | ATTR_VALTOKEN },
+  {&nsGkAtoms::aria_relevant,          ATTR_BYPASSOBJ                 },
+  {&nsGkAtoms::aria_required,          ATTR_BYPASSOBJ | ATTR_VALTOKEN },
+  {&nsGkAtoms::aria_selected,          ATTR_BYPASSOBJ | ATTR_VALTOKEN },
+  {&nsGkAtoms::aria_setsize,           ATTR_BYPASSOBJ                 }, /* handled via groupPosition */
+  {&nsGkAtoms::aria_sort,                               ATTR_VALTOKEN },
+  {&nsGkAtoms::aria_valuenow,          ATTR_BYPASSOBJ                 },
+  {&nsGkAtoms::aria_valuemin,          ATTR_BYPASSOBJ                 },
+  {&nsGkAtoms::aria_valuemax,          ATTR_BYPASSOBJ                 },
+  {&nsGkAtoms::aria_valuetext,         ATTR_BYPASSOBJ                 }
 };
 
-PRUint32 nsARIAMap::gWAIUnivAttrMapLength = NS_ARRAY_LENGTH(nsARIAMap::gWAIUnivAttrMap);
+uint32_t
+nsARIAMap::gWAIUnivAttrMapLength = NS_ARRAY_LENGTH(nsARIAMap::gWAIUnivAttrMap);
 
+nsRoleMapEntry*
+aria::GetRoleMap(nsINode* aNode)
+{
+  nsIContent* content = nsCoreUtils::GetRoleContent(aNode);
+  nsAutoString roles;
+  if (!content ||
+      !content->GetAttr(kNameSpaceID_None, nsGkAtoms::role, roles) ||
+      roles.IsEmpty()) {
+    // We treat role="" as if the role attribute is absent (per aria spec:8.1.1)
+    return nullptr;
+  }
+
+  nsWhitespaceTokenizer tokenizer(roles);
+  while (tokenizer.hasMoreTokens()) {
+    // Do a binary search through table for the next role in role list
+    const nsDependentSubstring role = tokenizer.nextToken();
+    uint32_t low = 0;
+    uint32_t high = ArrayLength(sWAIRoleMaps);
+    while (low < high) {
+      uint32_t idx = (low + high) / 2;
+      int32_t compare = Compare(role, sWAIRoleMaps[idx].ARIARoleString());
+      if (compare == 0)
+        return sWAIRoleMaps + idx;
+
+      if (compare < 0)
+        high = idx;
+      else
+        low = idx + 1;
+    }
+  }
+
+  // Always use some entry if there is a non-empty role string
+  // To ensure an accessible object is created
+  return &sLandmarkRoleMap;
+}
+
+uint64_t
+aria::UniversalStatesFor(mozilla::dom::Element* aElement)
+{
+  uint64_t state = 0;
+  uint32_t index = 0;
+  while (MapToState(sWAIUnivStateMap[index], aElement, &state))
+    index++;
+
+  return state;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
-// nsStateMapEntry
+// AttrIterator class
 
-nsStateMapEntry::nsStateMapEntry() :
-  mAttributeName(nsnull),
-  mIsToken(PR_FALSE),
-  mPermanentState(0),
-  mValue1(nsnull),
-  mState1(0),
-  mValue2(nsnull),
-  mState2(0),
-  mValue3(nsnull),
-  mState3(0),
-  mDefaultState(0),
-  mDefinedIfAbsent(PR_FALSE)
-{}
-
-nsStateMapEntry::nsStateMapEntry(nsIAtom** aAttrName, eStateValueType aType,
-                                 PRUint64 aPermanentState,
-                                 PRUint64 aTrueState,
-                                 PRUint64 aFalseState,
-                                 PRBool aDefinedIfAbsent) :
-  mAttributeName(aAttrName),
-  mIsToken(PR_TRUE),
-  mPermanentState(aPermanentState),
-  mValue1("false"),
-  mState1(aFalseState),
-  mValue2(nsnull),
-  mState2(0),
-  mValue3(nsnull),
-  mState3(0),
-  mDefaultState(aTrueState),
-  mDefinedIfAbsent(aDefinedIfAbsent)
+bool
+AttrIterator::Next(nsAString& aAttrName, nsAString& aAttrValue)
 {
-  if (aType == kMixedType) {
-    mValue2 = "mixed";
-    mState2 = states::MIXED;
-  }
-}
+  while (mAttrIdx < mAttrCount) {
+    const nsAttrName* attr = mContent->GetAttrNameAt(mAttrIdx);
+    mAttrIdx++;
+    if (attr->NamespaceEquals(kNameSpaceID_None)) {
+      nsIAtom* attrAtom = attr->Atom();
+      nsDependentAtomString attrStr(attrAtom);
+      if (!StringBeginsWith(attrStr, NS_LITERAL_STRING("aria-")))
+        continue; // Not ARIA
 
-nsStateMapEntry::nsStateMapEntry(nsIAtom** aAttrName,
-                                 const char* aValue1, PRUint64 aState1,
-                                 const char* aValue2, PRUint64 aState2,
-                                 const char* aValue3, PRUint64 aState3) :
-  mAttributeName(aAttrName), mIsToken(PR_FALSE), mPermanentState(0),
-  mValue1(aValue1), mState1(aState1),
-  mValue2(aValue2), mState2(aState2),
-  mValue3(aValue3), mState3(aState3),
-  mDefaultState(0), mDefinedIfAbsent(PR_FALSE)
-{
-}
+      uint8_t attrFlags = nsAccUtils::GetAttributeCharacteristics(attrAtom);
+      if (attrFlags & ATTR_BYPASSOBJ)
+        continue; // No need to handle exposing as obj attribute here
 
-nsStateMapEntry::nsStateMapEntry(nsIAtom** aAttrName,
-                                 EDefaultStateRule aDefaultStateRule,
-                                 const char* aValue1, PRUint64 aState1,
-                                 const char* aValue2, PRUint64 aState2,
-                                 const char* aValue3, PRUint64 aState3) :
-  mAttributeName(aAttrName), mIsToken(PR_TRUE), mPermanentState(0),
-  mValue1(aValue1), mState1(aState1),
-  mValue2(aValue2), mState2(aState2),
-  mValue3(aValue3), mState3(aState3),
-  mDefaultState(0), mDefinedIfAbsent(PR_TRUE)
-{
-  if (aDefaultStateRule == eUseFirstState)
-    mDefaultState = aState1;
-}
+      if ((attrFlags & ATTR_VALTOKEN) &&
+           !nsAccUtils::HasDefinedARIAToken(mContent, attrAtom))
+        continue; // only expose token based attributes if they are defined
 
-PRBool
-nsStateMapEntry::MapToStates(nsIContent* aContent, PRUint64* aState,
-                             eStateMapEntryID aStateMapEntryID)
-{
-  // Return true if we should continue.
-  if (aStateMapEntryID == eARIANone)
-    return PR_FALSE;
-
-  const nsStateMapEntry& entry = nsARIAMap::gWAIStateMap[aStateMapEntryID];
-
-  if (entry.mIsToken) {
-    // If attribute is considered as defined when it's absent then let's act
-    // attribute value is "false" supposedly.
-    PRBool hasAttr = aContent->HasAttr(kNameSpaceID_None, *entry.mAttributeName);
-    if (entry.mDefinedIfAbsent && !hasAttr) {
-      if (entry.mPermanentState)
-        *aState |= entry.mPermanentState;
-      if (entry.mState1)
-        *aState |= entry.mState1;
-      return PR_TRUE;
-    }
-
-    // We only have attribute state mappings for NMTOKEN (and boolean) based
-    // ARIA attributes. According to spec, a value of "undefined" is to be
-    // treated equivalent to "", or the absence of the attribute. We bail out
-    // for this case here.
-    // Note: If this method happens to be called with a non-token based
-    // attribute, for example: aria-label="" or aria-label="undefined", we will
-    // bail out and not explore a state mapping, which is safe.
-    if (!hasAttr ||
-        aContent->AttrValueIs(kNameSpaceID_None, *entry.mAttributeName,
-                              nsAccessibilityAtoms::_empty, eCaseMatters) ||
-        aContent->AttrValueIs(kNameSpaceID_None, *entry.mAttributeName,
-                              nsAccessibilityAtoms::_undefined, eCaseMatters)) {
-
-      if (entry.mPermanentState)
-        *aState &= ~entry.mPermanentState;
-      return PR_TRUE;
-    }
-
-    if (entry.mPermanentState)
-      *aState |= entry.mPermanentState;
-  }
-
-  nsAutoString attrValue;
-  if (!aContent->GetAttr(kNameSpaceID_None, *entry.mAttributeName, attrValue))
-    return PR_TRUE;
-
-  // Apply states for matched value. If no values was matched then apply default
-  // states.
-  PRBool applyDefaultStates = PR_TRUE;
-  if (entry.mValue1) {
-    if (attrValue.EqualsASCII(entry.mValue1)) {
-      applyDefaultStates = PR_FALSE;
-
-      if (entry.mState1)
-        *aState |= entry.mState1;
-    } else if (entry.mValue2) {
-      if (attrValue.EqualsASCII(entry.mValue2)) {
-        applyDefaultStates = PR_FALSE;
-
-        if (entry.mState2)
-          *aState |= entry.mState2;
-
-      } else if (entry.mValue3) {
-        if (attrValue.EqualsASCII(entry.mValue3)) {
-          applyDefaultStates = PR_FALSE;
-
-          if (entry.mState3)
-            *aState |= entry.mState3;
-
-        }
+      nsAutoString value;
+      if (mContent->GetAttr(kNameSpaceID_None, attrAtom, value)) {
+        aAttrName.Assign(Substring(attrStr, 5));
+        aAttrValue.Assign(value);
+        return true;
       }
     }
   }
 
-  if (applyDefaultStates) {
-    if (entry.mDefaultState)
-      *aState |= entry.mDefaultState;
-  }
-
-  return PR_TRUE;
+  return false;
 }
+

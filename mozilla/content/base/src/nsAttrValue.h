@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * IBM Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2003
- * IBM Corporation. All Rights Reserved.
- *
- * Contributor(s):
- *   IBM Corporation
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * A struct that represents the value (type and actual data) of an
@@ -45,17 +12,17 @@
 #define nsAttrValue_h___
 
 #include "nscore.h"
-#include "nsString.h"
+#include "nsStringGlue.h"
 #include "nsStringBuffer.h"
 #include "nsColor.h"
 #include "nsCaseTreatment.h"
 #include "nsMargin.h"
 #include "nsCOMPtr.h"
+#include "SVGAttrValueWrapper.h"
 
 typedef PRUptrdiff PtrBits;
 class nsAString;
 class nsIAtom;
-class nsISVGValue;
 class nsIDocument;
 template<class E, class A> class nsTArray;
 struct nsTArrayDefaultAllocator;
@@ -63,6 +30,8 @@ struct nsTArrayDefaultAllocator;
 namespace mozilla {
 namespace css {
 class StyleRule;
+struct URLValue;
+struct ImageValue;
 }
 }
 
@@ -103,10 +72,12 @@ public:
   nsAttrValue();
   nsAttrValue(const nsAttrValue& aOther);
   explicit nsAttrValue(const nsAString& aValue);
+  explicit nsAttrValue(nsIAtom* aValue);
   nsAttrValue(mozilla::css::StyleRule* aValue, const nsAString* aSerialized);
-  explicit nsAttrValue(nsISVGValue* aValue);
   explicit nsAttrValue(const nsIntMargin& aValue);
   ~nsAttrValue();
+
+  inline const nsAttrValue& operator=(const nsAttrValue& aOther);
 
   static nsresult Init();
   static void Shutdown();
@@ -122,11 +93,26 @@ public:
     ePercent =      0x0F, // 1111
     // Values below here won't matter, they'll be always stored in the 'misc'
     // struct.
-    eCSSStyleRule = 0x10,
-    eAtomArray =    0x11 
-    ,eSVGValue =    0x12
-    ,eDoubleValue  = 0x13
-    ,eIntMarginValue = 0x14
+    eCSSStyleRule =    0x10
+    ,eURL =            0x11
+    ,eImage =          0x12
+    ,eAtomArray =      0x13
+    ,eDoubleValue  =   0x14
+    ,eIntMarginValue = 0x15
+    ,eSVGTypesBegin =  0x16
+    ,eSVGAngle =       eSVGTypesBegin
+    ,eSVGIntegerPair = 0x17
+    ,eSVGLength =      0x18
+    ,eSVGLengthList =  0x19
+    ,eSVGNumberList =  0x20
+    ,eSVGNumberPair =  0x21
+    ,eSVGPathData   =  0x22
+    ,eSVGPointList  =  0x23
+    ,eSVGPreserveAspectRatio = 0x24
+    ,eSVGStringList =  0x25
+    ,eSVGTransformList = 0x26
+    ,eSVGViewBox =     0x27
+    ,eSVGTypesEnd =    0x34
   };
 
   ValueType Type() const;
@@ -135,29 +121,64 @@ public:
 
   void SetTo(const nsAttrValue& aOther);
   void SetTo(const nsAString& aValue);
-  void SetTo(PRInt16 aInt);
+  void SetTo(nsIAtom* aValue);
+  void SetTo(int16_t aInt);
+  void SetTo(int32_t aInt, const nsAString* aSerialized);
+  void SetTo(double aValue, const nsAString* aSerialized);
   void SetTo(mozilla::css::StyleRule* aValue, const nsAString* aSerialized);
-  void SetTo(nsISVGValue* aValue);
+  void SetTo(mozilla::css::URLValue* aValue, const nsAString* aSerialized);
   void SetTo(const nsIntMargin& aValue);
+  void SetTo(const nsSVGAngle& aValue, const nsAString* aSerialized);
+  void SetTo(const nsSVGIntegerPair& aValue, const nsAString* aSerialized);
+  void SetTo(const nsSVGLength2& aValue, const nsAString* aSerialized);
+  void SetTo(const mozilla::SVGLengthList& aValue,
+             const nsAString* aSerialized);
+  void SetTo(const mozilla::SVGNumberList& aValue,
+             const nsAString* aSerialized);
+  void SetTo(const nsSVGNumberPair& aValue, const nsAString* aSerialized);
+  void SetTo(const mozilla::SVGPathData& aValue, const nsAString* aSerialized);
+  void SetTo(const mozilla::SVGPointList& aValue, const nsAString* aSerialized);
+  void SetTo(const mozilla::SVGAnimatedPreserveAspectRatio& aValue,
+             const nsAString* aSerialized);
+  void SetTo(const mozilla::SVGStringList& aValue,
+             const nsAString* aSerialized);
+  void SetTo(const mozilla::SVGTransformList& aValue,
+             const nsAString* aSerialized);
+  void SetTo(const nsSVGViewBox& aValue, const nsAString* aSerialized);
+
+  /**
+   * Sets this object with the string or atom representation of aValue.
+   *
+   * After calling this method, this object will have type eString unless the
+   * type of aValue is eAtom, in which case this object will also have type
+   * eAtom.
+   */
+  void SetToSerialized(const nsAttrValue& aValue);
 
   void SwapValueWith(nsAttrValue& aOther);
 
   void ToString(nsAString& aResult) const;
+  /**
+   * Returns the value of this object as an atom. If necessary, the value will
+   * first be serialised using ToString before converting to an atom.
+   */
+  already_AddRefed<nsIAtom> GetAsAtom() const;
 
   // Methods to get value. These methods do not convert so only use them
   // to retrieve the datatype that this nsAttrValue has.
-  inline PRBool IsEmptyString() const;
+  inline bool IsEmptyString() const;
   const nsCheapString GetStringValue() const;
   inline nsIAtom* GetAtomValue() const;
-  inline PRInt32 GetIntegerValue() const;
-  PRBool GetColorValue(nscolor& aColor) const;
-  inline PRInt16 GetEnumValue() const;
+  inline int32_t GetIntegerValue() const;
+  bool GetColorValue(nscolor& aColor) const;
+  inline int16_t GetEnumValue() const;
   inline float GetPercentValue() const;
   inline AtomArray* GetAtomArrayValue() const;
   inline mozilla::css::StyleRule* GetCSSStyleRuleValue() const;
-  inline nsISVGValue* GetSVGValue() const;
+  inline mozilla::css::URLValue* GetURLValue() const;
+  inline mozilla::css::ImageValue* GetImageValue() const;
   inline double GetDoubleValue() const;
-  PRBool GetIntMarginValue(nsIntMargin& aMargin) const;
+  bool GetIntMarginValue(nsIntMargin& aMargin) const;
 
   /**
    * Returns the string corresponding to the stored enum value.
@@ -165,26 +186,41 @@ public:
    * @param aResult   the string representing the enum tag
    * @param aRealTag  wheter we want to have the real tag or the saved one
    */
-  void GetEnumString(nsAString& aResult, PRBool aRealTag) const;
+  void GetEnumString(nsAString& aResult, bool aRealTag) const;
 
   // Methods to get access to atoms we may have
   // Returns the number of atoms we have; 0 if we have none.  It's OK
   // to call this without checking the type first; it handles that.
-  PRUint32 GetAtomCount() const;
+  uint32_t GetAtomCount() const;
   // Returns the atom at aIndex (0-based).  Do not call this with
   // aIndex >= GetAtomCount().
-  nsIAtom* AtomAt(PRInt32 aIndex) const;
+  nsIAtom* AtomAt(int32_t aIndex) const;
 
-  PRUint32 HashValue() const;
-  PRBool Equals(const nsAttrValue& aOther) const;
-  PRBool Equals(const nsAString& aValue, nsCaseTreatment aCaseSensitive) const;
-  PRBool Equals(nsIAtom* aValue, nsCaseTreatment aCaseSensitive) const;
+  uint32_t HashValue() const;
+  bool Equals(const nsAttrValue& aOther) const;
+  bool Equals(const nsAString& aValue, nsCaseTreatment aCaseSensitive) const;
+  bool Equals(nsIAtom* aValue, nsCaseTreatment aCaseSensitive) const;
+
+  /**
+   * Compares this object with aOther according to their string representation.
+   *
+   * For example, when called on an object with type eInteger and value 4, and
+   * given aOther of type eString and value "4", EqualsAsStrings will return
+   * true (while Equals will return false).
+   */
+  bool EqualsAsStrings(const nsAttrValue& aOther) const;
 
   /**
    * Returns true if this AttrValue is equal to the given atom, or is an
    * array which contains the given atom.
    */
-  PRBool Contains(nsIAtom* aValue, nsCaseTreatment aCaseSensitive) const;
+  bool Contains(nsIAtom* aValue, nsCaseTreatment aCaseSensitive) const;
+  /**
+   * Returns true if this AttrValue is an atom equal to the given
+   * string, or is an array of atoms which contains the given string.
+   * This always does a case-sensitive comparison.
+   */
+  bool Contains(const nsAString& aValue) const;
 
   void ParseAtom(const nsAString& aValue);
   void ParseAtomArray(const nsAString& aValue);
@@ -204,7 +240,7 @@ public:
     /** The string the value maps to */
     const char* tag;
     /** The enum value that maps to this string */
-    PRInt16 value;
+    int16_t value;
   };
 
   /**
@@ -218,10 +254,10 @@ public:
    *        cause aDefaultValue->value to be stored as the enumeration value.
    * @return whether the enum value was found or not
    */
-  PRBool ParseEnumValue(const nsAString& aValue,
+  bool ParseEnumValue(const nsAString& aValue,
                         const EnumTable* aTable,
-                        PRBool aCaseSensitive,
-                        const EnumTable* aDefaultValue = nsnull);
+                        bool aCaseSensitive,
+                        const EnumTable* aDefaultValue = nullptr);
 
   /**
    * Parse a string into an integer. Can optionally parse percent (n%).
@@ -233,7 +269,7 @@ public:
    *
    * @see http://www.whatwg.org/html/#rules-for-parsing-dimension-values
    */
-  PRBool ParseSpecialIntValue(const nsAString& aString);
+  bool ParseSpecialIntValue(const nsAString& aString);
 
 
   /**
@@ -242,7 +278,7 @@ public:
    * @param aString the string to parse
    * @return whether the value could be parsed
    */
-  PRBool ParseIntValue(const nsAString& aString) {
+  bool ParseIntValue(const nsAString& aString) {
     return ParseIntWithBounds(aString, PR_INT32_MIN, PR_INT32_MAX);
   }
 
@@ -254,8 +290,8 @@ public:
    * @param aMax the maximum value (if value is greater it will be chopped down)
    * @return whether the value could be parsed
    */
-  PRBool ParseIntWithBounds(const nsAString& aString, PRInt32 aMin,
-                            PRInt32 aMax = PR_INT32_MAX);
+  bool ParseIntWithBounds(const nsAString& aString, int32_t aMin,
+                            int32_t aMax = PR_INT32_MAX);
 
   /**
    * Parse a string value into a non-negative integer.
@@ -265,7 +301,7 @@ public:
    * @param  aString the string to parse
    * @return whether the value is valid
    */
-  PRBool ParseNonNegativeIntValue(const nsAString& aString);
+  bool ParseNonNegativeIntValue(const nsAString& aString);
 
   /**
    * Parse a string value into a positive integer.
@@ -280,7 +316,7 @@ public:
    * @param aString       the string to parse
    * @return              whether the value was valid
    */
-  PRBool ParsePositiveIntValue(const nsAString& aString);
+  bool ParsePositiveIntValue(const nsAString& aString);
 
   /**
    * Parse a string into a color.  This implements what HTML5 calls the
@@ -289,7 +325,7 @@ public:
    * @param aString the string to parse
    * @return whether the value could be parsed
    */
-  PRBool ParseColor(const nsAString& aString);
+  bool ParseColor(const nsAString& aString);
 
   /**
    * Parse a string value into a double-precision floating point value.
@@ -297,13 +333,13 @@ public:
    * @param aString the string to parse
    * @return whether the value could be parsed
    */
-  PRBool ParseDoubleValue(const nsAString& aString);
+  bool ParseDoubleValue(const nsAString& aString);
 
   /**
    * Parse a lazy URI.  This just sets up the storage for the URI; it
    * doesn't actually allocate it.
    */
-  PRBool ParseLazyURIValue(const nsAString& aString);
+  bool ParseLazyURIValue(const nsAString& aString);
 
   /**
    * Parse a margin string of format 'top, right, bottom, left' into
@@ -312,9 +348,17 @@ public:
    * @param aString the string to parse
    * @return whether the value could be parsed
    */
-  PRBool ParseIntMarginValue(const nsAString& aString);
+  bool ParseIntMarginValue(const nsAString& aString);
 
-  PRInt64 SizeOf() const;
+  /**
+   * Convert a URL nsAttrValue to an Image nsAttrValue.
+   *
+   * @param aDocument the document this nsAttrValue belongs to.
+   * @return whether an image load was attempted
+   */
+  bool LoadImage(nsIDocument* aDocument);
+
+  size_t SizeOfExcludingThis(nsMallocSizeOfFun aMallocSizeOf) const;
 
 private:
   // These have to be the same as in ValueType
@@ -329,24 +373,38 @@ private:
   {
     ValueType mType;
     // mStringBits points to either nsIAtom* or nsStringBuffer* and is used when
-    // mType isn't mCSSStyleRule or eSVGValue.
+    // mType isn't mCSSStyleRule.
     // Note eStringBase and eAtomBase is used also to handle the type of
     // mStringBits.
     PtrBits mStringBits;
     union {
-      PRInt32 mInteger;
+      int32_t mInteger;
       nscolor mColor;
-      PRUint32 mEnumValue;
-      PRInt32 mPercent;
+      uint32_t mEnumValue;
+      int32_t mPercent;
       mozilla::css::StyleRule* mCSSStyleRule;
+      mozilla::css::URLValue* mURL;
+      mozilla::css::ImageValue* mImage;
       AtomArray* mAtomArray;
-      nsISVGValue* mSVGValue;
       double mDoubleValue;
       nsIntMargin* mIntMargin;
+      const nsSVGAngle* mSVGAngle;
+      const nsSVGIntegerPair* mSVGIntegerPair;
+      const nsSVGLength2* mSVGLength;
+      const mozilla::SVGLengthList* mSVGLengthList;
+      const mozilla::SVGNumberList* mSVGNumberList;
+      const nsSVGNumberPair* mSVGNumberPair;
+      const mozilla::SVGPathData* mSVGPathData;
+      const mozilla::SVGPointList* mSVGPointList;
+      const mozilla::SVGAnimatedPreserveAspectRatio* mSVGPreserveAspectRatio;
+      const mozilla::SVGStringList* mSVGStringList;
+      const mozilla::SVGTransformList* mSVGTransformList;
+      const nsSVGViewBox* mSVGViewBox;
     };
   };
 
   inline ValueBaseType BaseType() const;
+  inline bool IsSVGType(ValueType aType) const;
 
   /**
    * Get the index of an EnumTable in the sEnumTableArray.
@@ -355,33 +413,35 @@ private:
    * @param aTable   the EnumTable to get the index of.
    * @return         the index of the EnumTable.
    */
-  PRInt16  GetEnumTableIndex(const EnumTable* aTable);
+  int16_t  GetEnumTableIndex(const EnumTable* aTable);
 
   inline void SetPtrValueAndType(void* aValue, ValueBaseType aType);
-  void SetIntValueAndType(PRInt32 aValue, ValueType aType,
+  void SetIntValueAndType(int32_t aValue, ValueType aType,
                           const nsAString* aStringValue);
   void SetColorValue(nscolor aColor, const nsAString& aString);
   void SetMiscAtomOrString(const nsAString* aValue);
   void ResetMiscAtomOrString();
+  void SetSVGType(ValueType aType, const void* aValue,
+                  const nsAString* aSerialized);
   inline void ResetIfSet();
 
   inline void* GetPtr() const;
   inline MiscContainer* GetMiscContainer() const;
-  inline PRInt32 GetIntInternal() const;
+  inline int32_t GetIntInternal() const;
 
-  PRBool EnsureEmptyMiscContainer();
-  PRBool EnsureEmptyAtomArray();
+  bool EnsureEmptyMiscContainer();
+  bool EnsureEmptyAtomArray();
   nsStringBuffer* GetStringBuffer(const nsAString& aValue) const;
-  // aStrict is set PR_TRUE if stringifying the return value equals with
+  // aStrict is set true if stringifying the return value equals with
   // aValue.
-  PRInt32 StringToInteger(const nsAString& aValue,
-                          PRBool* aStrict,
-                          PRInt32* aErrorCode,
-                          PRBool aCanBePercent = PR_FALSE,
-                          PRBool* aIsPercent = nsnull) const;
+  int32_t StringToInteger(const nsAString& aValue,
+                          bool* aStrict,
+                          nsresult* aErrorCode,
+                          bool aCanBePercent = false,
+                          bool* aIsPercent = nullptr) const;
   // Given an enum table and a particular entry in that table, return
   // the actual integer value we should store.
-  PRInt32 EnumTableEntryToValue(const EnumTable* aEnumTable,
+  int32_t EnumTableEntryToValue(const EnumTable* aEnumTable,
                                 const EnumTable* aTableEntry);  
 
   static nsTArray<const EnumTable*, nsTArrayDefaultAllocator>* sEnumTableArray;
@@ -393,6 +453,13 @@ private:
  * Implementation of inline methods
  */
 
+inline const nsAttrValue&
+nsAttrValue::operator=(const nsAttrValue& aOther)
+{
+  SetTo(aOther);
+  return *this;
+}
+
 inline nsIAtom*
 nsAttrValue::GetAtomValue() const
 {
@@ -400,7 +467,7 @@ nsAttrValue::GetAtomValue() const
   return reinterpret_cast<nsIAtom*>(GetPtr());
 }
 
-inline PRInt32
+inline int32_t
 nsAttrValue::GetIntegerValue() const
 {
   NS_PRECONDITION(Type() == eInteger, "wrong type");
@@ -409,15 +476,15 @@ nsAttrValue::GetIntegerValue() const
          : GetMiscContainer()->mInteger;
 }
 
-inline PRInt16
+inline int16_t
 nsAttrValue::GetEnumValue() const
 {
   NS_PRECONDITION(Type() == eEnum, "wrong type");
   // We don't need to worry about sign extension here since we're
-  // returning an PRInt16 which will cut away the top bits.
-  return static_cast<PRInt16>((
+  // returning an int16_t which will cut away the top bits.
+  return static_cast<int16_t>((
     (BaseType() == eIntegerBase)
-    ? static_cast<PRUint32>(GetIntInternal())
+    ? static_cast<uint32_t>(GetIntInternal())
     : GetMiscContainer()->mEnumValue)
       >> NS_ATTRVALUE_ENUMTABLEINDEX_BITS);
 }
@@ -446,11 +513,18 @@ nsAttrValue::GetCSSStyleRuleValue() const
   return GetMiscContainer()->mCSSStyleRule;
 }
 
-inline nsISVGValue*
-nsAttrValue::GetSVGValue() const
+inline mozilla::css::URLValue*
+nsAttrValue::GetURLValue() const
 {
-  NS_PRECONDITION(Type() == eSVGValue, "wrong type");
-  return GetMiscContainer()->mSVGValue;
+  NS_PRECONDITION(Type() == eURL, "wrong type");
+  return GetMiscContainer()->mURL;
+}
+
+inline mozilla::css::ImageValue*
+nsAttrValue::GetImageValue() const
+{
+  NS_PRECONDITION(Type() == eImage, "wrong type");
+  return GetMiscContainer()->mImage;
 }
 
 inline double
@@ -460,21 +534,27 @@ nsAttrValue::GetDoubleValue() const
   return GetMiscContainer()->mDoubleValue;
 }
 
-inline PRBool
+inline bool
 nsAttrValue::GetIntMarginValue(nsIntMargin& aMargin) const
 {
   NS_PRECONDITION(Type() == eIntMarginValue, "wrong type");
   nsIntMargin* m = GetMiscContainer()->mIntMargin;
   if (!m)
-    return PR_FALSE;
+    return false;
   aMargin = *m;
-  return PR_TRUE;
+  return true;
 }
 
 inline nsAttrValue::ValueBaseType
 nsAttrValue::BaseType() const
 {
   return static_cast<ValueBaseType>(mBits & NS_ATTRVALUE_BASETYPE_MASK);
+}
+
+inline bool
+nsAttrValue::IsSVGType(ValueType aType) const
+{
+  return aType >= eSVGTypesBegin && aType <= eSVGTypesEnd;
 }
 
 inline void
@@ -508,7 +588,7 @@ nsAttrValue::GetMiscContainer() const
   return static_cast<MiscContainer*>(GetPtr());
 }
 
-inline PRInt32
+inline int32_t
 nsAttrValue::GetIntInternal() const
 {
   NS_ASSERTION(BaseType() == eIntegerBase,
@@ -516,11 +596,11 @@ nsAttrValue::GetIntInternal() const
   // Make sure we get a signed value.
   // Lets hope the optimizer optimizes this into a shift. Unfortunatly signed
   // bitshift right is implementaion dependant.
-  return static_cast<PRInt32>(mBits & ~NS_ATTRVALUE_INTEGERTYPE_MASK) /
+  return static_cast<int32_t>(mBits & ~NS_ATTRVALUE_INTEGERTYPE_MASK) /
          NS_ATTRVALUE_INTEGERTYPE_MULTIPLIER;
 }
 
-inline PRBool
+inline bool
 nsAttrValue::IsEmptyString() const
 {
   return !mBits;

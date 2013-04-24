@@ -1,42 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Geolocation.
- *
- * The Initial Developer of the Original Code is Mozilla Foundation
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * This is a derivative of work done by Google under a BSD style License.
- * See: http://gears.googlecode.com/svn/trunk/gears/geolocation/
- *
- * Contributor(s):
- *  Doug Turner <dougt@meer.net>  (Original Author)
- *  Ginn Chen <ginn.chen@sun.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsWifiMonitor.h"
 #include "nsWifiAccessPoint.h"
@@ -74,8 +38,8 @@ do_parse_str(char *bssid_str, char *essid_str, char *strength)
          &mac_as_int[2], &mac_as_int[3], &mac_as_int[4], &mac_as_int[5]);
 
   int signal = 0;
-  PRUint32 strength_vals_count = sizeof(strength_vals) / sizeof (val_strength_t);
-  for (PRUint32 i = 0; i < strength_vals_count; i++) {
+  uint32_t strength_vals_count = sizeof(strength_vals) / sizeof (val_strength_t);
+  for (uint32_t i = 0; i < strength_vals_count; i++) {
     if (!strncasecmp(strength, strength_vals[i].strength_name, DLADM_STRSIZE)) {
       signal = strength_vals[i].signal_value;
       break;
@@ -105,16 +69,16 @@ do_dladm(nsCOMArray<nsWifiAccessPoint> &accessPoints)
                              &sout, &serr, &exit_status, &err);
   if (rv && !exit_status) {
     char wlan[DLADM_SECTIONS][DLADM_STRSIZE+1];
-    PRUint32 section = 0;
-    PRUint32 sout_scan = 0;
-    PRUint32 wlan_put = 0;
-    PRBool escape = PR_FALSE;
+    uint32_t section = 0;
+    uint32_t sout_scan = 0;
+    uint32_t wlan_put = 0;
+    bool escape = false;
     nsWifiAccessPoint* ap;
     char sout_char;
     do {
       sout_char = sout[sout_scan++];
       if (escape) {
-        escape = PR_FALSE;
+        escape = false;
         if (sout_char != '\0') {
           wlan[section][wlan_put++] = sout_char;
           continue;
@@ -122,7 +86,7 @@ do_dladm(nsCOMArray<nsWifiAccessPoint> &accessPoints)
       }
 
       if (sout_char =='\\') {
-        escape = PR_TRUE;
+        escape = true;
         continue;
       }
 
@@ -169,7 +133,7 @@ nsWifiMonitor::DoScan()
     accessPoints.Clear();
     do_dladm(accessPoints);
 
-    PRBool accessPointsChanged = !AccessPointsEqual(accessPoints, lastAccessPoints);
+    bool accessPointsChanged = !AccessPointsEqual(accessPoints, lastAccessPoints);
     ReplaceArray(lastAccessPoints, accessPoints);
 
     nsresult rv = CallWifiListeners(lastAccessPoints, accessPointsChanged);

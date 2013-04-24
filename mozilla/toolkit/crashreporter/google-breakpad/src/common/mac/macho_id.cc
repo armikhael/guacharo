@@ -52,6 +52,10 @@ extern "C" {  // necessary for Leopard
 
 namespace MacFileUtilities {
 
+using google_breakpad::MD5Init;
+using google_breakpad::MD5Update;
+using google_breakpad::MD5Final;
+
 MachoID::MachoID(const char *path)
    : file_(0), 
      crc_(0), 
@@ -172,7 +176,7 @@ bool MachoID::IDCommand(int cpu_type, unsigned char identifier[16]) {
   // If we found the command, we'll have initialized the dylib_command
   // structure
   if (dylib_cmd.cmd == LC_ID_DYLIB) {
-    // Take the hashed filename, version, and compatability version bytes
+    // Take the hashed filename, version, and compatibility version bytes
     // to form the first 12 bytes, pad the rest with zeros
 
     // create a crude hash of the filename to generate the first 4 bytes

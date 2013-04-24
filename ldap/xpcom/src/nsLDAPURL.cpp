@@ -1,42 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  * 
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the mozilla.org LDAP XPCOM SDK.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Dan Mosedale <dmose@mozilla.org>
- *   Leif Hedstrom <leif@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsLDAPURL.h"
 #include "netCore.h"
@@ -65,7 +31,7 @@ nsLDAPURL::~nsLDAPURL()
 }
 
 nsresult
-nsLDAPURL::Init(PRUint32 aUrlType, PRInt32 aDefaultPort,
+nsLDAPURL::Init(uint32_t aUrlType, int32_t aDefaultPort,
                 const nsACString &aSpec, const char* aOriginCharset,
                 nsIURI *aBaseURI)
 {
@@ -129,27 +95,27 @@ nsLDAPURL::GetPathInternal(nsCString &aPath)
 nsresult
 nsLDAPURL::SetPathInternal(const nsCString &aPath)
 {
-  PRUint32 rv;
   LDAPURLDesc *desc;
 
   // This is from the LDAP C-SDK, which currently doesn't
   // support everything from RFC 2255... :(
   //
-  rv = ldap_url_parse(aPath.get(), &desc);
-  switch (rv) {
-  case LDAP_SUCCESS:
+  int err = ldap_url_parse(aPath.get(), &desc);
+  switch (err) {
+  case LDAP_SUCCESS: {
     // The base URL can pick up the host & port details and deal with them
     // better than we can
     mDN = desc->lud_dn;
     mScope = desc->lud_scope;
     mFilter = desc->lud_filter;
     mOptions = desc->lud_options;
-    rv = SetAttributeArray(desc->lud_attrs);
+    nsresult rv = SetAttributeArray(desc->lud_attrs);
     if (NS_FAILED(rv))
       return rv;
 
     ldap_free_urldesc(desc);
     return NS_OK;
+  }
 
   case LDAP_URL_ERR_NOTLDAP:
   case LDAP_URL_ERR_NODN:
@@ -197,7 +163,7 @@ nsLDAPURL::SetSpec(const nsACString &aSpec)
   rv = mBaseURL->SetSpec(aSpec);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = SetPathInternal(nsPromiseFlatCString(aSpec));
+  rv = SetPathInternal(PromiseFlatCString(aSpec));
   if (NS_FAILED(rv))
     mBaseURL->SetSpec(originalSpec);
 
@@ -312,7 +278,7 @@ nsLDAPURL::SetHost(const nsACString &aHost)
 }
 
 NS_IMETHODIMP 
-nsLDAPURL::GetPort(PRInt32 *_retval)
+nsLDAPURL::GetPort(int32_t *_retval)
 {
   if (!mBaseURL)
     return NS_ERROR_NOT_INITIALIZED;
@@ -321,7 +287,7 @@ nsLDAPURL::GetPort(PRInt32 *_retval)
 }
 
 NS_IMETHODIMP 
-nsLDAPURL::SetPort(PRInt32 aPort)
+nsLDAPURL::SetPort(int32_t aPort)
 {
   if (!mBaseURL)
     return NS_ERROR_NOT_INITIALIZED;
@@ -342,7 +308,7 @@ NS_IMETHODIMP nsLDAPURL::SetPath(const nsACString &aPath)
   if (!mBaseURL)
     return NS_ERROR_NOT_INITIALIZED;
 
-  nsresult rv = SetPathInternal(nsPromiseFlatCString(aPath));
+  nsresult rv = SetPathInternal(PromiseFlatCString(aPath));
   NS_ENSURE_SUCCESS(rv, rv);
 
   return mBaseURL->SetPath(aPath);
@@ -375,9 +341,9 @@ NS_IMETHODIMP nsLDAPURL::GetOriginCharset(nsACString &result)
 
 // boolean equals (in nsIURI other)
 // (based on nsSimpleURI::Equals)
-NS_IMETHODIMP nsLDAPURL::Equals(nsIURI *other, PRBool *_retval)
+NS_IMETHODIMP nsLDAPURL::Equals(nsIURI *other, bool *_retval)
 {
-  *_retval = PR_FALSE;
+  *_retval = false;
   if (other)
   {
     nsresult rv;
@@ -385,7 +351,7 @@ NS_IMETHODIMP nsLDAPURL::Equals(nsIURI *other, PRBool *_retval)
     if (NS_SUCCEEDED(rv))
     {
       nsCAutoString thisSpec, otherSpec;
-      PRUint32 otherOptions;
+      uint32_t otherOptions;
 
       rv = GetSpec(thisSpec);
       NS_ENSURE_SUCCESS(rv, rv);
@@ -397,7 +363,7 @@ NS_IMETHODIMP nsLDAPURL::Equals(nsIURI *other, PRBool *_retval)
       NS_ENSURE_SUCCESS(rv, rv);
 
       if (thisSpec == otherSpec && mOptions == otherOptions)
-        *_retval = PR_TRUE;
+        *_retval = true;
     }
   }
   return NS_OK;
@@ -405,7 +371,7 @@ NS_IMETHODIMP nsLDAPURL::Equals(nsIURI *other, PRBool *_retval)
 
 // boolean schemeIs(in const char * scheme);
 //
-NS_IMETHODIMP nsLDAPURL::SchemeIs(const char *aScheme, PRBool *aEquals)
+NS_IMETHODIMP nsLDAPURL::SchemeIs(const char *aScheme, bool *aEquals)
 {
   if (!mBaseURL)
     return NS_ERROR_NOT_INITIALIZED;
@@ -548,14 +514,14 @@ NS_IMETHODIMP nsLDAPURL::AddAttribute(const nsACString &aAttribute)
   else
   {
     // Wrap the attribute in commas, so that we can do an exact match.
-    nsCAutoString findAttribute(',');
+    nsCAutoString findAttribute(",");
     findAttribute.Append(aAttribute);
     findAttribute.Append(',');
 
     // Check to see if the attribute is already stored. If it is, then also
     // check to see if it is the last attribute in the string, or if the next
     // character is a comma, this means we won't match substrings.
-    PRInt32 pos = mAttributes.Find(findAttribute, CaseInsensitiveCompare);
+    int32_t pos = mAttributes.Find(findAttribute, CaseInsensitiveCompare);
     if (pos != -1)
       return NS_OK;
 
@@ -578,7 +544,7 @@ NS_IMETHODIMP nsLDAPURL::RemoveAttribute(const nsACString &aAttribute)
   if (mAttributes.IsEmpty())
     return NS_OK;
 
-  nsCAutoString findAttribute(',');
+  nsCAutoString findAttribute(",");
   findAttribute.Append(aAttribute);
   findAttribute.Append(',');
 
@@ -586,7 +552,7 @@ NS_IMETHODIMP nsLDAPURL::RemoveAttribute(const nsACString &aAttribute)
     mAttributes.Truncate();
   else
   {
-    PRInt32 pos = mAttributes.Find(findAttribute, CaseInsensitiveCompare);
+    int32_t pos = mAttributes.Find(findAttribute, CaseInsensitiveCompare);
     if (pos == -1)
       return NS_OK;
 
@@ -602,11 +568,11 @@ NS_IMETHODIMP nsLDAPURL::RemoveAttribute(const nsACString &aAttribute)
 }
 
 NS_IMETHODIMP nsLDAPURL::HasAttribute(const nsACString &aAttribute,
-                                      PRBool *_retval)
+                                      bool *_retval)
 {
   NS_ENSURE_ARG_POINTER(_retval);
 
-  nsCAutoString findAttribute(',');
+  nsCAutoString findAttribute(",");
   findAttribute.Append(aAttribute);
   findAttribute.Append(',');
 
@@ -614,14 +580,14 @@ NS_IMETHODIMP nsLDAPURL::HasAttribute(const nsACString &aAttribute,
   return NS_OK;
 }
 
-NS_IMETHODIMP nsLDAPURL::GetScope(PRInt32 *_retval)
+NS_IMETHODIMP nsLDAPURL::GetScope(int32_t *_retval)
 {
   NS_ENSURE_ARG_POINTER(_retval);
   *_retval = mScope;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsLDAPURL::SetScope(PRInt32 aScope)
+NS_IMETHODIMP nsLDAPURL::SetScope(int32_t aScope)
 {
   if (!mBaseURL)
     return NS_ERROR_NOT_INITIALIZED;
@@ -664,14 +630,14 @@ NS_IMETHODIMP nsLDAPURL::SetFilter(const nsACString& aFilter)
   return mBaseURL->SetPath(newPath);
 }
 
-NS_IMETHODIMP nsLDAPURL::GetOptions(PRUint32 *_retval)
+NS_IMETHODIMP nsLDAPURL::GetOptions(uint32_t *_retval)
 {
   NS_ENSURE_ARG_POINTER(_retval);
   *_retval = mOptions;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsLDAPURL::SetOptions(PRUint32 aOptions)
+NS_IMETHODIMP nsLDAPURL::SetOptions(uint32_t aOptions)
 {
   // Secure is the only option supported at the moment
   if (mOptions & OPT_SECURE == aOptions & OPT_SECURE)
@@ -696,7 +662,7 @@ nsLDAPURL::GetRef(nsACString &result)
   return mBaseURL->GetRef(result);
 }
 
-NS_IMETHODIMP nsLDAPURL::EqualsExceptRef(nsIURI *other, PRBool *result)
+NS_IMETHODIMP nsLDAPURL::EqualsExceptRef(nsIURI *other, bool *result)
 {
   return mBaseURL->EqualsExceptRef(other, result);
 }
@@ -714,7 +680,7 @@ nsLDAPURL::GetSpecIgnoringRef(nsACString &result)
 }
 
 NS_IMETHODIMP
-nsLDAPURL::GetHasRef(PRBool *result)
+nsLDAPURL::GetHasRef(bool *result)
 {
   return mBaseURL->GetHasRef(result);
 }

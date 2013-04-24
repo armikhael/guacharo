@@ -1,48 +1,23 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Android SUTAgent code.
- *
- * The Initial Developer of the Original Code is
- * Bob Moss.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Bob Moss <bmoss@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 package com.mozilla.SUTAgentAndroid;
 
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.InetAddress;
+import org.apache.http.conn.util.InetAddressUtils;
 import java.net.NetworkInterface;
 import java.net.SocketException;
+import java.net.UnknownHostException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Enumeration;
+import java.util.Formatter;
 import java.util.List;
 import java.util.Timer;
 
@@ -63,6 +38,7 @@ import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.net.wifi.WifiManager.WifiLock;
 import android.os.BatteryManager;
+import android.os.Build.VERSION;
 import android.os.Bundle;
 import android.os.Handler;
 import android.telephony.TelephonyManager;
@@ -99,7 +75,7 @@ public class SUTAgentAndroid extends Activity
     private static String HardwareID = "";
     private static String Pool = "";
     private static String sRegString = "";
-    private static String sNTPServer = "";
+    private static boolean LogCommands = false;
 
     private WifiLock wl = null;
 
@@ -128,6 +104,43 @@ public class SUTAgentAndroid extends Activity
         return(RegSvrIPAddr);
         }
 
+    public void pruneCommandLog(String datestamp, String testroot)
+        {
+
+        String today = "";
+        String yesterday = "";
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss:SSS");
+            Date dateObj = sdf.parse(datestamp);
+            SimpleDateFormat sdf_file = new SimpleDateFormat("yyyy-MM-dd");
+
+            today     = sdf_file.format(dateObj);
+            yesterday = sdf_file.format(new Date(dateObj.getTime() - 1000*60*60*24));
+        } catch (ParseException pe) {}
+
+        File dir = new File(testroot);
+
+        if (!dir.isDirectory())
+            return;
+
+        File [] files = dir.listFiles();
+        if (files == null)
+            return;
+
+        for (int iter = 0; iter < files.length; iter++) {
+            String fName = files[iter].getName();
+            if (fName.endsWith("sutcommands.txt")) {
+                if (fName.endsWith(today + "-sutcommands.txt") || fName.endsWith(yesterday + "-sutcommands.txt"))
+                    continue;
+
+                if (files[iter].delete())
+                    Log.i("SUTAgentAndroid", "Deleted old command logfile: " + files[iter]);
+                else
+                    Log.e("SUTAgentAndroid", "Unable to delete old command logfile: " + files[iter]);
+            }
+        }
+        }
+
     /** Called when the activity is first created. */
     @Override
     public void onCreate(Bundle savedInstanceState)
@@ -145,29 +158,56 @@ public class SUTAgentAndroid extends Activity
         File iniFile = new File(dir, "SUTAgent.ini");
         String sIniFile = iniFile.getAbsolutePath();
 
+        String lc = dc.GetIniData("General", "LogCommands", sIniFile);
+        if (lc != "" && Integer.parseInt(lc) == 1) {
+            SUTAgentAndroid.LogCommands = true;
+        }
         SUTAgentAndroid.RegSvrIPAddr = dc.GetIniData("Registration Server", "IPAddr", sIniFile);
         SUTAgentAndroid.RegSvrIPPort = dc.GetIniData("Registration Server", "PORT", sIniFile);
         SUTAgentAndroid.HardwareID = dc.GetIniData("Registration Server", "HARDWARE", sIniFile);
         SUTAgentAndroid.Pool = dc.GetIniData("Registration Server", "POOL", sIniFile);
-        SUTAgentAndroid.sNTPServer = dc.GetIniData("NTP Server", "IPAddr", sIniFile);
+        logToFile(dc, "onCreate");
 
         tv = (TextView) this.findViewById(R.id.Textview01);
 
         if (getLocalIpAddress() == null)
             setUpNetwork(sIniFile);
 
-        WifiInfo wifi;
-        WifiManager wifiMan = (WifiManager)getSystemService(Context.WIFI_SERVICE);
         String macAddress = "Unknown";
-        if (wifiMan != null)
+        if (android.os.Build.VERSION.SDK_INT > 8) {
+            try {
+                NetworkInterface iface = NetworkInterface.getByInetAddress(InetAddress.getAllByName(getLocalIpAddress())[0]);
+                if (iface != null)
+                    {
+                        byte[] mac = iface.getHardwareAddress();
+                        if (mac != null)
+                            {
+                                StringBuilder sb = new StringBuilder();
+                                Formatter f = new Formatter(sb);
+                                for (int i = 0; i < mac.length; i++)
+                                    {
+                                        f.format("%02x%s", mac[i], (i < mac.length - 1) ? ":" : "");
+                                    }
+                                macAddress = sUniqueID = sb.toString();
+                            }
+                    }
+            }
+            catch (UnknownHostException ex) {}
+            catch (SocketException ex) {}
+        }
+        else
             {
-            wifi = wifiMan.getConnectionInfo();
-            if (wifi != null)
-                {
-                macAddress = wifi.getMacAddress();
-                if (macAddress != null)
-                    sUniqueID = macAddress;
-                }
+                // Fall back to getting info from wifiman on older versions of Android,
+                // which don't support the NetworkInterface interface
+                WifiManager wifiMan = (WifiManager)getSystemService(Context.WIFI_SERVICE);
+                if (wifiMan != null)
+                    {
+                        WifiInfo wifi = wifiMan.getConnectionInfo();
+                        if (wifi != null)
+                            macAddress = wifi.getMacAddress();
+                        if (macAddress != null)
+                            sUniqueID = macAddress;
+                    }
             }
 
         if (sUniqueID == null)
@@ -257,6 +297,8 @@ public class SUTAgentAndroid extends Activity
         String sTemp = Uri.encode(sRegString,"=&");
         sRegString = "register " + sTemp;
 
+        pruneCommandLog(dc.GetSystemTime(), dc.GetTestRoot());
+
         if (!bNetworkingStarted)
             {
             Thread thread = new Thread(null, doStartService, "StartServiceBkgnd");
@@ -272,11 +314,6 @@ public class SUTAgentAndroid extends Activity
         // If we are returning from an update let'em know we're back
         Thread thread3 = new Thread(null, doUpdateCallback, "UpdateCallbackBkgnd");
         thread3.start();
-
-        if (SUTAgentAndroid.sNTPServer.length() > 0) {
-            Thread thread4 = new Thread(null, doSetClock, "SetClockBkgrnd");
-            thread4.start();
-        }
 
         final Button goButton = (Button) findViewById(R.id.Button01);
         goButton.setOnClickListener(new OnClickListener() {
@@ -321,9 +358,11 @@ public class SUTAgentAndroid extends Activity
     @Override
     public void onDestroy()
         {
+        DoCommand dc = new DoCommand(getApplication());
         super.onDestroy();
         if (isFinishing())
             {
+            logToFile(dc, "onDestroy - finishing");
             Intent listenerSvc = new Intent(this, ASMozStub.class);
             listenerSvc.setAction("com.mozilla.SUTAgentAndroid.service.LISTENER_SERVICE");
             stopService(listenerSvc);
@@ -335,6 +374,43 @@ public class SUTAgentAndroid extends Activity
                 wl.release();
 
             System.exit(0);
+            }
+        else
+            {
+            logToFile(dc, "onDestroy - not finishing");
+            }
+        }
+
+    @Override
+    public void onLowMemory()
+        {
+        System.gc();
+        DoCommand dc = new DoCommand(getApplication());
+        if (dc != null)
+            {
+            logToFile(dc, "onLowMemory");
+            logToFile(dc, dc.GetMemoryInfo());
+            String procInfo = dc.GetProcessInfo();
+            if (procInfo != null)
+                {
+                String lines[] = procInfo.split("\n");
+                for (String line : lines) 
+                    {
+                    if (line.contains("mozilla"))
+                        {
+                        logToFile(dc, line);
+                        String words[] = line.split("\t");
+                        if ((words != null) && (words.length > 1))
+                            {
+                            logToFile(dc, dc.StatProcess(words[1]));
+                            }
+                        }
+                    }
+                }
+            }
+        else
+            {
+            Log.e("SUTAgentAndroid", "onLowMemory: unable to log to file!");
             }
         }
 
@@ -626,20 +702,6 @@ public class SUTAgentAndroid extends Activity
         }
     };
 
-    private Runnable doSetClock = new Runnable() {
-        public void run() {
-            String sRet = "";
-
-            DoCommand dc = new DoCommand(getApplication());
-
-            sRet = dc.SetSystemTime(sNTPServer, null, null);
-
-               mHandler.post(new UpdateStatus(sRet));
-
-            dc = null;
-        }
-    };
-
     // registers with the reg server defined in the SUTAgent.ini file
     private Runnable doRegisterDevice = new Runnable() {
         public void run() {
@@ -686,7 +748,7 @@ public class SUTAgentAndroid extends Activity
                 for (Enumeration<InetAddress> enumIpAddr = intf.getInetAddresses(); enumIpAddr.hasMoreElements();)
                     {
                     InetAddress inetAddress = enumIpAddr.nextElement();
-                    if (!inetAddress.isLoopbackAddress())
+                    if (!inetAddress.isLoopbackAddress() && InetAddressUtils.isIPv4Address(inetAddress.getHostAddress()))
                         {
                         return inetAddress.getHostAddress().toString();
                         }
@@ -698,5 +760,57 @@ public class SUTAgentAndroid extends Activity
             Toast.makeText(getApplication().getApplicationContext(), ex.toString(), Toast.LENGTH_LONG).show();
             }
         return null;
+        }
+
+    public static void logToFile(DoCommand dc, String message)
+        {
+        if (SUTAgentAndroid.LogCommands == false)
+            {
+            return;
+            }
+
+        if (message == null)
+            {
+            Log.e("SUTAgentAndroid", "bad arguments in logToFile()!");
+            return;
+            }
+        Log.i("SUTAgentAndroid", message);
+        String fileDateStr = "00";
+        String testRoot = dc.GetTestRoot();
+        String datestamp = dc.GetSystemTime();
+        if (testRoot == null || datestamp == null)
+            {
+            Log.e("SUTAgentAndroid", "Unable to get testRoot or datestamp in logToFile!");
+            return;
+            }
+
+
+        try 
+            {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss:SSS");
+            Date dateStr = sdf.parse(datestamp);
+            SimpleDateFormat sdf_file = new SimpleDateFormat("yyyy-MM-dd");
+            fileDateStr = sdf_file.format(dateStr);
+            } 
+        catch (ParseException pe) {}
+        String logFile = testRoot + "/" + fileDateStr + "-sutcommands.txt";
+        PrintWriter pw = null;
+        try 
+            {
+            pw = new PrintWriter(new FileWriter(logFile, true));
+            pw.println(datestamp + " : " + message);
+            } 
+            catch (IOException ioe) 
+            {
+                Log.e("SUTAgentAndroid", "exception with file writer on: " + logFile);
+            } 
+            finally 
+            {
+                if (pw != null)
+                {
+                    pw.close();
+                }
+            }
+
         }
 }

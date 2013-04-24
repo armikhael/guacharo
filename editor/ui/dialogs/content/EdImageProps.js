@@ -1,46 +1,9 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pete Collins
- *   Brian King
- *   Ben Goodger
- *   Charles Manske (cmanske@netscape.com)
- *   Neil Rashbrook (neil@parkwaycc.co.uk)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var gAnchorElement = null;
+var gLinkElement = null;
 var gOriginalHref = "";
 var gHNodeArray = {};
 
@@ -60,6 +23,7 @@ function Startup()
   gDialog.makeRelativeLink = document.getElementById("MakeRelativeLink");
   gDialog.showLinkBorder   = document.getElementById("showLinkBorder");
   gDialog.linkTab          = document.getElementById("imageLinkTab");
+  gDialog.linkAdvanced     = document.getElementById("LinkAdvancedEditButton");
 
   // Get a single selected image element
   var tagName = "img";
@@ -125,7 +89,15 @@ function Startup()
 
   InitDialog();
   if (gAnchorElement)
+  {
     gOriginalHref = gAnchorElement.getAttribute("href");
+    // Make a copy to use for AdvancedEdit
+    gLinkElement = gAnchorElement.cloneNode(false);
+  }
+  else
+  {
+    gLinkElement = editor.createElementWithDefaults("a");
+  }
   gDialog.hrefInput.value = gOriginalHref;
 
   FillLinkMenulist(gDialog.hrefInput, gHNodeArray);
@@ -163,8 +135,11 @@ function InitDialog()
 
 function ChangeLinkLocation()
 {
+  var href = TrimString(gDialog.hrefInput.value);
   SetRelativeCheckbox(gDialog.makeRelativeLink);
-  gDialog.showLinkBorder.disabled = !TrimString(gDialog.hrefInput.value);
+  gDialog.showLinkBorder.disabled = !href;
+  gDialog.linkAdvanced.disabled = !href;
+  gLinkElement.setAttribute("href", href);
 }
 
 function ToggleShowLinkBorder()
@@ -245,9 +220,16 @@ function onAccept()
       if (href != gOriginalHref)
       {
         if (href && !gInsertNewImage)
+        {
           EditorSetTextProperty("a", "href", href);
+          // gAnchorElement is needed for cloning attributes later.
+          if (!gAnchorElement)
+            gAnchorElement = editor.getElementOrParentByTagName("href", imageElement);
+        }
         else
+        {
           EditorRemoveTextProperty("href", "");
+        }
       }
 
       // If inside a link, always write the 'border' attribute
@@ -266,10 +248,8 @@ function onAccept()
       if (gInsertNewImage)
       {
         if (href) {
-          var linkElement = editor.createElementWithDefaults("a");
-          linkElement.setAttribute("href", href);
-          linkElement.appendChild(imageElement);
-          editor.insertElementAtSelection(linkElement, true);
+          gLinkElement.appendChild(imageElement);
+          editor.insertElementAtSelection(gLinkElement, true);
         }
         else
           // 'true' means delete the selection before inserting
@@ -291,6 +271,8 @@ function onAccept()
       // All values are valid - copy to actual element in doc or
       //   element we just inserted
       editor.cloneAttributes(imageElement, globalElement);
+      if (gAnchorElement)
+        editor.cloneAttributes(gAnchorElement, gLinkElement);
 
       // If document is empty, the map element won't insert,
       //  so always insert the image first
@@ -317,4 +299,15 @@ function onAccept()
   gDoAltTextError = false;
 
   return false;
+}
+
+function onLinkAdvancedEdit()
+{
+  window.AdvancedEditOK = false;
+  window.openDialog("chrome://editor/content/EdAdvancedEdit.xul", "_blank",
+                    "chrome,close,titlebar,modal,resizable=yes", "",
+                    gLinkElement);
+  window.focus();
+  if (window.AdvancedEditOK)
+    gDialog.hrefInput.value = gLinkElement.getAttribute("href");
 }

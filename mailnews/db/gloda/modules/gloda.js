@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Global Database.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Andrew Sutherland <asutherland@asutherland.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 const EXPORTED_SYMBOLS = ['Gloda'];
 
@@ -251,7 +218,16 @@ var Gloda = {
    */
   kIndexerIndexing: 1,
 
-  /** Synchronous activities performed, you can drive us more. */
+  /**
+   * Synchronous activities performed that can be thought of as one processing
+   *  token.  Potentially yield the event-loop and re-schedule for later based
+   *  on how long we've actually taken/etc.  The goal here is that code that
+   *  is doing stuff synchronously yields with kWorkSync periodically to make
+   *  sure that it doesn't dominate the event-loop.  Unless the processing
+   *  in question is particularly intensive, it should be reasonable to apply
+   *  some decimation factor (ex: 32 or 64) with the general goal of yielding
+   *  every 3-10 milliseconds.
+   */
   kWorkSync: 0,
   /**
    * Asynchronous activity performed, you need to relinquish flow control and
@@ -264,7 +240,11 @@ var Gloda = {
   kWorkDone: 2,
   /**
    * We are not done with our task, but we think it's a good idea to take a
-   *  breather.
+   *  breather because we believe we have tied up the event loop for a
+   *  non-trivial amount of time.  So please re-schedule us in the future.
+   *
+   * This is currently only used internally by the indexer's batching logic;
+   *  minor changes may be required if used by actual indexers.
    */
   kWorkPause: 3,
   /**
@@ -274,6 +254,17 @@ var Gloda = {
    *  "yield aCallbackHandle.doneWithResult(myResult);".
    */
   kWorkDoneWithResult: 4,
+
+  /**
+   * Callers should access the unique ID for the GlodaDatastore
+   * with this getter. If the GlodaDatastore has not been
+   * initialized, this value is null.
+   *
+   * @return a UUID as a string, ex: "c4dd0159-9287-480f-a648-a4613e147fdb"
+   */
+  get datastoreID() {
+    return GlodaDatastore._datastoreID;
+  },
 
   /**
    * Lookup a gloda message from an nsIMsgDBHdr, with the result returned as a
@@ -478,7 +469,8 @@ var Gloda = {
       // (it will fix-up the name based on the card as appropriate)
       if (card)
         yield aCallbackHandle.pushAndGo(
-          Gloda.grokNounItem(contact, card, true, true, aCallbackHandle));
+          Gloda.grokNounItem(contact, {card: card}, true, true,
+                             aCallbackHandle));
       else // grokNounItem will issue the insert for us...
         GlodaDatastore.insertContact(contact);
 
@@ -682,6 +674,11 @@ var Gloda = {
    */
   BUILT_IN: "built-in",
 
+  /**
+   * Special sentinel value that will cause facets to skip a noun instance
+   * when an attribute has this value.
+   */
+  IGNORE_FACET: GlodaDatastore.IGNORE_FACET,
 
   /*
    * The following are explicit noun IDs.  While most extension-provided nouns
@@ -781,6 +778,10 @@ var Gloda = {
    * An attachment to a message. A message may have many different attachments.
    */
   NOUN_ATTACHMENT: GlodaAttachment.prototype.NOUN_ID, // 105
+  /**
+   * An account related to a message. A message can have only one account.
+   */
+  NOUN_ACCOUNT: GlodaAccount.prototype.NOUN_ID, // 106
 
   /**
    * Parameterized identities, for use in the from-me, to-me, cc-me optimization
@@ -893,10 +894,12 @@ var Gloda = {
     //  the legwork.  The schema attribute is the gateway to this magical world
     //  of functionality.  Said door is officially unsupported.
     if (aNounDef.schema) {
-      if (aNounDef.schema.name)
-        aNounDef.tableName = "ext_" + aNounDef.schema.name;
-      else
-        aNounDef.tableName = "ext_" + aNounDef.name;
+      if (!aNounDef.tableName) {
+        if (aNounDef.schema.name)
+          aNounDef.tableName = "ext_" + aNounDef.schema.name;
+        else
+          aNounDef.tableName = "ext_" + aNounDef.name;
+      }
       // this creates the data table and binder and hooks everything up
       GlodaDatastore.createNounTable(aNounDef);
 
@@ -1225,6 +1228,30 @@ var Gloda = {
           return [null, GlodaDatastore._mapFolder(aFolderOrGlodaFolder).id];
       }}, this.NOUN_FOLDER);
     this.defineNoun({
+      name: "account",
+      clazz: GlodaAccount,
+      allowsArbitraryAttrs: false,
+      isPrimitive: false,
+      equals: function(a, b) {
+        if (a && !b || !a && b)
+          return false;
+        if (!a && !b)
+          return true;
+        return a.id == b.id;
+      },
+      comparator: function gloda_account_comparator(a, b) {
+        if (a == null) {
+          if (b == null)
+            return 0;
+          else
+            return 1;
+        }
+        else if (b == null) {
+          return -1;
+        }
+        return a.name.localeCompare(b.name);
+      }}, this.NOUN_ACCOUNT);
+    this.defineNoun({
       name: "conversation",
       clazz: GlodaConversation,
       allowsArbitraryAttrs: false,
@@ -1354,16 +1381,18 @@ var Gloda = {
       allowsArbitraryAttrs: false,
       isPrimitive: false,
       toJSON: function (x) {
-          return {
-            name: x.name,
-            contentType: x.contentType,
-            size: x.size,
-            url: x.url,
-            isExternal: x.isExternal,
-          }
+          return [
+            x._name,
+            x._contentType,
+            x._size,
+            x._part,
+            x._externalUrl,
+            x._isExternal
+          ]
         },
-      fromJSON: function (x) {
-          return new GlodaAttachment(x.name, x.contentType, x.size, x.url, x.isExternal);
+      fromJSON: function (x, aGlodaMessage) {
+          let [name, contentType, size, _part, _externalUrl, isExternal] = x;
+          return new GlodaAttachment(aGlodaMessage, name, contentType, size, _part, _externalUrl, isExternal);
         },
       }, this.NOUN_ATTACHMENT);
 
@@ -1484,6 +1513,7 @@ var Gloda = {
     // -- the query constraint helpers
     if (aSubjectNounDef.queryClass !== undefined) {
       let constrainer;
+      let canQuery = true;
       if (aAttrDef.special == this.kSpecialFulltext) {
         constrainer = function() {
           let constraint = [GlodaDatastore.kConstraintFulltext, aAttrDef];
@@ -1494,7 +1524,7 @@ var Gloda = {
           return this;
         };
       }
-      else {
+      else if (aAttrDef.canQuery || aAttrDef.attributeName[0] == "_") {
         constrainer = function() {
           let constraint = [GlodaDatastore.kConstraintIn, aAttrDef];
           for (let iArg = 0; iArg < arguments.length; iArg++) {
@@ -1503,9 +1533,23 @@ var Gloda = {
           this._constraints.push(constraint);
           return this;
         };
+      } else {
+        constrainer = function() {
+          throw new Error(
+              "Cannot query on attribute "+aAttrDef.attributeName
+            + " because its canQuery parameter hasn't been set to true."
+            + " Reading the comments about Gloda.defineAttribute may be a"
+            + " sensible thing to do now.");
+        }
+        canQuery = false;
       }
 
       aSubjectNounDef.queryClass.prototype[aAttrDef.boundName] = constrainer;
+
+      // Don't bind extra query-able attributes if we're unable to perform a
+      // search on the attribute.
+      if (!canQuery)
+        return;
 
       // - ranged value helper: fooRange
       if (objectNounDef.continuous) {
@@ -1634,6 +1678,9 @@ var Gloda = {
     // -- Fill in defaults
     if (!("emptySetIsSignificant" in aAttrDef))
       aAttrDef.emptySetIsSignificant = false;
+
+    if (!("canQuery" in aAttrDef))
+      aAttrDef.canQuery = aAttrDef.facet ? true : false;
 
     // return if the attribute has already been defined
     if (aAttrDef.dbDef)
@@ -1914,10 +1961,18 @@ var Gloda = {
    * - JSON-able representation.
    *
    * @param aItem The noun instance you want processed.
-   * @param aRawReps An opaque dictionary that we pass to the attribute
-   *     providers.  There is a(n implied) contract between the caller of
-   *     grokNounItem for a given noun type and the attribute providers for
-   *     that noun type, and we have nothing to do with it.
+   * @param aRawReps A dictionary that we pass to the attribute providers.
+   *     There is a(n implied) contract between the caller of grokNounItem for a
+   *     given noun type and the attribute providers for that noun type, and we
+   *     have nothing to do with it OTHER THAN inserting a 'trueGlodaRep'
+   *     value into it.  In the event of reindexing an existing object, the
+   *     gloda representation we pass to the indexers is actually a clone that
+   *     allows the asynchronous indexers to mutate the object without
+   *     causing visible changes in the existing representation of the gloda
+   *     object.  We patch the changes back onto the original item atomically
+   *     once indexing completes.  The 'trueGlodaRep' is then useful for
+   *     objects that hang off of the gloda instance that need a reference
+   *     back to their containing object for API convenience purposes.
    * @param aIsConceptuallyNew Is the item "new" in the sense that it would
    *     never have been visible from within user code?  This translates into
    *     whether this should trigger an itemAdded notification or an
@@ -1945,6 +2000,7 @@ var Gloda = {
     let jsonDict = {};
 
     let aOldItem;
+    aRawReps.trueGlodaRep = aItem;
     if (aIsConceptuallyNew) // there is no old item if we are new.
       aOldItem = {};
     else {
@@ -2007,10 +2063,26 @@ var Gloda = {
           jsonDict[attrib.id] = value;
       }
 
+      let oldValue = aOldItem[key];
+
+      // the 'old' item is still the canonical one; update it
+      // do the update now, because we may skip operations on addDBAttribs and
+      //  removeDBattribs, if the attribute is not to generate entries in
+      //  messageAttributes
+      if (oldValue !== undefined || !aIsConceptuallyNew)
+        aOldItem[key] = value;
+
+      // the new canQuery property has to be set to true to generate entries
+      // in the messageAttributes table. Any other truthy value (like a non
+      // empty string), will still make the message query-able but without
+      // using the database.
+      if (attrib.canQuery !== true) {
+        continue;
+      }
+
       // - database index attributes
 
       // perform a delta analysis against the old value, if we have one
-      let oldValue = aOldItem[key];
       if (oldValue !== undefined) {
         // in the singular case if they don't match, it's one add and one remove
         if (attrib.singular) {
@@ -2073,16 +2145,9 @@ var Gloda = {
           else if (!value.length && oldValue.length)
             addDBAttribs.push([GlodaDatastore.kEmptySetAttrId, attribDB.id]);
         }
-
-        // replace the old value with the new values... (the 'old' item is
-        //  canonical)
-        aOldItem[key] = value;
       }
       // no old value, all values are new
       else {
-        // the 'old' item is still the canonical one; update it
-        if (!aIsConceptuallyNew)
-          aOldItem[key] = value;
         // add the db reps on the new values
         if (attrib.singular)
           value = [value];
@@ -2111,6 +2176,17 @@ var Gloda = {
       if (attrib === undefined) {
         continue;
       }
+
+      // delete these from the old item, as the old item is canonical, and
+      //  should no longer have these values
+      delete aOldItem[key];
+
+      if (attrib.canQuery !== true) {
+        this._log.debug("Not inserting attribute "+attrib.attributeName
+            +" into the db, since we don't plan on querying on it");
+        continue;
+      }
+
       if (attrib.singular)
         value = [value];
       let attribDB = attrib.dbDef;
@@ -2119,9 +2195,6 @@ var Gloda = {
       // remove the empty set marker if there should have been one
       if (!value.length && attrib.emptySetIsSignificant)
         removeDBAttribs.push([GlodaDatastore.kEmptySetAttrId, attribDB.id]);
-      // delete these from the old item, as the old item is canonical, and
-      //  should no longer have these values
-      delete aOldItem[key];
     }
 
     aItem._jsonText = JSON.stringify(jsonDict);

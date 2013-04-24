@@ -1,40 +1,8 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org Code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  *
@@ -138,7 +106,7 @@ int fill_apple_mime_header(
 			"\"\r\nContent-Disposition: inline; filename=\"%s\"\r\n\r\n\r\n--=\r\n",
 			p_ap_encode_obj->fname);
 #endif /* 0 */
-	PR_snprintf(tmpstr, sizeof(tmpstr), "--%s"CRLF, p_ap_encode_obj->boundary);
+	PR_snprintf(tmpstr, sizeof(tmpstr), "--%s" CRLF, p_ap_encode_obj->boundary);
 	status = write_stream(p_ap_encode_obj, 
 						tmpstr, 
 						strlen(tmpstr));
@@ -156,8 +124,8 @@ int ap_encode_file_infor(
 	char 		comment[256];
 	int	 		status;
     
-    nsCOMPtr <nsILocalFile> resFile;
-    NS_NewNativeLocalFile(nsDependentCString(p_ap_encode_obj->fname), PR_TRUE,
+    nsCOMPtr <nsIFile> resFile;
+    NS_NewNativeLocalFile(nsDependentCString(p_ap_encode_obj->fname), true,
                           getter_AddRefs(resFile));
     if (!resFile)
         return errFileOpen;
@@ -168,7 +136,7 @@ int ap_encode_file_infor(
         return errFileOpen;
 
     FSCatalogInfo catalogInfo;
-    if (::FSGetCatalogInfo(&ref, kFSCatInfoFinderInfo, &catalogInfo, nsnull, nsnull, nsnull) != noErr)
+    if (::FSGetCatalogInfo(&ref, kFSCatInfoFinderInfo, &catalogInfo, nullptr, nullptr, nullptr) != noErr)
 	{
 		return errFileOpen;
 	}
@@ -306,7 +274,7 @@ int ap_encode_file_infor(
 */
 int ap_encode_header(
 	appledouble_encode_object* p_ap_encode_obj, 
-	PRBool  firstime)
+	bool    firstime)
 {
 	char   	rd_buff[256];
     FSIORefNum fileId;
@@ -331,8 +299,8 @@ int ap_encode_header(
 		/*
 		** preparing to encode the resource fork.
 		*/
-        nsCOMPtr <nsILocalFile> myFile;
-        NS_NewNativeLocalFile(nsDependentCString(p_ap_encode_obj->fname), PR_TRUE, getter_AddRefs(myFile));
+        nsCOMPtr <nsIFile> myFile;
+        NS_NewNativeLocalFile(nsDependentCString(p_ap_encode_obj->fname), true, getter_AddRefs(myFile));
         if (!myFile)
             return errFileOpen;
 
@@ -379,7 +347,7 @@ int ap_encode_header(
 		** write out the boundary 
 		*/
 		PR_snprintf(rd_buff, sizeof(rd_buff),
-						CRLF"--%s"CRLF, 
+						CRLF "--%s" CRLF, 
 						p_ap_encode_obj->boundary);
 					
 		status = write_stream(p_ap_encode_obj,
@@ -459,7 +427,7 @@ static char *magic_look(char *inbuff, int numread)
 */
 int ap_encode_data(
 	appledouble_encode_object* p_ap_encode_obj, 
-	PRBool firstime)
+	bool firstime)
 {
 	char   		rd_buff[256];
     FSIORefNum fileId;
@@ -474,8 +442,8 @@ int ap_encode_data(
 		/*
 		** preparing to encode the data fork.
 		*/
-        nsCOMPtr <nsILocalFile> resFile;
-        NS_NewNativeLocalFile(nsDependentCString(p_ap_encode_obj->fname), PR_TRUE,
+        nsCOMPtr <nsIFile> resFile;
+        NS_NewNativeLocalFile(nsDependentCString(p_ap_encode_obj->fname), true,
                               getter_AddRefs(resFile));
         if (!resFile)
             return errFileOpen;
@@ -520,7 +488,7 @@ int ap_encode_data(
         nsCAutoString leafName;
         resFile->GetNativeLeafName(leafName);
 		PR_snprintf(rd_buff, sizeof(rd_buff),
-			"Content-Type: %s; name=\"%s\"" CRLF "Content-Transfer-Encoding: base64" CRLF "Content-Disposition: inline; filename=\"%s\""CRLF CRLF,
+			"Content-Type: %s; name=\"%s\"" CRLF "Content-Transfer-Encoding: base64" CRLF "Content-Disposition: inline; filename=\"%s\"" CRLF CRLF,
 			magic_type,
 			leafName.get(),
 			leafName.get());
@@ -563,7 +531,7 @@ int ap_encode_data(
 		/* write out the boundary 	*/
 		
 		PR_snprintf(rd_buff, sizeof(rd_buff),
-						CRLF"--%s--"CRLF CRLF, 
+						CRLF "--%s--" CRLF CRLF, 
 						p_ap_encode_obj->boundary);
 	
 		status = write_stream(p_ap_encode_obj,

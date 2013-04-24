@@ -1,4 +1,8 @@
 <?xml version="1.0"?>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
 <!DOCTYPE RDF SYSTEM "chrome://messenger-newsblog/locale/am-newsblog.dtd">  
 <RDF:RDF
     xmlns:NC="http://home.netscape.com/NC-rdf#"
@@ -26,7 +30,7 @@
         <NC:wizardAutoGenerateUniqueHostname>true</NC:wizardAutoGenerateUniqueHostname>
         <NC:wizardHideIncoming>true</NC:wizardHideIncoming>
         <NC:wizardAccountName>&feeds.accountName;</NC:wizardAccountName>
-        <NC:wizardSkipPanels>identitypage,serverpage,loginpage</NC:wizardSkipPanels>
+        <NC:wizardSkipPanels>identitypage,incomingpage,outgoingpage</NC:wizardSkipPanels>
         <NC:wizardShortName>&feeds.wizardShortName;</NC:wizardShortName>
         <NC:wizardLongName>&feeds.wizardLongName;</NC:wizardLongName>
         <NC:wizardLongNameAccesskey>&feeds.wizardLongName.accesskey;</NC:wizardLongNameAccesskey>

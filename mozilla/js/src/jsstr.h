@@ -1,54 +1,20 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef jsstr_h___
 #define jsstr_h___
 
 #include <ctype.h>
 #include "jsapi.h"
+#include "jsatom.h"
 #include "jsprvtd.h"
-#include "jshashtable.h"
 #include "jslock.h"
-#include "jsobj.h"
-#include "jsvalue.h"
-#include "jscell.h"
+#include "jsutil.h"
 
+#include "js/HashTable.h"
 #include "vm/Unicode.h"
 
 namespace js {
@@ -74,7 +40,7 @@ class RopeBuilder;
 }  /* namespace js */
 
 extern JSString * JS_FASTCALL
-js_ConcatStrings(JSContext *cx, JSString *s1, JSString *s2);
+js_ConcatStrings(JSContext *cx, js::HandleString s1, js::HandleString s2);
 
 extern JSString * JS_FASTCALL
 js_toLowerCase(JSContext *cx, JSString *str);
@@ -97,18 +63,10 @@ extern JSSubString js_EmptySubString;
 #define JS7_ISDEC(c)    ((((unsigned)(c)) - '0') <= 9)
 #define JS7_UNDEC(c)    ((c) - '0')
 #define JS7_ISHEX(c)    ((c) < 128 && isxdigit(c))
-#define JS7_UNHEX(c)    (uintN)(JS7_ISDEC(c) ? (c) - '0' : 10 + tolower(c) - 'a')
+#define JS7_UNHEX(c)    (unsigned)(JS7_ISDEC(c) ? (c) - '0' : 10 + tolower(c) - 'a')
 #define JS7_ISLET(c)    ((c) < 128 && isalpha(c))
 
 /* Initialize the String class, returning its prototype object. */
-extern js::Class js_StringClass;
-
-inline bool
-JSObject::isString() const
-{
-    return getClass() == &js_StringClass;
-}
-
 extern JSObject *
 js_InitStringClass(JSContext *cx, JSObject *obj);
 
@@ -148,26 +106,33 @@ extern const char *
 js_ValueToPrintable(JSContext *cx, const js::Value &,
                     JSAutoByteString *bytes, bool asSource = false);
 
-/*
- * Convert a value to a string, returning null after reporting an error,
- * otherwise returning a new string reference.
- */
-extern JSString *
-js_ValueToString(JSContext *cx, const js::Value &v);
-
 namespace js {
 
 /*
- * Most code that calls js_ValueToString knows the value is (probably) not a
- * string, so it does not make sense to put this inline fast path into
- * js_ValueToString.
+ * Convert a non-string value to a string, returning null after reporting an
+ * error, otherwise returning a new string reference.
+ */
+extern JSString *
+ToStringSlow(JSContext *cx, const Value &v);
+
+/*
+ * Convert the given value to a string.  This method includes an inline
+ * fast-path for the case where the value is already a string; if the value is
+ * known not to be a string, use ToStringSlow instead.
  */
 static JS_ALWAYS_INLINE JSString *
-ValueToString_TestForStringInline(JSContext *cx, const Value &v)
+ToString(JSContext *cx, const js::Value &v)
 {
+#ifdef DEBUG
+    {
+        SkipRoot skip(cx, &v);
+        MaybeCheckStackRoots(cx);
+    }
+#endif
+
     if (v.isString())
         return v.toString();
-    return js_ValueToString(cx, v);
+    return ToStringSlow(cx, v);
 }
 
 /*
@@ -190,24 +155,15 @@ js_ValueToSource(JSContext *cx, const js::Value &v);
 namespace js {
 
 /*
- * Compute a hash function from str. The caller can call this function even if
- * str is not a GC-allocated thing.
- */
-inline uint32
-HashChars(const jschar *chars, size_t length)
-{
-    uint32 h = 0;
-    for (; length; chars++, length--)
-        h = JS_ROTATE_LEFT32(h, 4) ^ *chars;
-    return h;
-}
-
-/*
  * Test if strings are equal. The caller can call the function even if str1
  * or str2 are not GC-allocated things.
  */
 extern bool
-EqualStrings(JSContext *cx, JSString *str1, JSString *str2, JSBool *result);
+EqualStrings(JSContext *cx, JSString *str1, JSString *str2, bool *result);
+
+/* Use the infallible method instead! */
+extern bool
+EqualStrings(JSContext *cx, JSLinearString *str1, JSLinearString *str2, bool *result) MOZ_DELETE;
 
 /* EqualStrings is infallible on linear strings. */
 extern bool
@@ -218,7 +174,7 @@ EqualStrings(JSLinearString *str1, JSLinearString *str2);
  * str1 is less than, equal to, or greater than str2.
  */
 extern bool
-CompareStrings(JSContext *cx, JSString *str1, JSString *str2, int32 *result);
+CompareStrings(JSContext *cx, JSString *str1, JSString *str2, int32_t *result);
 
 /*
  * Return true if the string matches the given sequence of ASCII bytes.
@@ -226,7 +182,7 @@ CompareStrings(JSContext *cx, JSString *str1, JSString *str2, int32 *result);
 extern bool
 StringEqualsAscii(JSLinearString *str, const char *asciiBytes);
 
-} /* namespacejs */
+} /* namespace js */
 
 extern size_t
 js_strlen(const jschar *s);
@@ -237,32 +193,16 @@ js_strchr(const jschar *s, jschar c);
 extern jschar *
 js_strchr_limit(const jschar *s, jschar c, const jschar *limit);
 
-#define js_strncpy(t, s, n)     memcpy((t), (s), (n) * sizeof(jschar))
+static JS_ALWAYS_INLINE void
+js_strncpy(jschar *dst, const jschar *src, size_t nelem)
+{
+    return js::PodCopy(dst, src, nelem);
+}
+
+extern jschar *
+js_strdup(JSContext *cx, const jschar *s);
 
 namespace js {
-
-/*
- * On encodings:
- *
- * - Some string functions have an optional FlationCoding argument that allow
- *   the caller to force CESU-8 encoding handling. 
- * - Functions that don't take a FlationCoding base their NormalEncoding
- *   behavior on the js_CStringsAreUTF8 value. NormalEncoding is either raw
- *   (simple zero-extension) or UTF-8 depending on js_CStringsAreUTF8.
- * - Functions that explicitly state their encoding do not use the
- *   js_CStringsAreUTF8 value.
- *
- * CESU-8 (Compatibility Encoding Scheme for UTF-16: 8-bit) is a variant of
- * UTF-8 that allows us to store any wide character string as a narrow
- * character string. For strings containing mostly ascii, it saves space.
- * http://www.unicode.org/reports/tr26/
- */
-
-enum FlationCoding
-{
-    NormalEncoding,
-    CESU8Encoding
-};
 
 /*
  * Inflate bytes to jschars. Return null on error, otherwise return the jschar
@@ -279,7 +219,7 @@ DeflateString(JSContext *cx, const jschar *chars, size_t length);
 /*
  * Inflate bytes to JS chars in an existing buffer. 'chars' must be large
  * enough for 'length' jschars. The buffer is NOT null-terminated.
- * 
+ *
  * charsLength must be be initialized with the destination buffer size and, on
  * return, will contain on return the number of copied chars.
  */
@@ -320,37 +260,38 @@ DeflateStringToUTF8Buffer(JSContext *cx, const jschar *chars,
                           size_t charsLength, char *bytes, size_t *length,
                           FlationCoding fc = NormalEncoding);
 
-} /* namespace js */
-
 /*
  * The String.prototype.replace fast-native entry point is exported for joined
  * function optimization in js{interp,tracer}.cpp.
  */
-namespace js {
 extern JSBool
-str_replace(JSContext *cx, uintN argc, js::Value *vp);
-}
+str_replace(JSContext *cx, unsigned argc, js::Value *vp);
 
 extern JSBool
-js_str_toString(JSContext *cx, uintN argc, js::Value *vp);
+str_fromCharCode(JSContext *cx, unsigned argc, Value *vp);
+
+} /* namespace js */
 
 extern JSBool
-js_str_charAt(JSContext *cx, uintN argc, js::Value *vp);
+js_str_toString(JSContext *cx, unsigned argc, js::Value *vp);
 
 extern JSBool
-js_str_charCodeAt(JSContext *cx, uintN argc, js::Value *vp);
+js_str_charAt(JSContext *cx, unsigned argc, js::Value *vp);
+
+extern JSBool
+js_str_charCodeAt(JSContext *cx, unsigned argc, js::Value *vp);
 
 /*
  * Convert one UCS-4 char and write it into a UTF-8 buffer, which must be at
  * least 6 bytes long.  Return the number of UTF-8 bytes of data written.
  */
 extern int
-js_OneUcs4ToUtf8Char(uint8 *utf8Buffer, uint32 ucs4Char);
+js_OneUcs4ToUtf8Char(uint8_t *utf8Buffer, uint32_t ucs4Char);
 
 namespace js {
 
 extern size_t
-PutEscapedStringImpl(char *buffer, size_t size, FILE *fp, JSLinearString *str, uint32 quote);
+PutEscapedStringImpl(char *buffer, size_t size, FILE *fp, JSLinearString *str, uint32_t quote);
 
 /*
  * Write str into buffer escaping any non-printable or non-ASCII character
@@ -362,7 +303,7 @@ PutEscapedStringImpl(char *buffer, size_t size, FILE *fp, JSLinearString *str, u
  * be a single or double quote character that will quote the output.
 */
 inline size_t
-PutEscapedString(char *buffer, size_t size, JSLinearString *str, uint32 quote)
+PutEscapedString(char *buffer, size_t size, JSLinearString *str, uint32_t quote)
 {
     size_t n = PutEscapedStringImpl(buffer, size, NULL, str, quote);
 
@@ -377,14 +318,23 @@ PutEscapedString(char *buffer, size_t size, JSLinearString *str, uint32 quote)
  * will quote the output.
 */
 inline bool
-FileEscapedString(FILE *fp, JSLinearString *str, uint32 quote)
+FileEscapedString(FILE *fp, JSLinearString *str, uint32_t quote)
 {
     return PutEscapedStringImpl(NULL, 0, fp, str, quote) != size_t(-1);
 }
 
+JSBool
+str_match(JSContext *cx, unsigned argc, Value *vp);
+
+JSBool
+str_search(JSContext *cx, unsigned argc, Value *vp);
+
+JSBool
+str_split(JSContext *cx, unsigned argc, Value *vp);
+
 } /* namespace js */
 
 extern JSBool
-js_String(JSContext *cx, uintN argc, js::Value *vp);
+js_String(JSContext *cx, unsigned argc, js::Value *vp);
 
 #endif /* jsstr_h___ */

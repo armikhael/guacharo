@@ -21,7 +21,7 @@ function test()
   }
   function clickTest(doc, win) {
     var clicks = doc.defaultView.clicks;
-    EventUtils.synthesizeMouse(doc.body, 100, 600, {}, win);
+    EventUtils.synthesizeMouseAtCenter(doc.body, {}, win);
     is(doc.defaultView.clicks, clicks+1, "adding 1 more click on BODY");
   }
   function test1() {
@@ -90,8 +90,12 @@ function test()
   }
 
   var loads = 0;
-  function waitForLoad(tab) {
-    gBrowser.getBrowserForTab(gBrowser.tabs[tab]).removeEventListener("load", arguments.callee, true);
+  function waitForLoad(event, tab, listenerContainer) {
+    var b = gBrowser.getBrowserForTab(gBrowser.tabs[tab]);
+    if (b.contentDocument != event.target) {
+      return;
+    }
+    gBrowser.getBrowserForTab(gBrowser.tabs[tab]).removeEventListener("load", listenerContainer.listener, true);
     ++loads;
     if (loads == tabs.length - 1) {
       executeSoon(test1);
@@ -99,7 +103,9 @@ function test()
   }
 
   function fn(f, arg) {
-    return function () { return f(arg); };
+    var listenerContainer = { listener: null }
+    listenerContainer.listener = function (event) { return f(event, arg, listenerContainer); };
+    return listenerContainer.listener;
   }
   for (var i = 1; i < tabs.length; ++i) {
     gBrowser.getBrowserForTab(tabs[i]).addEventListener("load", fn(waitForLoad,i), true);

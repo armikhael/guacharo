@@ -1,4 +1,8 @@
 <?xml version="1.0"?>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
 <!DOCTYPE bindings [
 <!ENTITY % commonDialogDTD  SYSTEM "chrome://global/locale/commonDialog.dtd">
 <!ENTITY % dialogOverlayDTD SYSTEM "chrome://global/locale/dialogOverlay.dtd">
@@ -213,10 +217,8 @@
         <method name="onResize">
             <body>
             <![CDATA[
-                // XXX the <notificationbox/>; to be made app-agnostic later
-                let container = this.parentNode.parentNode;
-                let availWidth = container.clientWidth;
-                let availHeight = container.clientHeight;
+                let availWidth = this.clientWidth;
+                let availHeight = this.clientHeight;
                 if (availWidth == this.availWidth && availHeight == this.availHeight)
                     return;
                 this.availWidth = availWidth;
@@ -270,7 +272,7 @@
             <parameter name="event"/>
             <body>
             <![CDATA[
-                if (event.getPreventDefault())
+                if (event.defaultPrevented)
                     return;
 
                 event.stopPropagation();

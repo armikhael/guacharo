@@ -1,38 +1,9 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla SVG Project code.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "mozilla/Util.h"
 
 #include "DOMSVGPathSeg.h"
 #include "DOMSVGPathSegList.h"
@@ -40,7 +11,8 @@
 #include "SVGAnimatedPathSegList.h"
 #include "nsSVGElement.h"
 #include "nsIDOMSVGPathSeg.h"
-#include "nsDOMError.h"
+#include "nsError.h"
+#include "nsContentUtils.h"
 
 // See the architecture comment in DOMSVGPathSegList.h.
 
@@ -54,7 +26,7 @@ NS_IMPL_CYCLE_COLLECTION_CLASS(DOMSVGPathSeg)
 NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN(DOMSVGPathSeg)
   // We may not belong to a list, so we must null check tmp->mList.
   if (tmp->mList) {
-    tmp->mList->ItemAt(tmp->mListIndex) = nsnull;
+    tmp->mList->ItemAt(tmp->mListIndex) = nullptr;
   }
 NS_IMPL_CYCLE_COLLECTION_UNLINK_NSCOMPTR(mList)
 NS_IMPL_CYCLE_COLLECTION_UNLINK_END
@@ -75,8 +47,8 @@ NS_INTERFACE_MAP_END
 
 
 DOMSVGPathSeg::DOMSVGPathSeg(DOMSVGPathSegList *aList,
-                             PRUint32 aListIndex,
-                             PRBool aIsAnimValItem)
+                             uint32_t aListIndex,
+                             bool aIsAnimValItem)
   : mList(aList)
   , mListIndex(aListIndex)
   , mIsAnimValItem(aIsAnimValItem)
@@ -89,16 +61,16 @@ DOMSVGPathSeg::DOMSVGPathSeg(DOMSVGPathSegList *aList,
 }
 
 DOMSVGPathSeg::DOMSVGPathSeg()
-  : mList(nsnull)
+  : mList(nullptr)
   , mListIndex(0)
-  , mIsAnimValItem(PR_FALSE)
+  , mIsAnimValItem(false)
 {
 }
 
 NS_IMETHODIMP
-DOMSVGPathSeg::GetPathSegType(PRUint16 *aPathSegType)
+DOMSVGPathSeg::GetPathSegType(uint16_t *aPathSegType)
 {
-  *aPathSegType = PRUint16(Type());
+  *aPathSegType = uint16_t(Type());
   return NS_OK;
 }
 
@@ -111,8 +83,8 @@ DOMSVGPathSeg::GetPathSegTypeAsLetter(nsAString &aPathSegTypeAsLetter)
 
 void
 DOMSVGPathSeg::InsertingIntoList(DOMSVGPathSegList *aList,
-                                 PRUint32 aListIndex,
-                                 PRBool aIsAnimValItem)
+                                 uint32_t aListIndex,
+                                 bool aIsAnimValItem)
 {
   NS_ABORT_IF_FALSE(!HasOwner(), "Inserting item that is already in a list");
 
@@ -126,18 +98,18 @@ DOMSVGPathSeg::InsertingIntoList(DOMSVGPathSegList *aList,
 void
 DOMSVGPathSeg::RemovingFromList()
 {
-  PRUint32 argCount = SVGPathSegUtils::ArgCountForType(Type());
+  uint32_t argCount = SVGPathSegUtils::ArgCountForType(Type());
   // InternalItem() + 1, because the args come after the encoded seg type
   memcpy(PtrToMemberArgs(), InternalItem() + 1, argCount * sizeof(float));
-  mList = nsnull;
-  mIsAnimValItem = PR_FALSE;
+  mList = nullptr;
+  mIsAnimValItem = false;
 }
 
 void
 DOMSVGPathSeg::ToSVGPathSegEncodedData(float* aRaw)
 {
   NS_ABORT_IF_FALSE(aRaw, "null pointer");
-  PRUint32 argCount = SVGPathSegUtils::ArgCountForType(Type());
+  uint32_t argCount = SVGPathSegUtils::ArgCountForType(Type());
   if (IsInList()) {
     // 1 + argCount, because we're copying the encoded seg type and args
     memcpy(aRaw, InternalItem(), (1 + argCount) * sizeof(float));
@@ -151,12 +123,12 @@ DOMSVGPathSeg::ToSVGPathSegEncodedData(float* aRaw)
 float*
 DOMSVGPathSeg::InternalItem()
 {
-  PRUint32 dataIndex = mList->mItems[mListIndex].mInternalDataIndex;
+  uint32_t dataIndex = mList->mItems[mListIndex].mInternalDataIndex;
   return &(mList->InternalList().mData[dataIndex]);
 }
 
 #ifdef DEBUG
-PRBool
+bool
 DOMSVGPathSeg::IndexIsValid()
 {
   SVGAnimatedPathSegList *alist = Element()->GetAnimPathSegList();
@@ -172,9 +144,9 @@ DOMSVGPathSeg::IndexIsValid()
 // Implementation of DOMSVGPathSeg sub-classes below this point
 
 #define CHECK_ARG_COUNT_IN_SYNC(segType)                                      \
-          NS_ABORT_IF_FALSE(NS_ARRAY_LENGTH(mArgs) ==                         \
-            SVGPathSegUtils::ArgCountForType(PRUint32(segType)) ||            \
-            PRUint32(segType) == nsIDOMSVGPathSeg::PATHSEG_CLOSEPATH,         \
+          NS_ABORT_IF_FALSE(ArrayLength(mArgs) ==                         \
+            SVGPathSegUtils::ArgCountForType(uint32_t(segType)) ||            \
+            uint32_t(segType) == nsIDOMSVGPathSeg::PATHSEG_CLOSEPATH,         \
             "Arg count/array size out of sync")
 
 #define IMPL_SVGPATHSEG_SUBCLASS_COMMON(segName, segType)                     \
@@ -183,17 +155,17 @@ DOMSVGPathSeg::IndexIsValid()
   {                                                                           \
     CHECK_ARG_COUNT_IN_SYNC(segType);                                         \
     memcpy(mArgs, aArgs,                                                      \
-        SVGPathSegUtils::ArgCountForType(PRUint32(segType)) * sizeof(float)); \
+        SVGPathSegUtils::ArgCountForType(uint32_t(segType)) * sizeof(float)); \
   }                                                                           \
   DOMSVGPathSeg##segName(DOMSVGPathSegList *aList,                            \
-                         PRUint32 aListIndex,                                 \
-                         PRBool aIsAnimValItem)                               \
+                         uint32_t aListIndex,                                 \
+                         bool aIsAnimValItem)                               \
     : DOMSVGPathSeg(aList, aListIndex, aIsAnimValItem)                        \
   {                                                                           \
     CHECK_ARG_COUNT_IN_SYNC(segType);                                         \
   }                                                                           \
   /* From DOMSVGPathSeg: */                                                   \
-  virtual PRUint32                                                            \
+  virtual uint32_t                                                            \
   Type() const                                                                \
   {                                                                           \
     return segType;                                                           \
@@ -229,7 +201,7 @@ DOMSVGPathSeg::IndexIsValid()
   DOMSVGPathSeg##segName::Get##propName(type *a##propName)                    \
   {                                                                           \
     if (mIsAnimValItem && HasOwner()) {                                       \
-      Element()->FlushAnimations(); /* May make HasOwner() == PR_FALSE */     \
+      Element()->FlushAnimations(); /* May make HasOwner() == false */     \
     }                                                                         \
     *a##propName = type(HasOwner() ? InternalItem()[1+index] : mArgs[index]); \
     return NS_OK;                                                             \
@@ -242,9 +214,13 @@ DOMSVGPathSeg::IndexIsValid()
     }                                                                         \
     NS_ENSURE_FINITE(float(a##propName), NS_ERROR_ILLEGAL_VALUE);             \
     if (HasOwner()) {                                                         \
+      if (InternalItem()[1+index] == float(a##propName)) {                    \
+        return NS_OK;                                                         \
+      }                                                                       \
+      NS_ABORT_IF_FALSE(IsInList(), "Will/DidChangePathSegList() is wrong");  \
+      nsAttrValue emptyOrOldValue = Element()->WillChangePathSegList();       \
       InternalItem()[1+index] = float(a##propName);                           \
-      NS_ABORT_IF_FALSE(IsInList(), "DidChangePathSegList() is wrong");       \
-      Element()->DidChangePathSegList(PR_TRUE);                               \
+      Element()->DidChangePathSegList(emptyOrOldValue);                       \
       if (mList->AttrIsAnimating()) {                                         \
         Element()->AnimationNeedsResample();                                  \
       }                                                                       \
@@ -260,7 +236,7 @@ DOMSVGPathSeg::IndexIsValid()
 
 // For the boolean flags in arc commands
 #define IMPL_BOOL_PROP(segName, propName, index) \
-  IMPL_PROP_WITH_TYPE(segName, propName, index, PRBool)
+  IMPL_PROP_WITH_TYPE(segName, propName, index, bool)
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -552,7 +528,7 @@ class DOMSVGPathSegArcAbs
 {
 public:
   DOMSVGPathSegArcAbs(float r1, float r2, float angle,
-                      PRBool largeArcFlag, PRBool sweepFlag,
+                      bool largeArcFlag, bool sweepFlag,
                       float x, float y)
     : DOMSVGPathSeg()
   {
@@ -592,7 +568,7 @@ class DOMSVGPathSegArcRel
 {
 public:
   DOMSVGPathSegArcRel(float r1, float r2, float angle,
-                      PRBool largeArcFlag, PRBool sweepFlag,
+                      bool largeArcFlag, bool sweepFlag,
                       float x, float y)
     : DOMSVGPathSeg()
   {
@@ -854,12 +830,12 @@ IMPL_FLOAT_PROP(CurvetoQuadraticSmoothRel, Y, 1)
 // This must come after DOMSVGPathSegClosePath et. al. have been declared.
 /* static */ DOMSVGPathSeg*
 DOMSVGPathSeg::CreateFor(DOMSVGPathSegList *aList,
-                         PRUint32 aListIndex,
-                         PRBool aIsAnimValItem)
+                         uint32_t aListIndex,
+                         bool aIsAnimValItem)
 {
-  PRUint32 dataIndex = aList->mItems[aListIndex].mInternalDataIndex;
+  uint32_t dataIndex = aList->mItems[aListIndex].mInternalDataIndex;
   float *data = &aList->InternalList().mData[dataIndex];
-  PRUint32 type = SVGPathSegUtils::DecodeType(data[0]);
+  uint32_t type = SVGPathSegUtils::DecodeType(data[0]);
 
   switch (type)
   {
@@ -903,7 +879,7 @@ DOMSVGPathSeg::CreateFor(DOMSVGPathSegList *aList,
     return new DOMSVGPathSegCurvetoQuadraticSmoothRel(aList, aListIndex, aIsAnimValItem);
   default:
     NS_NOTREACHED("Invalid path segment type");
-    return nsnull;
+    return nullptr;
   }
 }
 
@@ -983,7 +959,7 @@ NS_NewSVGPathSegCurvetoQuadraticRel(float x, float y,
 nsIDOMSVGPathSeg*
 NS_NewSVGPathSegArcAbs(float x, float y,
                        float r1, float r2, float angle,
-                       PRBool largeArcFlag, PRBool sweepFlag)
+                       bool largeArcFlag, bool sweepFlag)
 {
   // See comment in NS_NewSVGPathSegCurvetoCubicAbs!
 
@@ -993,7 +969,7 @@ NS_NewSVGPathSegArcAbs(float x, float y,
 nsIDOMSVGPathSeg*
 NS_NewSVGPathSegArcRel(float x, float y,
                        float r1, float r2, float angle,
-                       PRBool largeArcFlag, PRBool sweepFlag)
+                       bool largeArcFlag, bool sweepFlag)
 {
   // See comment in NS_NewSVGPathSegCurvetoCubicAbs!
 

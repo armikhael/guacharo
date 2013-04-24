@@ -1,6 +1,10 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * vim: set ts=8 sw=4 et tw=99:
  */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 
 #include "tests.h"
 
@@ -22,14 +26,14 @@ BEGIN_TEST(testRegExpInstanceProperties)
 
     JS_GC(cx);
 
-    CHECK_EQUAL(regexpProto->getCompartment()->initialRegExpShape, NULL);
+    CHECK_EQUAL(regexpProto->compartment()->initialRegExpShape, NULL);
 
     jsval regexp;
     EVAL("/foopy/", &regexp);
     JSObject *robj = JSVAL_TO_OBJECT(regexp);
 
     CHECK(robj->lastProperty());
-    CHECK_EQUAL(robj->getCompartment()->initialRegExpShape, robj->lastProperty());
+    CHECK_EQUAL(robj->compartment()->initialRegExpShape, robj->lastProperty());
 
     return true;
 }
@@ -46,7 +50,7 @@ JS_NEVER_INLINE bool helper(JSObject *regexpProto)
     const js::Shape *shape = regexpProto->lastProperty();
     js::AutoShapeRooter root(cx, shape);
     for (js::Shape::Range r = shape;
-         &r.front() != regexpProto->getCompartment()->initialRegExpShape;
+         &r.front() != regexpProto->compartment()->initialRegExpShape;
          r.popFront())
     {
          CHECK(!r.empty());
@@ -63,7 +67,7 @@ JS_NEVER_INLINE bool helper(JSObject *regexpProto)
     js::AutoShapeRooter root2(cx, shape2);
     js::Shape::Range r2 = shape2;
     while (!r2.empty()) {
-        CHECK(&r2.front() != regexpProto->getCompartment()->initialRegExpShape);
+        CHECK(&r2.front() != regexpProto->compartment()->initialRegExpShape);
         r2.popFront();
     }
 

@@ -1,46 +1,25 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  * vim: sw=2 ts=2 et lcs=trail\:.,tab\:>~ :
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Oracle Corporation code.
- *
- * The Initial Developer of the Original Code is
- *  Oracle Corporation
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Taras Glek <tglek@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <string.h>
 #include "mozilla/Telemetry.h"
+#include "mozilla/Preferences.h"
 #include "sqlite3.h"
 #include "nsThreadUtils.h"
+#include "mozilla/Util.h"
+
+/**
+ * This preference is a workaround to allow users/sysadmins to identify
+ * that the profile exists on an NFS share whose implementation
+ * is incompatible with SQLite's default locking implementation.
+ * Bug 433129 attempted to automatically identify such file-systems, 
+ * but a reliable way was not found and it was determined that the fallback 
+ * locking is slower than POSIX locking, so we do not want to do it by default.
+*/
+#define PREF_NFS_FILESYSTEM   "storage.nfs_filesystem"
 
 namespace {
 
@@ -66,8 +45,8 @@ struct Histograms {
 
 Histograms gHistograms[] = {
   SQLITE_TELEMETRY("places.sqlite", PLACES),
-  SQLITE_TELEMETRY("urlclassifier3.sqlite", URLCLASSIFIER),
   SQLITE_TELEMETRY("cookies.sqlite", COOKIES),
+  SQLITE_TELEMETRY("webappsstore.sqlite", WEBAPPS),
   SQLITE_TELEMETRY(NULL, OTHER)
 };
 #undef SQLITE_TELEMETRY
@@ -92,9 +71,9 @@ public:
   }
 
   ~IOThreadAutoTimer() {
-    PRUint32 mainThread = NS_IsMainThread() ? 1 : 0;
-    Telemetry::Accumulate(static_cast<Telemetry::ID>(id + mainThread),
-                          (TimeStamp::Now() - start).ToMilliseconds());
+    uint32_t mainThread = NS_IsMainThread() ? 1 : 0;
+    Telemetry::AccumulateTimeDelta(static_cast<Telemetry::ID>(id + mainThread),
+                                   start);
   }
 
 private:
@@ -322,6 +301,8 @@ xOpen(sqlite3_vfs* vfs, const char *zName, sqlite3_file* pFile,
   }
   p->histograms = h;
   rc = orig_vfs->xOpen(orig_vfs, zName, p->pReal, flags, pOutFlags);
+  if( rc != SQLITE_OK )
+    return rc;
   if( p->pReal->pMethods ){
     sqlite3_io_methods *pNew = new sqlite3_io_methods;
     const sqlite3_io_methods *pSub = p->pReal->pMethods;
@@ -433,6 +414,30 @@ xCurrentTimeInt64(sqlite3_vfs *vfs, sqlite3_int64 *piNow)
   return orig_vfs->xCurrentTimeInt64(orig_vfs, piNow);
 }
 
+static
+int
+xSetSystemCall(sqlite3_vfs *vfs, const char *zName, sqlite3_syscall_ptr pFunc)
+{
+  sqlite3_vfs *orig_vfs = static_cast<sqlite3_vfs*>(vfs->pAppData);
+  return orig_vfs->xSetSystemCall(orig_vfs, zName, pFunc);
+}
+
+static
+sqlite3_syscall_ptr
+xGetSystemCall(sqlite3_vfs *vfs, const char *zName)
+{
+  sqlite3_vfs *orig_vfs = static_cast<sqlite3_vfs*>(vfs->pAppData);
+  return orig_vfs->xGetSystemCall(orig_vfs, zName);
+}
+
+static
+const char *
+xNextSystemCall(sqlite3_vfs *vfs, const char *zName)
+{
+  sqlite3_vfs *orig_vfs = static_cast<sqlite3_vfs*>(vfs->pAppData);
+  return orig_vfs->xNextSystemCall(orig_vfs, zName);
+}
+
 }
 
 namespace mozilla {
@@ -441,21 +446,32 @@ namespace storage {
 sqlite3_vfs* ConstructTelemetryVFS()
 {
 #if defined(XP_WIN)
-#define EXPECTED_VFS "win32"
+#define EXPECTED_VFS     "win32"
+#define EXPECTED_VFS_NFS "win32"
 #else
-#define EXPECTED_VFS "unix"
+#define EXPECTED_VFS     "unix"
+#define EXPECTED_VFS_NFS "unix-excl"
 #endif
-
-  sqlite3_vfs *vfs = sqlite3_vfs_find(NULL);
-  const bool expected_vfs = vfs->zName && !strcmp(vfs->zName, EXPECTED_VFS);
+  
+  bool expected_vfs;
+  sqlite3_vfs *vfs;
+  if (Preferences::GetBool(PREF_NFS_FILESYSTEM)) {
+    vfs = sqlite3_vfs_find(EXPECTED_VFS_NFS);
+    expected_vfs = (vfs != nullptr);
+  }
+  else {
+    vfs = sqlite3_vfs_find(NULL);
+    expected_vfs = vfs->zName && !strcmp(vfs->zName, EXPECTED_VFS);
+  }
   if (!expected_vfs) {
     return NULL;
   }
 
   sqlite3_vfs *tvfs = new ::sqlite3_vfs;
   memset(tvfs, 0, sizeof(::sqlite3_vfs));
-  tvfs->iVersion = 2;
-  NS_ASSERTION(vfs->iVersion == tvfs->iVersion, "Telemetry wrapper needs to be updated");
+  tvfs->iVersion = 3;
+  // If the SQLite VFS version is updated, this shim must be updated as well.
+  MOZ_ASSERT(vfs->iVersion == tvfs->iVersion);
   tvfs->szOsFile = sizeof(telemetry_file) - sizeof(sqlite3_file) + vfs->szOsFile;
   tvfs->mxPathname = vfs->mxPathname;
   tvfs->zName = "telemetry-vfs";
@@ -472,7 +488,13 @@ sqlite3_vfs* ConstructTelemetryVFS()
   tvfs->xSleep = xSleep;
   tvfs->xCurrentTime = xCurrentTime;
   tvfs->xGetLastError = xGetLastError;
+  // Added in version 2.
   tvfs->xCurrentTimeInt64 = xCurrentTimeInt64;
+  // Added in version 3.
+  tvfs->xSetSystemCall = xSetSystemCall;
+  tvfs->xGetSystemCall = xGetSystemCall;
+  tvfs->xNextSystemCall = xNextSystemCall;
+
   return tvfs;
 }
 

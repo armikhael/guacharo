@@ -1,40 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK *****
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  * This Original Code has been modified by IBM Corporation. Modifications made by IBM 
  * described herein are Copyright (c) International Business Machines Corporation, 2000.
  * Modifications to Mozilla code or documentation identified per MPL Section 3.3
@@ -87,8 +55,8 @@ public:
   nsCOMPtr <nsIMsgFolder> m_folderWatching; // folder whose db we're listening to.
   nsCOMPtr <nsISupportsArray> m_searchTerms;
   nsCOMPtr <nsIMsgSearchSession> m_searchSession;
-  PRBool m_searchOnMsgStatus;
-  PRBool m_batchingEvents;
+  bool m_searchOnMsgStatus;
+  bool m_batchingEvents;
 };
 
 
@@ -118,7 +86,7 @@ public:
 
 private:
 
-  PRBool m_accountsLoaded;
+  bool m_accountsLoaded;
   nsCOMPtr <nsIMsgFolderCache> m_msgFolderCache;
   nsCOMPtr<nsIAtom> kDefaultServerAtom;
   nsCOMPtr<nsIAtom> mFolderFlagAtom;
@@ -130,29 +98,29 @@ private:
   nsTObserverArray<nsRefPtr<VirtualFolderChangeListener> > m_virtualFolderListeners;
   nsCOMPtr<nsIMsgFolder> m_folderDoingEmptyTrash;
   nsCOMPtr<nsIMsgFolder> m_folderDoingCleanupInbox;
-  PRBool m_emptyTrashInProgress;
-  PRBool m_cleanupInboxInProgress;
+  bool m_emptyTrashInProgress;
+  bool m_cleanupInboxInProgress;
 
   nsCString mAccountKeyList;
 
   // These are static because the account manager may go away during
   // shutdown, and get recreated.
-  static PRBool m_haveShutdown;
-  static PRBool m_shutdownInProgress;
+  static bool m_haveShutdown;
+  static bool m_shutdownInProgress;
 
-  PRBool m_userAuthenticated;
-  PRBool m_loadingVirtualFolders;
-  PRBool m_virtualFoldersLoaded;
+  bool m_userAuthenticated;
+  bool m_loadingVirtualFolders;
+  bool m_virtualFoldersLoaded;
 
   /* we call FindServer() a lot.  so cache the last server found */
   nsCOMPtr <nsIMsgIncomingServer> m_lastFindServerResult;
   nsCString m_lastFindServerHostName;
   nsCString m_lastFindServerUserName;
-  PRInt32 m_lastFindServerPort;
+  int32_t m_lastFindServerPort;
   nsCString m_lastFindServerType;
 
   void SetLastServerFound(nsIMsgIncomingServer *server, const nsACString& hostname,
-                          const nsACString& username, const PRInt32 port, const nsACString& type);
+                          const nsACString& username, const int32_t port, const nsACString& type);
 
   // Cache the results of the last call to FolderUriFromDirInProfile
   nsCOMPtr<nsIFile> m_lastPathLookedUp;
@@ -190,22 +158,22 @@ private:
   //
 
   // find the identities that correspond to the given server
-  static PRBool findIdentitiesForServer(nsISupports *element, void *aData);
+  static bool findIdentitiesForServer(nsISupports *element, void *aData);
 
   // find the servers that correspond to the given identity
-  static PRBool findServersForIdentity (nsISupports *element, void *aData);
+  static bool findServersForIdentity (nsISupports *element, void *aData);
 
-  static PRBool findServerIndexByServer(nsISupports *element, void *aData);
+  static bool findServerIndexByServer(nsISupports *element, void *aData);
   // find the account with the given key
-  static PRBool findAccountByKey (nsISupports *element, void *aData);
+  static bool findAccountByKey (nsISupports *element, void *aData);
 
-  static PRBool findAccountByServerKey (nsISupports *element, void *aData);
+  static bool findAccountByServerKey (nsISupports *element, void *aData);
 
   // load up the identities into the given nsISupportsArray
-  static PRBool getIdentitiesToArray(nsISupports *element, void *aData);
+  static bool getIdentitiesToArray(nsISupports *element, void *aData);
 
   // add identities if they don't alreadby exist in the given nsISupportsArray
-  static PRBool addIdentityIfUnique(nsISupports *element, void *aData);
+  static bool addIdentityIfUnique(nsISupports *element, void *aData);
 
   //
   // server enumerators
@@ -225,16 +193,16 @@ private:
   nsresult findServerInternal(const nsACString& username,
                               const nsACString& hostname,
                               const nsACString& type,
-                              PRInt32 port,
-                              PRBool aRealFlag,
+                              int32_t port,
+                              bool aRealFlag,
                               nsIMsgIncomingServer** aResult);
 
   // handle virtual folders
-  static nsresult GetVirtualFoldersFile(nsCOMPtr<nsILocalFile>& file);
+  static nsresult GetVirtualFoldersFile(nsCOMPtr<nsIFile>& file);
   static nsresult WriteLineToOutputStream(const char *prefix, const char * line, nsIOutputStream *outputStream);
   void     ParseAndVerifyVirtualFolderScope(nsCString &buffer,
                                             nsIRDFService *rdf);
-  nsresult AddVFListenersForVF(nsIMsgFolder *virtualFolder, 
+  nsresult AddVFListenersForVF(nsIMsgFolder *virtualFolder,
                                const nsCString& srchFolderUris,
                                nsIRDFService *rdf,
                                nsIMsgDBService *msgDBService);
@@ -242,23 +210,24 @@ private:
   nsresult RemoveVFListenerForVF(nsIMsgFolder *virtualFolder,
                                  nsIMsgFolder *folder);
 
-  static void getUniqueAccountKey(const char * prefix,
-                                  nsISupportsArray *accounts,
+  static void getUniqueAccountKey(nsISupportsArray *accounts,
                                   nsCString& aResult);
 
 
+  // Scan the preferences to find a unique server key
+  void GetUniqueServerKey(nsACString& aResult);
+
   nsresult RemoveFolderFromSmartFolder(nsIMsgFolder *aFolder,
-                                       PRUint32 flagsChanged);
+                                       uint32_t flagsChanged);
 
   nsresult SetSendLaterUriPref(nsIMsgIncomingServer *server);
 
-  nsresult getPrefService();
   nsCOMPtr<nsIPrefBranch> m_prefs;
 
   //
   // root folder listener stuff
   //
-  
+
   // this array is for folder listeners that are supposed to be listening
   // on the root folders.
   // When a new server is created, all of the the folder listeners
@@ -266,9 +235,8 @@ private:
   // When a new listener is added, it should be added to all root folders.
   // similar for when servers are deleted or listeners removed
   nsCOMPtr<nsISupportsArray> mFolderListeners;
-  
-  // folder listener enumerators
-  static PRBool addListenerToFolder(nsISupports *element, void *data);
-  static PRBool removeListenerFromFolder(nsISupports *element, void *data);
-};
 
+  // folder listener enumerators
+  static bool addListenerToFolder(nsISupports *element, void *data);
+  static bool removeListenerFromFolder(nsISupports *element, void *data);
+};

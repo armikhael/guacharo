@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Mike Shaver <shaver@mozilla.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * Implementation of nsIFile for ``Unixy'' systems.
@@ -53,7 +19,8 @@
 #include "nsReadableUtils.h"
 #include "nsIHashable.h"
 #include "nsIClassInfoImpl.h"
-#ifdef XP_MACOSX
+#include "mozilla/Attributes.h"
+#ifdef MOZ_WIDGET_COCOA
 #include "nsILocalFileMac.h"
 #endif
 
@@ -108,8 +75,8 @@
 #endif
 
 
-class NS_COM nsLocalFile :
-#ifdef XP_MACOSX
+class nsLocalFile MOZ_FINAL :
+#ifdef MOZ_WIDGET_COCOA
                            public nsILocalFileMac,
 #else
                            public nsILocalFile,
@@ -126,7 +93,7 @@ public:
     NS_DECL_ISUPPORTS
     NS_DECL_NSIFILE
     NS_DECL_NSILOCALFILE
-#ifdef XP_MACOSX
+#ifdef MOZ_WIDGET_COCOA
     NS_DECL_NSILOCALFILEMAC
 #endif
     NS_DECL_NSIHASHABLE
@@ -149,15 +116,15 @@ protected:
                               nsACString::const_iterator &);
 
     nsresult CopyDirectoryTo(nsIFile *newParent);
-    nsresult CreateAllAncestors(PRUint32 permissions);
+    nsresult CreateAllAncestors(uint32_t permissions);
     nsresult GetNativeTargetPathName(nsIFile *newParent,
                                      const nsACString &newName,
                                      nsACString &_retval);
 
-    PRBool FillStatCache();
+    bool FillStatCache();
 
-    nsresult CreateAndKeepOpen(PRUint32 type, PRIntn flags,
-                               PRUint32 permissions, PRFileDesc **_retval);
+    nsresult CreateAndKeepOpen(uint32_t type, int flags,
+                               uint32_t permissions, PRFileDesc **_retval);
 };
 
 #endif /* _nsLocalFileUNIX_H_ */

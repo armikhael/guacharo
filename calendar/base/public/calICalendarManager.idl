@@ -1,65 +1,33 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Oracle Corporation code.
- *
- * The Initial Developer of the Original Code is Oracle Corporation
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Stuart Parmenter <stuart.parmenter@oracle.com>
- *   Philipp Kewisch <mozilla@kewis.ch>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsISupports.idl"
 
 interface calICalendar;
+interface calIObserver;
 interface nsIURI;
 interface nsIVariant;
 
 interface calICalendarManagerObserver;
 
-[scriptable, uuid(43a71d40-7807-4e2f-b741-2926ee73f89a)]
+[scriptable, uuid(613fb99f-359c-4a12-9c87-10b2b968f8cd)]
 interface calICalendarManager : nsISupports
 {
   /**
    * Gives the number of registered calendars that require network access.
    */
-  readonly attribute PRUint32 networkCalendarCount;
+  readonly attribute uint32_t networkCalendarCount;
 
   /***
    * Gives the number of registered readonly calendars.
    */
-  readonly attribute PRUint32 readOnlyCalendarCount;
+  readonly attribute uint32_t readOnlyCalendarCount;
 
   /**
    * Gives the number of registered calendars
    */
-  readonly attribute PRUint32 calendarCount;
+  readonly attribute uint32_t calendarCount;
   /* 
    * create a new calendar
    * aType is the type ("caldav", "storage", etc)
@@ -75,10 +43,22 @@ interface calICalendarManager : nsISupports
   /* delete a calendar for good */
   void deleteCalendar(in calICalendar aCalendar);
 
+  /* get a calendar by its id */
+  calICalendar getCalendarById(in AUTF8String aId);
+
   /* return a list of all calendars currently registered */
-  void getCalendars(out PRUint32 count,
+  void getCalendars(out uint32_t count,
                     [array, size_is(count), retval] out calICalendar aCalendars);
 
+  /** Add an observer for the calendar manager, i.e when calendars are registered */
+  void addObserver(in calICalendarManagerObserver aObserver);
+  /** Remove an observer for the calendar manager */
+  void removeObserver(in calICalendarManagerObserver aObserver);
+
+  /** Add an observer to handle changes to all calendars (even disabled or unchecked ones) */
+  void addCalendarObserver(in calIObserver aObserver);
+  /** Remove an observer to handle changes to all calendars */
+  void removeCalendarObserver(in calIObserver aObserver);
 
   /* XXX private, don't use:
          will vanish as soon as providers will directly read/write from moz prefs
@@ -91,19 +71,23 @@ interface calICalendarManager : nsISupports
   void deleteCalendarPref_(in calICalendar aCalendar,
                            in AUTF8String aName);
   
-  void addObserver(in calICalendarManagerObserver aObserver);
-  void removeObserver(in calICalendarManagerObserver aObserver);
 };
 
+/**
+ * Observer to handle actions done by the calendar manager
+ *
+ * NOTE: When adding methods here, please also add them in calUtils.jsm's
+ * createAdapter() method.
+ */
 [scriptable, uuid(383f36f1-e669-4ca4-be7f-06b43910f44a)]
 interface calICalendarManagerObserver : nsISupports
 {
-  // called after the calendar is registered
+  /** Called after the calendar is registered */
   void onCalendarRegistered(in calICalendar aCalendar);
 
-  // called before the unregister actually takes place
+  /** Called before the unregister actually takes place */
   void onCalendarUnregistering(in calICalendar aCalendar);
 
-  // called before the delete actually takes place
+  /** Called before the delete actually takes place */
   void onCalendarDeleting(in calICalendar aCalendar);
 };

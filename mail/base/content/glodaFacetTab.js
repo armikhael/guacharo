@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 Components.utils.import("resource:///modules/StringBundle.js");
 
 Components.utils.import("resource:///modules/gloda/facet.js");
@@ -6,7 +10,7 @@ Components.utils.import("resource:///modules/gloda/msg_search.js");
 
 var glodaFacetTabType = {
   name: "glodaFacet",
-  perTabPanel: "iframe",
+  perTabPanel: "vbox",
   strings:
     new StringBundle("chrome://messenger/locale/glodaFacetView.properties"),
   modes: {
@@ -19,6 +23,21 @@ var glodaFacetTabType = {
     // we have no browser until our XUL document loads
     aTab.browser = null;
 
+    // First clone the page and set up the basics.
+    let clone = document.getElementById("glodaTab")
+                        .firstChild
+                        .cloneNode(true);
+
+    aTab.panel.appendChild(clone);
+    aTab.iframe = aTab.panel.querySelector("iframe");
+
+    // Wire up the search input icon click event
+    let searchInput = aTab.panel.querySelector(".remote-gloda-search");
+    let searchIcon = aTab.panel.querySelector(".gloda-search-icon");
+    searchIcon.addEventListener("click", function(e) {
+      searchInput.doSearch();
+    });
+
     if ("query" in aArgs) {
       aTab.query = aArgs.query;
       aTab.collection = aTab.query.getCollection();
@@ -30,6 +49,11 @@ var glodaFacetTabType = {
       aTab.searcher = aArgs.searcher;
       aTab.collection = aTab.searcher.getCollection();
       aTab.query = aTab.searcher.query;
+      if ("IMSearcher" in aArgs) {
+        aTab.IMSearcher = aArgs.IMSearcher;
+        aTab.IMCollection = aArgs.IMSearcher.getCollection();
+        aTab.IMQuery = aTab.IMSearcher.query;
+      }
 
       let searchString = aTab.searcher.searchString;
       aTab.title = aTab.searchInputValue = aTab.searchString =
@@ -43,16 +67,16 @@ var glodaFacetTabType = {
     }
 
     function xulLoadHandler() {
-      aTab.panel.contentWindow.removeEventListener("load", xulLoadHandler,
-                                                   false);
-      aTab.panel.contentWindow.tab = aTab;
-      aTab.browser = aTab.panel.contentDocument.getElementById("browser");
+      aTab.iframe.contentWindow.removeEventListener("load", xulLoadHandler,
+                                                    false);
+      aTab.iframe.contentWindow.tab = aTab;
+      aTab.browser = aTab.iframe.contentDocument.getElementById("browser");
       aTab.browser.setAttribute("src",
         "chrome://messenger/content/glodaFacetView.xhtml");
     }
 
-    aTab.panel.contentWindow.addEventListener("load", xulLoadHandler, false);
-    aTab.panel.setAttribute("src",
+    aTab.iframe.contentWindow.addEventListener("load", xulLoadHandler, false);
+    aTab.iframe.setAttribute("src",
       "chrome://messenger/content/glodaFacetViewWrapper.xul");
   },
   closeTab: function glodaFacetTabType_closeTab(aTab) {

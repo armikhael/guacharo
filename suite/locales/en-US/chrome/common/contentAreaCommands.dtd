@@ -1,3 +1,7 @@
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
 <!-- Context Menu -->
 <!ENTITY popupWindowRejectCmd.label     "Reject popup windows from this website">
 <!ENTITY popupWindowRejectCmd.accesskey "o">
@@ -51,13 +55,13 @@
 <!ENTITY viewVideoCmd.accesskey       "i">
 <!ENTITY viewBGImageCmd.label         "View Background Image">
 <!ENTITY viewBGImageCmd.accesskey     "w">
-<!ENTITY setWallpaperCmd.label        "Set As Wallpaper">
-<!ENTITY setWallpaperCmd.accesskey    "A">
-<!ENTITY bookmarkPageCmd.label        "Bookmark This Page">
+<!ENTITY setDesktopBackgroundCmd.label     "Set Desktop Background…">
+<!ENTITY setDesktopBackgroundCmd.accesskey "a">
+<!ENTITY bookmarkPageCmd.label        "Bookmark This Page…">
 <!ENTITY bookmarkPageCmd.accesskey    "m">
-<!ENTITY bookmarkLinkCmd.label        "Bookmark This Link">
+<!ENTITY bookmarkLinkCmd.label        "Bookmark This Link…">
 <!ENTITY bookmarkLinkCmd.accesskey    "B">
-<!ENTITY bookmarkFrameCmd.label       "Bookmark This Frame">
+<!ENTITY bookmarkFrameCmd.label       "Bookmark This Frame…">
 <!ENTITY bookmarkFrameCmd.accesskey   "m">
 <!ENTITY savePageAsCmd.label          "Save Page As…">
 <!ENTITY savePageCmd.label            "Save Page">
@@ -104,6 +108,12 @@
 <!ENTITY mediaHideControls.accesskey  "a">
 <!ENTITY videoFullScreen.label        "Full Screen">
 <!ENTITY videoFullScreen.accesskey    "F">
+<!ENTITY videoSaveImage.label         "Save Snapshot As…">
+<!ENTITY videoSaveImage.accesskey     "S">
+<!ENTITY videoShowStats.label         "Show Statistics">
+<!ENTITY videoShowStats.accesskey     "t">
+<!ENTITY videoHideStats.label         "Hide Statistics">
+<!ENTITY videoHideStats.accesskey     "t">
 <!ENTITY search.accesskey             "W">
 <!ENTITY bidiSwitchPageDirectionItem.label        "Switch Page Direction">
 <!ENTITY bidiSwitchPageDirectionItem.accesskey    "g">
@@ -111,6 +121,8 @@
 <!ENTITY bidiSwitchTextDirectionItem.accesskey    "x">
 <!ENTITY spellAddToDictionary.label     "Add to Dictionary">
 <!ENTITY spellAddToDictionary.accesskey "n">
+<!ENTITY spellUndoAddToDictionary.label      "Undo Add to Dictionary">
+<!ENTITY spellUndoAddToDictionary.accesskey  "i">
 <!ENTITY spellIgnoreWord.label          "Ignore Word">
 <!ENTITY spellIgnoreWord.accesskey      "W">
 <!ENTITY spellCheckEnable.label         "Check Spelling">

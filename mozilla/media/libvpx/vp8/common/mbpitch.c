@@ -17,7 +17,7 @@ typedef enum
     DEST = 1
 } BLOCKSET;
 
-void vp8_setup_block
+static void setup_block
 (
     BLOCKD *b,
     int mv_stride,
@@ -43,7 +43,8 @@ void vp8_setup_block
 
 }
 
-void vp8_setup_macroblock(MACROBLOCKD *x, BLOCKSET bs)
+
+static void setup_macroblock(MACROBLOCKD *x, BLOCKSET bs)
 {
     int block;
 
@@ -64,16 +65,16 @@ void vp8_setup_macroblock(MACROBLOCKD *x, BLOCKSET bs)
 
     for (block = 0; block < 16; block++) /* y blocks */
     {
-        vp8_setup_block(&x->block[block], x->dst.y_stride, y, x->dst.y_stride,
+        setup_block(&x->block[block], x->dst.y_stride, y, x->dst.y_stride,
                         (block >> 2) * 4 * x->dst.y_stride + (block & 3) * 4, bs);
     }
 
     for (block = 16; block < 20; block++) /* U and V blocks */
     {
-        vp8_setup_block(&x->block[block], x->dst.uv_stride, u, x->dst.uv_stride,
+        setup_block(&x->block[block], x->dst.uv_stride, u, x->dst.uv_stride,
                         ((block - 16) >> 1) * 4 * x->dst.uv_stride + (block & 1) * 4, bs);
 
-        vp8_setup_block(&x->block[block+4], x->dst.uv_stride, v, x->dst.uv_stride,
+        setup_block(&x->block[block+4], x->dst.uv_stride, v, x->dst.uv_stride,
                         ((block - 16) >> 1) * 4 * x->dst.uv_stride + (block & 1) * 4, bs);
     }
 }
@@ -86,7 +87,6 @@ void vp8_setup_block_dptrs(MACROBLOCKD *x)
     {
         for (c = 0; c < 4; c++)
         {
-            x->block[r*4+c].diff      = &x->diff[r * 4 * 16 + c * 4];
             x->block[r*4+c].predictor = x->predictor + r * 4 * 16 + c * 4;
         }
     }
@@ -95,7 +95,6 @@ void vp8_setup_block_dptrs(MACROBLOCKD *x)
     {
         for (c = 0; c < 2; c++)
         {
-            x->block[16+r*2+c].diff      = &x->diff[256 + r * 4 * 8 + c * 4];
             x->block[16+r*2+c].predictor = x->predictor + 256 + r * 4 * 8 + c * 4;
 
         }
@@ -105,18 +104,16 @@ void vp8_setup_block_dptrs(MACROBLOCKD *x)
     {
         for (c = 0; c < 2; c++)
         {
-            x->block[20+r*2+c].diff      = &x->diff[320+ r * 4 * 8 + c * 4];
             x->block[20+r*2+c].predictor = x->predictor + 320 + r * 4 * 8 + c * 4;
 
         }
     }
 
-    x->block[24].diff = &x->diff[384];
-
     for (r = 0; r < 25; r++)
     {
         x->block[r].qcoeff  = x->qcoeff  + r * 16;
         x->block[r].dqcoeff = x->dqcoeff + r * 16;
+        x->block[r].eob     = x->eobs + r;
     }
 }
 
@@ -124,6 +121,6 @@ void vp8_build_block_doffsets(MACROBLOCKD *x)
 {
 
     /* handle the destination pitch features */
-    vp8_setup_macroblock(x, DEST);
-    vp8_setup_macroblock(x, PRED);
+    setup_macroblock(x, DEST);
+    setup_macroblock(x, PRED);
 }

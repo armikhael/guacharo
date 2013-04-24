@@ -32,11 +32,7 @@ function run_test() {
 
   try {
     _("Set up test fixtures.");
-    Weave.Service.serverURL = "http://localhost:8080/";
-    Weave.Service.clusterURL = "http://localhost:8080/";
-    Weave.Service.username = "johndoe";
-    Weave.Service.password = "ilovejane";
-    Weave.Service.passphrase = "foo";
+    new SyncTestingInfrastructure("johndoe", "ilovejane", "foo");
     SyncScheduler.globalScore = GLOBAL_SCORE;
     // Avoid daily ping
     Weave.Svc.Prefs.set("lastPing", Math.floor(Date.now() / 1000));
@@ -51,8 +47,8 @@ function run_test() {
     do_check_true(Weave.Service.isLoggedIn);
     do_check_eq(Weave.Status.login, Weave.LOGIN_SUCCEEDED);
 
-    _("Simulate having changed the password somehwere else.");
-    Weave.Service.password = "ilovejosephine";
+    _("Simulate having changed the password somewhere else.");
+    Identity.basicPassword = "ilovejosephine";
 
     _("Let's try to sync.");
     Weave.Service.sync();
@@ -63,11 +59,17 @@ function run_test() {
     _("We're no longer logged in.");
     do_check_false(Weave.Service.isLoggedIn);
 
-    _("Sync status.");
-    do_check_eq(Weave.Status.login, Weave.LOGIN_FAILED_LOGIN_REJECTED);
+    _("Sync status won't have changed yet, because we haven't tried again.");
 
     _("globalScore is reset upon starting a sync.");
     do_check_eq(SyncScheduler.globalScore, 0);
+
+    _("Our next sync will fail appropriately.");
+    try {
+      Weave.Service.sync();
+    } catch (ex) {
+    }
+    do_check_eq(Weave.Status.login, Weave.LOGIN_FAILED_LOGIN_REJECTED);
 
   } finally {
     Weave.Svc.Prefs.resetBranch("");

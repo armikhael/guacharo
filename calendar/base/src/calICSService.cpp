@@ -1,42 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Oracle Corporation code.
- *
- * The Initial Developer of the Original Code is
- *  Oracle Corporation
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Mike Shaver <shaver@off.net>
- *   Michiel van Leeuwen <mvl@exedo.nl>
- *   Daniel Boelzle <daniel.boelzle@sun.com>
- *   Philipp Kewisch <mozilla@kewis.ch>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #include "nsStringStream.h"
 #include "nsComponentManagerUtils.h"
 
@@ -121,7 +85,7 @@ calIcalProperty::GetValue(nsACString &str)
             str.Truncate();
             // Set string to null, because we don't have a value
             // (which is something different then an empty value)
-            str.SetIsVoid(PR_TRUE);
+            str.SetIsVoid(true);
             return NS_OK;
         }
 
@@ -167,7 +131,7 @@ calIcalProperty::GetValueAsIcalString(nsACString &str)
             str.Truncate();
             // Set string to null, because we don't have a value
             // (which is something different then an empty value)
-            str.SetIsVoid(PR_TRUE);
+            str.SetIsVoid(true);
             return NS_OK;
         }
 
@@ -218,7 +182,7 @@ FindParameter(icalproperty *prop, const nsACString &param, icalparameter_kind ki
         if (param.Equals(icalparameter_get_xname(icalparam)))
             return icalparam;
     }
-    return nsnull;
+    return nullptr;
 }
 
 NS_IMETHODIMP
@@ -231,7 +195,7 @@ calIcalProperty::GetParameter(const nsACString &param, nsACString &value)
     if (paramkind == ICAL_NO_PARAMETER)
         return NS_ERROR_INVALID_ARG;
 
-    const char *icalstr = nsnull;
+    const char *icalstr = nullptr;
     if (paramkind == ICAL_X_PARAMETER) {
         icalparameter *icalparam = FindParameter(mProperty, param, ICAL_X_PARAMETER);
         if (icalparam)
@@ -247,7 +211,7 @@ calIcalProperty::GetParameter(const nsACString &param, nsACString &value)
 
     if (!icalstr) {
         value.Truncate();
-        value.SetIsVoid(PR_TRUE);
+        value.SetIsVoid(true);
     } else {
         value.Assign(icalstr);
     }
@@ -314,7 +278,7 @@ calIcalProperty::SetParameter(const nsACString &param, const nsACString &value)
 static nsresult
 FillParameterName(icalparameter *icalparam, nsACString &name)
 {
-    const char *propname = nsnull;
+    const char *propname = nullptr;
     if (icalparam) {
         icalparameter_kind paramkind = icalparameter_isa(icalparam);
         if (paramkind == ICAL_X_PARAMETER)
@@ -329,7 +293,7 @@ FillParameterName(icalparameter *icalparam, nsACString &name)
         name.Assign(propname);
     } else {
         name.Truncate();
-        name.SetIsVoid(PR_TRUE);
+        name.SetIsVoid(true);
     }
 
     return NS_OK;
@@ -398,7 +362,7 @@ nsresult calIcalProperty::getDatetime_(calIcalComponent * parent,
     }
     icaltimetype itt = icalvalue_get_datetime(val);
 
-    char const* tzid_ = nsnull;
+    char const* tzid_ = nullptr;
     if (!itt.is_utc) {
         if (itt.zone) {
             tzid_ = icaltimezone_get_tzid(const_cast<icaltimezone *>(itt.zone));
@@ -416,7 +380,7 @@ nsresult calIcalProperty::getDatetime_(calIcalComponent * parent,
     nsCOMPtr<calITimezone> tz;
     if (tzid_) {
         nsDependentCString const tzid(tzid_);
-        calIcalComponent * comp = nsnull;
+        calIcalComponent * comp = nullptr;
         if (parent) {
             comp = parent->getParentVCalendarOrThis();
         }
@@ -467,7 +431,7 @@ nsresult calIcalProperty::getDatetime_(calIcalComponent * parent,
                         tz = new calTimezone(tzid, tzComp);
                         CAL_ENSURE_MEMORY(tz);
                     } else { // install phantom timezone, so the data could be repaired:
-                        tz = new calTimezone(tzid, nsnull);
+                        tz = new calTimezone(tzid, nullptr);
                         CAL_ENSURE_MEMORY(tz);
                     }
                 }
@@ -512,9 +476,8 @@ calIcalComponent::AddTimezoneReference(calITimezone *aTimezone)
     nsCAutoString tzid;
     nsresult rv = aTimezone->GetTzid(tzid);
     NS_ENSURE_SUCCESS(rv, rv);
-    if (!mReferencedTimezones.Put(tzid, aTimezone)) {
-        return NS_ERROR_OUT_OF_MEMORY;
-    }
+    mReferencedTimezones.Put(tzid, aTimezone);
+
     return NS_OK;
 }
 
@@ -528,15 +491,15 @@ TimezoneHashToTimezoneArray(nsACString const& /*tzid*/, calITimezone * tz, void 
 }
 
 NS_IMETHODIMP
-calIcalComponent::GetReferencedTimezones(PRUint32 * aCount, calITimezone *** aTimezones)
+calIcalComponent::GetReferencedTimezones(uint32_t * aCount, calITimezone *** aTimezones)
 {
     NS_ENSURE_ARG_POINTER(aCount);
     NS_ENSURE_ARG_POINTER(aTimezones);
 
-    PRUint32 const count = mReferencedTimezones.Count();
+    uint32_t const count = mReferencedTimezones.Count();
     if (count == 0) {
         *aCount = 0;
-        *aTimezones = nsnull;
+        *aTimezones = nullptr;
         return NS_OK;
     }
 
@@ -584,13 +547,13 @@ calIcalComponent::SetProperty(icalproperty_kind kind, icalproperty *prop)
 NS_IMETHODIMP                                                           \
 calIcalComponent::Get##Attrname(nsACString &str)                        \
 {                                                                       \
-    PRInt32 val;                                                        \
+    int32_t val;                                                        \
     nsresult rv = GetIntProperty(ICAL_##ICALNAME##_PROPERTY, &val);     \
     if (NS_FAILED(rv))                                                  \
         return rv;                                                      \
     if (val == -1) {                                                    \
         str.Truncate();                                                 \
-        str.SetIsVoid(PR_TRUE);                                         \
+        str.SetIsVoid(true);                                         \
     } else {                                                            \
         str.Assign(icalproperty_##lcname##_to_string((icalproperty_##lcname)val)); \
     }                                                                   \
@@ -600,7 +563,7 @@ calIcalComponent::Get##Attrname(nsACString &str)                        \
 NS_IMETHODIMP                                                           \
 calIcalComponent::Set##Attrname(const nsACString &str)                  \
 {                                                                       \
-    icalproperty *prop = nsnull;                                        \
+    icalproperty *prop = nullptr;                                        \
     if (!str.IsVoid()) {                                                \
         icalproperty_##lcname val =                                     \
             icalproperty_string_to_##lcname(PromiseFlatCString(str).get()); \
@@ -641,26 +604,26 @@ calIcalComponent::Set##Attrname(const nsACString &str)          \
 
 #define COMP_GENERAL_INT_ATTRIBUTE(Attrname, ICALNAME)          \
 NS_IMETHODIMP                                                   \
-calIcalComponent::Get##Attrname(PRInt32 *valp)                  \
+calIcalComponent::Get##Attrname(int32_t *valp)                  \
 {                                                               \
     return GetIntProperty(ICAL_##ICALNAME##_PROPERTY, valp);    \
 }                                                               \
                                                                 \
 NS_IMETHODIMP                                                   \
-calIcalComponent::Set##Attrname(PRInt32 val)                    \
+calIcalComponent::Set##Attrname(int32_t val)                    \
 {                                                               \
     return SetIntProperty(ICAL_##ICALNAME##_PROPERTY, val);     \
 }
 
 #define COMP_ENUM_ATTRIBUTE(Attrname, ICALNAME, lcname)         \
 NS_IMETHODIMP                                                   \
-calIcalComponent::Get##Attrname(PRInt32 *valp)                  \
+calIcalComponent::Get##Attrname(int32_t *valp)                  \
 {                                                               \
     return GetIntProperty(ICAL_##ICALNAME##_PROPERTY, valp);    \
 }                                                               \
                                                                 \
 NS_IMETHODIMP                                                   \
-calIcalComponent::Set##Attrname(PRInt32 val)                    \
+calIcalComponent::Set##Attrname(int32_t val)                    \
 {                                                               \
     icalproperty *prop =                                        \
       icalproperty_new_##lcname((icalproperty_##lcname)val);    \
@@ -669,13 +632,13 @@ calIcalComponent::Set##Attrname(PRInt32 val)                    \
 
 #define COMP_INT_ATTRIBUTE(Attrname, ICALNAME, lcname)          \
 NS_IMETHODIMP                                                   \
-calIcalComponent::Get##Attrname(PRInt32 *valp)                  \
+calIcalComponent::Get##Attrname(int32_t *valp)                  \
 {                                                               \
     return GetIntProperty(ICAL_##ICALNAME##_PROPERTY, valp);    \
 }                                                               \
                                                                 \
 NS_IMETHODIMP                                                   \
-calIcalComponent::Set##Attrname(PRInt32 val)                    \
+calIcalComponent::Set##Attrname(int32_t val)                    \
 {                                                               \
     icalproperty *prop = icalproperty_new_##lcname(val);        \
     return SetProperty(ICAL_##ICALNAME##_PROPERTY, prop);       \
@@ -686,7 +649,7 @@ nsresult calIcalComponent::GetStringProperty(icalproperty_kind kind, nsACString 
     icalproperty *prop = icalcomponent_get_first_property(mComponent, kind);
     if (!prop) {
         str.Truncate();
-        str.SetIsVoid(PR_TRUE);
+        str.SetIsVoid(true);
     } else {
         str.Assign(icalvalue_get_string(icalproperty_get_value(prop)));
     }
@@ -696,7 +659,7 @@ nsresult calIcalComponent::GetStringProperty(icalproperty_kind kind, nsACString 
 nsresult calIcalComponent::SetStringProperty(icalproperty_kind kind,
                                              const nsACString &str)
 {
-    icalvalue *val = nsnull;
+    icalvalue *val = nullptr;
     if (!str.IsVoid()) {
         val = icalvalue_new_string(PromiseFlatCString(str).get());
         if (!val)
@@ -705,17 +668,17 @@ nsresult calIcalComponent::SetStringProperty(icalproperty_kind kind,
     return SetPropertyValue(kind, val);
 }
 
-nsresult calIcalComponent::GetIntProperty(icalproperty_kind kind, PRInt32 *valp)
+nsresult calIcalComponent::GetIntProperty(icalproperty_kind kind, int32_t *valp)
 {
     icalproperty *prop = icalcomponent_get_first_property(mComponent, kind);
     if (!prop)
         *valp = calIIcalComponent::INVALID_VALUE;
     else
-        *valp = (PRInt32)icalvalue_get_integer(icalproperty_get_value(prop));
+        *valp = (int32_t)icalvalue_get_integer(icalproperty_get_value(prop));
     return NS_OK;
 }
 
-nsresult calIcalComponent::SetIntProperty(icalproperty_kind kind, PRInt32 i)
+nsresult calIcalComponent::SetIntProperty(icalproperty_kind kind, int32_t i)
 {
     icalvalue *val = icalvalue_new_integer(i);
     if (!val)
@@ -729,7 +692,7 @@ nsresult calIcalComponent::GetDateTimeAttribute(icalproperty_kind kind,
     NS_ENSURE_ARG_POINTER(dtp);
     icalproperty *prop = icalcomponent_get_first_property(mComponent, kind);
     if (!prop) {
-        *dtp = nsnull;  /* invalid date */
+        *dtp = nullptr;  /* invalid date */
         return NS_OK;
     }
     return calIcalProperty::getDatetime_(this, prop, dtp);
@@ -739,7 +702,7 @@ nsresult calIcalComponent::SetDateTimeAttribute(icalproperty_kind kind,
                                                 calIDateTime * dt)
 {
     ClearAllProperties(kind);
-    PRBool isValid;
+    bool isValid;
     if (!dt || NS_FAILED(dt->GetIsValid(&isValid)) || !isValid) {
         return NS_OK;
     }
@@ -782,7 +745,7 @@ nsresult calIcalProperty::setDatetime_(calIcalComponent * parent,
                     ICAL_TZID_PARAMETER, icaltimezone_get_tzid(const_cast<icaltimezone *>(itt.zone)));
                 icalproperty_set_parameter(prop, param);
             } else { // either floating or phantom:
-                PRBool b = PR_FALSE;
+                bool b = false;
                 if (NS_FAILED(tz->GetIsFloating(&b)) || !b) {
                     // restore the same phantom TZID:
                     nsCAutoString tzid;
@@ -833,7 +796,7 @@ calIcalComponent::Get##Attrname(calIDuration **dtp)                     \
         icalcomponent_get_first_property(mComponent,                    \
                                          ICAL_##ICALNAME##_PROPERTY);   \
     if (!prop) {                                                        \
-        *dtp = nsnull;  /* invalid duration */                          \
+        *dtp = nullptr;  /* invalid duration */                          \
         return NS_OK;                                                   \
     }                                                                   \
     struct icaldurationtype idt =                                       \
@@ -891,7 +854,7 @@ calIcalComponent::GetFirstSubcomponent(const nsACString& kind,
     icalcomponent *ical =
         icalcomponent_get_first_component(mComponent, compkind);
     if (!ical) {
-        *subcomp = nsnull;
+        *subcomp = nullptr;
         return NS_OK;
     }
 
@@ -917,7 +880,7 @@ calIcalComponent::GetNextSubcomponent(const nsACString& kind,
     icalcomponent *ical =
         icalcomponent_get_next_component(mComponent, compkind);
     if (!ical) {
-        *subcomp = nsnull;
+        *subcomp = nullptr;
         return NS_OK;
     }
 
@@ -1050,10 +1013,10 @@ calIcalComponent::Clone(calIIcalComponent **_retval)
 {
     NS_ENSURE_ARG_POINTER(_retval);
     icalcomponent * cloned = icalcomponent_new_clone(mComponent);
-    if (cloned == nsnull)
+    if (cloned == nullptr)
         return NS_ERROR_OUT_OF_MEMORY;
-    calIcalComponent * const comp = new calIcalComponent(cloned, nsnull, getTzProvider());
-    if (comp == nsnull) {
+    calIcalComponent * const comp = new calIcalComponent(cloned, nullptr, getTzProvider());
+    if (comp == nullptr) {
         icalcomponent_free(cloned);
         return NS_ERROR_OUT_OF_MEMORY;
     }
@@ -1077,18 +1040,18 @@ calIcalComponent::AddSubcomponent(calIIcalComponent *comp)
      */
     calIcalComponent * const ical = toIcalComponent(comp);
 
-    PRUint32 tzCount = 0;
-    calITimezone ** timezones = nsnull;
+    uint32_t tzCount = 0;
+    calITimezone ** timezones = nullptr;
     nsresult rv = ical->GetReferencedTimezones(&tzCount, &timezones);
     NS_ENSURE_SUCCESS(rv, rv);
 
     calIcalComponent * const vcal = getParentVCalendarOrThis();
-    PRBool failed = PR_FALSE;
-    for (PRUint32 i = 0; i < tzCount; i++) {
+    bool failed = false;
+    for (uint32_t i = 0; i < tzCount; i++) {
         if (!failed) {
             rv = vcal->AddTimezoneReference(timezones[i]);
             if (NS_FAILED(rv))
-                failed = PR_TRUE;
+                failed = true;
         }
 
         NS_RELEASE(timezones[i]);
@@ -1113,7 +1076,7 @@ calIcalComponent::AddSubcomponent(calIIcalComponent *comp)
 //     NS_ENSURE_ARG_POINTER(comp);
 //     calIcalComponent *ical = static_cast<calIcalComponent *>(comp);
 //     icalcomponent_remove_component(mComponent, ical->mComponent);
-//     ical->mParent = nsnull;
+//     ical->mParent = nullptr;
 //     return NS_OK;
 // }
 
@@ -1129,7 +1092,7 @@ calIcalComponent::GetFirstProperty(const nsACString &kind,
     if (propkind == ICAL_NO_PROPERTY)
         return NS_ERROR_INVALID_ARG;
 
-    icalproperty *icalprop = nsnull;
+    icalproperty *icalprop = nullptr;
     if (propkind == ICAL_X_PROPERTY) {
         for (icalprop =
                  icalcomponent_get_first_property(mComponent, ICAL_X_PROPERTY);
@@ -1145,7 +1108,7 @@ calIcalComponent::GetFirstProperty(const nsACString &kind,
     }
 
     if (!icalprop) {
-        *prop = nsnull;
+        *prop = nullptr;
         return NS_OK;
     }
 
@@ -1165,7 +1128,7 @@ calIcalComponent::GetNextProperty(const nsACString &kind, calIIcalProperty **pro
 
     if (propkind == ICAL_NO_PROPERTY)
         return NS_ERROR_INVALID_ARG;
-    icalproperty *icalprop = nsnull;
+    icalproperty *icalprop = nullptr;
     if (propkind == ICAL_X_PROPERTY) {
         for (icalprop =
                  icalcomponent_get_next_property(mComponent, ICAL_X_PROPERTY);
@@ -1181,7 +1144,7 @@ calIcalComponent::GetNextProperty(const nsACString &kind, calIIcalProperty **pro
     }
 
     if (!icalprop) {
-        *prop = nsnull;
+        *prop = nullptr;
         return NS_OK;
     }
 
@@ -1226,7 +1189,7 @@ calIcalComponent::AddProperty(calIIcalProperty * prop)
 //     // XXX like AddSubcomponent, this is questionable
 //     calIcalProperty *ical = static_cast<calIcalProperty *>(prop);
 //     icalcomponent_remove_property(mComponent, ical->mProperty);
-//     ical->mParent = nsnull;
+//     ical->mParent = nullptr;
 //     return NS_OK;
 // }
 
@@ -1257,7 +1220,7 @@ calICSService::ParseICS(const nsACString& serialized,
         // so no need for a conversion table or anything.
         return calIErrors::ICS_ERROR_BASE + icalerrno;
     }
-    calIcalComponent *comp = new calIcalComponent(ical, nsnull, tzProvider);
+    calIcalComponent *comp = new calIcalComponent(ical, nullptr, tzProvider);
     if (!comp) {
         icalcomponent_free(ical);
         return NS_ERROR_OUT_OF_MEMORY;
@@ -1272,10 +1235,10 @@ calICSService::ParserWorker::Run()
     icalcomponent *ical =
         icalparser_parse_string(PromiseFlatCString(mString).get());
     nsresult status = NS_OK;
-    calIIcalComponent *comp = nsnull;
+    calIIcalComponent *comp = nullptr;
 
     if (ical) {
-        comp = new calIcalComponent(ical, nsnull, mProvider);
+        comp = new calIcalComponent(ical, nullptr, mProvider);
         if (!comp) {
             icalcomponent_free(ical);
             status = NS_ERROR_OUT_OF_MEMORY;
@@ -1284,9 +1247,12 @@ calICSService::ParserWorker::Run()
         status = calIErrors::ICS_ERROR_BASE + icalerrno;
     }
 
-    nsCOMPtr<nsIRunnable> completer = new ParserWorkerCompleter(status, comp, mListener);
-    mThread->Dispatch(completer, NS_DISPATCH_NORMAL);
+    nsCOMPtr<nsIRunnable> completer = new ParserWorkerCompleter(mWorkerThread, status,
+                                                                comp, mListener);
+    mMainThread->Dispatch(completer, NS_DISPATCH_NORMAL);
 
+    mWorkerThread = nullptr;
+    mMainThread = nullptr;
     return NS_OK;
 }
 
@@ -1294,6 +1260,11 @@ NS_IMETHODIMP
 calICSService::ParserWorker::ParserWorkerCompleter::Run()
 {
     mListener->OnParsingComplete(mStatus, mComp);
+
+    nsresult rv = mWorkerThread->Shutdown();
+    NS_ENSURE_SUCCESS(rv, rv);
+
+    mWorkerThread = nullptr;
     return NS_OK;
 }
 
@@ -1309,11 +1280,16 @@ calICSService::ParseICSAsync(const nsACString& serialized,
     nsCOMPtr<nsIThread> currentThread;
     rv = NS_GetCurrentThread(getter_AddRefs(currentThread));
     NS_ENSURE_SUCCESS(rv, rv);
-
-    nsCOMPtr<nsIRunnable> worker = new ParserWorker(currentThread, serialized, tzProvider, listener);
-    NS_ENSURE_TRUE(worker, NS_ERROR_OUT_OF_MEMORY);
-    rv = NS_NewThread(getter_AddRefs(workerThread), worker);
+    rv = NS_NewThread(getter_AddRefs(workerThread));
     NS_ENSURE_SUCCESS(rv, rv);
+
+    nsCOMPtr<nsIRunnable> worker = new ParserWorker(currentThread, workerThread,
+                                                    serialized, tzProvider, listener);
+    NS_ENSURE_TRUE(worker, NS_ERROR_OUT_OF_MEMORY);
+
+    rv = workerThread->Dispatch(worker, NS_DISPATCH_NORMAL);
+    NS_ENSURE_SUCCESS(rv, rv);
+
     return NS_OK;
 }
 
@@ -1332,7 +1308,7 @@ calICSService::CreateIcalComponent(const nsACString &kind, calIIcalComponent **c
     if (!ical)
         return NS_ERROR_OUT_OF_MEMORY; // XXX translate
 
-    *comp = new calIcalComponent(ical, nsnull);
+    *comp = new calIcalComponent(ical, nullptr);
     if (!*comp) {
         icalcomponent_free(ical);
         return NS_ERROR_OUT_OF_MEMORY;
@@ -1359,7 +1335,7 @@ calICSService::CreateIcalProperty(const nsACString &kind, calIIcalProperty **pro
     if (propkind == ICAL_X_PROPERTY)
         icalproperty_set_x_name(icalprop, PromiseFlatCString(kind).get());
 
-    *prop = new calIcalProperty(icalprop, nsnull);
+    *prop = new calIcalProperty(icalprop, nullptr);
     CAL_ENSURE_MEMORY(*prop);
     NS_ADDREF(*prop);
     return NS_OK;

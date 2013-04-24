@@ -1,50 +1,56 @@
-# -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
-# The Original Code is mozilla.org code.
-#
-# The Initial Developer of the Original Code is
-# Netscape Communications Corporation.
-# Portions created by the Initial Developer are Copyright (C) 1998
-# the Initial Developer. All Rights Reserved.
-#
-# Contributor(s):
-#   Alec Flett <alecf@netscape.com>
-#   Ehsan Akhgari <ehsan.akhgari@gmail.com>
-#   Gavin Sharp <gavin@gavinsharp.com>
-#   Dão Gottwald <dao@design-noir.de>
-#
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
+# -*- Mode: javascript; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 // Services = object with smart getters for common XPCOM services
 Components.utils.import("resource://gre/modules/Services.jsm");
+Components.utils.import("resource://gre/modules/XPCOMUtils.jsm");
+
+XPCOMUtils.defineLazyGetter(this, "BROWSER_NEW_TAB_URL", function () {
+  const PREF = "browser.newtab.url";
+  const TOPIC = "private-browsing-transition-complete";
+
+  function getNewTabPageURL() {
+    if (("gPrivateBrowsingUI" in window) &&
+        !Services.prefs.prefHasUserValue(PREF)) {
+      // gPrivateBrowsingUI may not be initialized yet, in that case we'll
+      // update BROWSER_NEW_TAB_URL when it gets initialized.
+      if (!gPrivateBrowsingUI.initialized)
+        gPrivateBrowsingUI.addInitializationCallback(update);
+      else if (gPrivateBrowsingUI.privateWindow &&
+               !gPrivateBrowsingUI.autoStarted)
+        return "about:privatebrowsing";
+    }
+    return Services.prefs.getCharPref(PREF) || "about:blank";
+  }
+
+  function update() {
+    BROWSER_NEW_TAB_URL = getNewTabPageURL();
+  }
+
+  Services.prefs.addObserver(PREF, update, false);
+  Services.obs.addObserver(update, TOPIC, false);
+
+  addEventListener("unload", function onUnload() {
+    removeEventListener("unload", onUnload);
+    Services.prefs.removeObserver(PREF, update);
+    Services.obs.removeObserver(update, TOPIC);
+  });
+
+  return getNewTabPageURL();
+});
 
 var TAB_DROP_TYPE = "application/x-moz-tabbrowser-tab";
 
 var gBidiUI = false;
+
+/**
+ * Determines whether the given url is considered a special URL for new tabs.
+ */
+function isBlankPageURL(aURL) {
+  return aURL == "about:blank" || aURL == BROWSER_NEW_TAB_URL;
+}
 
 function getBrowserURL()
 {
@@ -56,7 +62,7 @@ function getTopWin(skipPopups) {
   // whether it's the frontmost window, since commands can be executed in
   // background windows (bug 626148).
   if (top.document.documentElement.getAttribute("windowtype") == "navigator:browser" &&
-      (!skipPopups || !top.document.documentElement.getAttribute("chromehidden")))
+      (!skipPopups || top.toolbar.visible))
     return top;
 
   if (skipPopups) {
@@ -67,9 +73,9 @@ function getTopWin(skipPopups) {
   return Services.wm.getMostRecentWindow("navigator:browser");
 }
 
-function openTopWin( url )
-{
-  openUILink(url, {})
+function openTopWin(url) {
+  /* deprecated */
+  openUILinkIn(url, "current");
 }
 
 function getBoolPref(prefname, def)
@@ -82,11 +88,33 @@ function getBoolPref(prefname, def)
   }
 }
 
-// openUILink handles clicks on UI elements that cause URLs to load.
-function openUILink( url, e, ignoreButton, ignoreAlt, allowKeywordFixup, postData, referrerUrl )
-{
-  var where = whereToOpenLink(e, ignoreButton, ignoreAlt);
-  openUILinkIn(url, where, allowKeywordFixup, postData, referrerUrl);
+/* openUILink handles clicks on UI elements that cause URLs to load.
+ *
+ * As the third argument, you may pass an object with the same properties as
+ * accepted by openUILinkIn, plus "ignoreButton" and "ignoreAlt".
+ */
+function openUILink(url, event, aIgnoreButton, aIgnoreAlt, aAllowThirdPartyFixup,
+                    aPostData, aReferrerURI) {
+  let params;
+
+  if (aIgnoreButton && typeof aIgnoreButton == "object") {
+    params = aIgnoreButton;
+
+    // don't forward "ignoreButton" and "ignoreAlt" to openUILinkIn
+    aIgnoreButton = params.ignoreButton;
+    aIgnoreAlt = params.ignoreAlt;
+    delete params.ignoreButton;
+    delete params.ignoreAlt;
+  } else {
+    params = {
+      allowThirdPartyFixup: aAllowThirdPartyFixup,
+      postData: aPostData,
+      referrerURI: aReferrerURI
+    };
+  }
+
+  let where = whereToOpenLink(event, aIgnoreButton, aIgnoreAlt);
+  openUILinkIn(url, where, params);
 }
 
 
@@ -100,12 +128,7 @@ function openUILink( url, e, ignoreButton, ignoreAlt, allowKeywordFixup, postDat
  * Ctrl+Shift  new tab, in background
  * Alt         save
  *
- * You can swap Ctrl and Ctrl+shift by toggling the hidden pref
- * browser.tabs.loadBookmarksInBackground (not browser.tabs.loadInBackground, which
- * is for content area links).
- *
- * Middle-clicking is the same as Ctrl+clicking (it opens a new tab) and it is
- * subject to the shift modifier and pref in the same way.
+ * Middle-clicking is the same as Ctrl+clicking (it opens a new tab).
  *
  * Exceptions: 
  * - Alt is ignored for menu items selected using the keyboard so you don't accidentally save stuff.  
@@ -140,7 +163,7 @@ function whereToOpenLink( e, ignoreButton, ignoreAlt )
 #endif
     return shift ? "tabshifted" : "tab";
 
-  if (alt)
+  if (alt && getBoolPref("browser.altClickSave", false))
     return "save";
 
   if (shift || (middle && !middleUsesTabs))
@@ -197,6 +220,10 @@ function openLinkIn(url, where, params) {
   var aCharset              = params.charset;
   var aReferrerURI          = params.referrerURI;
   var aRelatedToCurrent     = params.relatedToCurrent;
+  var aInBackground         = params.inBackground;
+  var aDisallowInheritPrincipal = params.disallowInheritPrincipal;
+  // Currently, this parameter works only for where=="tab" or "current"
+  var aIsUTF8               = params.isUTF8;
 
   if (where == "save") {
     saveURL(url, null, null, true, null, aReferrerURI);
@@ -207,7 +234,7 @@ function openLinkIn(url, where, params) {
 
   var w = getTopWin();
   if ((where == "tab" || where == "tabshifted") &&
-      w && w.document.documentElement.getAttribute("chromehidden")) {
+      w && !w.toolbar.visible) {
     w = getTopWin(true);
     aRelatedToCurrent = false;
   }
@@ -242,9 +269,12 @@ function openLinkIn(url, where, params) {
     return;
   }
 
-  var loadInBackground = aFromChrome ?
-                         getBoolPref("browser.tabs.loadBookmarksInBackground") :
+  let loadInBackground = where == "current" ? false : aInBackground;
+  if (loadInBackground == null) {
+    loadInBackground = aFromChrome ?
+                         false :
                          getBoolPref("browser.tabs.loadInBackground");
+  }
 
   if (where == "current" && w.gBrowser.selectedTab.pinned) {
     try {
@@ -262,7 +292,14 @@ function openLinkIn(url, where, params) {
 
   switch (where) {
   case "current":
-    w.loadURI(url, aReferrerURI, aPostData, aAllowThirdPartyFixup);
+    let flags = Ci.nsIWebNavigation.LOAD_FLAGS_NONE;
+    if (aAllowThirdPartyFixup)
+      flags |= Ci.nsIWebNavigation.LOAD_FLAGS_ALLOW_THIRD_PARTY_FIXUP;
+    if (aDisallowInheritPrincipal)
+      flags |= Ci.nsIWebNavigation.LOAD_FLAGS_DISALLOW_INHERIT_OWNER;
+    if (aIsUTF8)
+      flags |= Ci.nsIWebNavigation.LOAD_FLAGS_URI_IS_UTF8;
+    w.gBrowser.loadURIWithFlags(url, flags, aReferrerURI, null, aPostData);
     break;
   case "tabshifted":
     loadInBackground = !loadInBackground;
@@ -275,7 +312,8 @@ function openLinkIn(url, where, params) {
                        postData: aPostData,
                        inBackground: loadInBackground,
                        allowThirdPartyFixup: aAllowThirdPartyFixup,
-                       relatedToCurrent: aRelatedToCurrent});
+                       relatedToCurrent: aRelatedToCurrent,
+                       isUTF8: aIsUTF8});
     break;
   }
 
@@ -288,6 +326,9 @@ function openLinkIn(url, where, params) {
     w.content.focus();
   else
     w.gBrowser.selectedBrowser.focus();
+
+  if (!loadInBackground && isBlankPageURL(url))
+    w.focusAndSelectUrlBar();
 }
 
 // Used as an onclick handler for UI elements with link-like behavior.
@@ -353,13 +394,13 @@ function gatherTextUnder ( root )
       node = node.firstChild;
       depth++;
     } else {
-      // No children, try next sibling.
+      // No children, try next sibling (or parent next sibling).
+      while ( depth > 0 && !node.nextSibling ) {
+        node = node.parentNode;
+        depth--;
+      }
       if ( node.nextSibling ) {
         node = node.nextSibling;
-      } else {
-        // Last resort is our next oldest uncle/aunt.
-        node = node.parentNode.nextSibling;
-        depth--;
       }
     }
   }
@@ -378,7 +419,8 @@ function getShellService()
   try {
     shell = Components.classes["@mozilla.org/browser/shell-service;1"]
       .getService(Components.interfaces.nsIShellService);
-  } catch (e) {dump("*** e = " + e + "\n");}
+  } catch (e) {
+  }
   return shell;
 }
 
@@ -431,32 +473,36 @@ function openAboutDialog() {
 
 function openPreferences(paneID, extraArgs)
 {
-  var instantApply = getBoolPref("browser.preferences.instantApply", false);
-  var features = "chrome,titlebar,toolbar,centerscreen" + (instantApply ? ",dialog=no" : ",modal");
+  if (Services.prefs.getBoolPref("browser.preferences.inContent")) {
+    openUILinkIn("about:preferences", "tab");
+  } else {
+    var instantApply = getBoolPref("browser.preferences.instantApply", false);
+    var features = "chrome,titlebar,toolbar,centerscreen" + (instantApply ? ",dialog=no" : ",modal");
 
-  var win = Services.wm.getMostRecentWindow("Browser:Preferences");
-  if (win) {
-    win.focus();
-    if (paneID) {
-      var pane = win.document.getElementById(paneID);
-      win.document.documentElement.showPane(pane);
+    var win = Services.wm.getMostRecentWindow("Browser:Preferences");
+    if (win) {
+      win.focus();
+      if (paneID) {
+        var pane = win.document.getElementById(paneID);
+        win.document.documentElement.showPane(pane);
+      }
+
+      if (extraArgs && extraArgs["advancedTab"]) {
+        var advancedPaneTabs = win.document.getElementById("advancedPrefs");
+        advancedPaneTabs.selectedTab = win.document.getElementById(extraArgs["advancedTab"]);
+      }
+
+     return;
     }
 
-    if (extraArgs && extraArgs["advancedTab"]) {
-      var advancedPaneTabs = win.document.getElementById("advancedPrefs");
-      advancedPaneTabs.selectedTab = win.document.getElementById(extraArgs["advancedTab"]);
-    }
-
-    return win;
+    openDialog("chrome://browser/content/preferences/preferences.xul",
+               "Preferences", features, paneID, extraArgs);
   }
-
-  return openDialog("chrome://browser/content/preferences/preferences.xul",
-                    "Preferences", features, paneID, extraArgs);
 }
 
 function openAdvancedPreferences(tabID)
 {
-  return openPreferences("paneAdvanced", { "advancedTab" : tabID });
+  openPreferences("paneAdvanced", { "advancedTab" : tabID });
 }
 
 /**
@@ -478,10 +524,9 @@ function openFeedbackPage()
 
 function buildHelpMenu()
 {
-  // Enable/disable the "Report Web Forgery" menu item.  safebrowsing object
-  // may not exist in OSX
-  if (typeof safebrowsing != "undefined")
-    safebrowsing.setReportPhishingMenu();
+  // Enable/disable the "Report Web Forgery" menu item.
+  if (typeof gSafeBrowsing != "undefined")
+    gSafeBrowsing.setReportPhishingMenu();
 }
 
 function isElementVisible(aElement)
@@ -620,8 +665,10 @@ function openPrefsHelp() {
 }
 
 function trimURL(aURL) {
+  // This function must not modify the given URL such that calling
+  // nsIURIFixup::createFixupURI with the result will produce a different URI.
   return aURL /* remove single trailing slash for http/https/ftp URLs */
              .replace(/^((?:http|https|ftp):\/\/[^/]+)\/$/, "$1")
-              /* remove http:// unless the host starts with "ftp." or contains "@" */
-             .replace(/^http:\/\/((?!ftp\.)[^\/@]+(?:\/|$))/, "$1");
+              /* remove http:// unless the host starts with "ftp\d*\." or contains "@" */
+             .replace(/^http:\/\/((?!ftp\d*\.)[^\/@]+(?:\/|$))/, "$1");
 }

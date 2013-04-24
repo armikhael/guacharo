@@ -1,45 +1,9 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jan Varga <varga@nixcorp.com>
- *   Hakan Waara <hwaara@chello.se>
- *   Markus Hossner <markushossner@gmx.de>
- *   Magnus Melin <mkmelin+mozilla@iki.fi>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://gre/modules/PluralForm.jsm");
+Components.utils.import("resource:///modules/mailServices.js");
 
 const mailtolength = 7;
 
@@ -97,7 +61,7 @@ function fillMailContextMenu(event)
   goUpdateCommand('cmd_printpreview');
   goUpdateCommand('cmd_print');
   
-  gContextMenu = new nsContextMenu(event.target);
+  gContextMenu = new nsContextMenu(event.target, event.shiftKey);
   return gContextMenu.shouldDisplay;
 }
 
@@ -111,12 +75,15 @@ function FillMessageIdContextMenu(messageIdNode)
   document.getElementById("messageIdContext-messageIdTarget")
           .setAttribute("label", msgId);
 
-  // We don't want to show "open message for id" for the same message we're
-  // viewing.
+  // We don't want to show "Open Message For ID" for the same message
+  // we're viewing.
   var currentMsgId = "<" + gFolderDisplay.selectedMessage.messageId + ">";
   document.getElementById("messageIdContext-openMessageForMsgId")
-          .setAttribute("hidden", (currentMsgId == msgId));
+          .hidden = (currentMsgId == msgId);
 
+  // We don't want to show "Open Browser With Message-ID" for non-nntp messages.
+  document.getElementById("messageIdContext-openBrowserWithMsgId")
+          .hidden = !gFolderDisplay.selectedMessageIsNews;
 }
 
 function CopyMessageId(messageId)
@@ -442,10 +409,9 @@ function fillFolderPaneContextMenu()
 
   // --- Set up the delete folder menu item.
   function checkCanDeleteFolder(folder) {
-    let specialFolder = getSpecialFolderString(folder);
-    return folder.server.type != "nntp" && !folder.isServer &&
-           (specialFolder == "none" || specialFolder == "Virtual" ||
-            (specialFolder == "Junk" && CanRenameDeleteJunkMail(folder.URI)));
+    if (folder.isSpecialFolder(nsMsgFolderFlags.Junk, false))
+      return CanRenameDeleteJunkMail(folder.URI);
+    return folder.deletable;
   }
   var haveOnlyDeletableFolders = folders.every(checkCanDeleteFolder);
   ShowMenuItem("folderPaneContext-remove", haveOnlyDeletableFolders && numSelected == 1);
@@ -607,7 +573,7 @@ function composeEmailTo()
                         gFolderDisplay.displayedFolder.server);
   }
   params.composeFields = fields;
-  msgComposeService.OpenComposeWindowWithParams(null, params);
+  MailServices.compose.OpenComposeWindowWithParams(null, params);
 }
 
 // Extracts email address from url string

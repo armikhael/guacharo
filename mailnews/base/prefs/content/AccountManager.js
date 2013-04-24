@@ -1,42 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Joey Minta <jminta@gmail.com>
- *   Joshua Cranmer <Pidgeot18@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * here's how this dialog works:
@@ -61,8 +26,13 @@
  */
 
 Components.utils.import("resource:///modules/iteratorUtils.jsm");
+Components.utils.import("resource://gre/modules/Services.jsm");
+Components.utils.import("resource:///modules/mailServices.js");
 
 var gSmtpHostNameIsIllegal = false;
+// If Local directory has changed the app needs to restart. Once this is set
+// a restart will be attempted at each attempt to close the Account manager with OK.
+var gRestartNeeded = false;
 
 // This is a hash-map for every account we've touched in the pane. Each entry
 // has additional maps of attribute-value pairs that we're going to want to save
@@ -75,10 +45,6 @@ var currentPageId;
 
 var pendingAccount;
 var pendingPageId;
-
-// services used
-var smtpService;
-var nsPrefBranch;
 
 // This sets an attribute in a xul element so that we can later
 // know what value to substitute in a prefstring.  Different
@@ -97,8 +63,8 @@ function updateElementWithKeys(account, element, type) {
       element["serverkey"] = account.incomingServer.key;
       break;
     case "smtp":
-      if (smtpService.defaultServer)
-        element["serverkey"] = smtpService.defaultServer.key;
+      if (MailServices.smtp.defaultServer)
+        element["serverkey"] = MailServices.smtp.defaultServer.key;
       break;
     default:
 //      dump("unknown element type! "+type+"\n");
@@ -145,9 +111,6 @@ function onLoad() {
   accountArray = new Object();
   gGenericAttributeTypes = new Object();
 
-  smtpService =
-    Components.classes["@mozilla.org/messengercompose/smtp;1"].getService(Components.interfaces.nsISmtpService);
-
   gAccountTree.load();
 
   setTimeout(selectServer, 0, selectedServer, selectPage);
@@ -159,16 +122,16 @@ function onUnload() {
 
 function selectServer(server, selectPage)
 {
-  var accountNode;
+  let childrenNode = document.getElementById("account-tree-children");
+
+  // Default to showing the first account.
+  let accountNode = childrenNode.firstChild;
 
   // Find the tree-node for the account we want to select
-  if (!server) {
-    // Just get the first account
-    accountNode = document.getElementById("account-tree-children").firstChild;
-  } else {
-    var childrenNode = document.getElementById("account-tree-children");
+  if (server) {
     for (var i = 0; i < childrenNode.childNodes.length; i++) {
-      if (server == childrenNode.childNodes[i]._account.incomingServer) {
+      let account = childrenNode.childNodes[i]._account;
+      if (account && server == account.incomingServer) {
         accountNode = childrenNode.childNodes[i];
         break;
       }
@@ -196,11 +159,10 @@ function selectServer(server, selectPage)
 
 function replaceWithDefaultSmtpServer(deletedSmtpServerKey)
 {
-  //First we replace the smtpserverkey in every identity
-  const Ci = Components.interfaces;
-  var am = Components.classes["@mozilla.org/messenger/account-manager;1"]
-                     .getService(Ci.nsIMsgAccountManager);
-  for each (var identity in fixIterator(am.allIdentities, Ci.nsIMsgIdentity)) {
+  // First we replace the smtpserverkey in every identity.
+  let am = MailServices.accounts;
+  for each (let identity in fixIterator(am.allIdentities,
+                                        Components.interfaces.nsIMsgIdentity)) {
     if (identity.smtpServerKey == deletedSmtpServerKey)
       identity.smtpServerKey = "";
   }
@@ -215,7 +177,7 @@ function replaceWithDefaultSmtpServer(deletedSmtpServerKey)
 
   for (var accountid in accountArray) {
     var account = accountArray[accountid]._account;
-    if(account && account.defaultIdentity) {
+    if (account && account.defaultIdentity) {
       var accountValues = accountArray[accountid];
       var smtpServerKey = getAccountValue(account, accountValues, "identity",
                                           "smtpServerKey", null, false);
@@ -226,7 +188,7 @@ function replaceWithDefaultSmtpServer(deletedSmtpServerKey)
 }
 
 function onAccept() {
-  // Check if user/host have been modified.
+  // Check if user/host have been modified correctly.
   if (!checkUserServerChanges(true))
     return false;
 
@@ -235,30 +197,39 @@ function onAccept() {
     return false;
   }
 
-  onSave();
+  if (!onSave())
+    return false;
+
   // hack hack - save the prefs file NOW in case we crash
-  Components.classes["@mozilla.org/preferences-service;1"]
-            .getService(Components.interfaces.nsIPrefService)
-            .savePrefFile(null);
+  Services.prefs.savePrefFile(null);
+
+  if (gRestartNeeded) {
+    gRestartNeeded = !Application.restart();
+    // returns false so that Account manager is not exited when restart failed
+    return !gRestartNeeded;
+  }
+
   return true;
 }
 
-// Check if the user and/or host names have been changed and
-// if so check if the new names already exists for an account.
+/**
+ * Check if the user and/or host names have been changed and if so check
+ * if the new names already exists for an account or are empty.
+ * Also check if the Local Directory path was changed.
+ *
+ * @param showAlert  show and alert if a problem with the host / user name is found
+ */
 function checkUserServerChanges(showAlert) {
-  const Cc = Components.classes;
-  const Ci = Components.interfaces;
-  if (smtpService.defaultServer) {
+  const prefBundle = document.getElementById("bundle_prefs");
+  const alertTitle = prefBundle.getString("prefPanel-server");
+  var alertText = null;
+  if (MailServices.smtp.defaultServer) {
     try {
-      var smtpHostName = top.frames["contentFrame"].document.getElementById("smtp.hostname");
+      var smtpHostName = top.frames["contentFrame"]
+                            .document.getElementById("smtp.hostname");
       if (smtpHostName && hostnameIsIllegal(smtpHostName.value)) {
-        var alertTitle = document.getElementById("bundle_brand")
-                                 .getString("brandShortName");
-        var alertMsg = document.getElementById("bundle_prefs")
-                               .getString("enterValidHostname");
-
-        Cc["@mozilla.org/embedcomp/prompt-service;1"]
-          .getService(Ci.nsIPromptService).alert(window, alertTitle, alertMsg);
+        alertText = prefBundle.getString("enterValidHostname");
+        Services.prompt.alert(window, alertTitle, alertText);
         gSmtpHostNameIsIllegal = true;
       }
     }
@@ -266,16 +237,17 @@ function checkUserServerChanges(showAlert) {
   }
 
   var accountValues = getValueArrayFor(currentAccount);
-  if (!accountValues) 
+  if (!accountValues)
     return true;
-  var pageElements = getPageFormElements();
 
-  if (pageElements == null) return true;
+  var pageElements = getPageFormElements();
+  if (!pageElements)
+    return true;
 
   // Get the new username, hostname and type from the page
   var newUser, newHost, newType, oldUser, oldHost;
   var uIndx, hIndx;
-  for (var i=0; i<pageElements.length; i++) {
+  for (var i = 0; i < pageElements.length; i++) {
     if (pageElements[i].id) {
       var vals = pageElements[i].id.split(".");
       if (vals.length >= 2) {
@@ -301,69 +273,92 @@ function checkUserServerChanges(showAlert) {
     }
   }
 
+  var checkUser = true;
   // There is no username defined for news so reset it.
-  if (newType == "nntp")
+  if (newType == "nntp") {
     oldUser = newUser = "";
-
-
+    checkUser = false;
+  }
+  alertText = null;
   // If something is changed then check if the new user/host already exists.
-  if ( (oldUser != newUser) || (oldHost != newHost) ) {
-    var accountManager = Cc["@mozilla.org/messenger/account-manager;1"]
-                           .getService(Ci.nsIMsgAccountManager);
-    var newServer = accountManager.findRealServer(newUser, newHost, newType, 0);
-    if (newServer) {
-      if (showAlert) {
-        var alertText = document.getElementById("bundle_prefs")
-                                .getString("modifiedAccountExists");
-        Components.classes["@mozilla.org/embedcomp/prompt-service;1"]
-                  .getService(Components.interfaces.nsIPromptService)
-                  .alert(window, null, alertText);
-
-      }
+  if ((oldUser != newUser) || (oldHost != newHost)) {
+    if ((checkUser && (newUser == "")) || (newHost == "")) {
+        alertText = prefBundle.getString("serverNameEmpty");
+    } else {
+      let sameServer = MailServices.accounts
+                                   .findRealServer(newUser, newHost, newType, 0)
+      if (sameServer && (sameServer != currentAccount.incomingServer))
+        alertText = prefBundle.getString("modifiedAccountExists");
+    }
+    if (alertText) {
+      if (showAlert)
+        Services.prompt.alert(window, alertTitle, alertText);
       // Restore the old values before return
-      if (newType != "nntp")
+      if (checkUser)
         setFormElementValue(pageElements[uIndx], oldUser);
       setFormElementValue(pageElements[hIndx], oldHost);
       return false;
     }
 
     // If username is changed remind users to change Your Name and Email Address.
-    // If serve name is changed and has defined filters then remind users to edit rules.
+    // If server name is changed and has defined filters then remind users
+    // to edit rules.
     if (showAlert) {
-      var account = currentAccount
-      var filterList;
-      if (account && (newType != "nntp")) {
-        var server = account.incomingServer;
-        filterList = server.getEditableFilterList(null);
+      let filterList;
+      if (currentAccount && checkUser) {
+        filterList = currentAccount.incomingServer.getEditableFilterList(null);
       }
-      var userChangeText, serverChangeText;
-      var bundle = document.getElementById("bundle_prefs");
-      if ( (oldHost != newHost) && (filterList != undefined) && filterList.filterCount )
-        serverChangeText = bundle.getString("serverNameChanged");
+      let changeText = "";
+      if ((oldHost != newHost) &&
+          (filterList != undefined) && filterList.filterCount)
+        changeText = prefBundle.getString("serverNameChanged");
+      // In the event that oldHost == newHost or oldUser == newUser,
+      // the \n\n will be trimmed off before the message is shown.
       if (oldUser != newUser)
-        userChangeText = bundle.getString("userNameChanged");
+        changeText = changeText + "\n\n" + prefBundle.getString("userNameChanged");
 
-      if ( (serverChangeText != undefined) && (userChangeText != undefined) )
-        serverChangeText = serverChangeText + "\n\n" + userChangeText;
-      else
-        if (userChangeText != undefined)
-          serverChangeText = userChangeText;
+      if (changeText != "")
+        Services.prompt.alert(window, alertTitle, changeText.trim());
+    }
+  }
 
-      if (serverChangeText != undefined) {
-        var promptService =
-          Components.classes["@mozilla.org/embedcomp/prompt-service;1"]
-                    .getService(Components.interfaces.nsIPromptService);
-        promptService.alert(window, null, serverChangeText);
+  // Warn if the Local directory path was changed.
+  // This can be removed once bug 2654 is fixed.
+  let oldLocalDir = null;
+  let newLocalDir = null;
+  let pIndx;
+  for (let i = 0; i < pageElements.length; i++) {
+    if (pageElements[i].id) {
+      if (pageElements[i].id == "server.localPath") {
+        oldLocalDir = accountValues["server"]["localPath"]; // both return nsILocalFile
+        newLocalDir = getFormElementValue(pageElements[i]);
+        pIndx = i;
+        break;
       }
     }
   }
+  if (oldLocalDir && newLocalDir && (oldLocalDir.path != newLocalDir.path)) {
+    let brandName = document.getElementById("bundle_brand").getString("brandShortName");
+    alertText = prefBundle.getFormattedString("localDirectoryChanged", [brandName]);
+
+    let cancel = Services.prompt.confirmEx(window, alertTitle, alertText,
+      (Services.prompt.BUTTON_POS_0 * Services.prompt.BUTTON_TITLE_IS_STRING) +
+      (Services.prompt.BUTTON_POS_1 * Services.prompt.BUTTON_TITLE_CANCEL),
+      prefBundle.getString("localDirectoryRestart"), null, null, null, {});
+    if (cancel) {
+      setFormElementValue(pageElements[pIndx], oldLocalDir);
+      return false;
+    }
+    gRestartNeeded = true;
+  }
+
   return true;
 }
 
 function onSave() {
   if (pendingPageId) {
     dump("ERROR: " + pendingPageId + " hasn't loaded yet! Not saving.\n");
-    return;
+    return false;
   }
 
   // make sure the current visible page is saved
@@ -372,8 +367,11 @@ function onSave() {
   for (var accountid in accountArray) {
     var accountValues = accountArray[accountid];
     var account = accountArray[accountid]._account;
-    saveAccount(accountValues, account);
+    if (!saveAccount(accountValues, account))
+      return false;
   }
+
+ return true;
 }
 
 function onAddAccount() {
@@ -382,71 +380,122 @@ function onAddAccount() {
 
 function AddMailAccount()
 {
-  let msgWindow = Components.classes["@mozilla.org/messenger/services/session;1"]
-                            .getService(Components.interfaces.nsIMsgMailSession)
-                            .topmostMsgWindow;
-  NewMailAccount(msgWindow);
+  NewMailAccount(MailServices.mailSession.topmostMsgWindow);
 }
 
-function onSetDefault(event) {
-  if (event.target.getAttribute("disabled") == "true") return;
+function AddIMAccount()
+{
+  window.openDialog("chrome://messenger/content/chat/imAccountWizard.xul",
+                    "", "chrome,modal,titlebar,centerscreen");
+}
 
-  Components.classes["@mozilla.org/messenger/account-manager;1"]
-            .getService(Components.interfaces.nsIMsgAccountManager)
-            .defaultAccount = currentAccount;
+/**
+ * Highlight the default server in the account tree,
+ * optionally un-highlight the previous one.
+ */
+function markDefaultServer(newDefault, oldDefault) {
+  let accountTree = document.getElementById("account-tree-children");
+  for each (let accountNode in accountTree.childNodes) {
+    if (newDefault == accountNode._account) {
+      accountNode.firstChild
+                 .firstChild
+                 .setAttribute("properties", "isDefaultServer-true");
+    }
+    if (oldDefault && oldDefault == accountNode._account) {
+      accountNode.firstChild
+                 .firstChild
+                 .removeAttribute("properties");
+    }
+  }
+}
+
+/**
+ * Make currentAccount (currently selected in the account tree) the default one.
+ */
+function onSetDefault(event) {
+  // Make sure this function was not called while the control item is disabled
+  if (event.target.getAttribute("disabled") == "true")
+    return;
+
+  let previousDefault = MailServices.accounts.defaultAccount;
+  MailServices.accounts.defaultAccount = currentAccount;
+  markDefaultServer(currentAccount, previousDefault);
+
+  // This is only needed on Seamonkey which has this button.
   setEnabled(document.getElementById("setDefaultButton"), false);
 }
 
 function onRemoveAccount(event) {
-  if (event.target.getAttribute("disabled") == "true") return;
+  if (event.target.getAttribute("disabled") == "true" || !currentAccount)
+    return;
 
-  var account = currentAccount;
+  let server = currentAccount.incomingServer;
+  let type = server.type;
+  let prettyName = server.prettyName;
 
-  var server = account.incomingServer;
-  var type = server.type;
-  var prettyName = server.prettyName;
-
-  var protocolinfo = Components.classes["@mozilla.org/messenger/protocol/info;1?type=" + type].getService(Components.interfaces.nsIMsgProtocolInfo);
-  var canDelete = protocolinfo.canDelete;
-  if (!canDelete) {
+  let canDelete = false;
+  if (Components.classes["@mozilla.org/messenger/protocol/info;1?type=" + type]
+                .getService(Components.interfaces.nsIMsgProtocolInfo).canDelete)
+    canDelete = true;
+  else
     canDelete = server.canDelete;
+
+  if (!canDelete)
+    return;
+
+  let bundle = document.getElementById("bundle_prefs");
+  let confirmRemoveAccount = bundle.getFormattedString("confirmRemoveAccount",
+                                                       [prettyName]);
+
+  let confirmTitle = bundle.getString("confirmRemoveAccountTitle");
+
+  if (!Services.prompt.confirm(window, confirmTitle, confirmRemoveAccount))
+    return;
+
+  let serverList = [];
+  let accountTreeNode = document.getElementById("account-tree-children");
+  // build the list of servers in the account tree (order is important)
+  for (let i = 0; i < accountTreeNode.childNodes.length; i++) {
+    if ("_account" in accountTreeNode.childNodes[i]) {
+      let curServer = accountTreeNode.childNodes[i]._account.incomingServer;
+      if (serverList.indexOf(curServer) == -1)
+        serverList.push(curServer);
+    }
   }
-  if (!canDelete) 
-    return;
 
-  var bundle = document.getElementById("bundle_prefs");
-  var confirmRemoveAccount =
-    bundle.getFormattedString("confirmRemoveAccount", [prettyName]);
+  // get position of the current server in the server list
+  let serverIndex = serverList.indexOf(server);
 
-  var confirmTitle = bundle.getString("confirmRemoveAccountTitle");
-
-  var promptService =
-    Components.classes["@mozilla.org/embedcomp/prompt-service;1"]
-              .getService(Components.interfaces.nsIPromptService);
-  if (!promptService.confirm(window, confirmTitle, confirmRemoveAccount))
-    return;
+  // After the current server is deleted, choose the next server/account,
+  // or the previous one if the last one was deleted.
+  if (serverIndex == serverList.length - 1)
+    serverIndex--;
+  else
+    serverIndex++;
 
   try {
+    let serverId = server.serverURI;
+    MailServices.accounts.removeAccount(currentAccount);
+
     // clear cached data out of the account array
     currentAccount = currentPageId = null;
-
-    var serverId = server.serverURI;
-    Components.classes["@mozilla.org/messenger/account-manager;1"]
-              .getService(Components.interfaces.nsIMsgAccountManager)
-              .removeAccount(account);
-
     if (serverId in accountArray) {
       delete accountArray[serverId];
     }
-    selectServer(null, null);
+
+    if ((serverIndex >= 0) && (serverIndex < serverList.length))
+      selectServer(serverList[serverIndex], null);
   }
   catch (ex) {
-    dump("failure to remove account: " + ex + "\n");
-    var alertText = bundle.getString("failedRemoveAccount");
-    Components.classes["@mozilla.org/embedcomp/prompt-service;1"]
-              .getService(Components.interfaces.nsIPromptService)
-              .alert(window, null, alertText);;
+    Components.utils.reportError("Failure to remove account: " + ex);
+    let alertText = bundle.getString("failedRemoveAccount");
+    Services.prompt.alert(window, null, alertText);
   }
+
+  // Either the default account was deleted so there is a new one
+  // or the default account was not changed. Either way, there is
+  // no need to unmark the old one.
+  markDefaultServer(MailServices.accounts.defaultAccount, null);
 }
 
 function saveAccount(accountValues, account)
@@ -478,7 +527,7 @@ function saveAccount(accountValues, account)
       else if (type == "nntp")
         dest = server.QueryInterface(Components.interfaces.nsINntpIncomingServer);
       else if (type == "smtp")
-        dest = smtpService.defaultServer;
+        dest = MailServices.smtp.defaultServer;
 
       } catch (ex) {
         // don't do anything, just means we don't support that
@@ -519,134 +568,136 @@ function saveAccount(accountValues, account)
           dest[methodName](slot, typeArray[slot]);
         }
       }
-      else {
-      if (slot in dest && typeArray[slot] != undefined && dest[slot] != typeArray[slot]) {
+      else if (slot in dest && typeArray[slot] != undefined && dest[slot] != typeArray[slot]) {
         try {
           dest[slot] = typeArray[slot];
-          } 
-          catch (ex) {
+        } catch (ex) {
           // hrm... need to handle special types here
         }
       }
     }
   }
- }
- 
- // if we made account changes to the spam settings, we'll need to re-initialize
- // our settings object
- if (server && server.spamSettings)
-   server.spamSettings.initialize(server);
-}
 
-function updateButtons(tree, account) {
-  var canCreate = true;
-  var canDelete = true;
-  var canSetDefault = true;
-
-  if (account) {
-    var server = account.incomingServer;
-    var type = server.type;
-
-    var am = Components.classes["@mozilla.org/messenger/account-manager;1"]
-                       .getService(Components.interfaces.nsIMsgAccountManager);
-    if (account == am.defaultAccount || !server.canBeDefaultServer ||
-        account.identities.Count() < 1)
-      canSetDefault = false;
-
-    var protocolinfo = Components.classes["@mozilla.org/messenger/protocol/info;1?type=" + type].getService(Components.interfaces.nsIMsgProtocolInfo);
-    canDelete = protocolinfo.canDelete;
-    if (!canDelete) {
-      canDelete = server.canDelete;
+  // if we made account changes to the spam settings, we'll need to re-initialize
+  // our settings object
+  if (server && server.spamSettings) {
+    try {
+      server.spamSettings.initialize(server);
+    } catch(e) {
+      let accountName = getAccountValue(account, getValueArrayFor(account), "server",
+                                        "prettyName", null, false);
+      let alertText = document.getElementById("bundle_prefs")
+                              .getFormattedString("junkSettingsBroken", [accountName]);
+      let review = Services.prompt.confirmEx(window, null, alertText,
+        (Services.prompt.BUTTON_POS_0 * Services.prompt.BUTTON_TITLE_YES) +
+        (Services.prompt.BUTTON_POS_1 * Services.prompt.BUTTON_TITLE_NO),
+        null, null, null, null, {});
+      if (!review) {
+        onAccountTreeSelect("am-junk.xul", account);
+        return false;
+      }
     }
   }
-  else {
-    // HACK
-    // if account is null, we have either selected a SMTP server, or there is a problem
-    // either way, we don't want the user to be able to delete it.
 
-    canSetDefault = false;
-    canDelete = false;
-  }
+  return true;
+}
 
-  if (tree.view.selection.count < 1)
-    canSetDefault = canDelete = false;
+/**
+ * Set enabled/disabled state for account actions buttons.
+ * Called by all apps, but if the buttons do not exist, exits early.
+ */
+function updateButtons(tree, account) {
+  let addAccountButton = document.getElementById("addAccountButton");
+  let removeButton = document.getElementById("removeButton");
+  let setDefaultButton = document.getElementById("setDefaultButton");
 
-  // check for disabled preferences on the account buttons.  
-  //  Not currently handled by WSM or the main loop yet since these buttons aren't
-  //  under the IFRAME
-  var addAccountButton = document.getElementById("addAccountButton");
-  var removeButton = document.getElementById("removeButton");
-  var setDefaultButton = document.getElementById("setDefaultButton");
+  if (!addAccountButton && !removeButton && !setDefaultButton)
+    return; // Thunderbird isn't using these.
 
-  if (!addAccountButton && !removeButton && !setDefaultButton)
-    return; // tb isn't useing these anymore
-
-  var prefBranch = Components.classes["@mozilla.org/preferences-service;1"]
-                             .getService(Components.interfaces.nsIPrefBranch);
-  if (prefBranch.prefIsLocked(addAccountButton.getAttribute("prefstring")))
-    canCreate = false;
-  if (prefBranch.prefIsLocked(setDefaultButton.getAttribute("prefstring")))
-    canSetDefault = false;
-  if (prefBranch.prefIsLocked(removeButton.getAttribute("prefstring")))
-    canDelete = false;
-
-  setEnabled(addAccountButton, canCreate);
-  setEnabled(setDefaultButton, canSetDefault);
-  setEnabled(removeButton, canDelete);
+  updateItems(tree, account, addAccountButton, setDefaultButton, removeButton);
+  updateBlockedItems([addAccountButton, setDefaultButton, removeButton], false);
 }
 
 /**
  * Set enabled/disabled state for the actions in the Account Actions menu.
+ * Called only by Thunderbird.
  */
-function initAcountActionsButton(menupopup) {
-  let account = getCurrentAccount();
-  if (account) {
+function initAccountActionsButtons(menupopup) {
+  if (!Services.prefs.getBoolPref("mail.chat.enabled"))
+    document.getElementById("accountActionsAddIMAccount").hidden = true;
+
+  updateItems(
+    document.getElementById("accounttree"),
+    getCurrentAccount(),
+    document.getElementById("accountActionsAddMailAccount"),
+    document.getElementById("accountActionsDropdownSetDefault"),
+    document.getElementById("accountActionsDropdownRemove"));
+
+  updateBlockedItems(menupopup.childNodes, true);
+}
+
+/**
+ * Determine enabled/disabled state for the passed in elements
+ * representing account actions.
+ */
+function updateItems(tree, account, addAccountItem, setDefaultItem, removeItem) {
+  // Start with items disabled and then find out what can be enabled.
+  let canSetDefault = false;
+  let canDelete = false;
+
+  if (account && (tree.view.selection.count >= 1)) {
+    // Only try to check properties if there was anything selected in the tree
+    // and it belongs to an account.
+    // Otherwise we have either selected a SMTP server, or there is some
+    // problem. Either way, we don't want the user to act on it.
     let server = account.incomingServer;
+    let type = server.type;
 
-    let am = Components.classes["@mozilla.org/messenger/account-manager;1"]
-                      .getService(Components.interfaces.nsIMsgAccountManager);
-    if (account == am.defaultAccount || !server.canBeDefaultServer ||
-        account.identities.Count() < 1)
-      document.getElementById("accountActionsDropdownSetDefault")
-              .setAttribute("disabled", true);
-    else
-      document.getElementById("accountActionsDropdownSetDefault")
-              .removeAttribute("disabled");
+    if (account != MailServices.accounts.defaultAccount &&
+        server.canBeDefaultServer && account.identities.Count() > 0)
+      canSetDefault = true;
 
-    let protocolInfo = Components.classes["@mozilla.org/messenger/protocol/info;1?type=" + server.type]
-                                .getService(Components.interfaces.nsIMsgProtocolInfo);
-    if (!protocolInfo.canDelete)
-      document.getElementById("accountActionsDropdownRemove")
-              .setAttribute("disabled", true);
+    if (Components.classes["@mozilla.org/messenger/protocol/info;1?type=" + type]
+                  .getService(Components.interfaces.nsIMsgProtocolInfo).canDelete)
+      canDelete = true;
     else
-      document.getElementById("accountActionsDropdownRemove")
-              .removeAttribute("disabled");
-  }
-  else { // SMTP server
-    document.getElementById("accountActionsDropdownSetDefault")
-            .setAttribute("disabled", true);
-    document.getElementById("accountActionsDropdownRemove")
-            .setAttribute("disabled", true);
+      canDelete = server.canDelete;
   }
 
-  let prefBranch = Components.classes["@mozilla.org/preferences-service;1"]
-                             .getService(Components.interfaces.nsIPrefBranch);
+  setEnabled(addAccountItem, true);
+  setEnabled(setDefaultItem, canSetDefault);
+  setEnabled(removeItem, canDelete);
+}
 
-  let children = menupopup.childNodes;
-  for (let i = 0; i < children.length; i++) {
-    let prefstring = children[i].getAttribute("prefstring");
+/**
+ * Disable buttons/menu items if their control preference is locked.
+ * SeaMonkey: Not currently handled by WSM or the main loop yet
+ * since these buttons aren't under the IFRAME.
+ *
+ * @param aItems  the elements to be checked
+ * @param aMustBeTrue  if true then the pref must be boolean and set to true
+ *                     to trigger the disabling (TB requires this, SM not)
+ */
+function updateBlockedItems(aItems, aMustBeTrue) {
+  for each (let [, item] in Iterator(aItems)) {
+    let prefstring = item.getAttribute("prefstring");
     if (!prefstring)
       continue;
 
-    if (prefBranch.prefIsLocked(prefstring) && prefBranch.getBoolPref(prefstring))
-      children[i].setAttribute("disabled", true);
+    if (Services.prefs.prefIsLocked(prefstring) &&
+        (!aMustBeTrue || Services.prefs.getBoolPref(prefstring)))
+      item.setAttribute("disabled", true);
   }
 }
 
-
+/**
+ * Set enabled/disabled state for the control.
+ */
 function setEnabled(control, enabled)
 {
-  if (!control) return;
+  if (!control)
+    return;
+
   if (enabled)
     control.removeAttribute("disabled");
   else
@@ -656,50 +707,66 @@ function setEnabled(control, enabled)
 // Called when someone clicks on an account. Figure out context by what they
 // clicked on. This is also called when an account is removed. In this case,
 // nothing is selected.
-function onAccountTreeSelect()
+function onAccountTreeSelect(pageId, account)
 {
-  var tree = document.getElementById("accounttree");
+  let tree = document.getElementById("accounttree");
 
-  if (tree.view.selection.count < 1)
-    return null;
-  var node = tree.contentView.getItemAtIndex(tree.currentIndex);
-  var account = node._account;
-  var pageId = node.getAttribute('PageTag')
+  let changeView = pageId && account;
+  if (!changeView) {
+    if (tree.view.selection.count < 1)
+      return false;
+
+    let node = tree.contentView.getItemAtIndex(tree.currentIndex);
+    account = ("_account" in node) ? node._account : null;
+
+    pageId = node.getAttribute("PageTag")
+  }
 
   if (pageId == currentPageId && account == currentAccount)
-    return;
+    return true;
 
   // check if user/host names have been changed
   checkUserServerChanges(false);
 
   if (gSmtpHostNameIsIllegal) {
     gSmtpHostNameIsIllegal = false;
-    selectServer(currentAccount, currentPageId);
-    return;
+    selectServer(currentAccount.incomingServer, currentPageId);
+    return true;
+  }
+
+  if (currentPageId) {
+    // Change focus to the account tree first so that any 'onchange' handlers
+    // on elements in the current page have a chance to run before the page
+    // is saved and replaced by the new one.
+    tree.focus();
   }
 
   // save the previous page
   savePage(currentAccount);
 
-  var changeAccount = (account != currentAccount);
-  // loading a complete different page
+  let changeAccount = (account != currentAccount);
+
+  if (changeView)
+    selectServer(account.incomingServer, pageId);
+
   if (pageId != currentPageId) {
+    // loading a complete different page
 
     // prevent overwriting with bad stuff
     currentAccount = currentPageId = null;
 
     pendingAccount = account;
-    pendingPageId=pageId;
+    pendingPageId = pageId;
     loadPage(pageId);
-  }
-
-  // same page, different server
-  else if (changeAccount) {
+  } else if (changeAccount) {
+    // same page, different server
     restorePage(pageId, account);
   }
 
   if (changeAccount)
     updateButtons(tree, account);
+
+  return true;
 }
 
 // page has loaded
@@ -728,19 +795,15 @@ function onPanelLoaded(pageId) {
 
 function loadPage(pageId)
 {
-  var chromePackageName;
-  try 
-  {
+  let chromePackageName;
+  try {
     // we could compare against "main","server","copies","offline","addressing",
     // "smtp" and "advanced" first to save the work, but don't,
     // as some of these might be turned into extensions (for thunderbird)
-    var am = Components.classes["@mozilla.org/messenger/account-manager;1"]
-                       .getService(Components.interfaces.nsIMsgAccountManager);
-    var package = pageId.split("am-")[1].split(".xul")[0];
-    chromePackageName = am.getChromePackageName(package);
+    let packageName = pageId.split("am-")[1].split(".xul")[0];
+    chromePackageName = MailServices.accounts.getChromePackageName(packageName);
   }
-  catch (ex) 
-  {
+  catch (ex) {
     chromePackageName = "messenger";
   }
   const LOAD_FLAGS_NONE = Components.interfaces.nsIWebNavigation.LOAD_FLAGS_NONE;
@@ -758,15 +821,15 @@ function savePage(account)
     top.frames["contentFrame"].onSave();
 
   var accountValues = getValueArrayFor(account);
-  if (!accountValues) 
+  if (!accountValues)
     return;
 
   var pageElements = getPageFormElements();
-  if (!pageElements) 
+  if (!pageElements)
     return;
 
   // store the value in the account
-  for (var i=0; i<pageElements.length; i++) {
+  for (var i = 0; i < pageElements.length; i++) {
     if (pageElements[i].id) {
       var vals = pageElements[i].id.split(".");
       if (vals.length >= 2) {
@@ -812,7 +875,7 @@ function getAccountValue(account, accountValues, type, slot, preftype, isGeneric
     else if (type == "nntp")
       source = server.QueryInterface(Components.interfaces.nsINntpIncomingServer);
     else if (type == "smtp")
-      source = smtpService.defaultServer;
+      source = MailServices.smtp.defaultServer;
     } catch (ex) {
     }
 
@@ -864,18 +927,18 @@ function restorePage(pageId, account)
     return;
 
   var accountValues = getValueArrayFor(account);
-  if (!accountValues) 
-    return;
-
-  var pageElements = getPageFormElements();
-  if (!pageElements) 
+  if (!accountValues)
     return;
 
   if ("onPreInit" in top.frames["contentFrame"])
     top.frames["contentFrame"].onPreInit(account, accountValues);
 
+  var pageElements = getPageFormElements();
+  if (!pageElements)
+    return;
+
   // restore the value from the account
-  for (var i=0; i<pageElements.length; i++) {
+  for (var i = 0; i < pageElements.length; i++) {
     if (pageElements[i].id) {
       var vals = pageElements[i].id.split(".");
       if (vals.length >= 2) {
@@ -899,12 +962,12 @@ function restorePage(pageId, account)
             element["serverkey"] = account.incomingServer.key;
             break;
           case "smtp":
-            if (smtpService.defaultServer)
-              element["serverkey"] = smtpService.defaultServer.key;
+            if (MailServices.smtp.defaultServer)
+              element["serverkey"] = MailServices.smtp.defaultServer.key;
             break;
         }
         var isLocked = getAccountValueIsLocked(pageElements[i]);
-        setEnabled(pageElements[i],!isLocked);
+        setEnabled(pageElements[i], !isLocked);
       }
     }
   }
@@ -937,12 +1000,7 @@ function getFormElementValue(formElement) {
       }
       return null;
     }
-    if (type == "text") {
-      var val = formElement.getAttribute("value");
-      if (val) return val;
-      return null;
-    }
-    if ("value" in formElement) {
+    if ((type == "textbox") || ("value" in formElement)) {
       return formElement.value;
     }
     return null;
@@ -1005,12 +1063,12 @@ function setFormElementValue(formElement, value) {
         formElement.value = "";
     }
   }
-
-  else if (type == "text") {
-    if (value == null || value == undefined)
-      formElement.removeAttribute("value");
-    else
-      formElement.setAttribute("value",value);
+  else if (type == "textbox") {
+    if (value == null || value == undefined) {
+      formElement.value = null;
+    } else {
+      formElement.value = value;
+    }
   }
 
   // let the form figure out what to do with it
@@ -1037,9 +1095,11 @@ function getCurrentAccount()
 
 // get the array of form elements for the given page
 function getPageFormElements() {
-  if("getElementsByAttribute" in top.frames["contentFrame"].document)
+  if ("getElementsByAttribute" in top.frames["contentFrame"].document)
     return top.frames["contentFrame"].document
               .getElementsByAttribute("wsm_persist", "true");
+
+  return null;
 }
 
 // get the value array for the given account
@@ -1058,14 +1118,10 @@ var gAccountTree = {
   load: function at_load() {
     this._build();
 
-    var mgr = Components.classes["@mozilla.org/messenger/account-manager;1"]
-                        .getService(Components.interfaces.nsIMsgAccountManager);
-    mgr.addIncomingServerListener(this);
+    MailServices.accounts.addIncomingServerListener(this);
   },
   unload: function at_unload() {
-    var mgr = Components.classes["@mozilla.org/messenger/account-manager;1"]
-                        .getService(Components.interfaces.nsIMsgAccountManager);
-    mgr.removeIncomingServerListener(this);
+    MailServices.accounts.removeIncomingServerListener(this);
   },
   onServerLoaded: function at_onServerLoaded(aServer) {
     this._build();
@@ -1087,8 +1143,7 @@ var gAccountTree = {
                   {string: get("prefPanel-junk"), src: "am-junk.xul"}];
 
     // Get our account list, and add the proper items
-    var mgr = Components.classes["@mozilla.org/messenger/account-manager;1"]
-                        .getService(Components.interfaces.nsIMsgAccountManager);
+    var mgr = MailServices.accounts;
 
     var accounts = [a for each (a in fixIterator(mgr.accounts, Ci.nsIMsgAccount))];
     // Stupid bug 41133 hack. Grr...
@@ -1121,8 +1176,12 @@ var gAccountTree = {
     while (mainTree.firstChild)
       mainTree.removeChild(mainTree.firstChild);
 
-    for each (var account in accounts) {
+    for each (let account in accounts) {
       let server = account.incomingServer;
+
+      if (server.type == "im" && !Services.prefs.getBoolPref("mail.chat.enabled"))
+        continue;
+
       // Create the top level tree-item
       var treeitem = document.createElement("treeitem");
       mainTree.appendChild(treeitem);
@@ -1133,9 +1192,6 @@ var gAccountTree = {
       treecell.setAttribute("label", server.rootFolder.prettyName);
 
       // Now add our panels
-      var treekids = document.createElement("treechildren");
-      treeitem.appendChild(treekids);
-
       var panelsToKeep = [];
       var idents = mgr.GetIdentitiesForServer(server);
       if (idents.Count()) {
@@ -1144,9 +1200,10 @@ var gAccountTree = {
         panelsToKeep.push(panels[4]); // and addresssing
       }
 
-      // Everyone except news and RSS has a junk panel
+      // Everyone except News, RSS and IM has a junk panel
       // XXX: unextensible!
-      if (server.type != "nntp" && server.type != "rss")
+      // The existence of server.spamSettings can't currently be used for this.
+      if (server.type != "nntp" && server.type != "rss" && server.type != "im")
         panelsToKeep.push(panels[5]);
 
       // Check offline/diskspace support level
@@ -1167,37 +1224,38 @@ var gAccountTree = {
         var entryName = catEnum.getNext().QueryInterface(string).data;
         var svc = Components.classes[catMan.getCategoryEntry(CATEGORY, entryName)]
                             .getService(Ci.nsIMsgAccountManagerExtension);
-        if (svc.showPanel(server))
-{
-          var sbs = Components.classes["@mozilla.org/intl/stringbundle;1"]
-                              .getService(Ci.nsIStringBundleService);
-
+        if (svc.showPanel(server)) {
           let bundleName = "chrome://" + svc.chromePackageName +
                            "/locale/am-" + svc.name + ".properties";
-          let bundle = sbs.createBundle(bundleName);
+          let bundle = Services.strings.createBundle(bundleName);
           let title = bundle.GetStringFromName("prefPanel-" + svc.name);
           panelsToKeep.push({string: title, src: "am-" + svc.name + ".xul"});
-  }
-}
-
-      for each (panel in panelsToKeep) {
-        var kidtreeitem = document.createElement("treeitem");
-        treekids.appendChild(kidtreeitem);
-        var kidtreerow = document.createElement("treerow");
-        kidtreeitem.appendChild(kidtreerow);
-        var kidtreecell = document.createElement("treecell");
-        kidtreerow.appendChild(kidtreecell);
-        kidtreecell.setAttribute("label", panel.string);
-        kidtreeitem.setAttribute("PageTag", panel.src);
-        kidtreeitem._account = account;
+        }
       }
 
+      if (panelsToKeep.length > 0) {
+        var treekids = document.createElement("treechildren");
+        treeitem.appendChild(treekids);
+        for each (let panel in panelsToKeep) {
+          var kidtreeitem = document.createElement("treeitem");
+          treekids.appendChild(kidtreeitem);
+          var kidtreerow = document.createElement("treerow");
+          kidtreeitem.appendChild(kidtreerow);
+          var kidtreecell = document.createElement("treecell");
+          kidtreerow.appendChild(kidtreecell);
+          kidtreecell.setAttribute("label", panel.string);
+          kidtreeitem.setAttribute("PageTag", panel.src);
+          kidtreeitem._account = account;
+        }
+        treeitem.setAttribute("container", "true");
+        treeitem.setAttribute("open", "true");
+      }
       treeitem.setAttribute("PageTag", server ? server.accountManagerChrome
                                               : "am-main.xul");
       treeitem._account = account;
-      treeitem.setAttribute("container", "true");
-      treeitem.setAttribute("open", "true");
     }
+
+    markDefaultServer(mgr.defaultAccount, null);
 
     // Now add the outgoing server node
     var treeitem = document.createElement("treeitem");

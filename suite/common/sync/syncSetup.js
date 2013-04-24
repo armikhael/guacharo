@@ -1,42 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Weave.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Edward Lee <edilee@mozilla.com>
- *   Mike Connor <mconnor@mozilla.com>
- *   Philipp von Weitershausen <philipp@weitershausen.de>
- *   Paul O’Shannessy <paul@oshannessy.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 const Ci = Components.interfaces;
 const Cc = Components.classes;
@@ -55,6 +19,11 @@ const OPTIONS_PAGE                  = 6;
 const OPTIONS_CONFIRM_PAGE          = 7;
 const SETUP_SUCCESS_PAGE            = 8;
 
+// Broader than we'd like, but after this changed from api-secure.recaptcha.net
+// we had no choice. At least we only do this for the duration of setup.
+// See discussion in Bugs 508112 and 653307.
+const RECAPTCHA_DOMAIN = "https://www.google.com";
+
 Cu.import("resource://services-sync/main.js");
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
@@ -69,13 +38,14 @@ var gSyncSetup = {
   captchaBrowser: null,
   wizard: null,
   _disabledSites: [],
-  _remoteSites: [Weave.Service.serverURL, "https://api-secure.recaptcha.net"],
 
   status: {
     password: false,
     email: false,
     server: true
   },
+
+  get _remoteSites() [Weave.Service.serverURL, RECAPTCHA_DOMAIN],
 
   get _usingMainServers() {
     if (this._settingUpNew)
@@ -86,9 +56,9 @@ var gSyncSetup = {
   init: function () {
     let obs = [
       ["weave:service:changepph:finish", "onResetPassphrase"],
-      ["weave:service:verify-login:start",  "onLoginStart"],
-      ["weave:service:verify-login:error",  "onLoginEnd"],
-      ["weave:service:verify-login:finish", "onLoginEnd"]];
+      ["weave:service:login:start",  "onLoginStart"],
+      ["weave:service:login:error",  "onLoginEnd"],
+      ["weave:service:login:finish", "onLoginEnd"]];
 
     // Add the observers now and remove them on unload
     let self = this;
@@ -104,6 +74,12 @@ var gSyncSetup = {
     };
     addRem(true);
     window.addEventListener("unload", function() addRem(false), false);
+
+    setTimeout(function () {
+      // Force Service to be loaded so that engines are registered.
+      // See Bug 670082.
+      Weave.Service;
+    }, 0);
 
     this.captchaBrowser = document.getElementById("captcha");
     this.wizard = document.getElementById("accountSetup");
@@ -145,10 +121,41 @@ var gSyncSetup = {
     this.wizard.pageIndex = EXISTING_ACCOUNT_CONNECT_PAGE;
   },
 
+  resetPassphrase: function resetPassphrase() {
+    // Apply the existing form fields so that
+    // Weave.Service.changePassphrase() has the necessary credentials.
+    Weave.Identity.account = document.getElementById("existingAccountName").value;
+    Weave.Identity.basicPassword = document.getElementById("existingPassword").value;
+
+    // Generate a new passphrase so that Weave.Service.login() will
+    // actually do something.
+    let passphrase = Weave.Utils.generatePassphrase();
+    Weave.Identity.syncKey = passphrase;
+
+    // Only open the dialog if username + password are actually correct.
+    Weave.Service.login();
+    if ([Weave.LOGIN_FAILED_INVALID_PASSPHRASE,
+         Weave.LOGIN_FAILED_NO_PASSPHRASE,
+         Weave.LOGIN_SUCCEEDED].indexOf(Weave.Status.login) == -1)
+      return;
+
+    // Hide any errors about the passphrase, we know it's not right.
+    let feedback = document.getElementById("existingPassphraseFeedbackRow");
+    feedback.hidden = true;
+    let el = document.getElementById("existingPassphrase");
+    el.value = Weave.Utils.hyphenatePassphrase(passphrase);
+
+    // changePassphrase() will sync, make sure we set the "firstSync" pref
+    // according to the user's pref.
+    Weave.Svc.Prefs.reset("firstSync");
+    this.setupInitialSync();
+    gSyncUtils.resetPassphrase(true);
+  },
+
   onResetPassphrase: function () {
     document.getElementById("existingPassphrase").value =
-      Weave.Utils.hyphenatePassphrase(Weave.Service.passphrase);
-
+      Weave.Utils.hyphenatePassphrase(Weave.Identity.syncKey);
+    this.checkFields();
     this.wizard.advance();
   },
 
@@ -178,6 +185,8 @@ var gSyncSetup = {
         feedback = server;
         break;
       case Weave.LOGIN_FAILED_LOGIN_REJECTED:
+      case Weave.LOGIN_FAILED_NO_USERNAME:
+      case Weave.LOGIN_FAILED_NO_PASSWORD:
         feedback = password;
         break;
       case Weave.LOGIN_FAILED_INVALID_PASSPHRASE:
@@ -249,7 +258,8 @@ var gSyncSetup = {
 
   checkAccount: function() {
     delete this._checkAccountTimer;
-    let value = document.getElementById("weaveEmail").value;
+    let value = Weave.Utils.normalizeAccount(
+      document.getElementById("weaveEmail").value);
     if (!value) {
       this.status.email = false;
       this.checkFields();
@@ -277,7 +287,7 @@ var gSyncSetup = {
     this._setFeedbackMessage(feedback, valid, str);
     this.status.email = valid;
     if (valid)
-      Weave.Service.account = value;
+      Weave.Identity.account = value;
     this.checkFields();
   },
 
@@ -287,7 +297,7 @@ var gSyncSetup = {
     if (password.value == document.getElementById("weavePassphrase").value) {
       // xxxmpc - hack, sigh
       valid = false;
-      str = Weave.Utils.getErrorString("change.password.pwSameAsSyncKey");
+      str = Weave.Utils.getErrorString("change.password.pwSameAsRecoveryKey");
     }
     else {
       let pwconfirm = document.getElementById("weavePasswordConfirm");
@@ -303,7 +313,7 @@ var gSyncSetup = {
 
   onPassphraseGenerate: function () {
     let passphrase = Weave.Utils.generatePassphrase();
-    Weave.Service.passphrase = passphrase;
+    Weave.Identity.syncKey = passphrase;
     let el = document.getElementById("weavePassphrase");
     el.value = Weave.Utils.hyphenatePassphrase(passphrase);
   },
@@ -413,7 +423,8 @@ var gSyncSetup = {
         feedback.hidden = false;
 
         let password = document.getElementById("weavePassword").value;
-        let email    = document.getElementById("weaveEmail").value;
+        let email = Weave.Utils.normalizeAccount(
+          document.getElementById("weaveEmail").value);
         let challenge = getField("challenge");
         let response = getField("response");
 
@@ -421,8 +432,8 @@ var gSyncSetup = {
                                                 challenge, response);
 
         if (error == null) {
-          Weave.Service.account = email;
-          Weave.Service.password = password;
+          Weave.Identity.account = email;
+          Weave.Identity.basicPassword = password;
           this._handleNoScript(false);
           this.wizard.pageIndex = SETUP_SUCCESS_PAGE;
           return false;
@@ -438,10 +449,11 @@ var gSyncSetup = {
         this.captchaBrowser.loadURI(Weave.Service.miscAPI + "captcha_html");
         break;
       case EXISTING_ACCOUNT_LOGIN_PAGE:
-        Weave.Service.account = document.getElementById("existingAccountName").value;
-        Weave.Service.password = document.getElementById("existingPassword").value;
+        Weave.Identity.account = Weave.Utils.normalizeAccount(
+          document.getElementById("existingAccountName").value);
+        Weave.Identity.basicPassword = document.getElementById("existingPassword").value;
         let pp = document.getElementById("existingPassphrase").value;
-        Weave.Service.passphrase = Weave.Utils.normalizePassphrase(pp);
+        Weave.Identity.syncKey = Weave.Utils.normalizePassphrase(pp);
         if (Weave.Service.login())
           this.wizard.pageIndex = SETUP_SUCCESS_PAGE;
         return false;
@@ -489,7 +501,8 @@ var gSyncSetup = {
         return document.getElementById(element).hasAttribute("checked");
       }
 
-      let prefs = ["engine.bookmarks", "engine.passwords", "engine.history", "engine.tabs", "engine.prefs"];
+      let prefs = ["engine.bookmarks", "engine.passwords", "engine.history",
+                   "engine.tabs", "engine.prefs", "engine.addons"];
       for (let i = 0; i < prefs.length; i++) {
         Weave.Svc.Prefs.set(prefs[i], isChecked(prefs[i]));
       }
@@ -548,6 +561,9 @@ var gSyncSetup = {
     if (this._jpakeclient)
       return;
 
+    // When onAbort is called, Weave may already be gone.
+    const JPAKE_ERROR_USERABORT = Weave.JPAKE_ERROR_USERABORT;
+  
     let self = this;
     this._jpakeclient = new Weave.JPAKEClient({
       displayPIN: function displayPIN(pin) {
@@ -556,10 +572,14 @@ var gSyncSetup = {
         document.getElementById("easySetupPIN3").value = pin.slice(8);
       },
 
+      onPairingStart: function onPairingStart() {},
+
+      onPaired: function onPaired() {},
+
       onComplete: function onComplete(credentials) {
-        Weave.Service.account = credentials.account;
-        Weave.Service.password = credentials.password;
-        Weave.Service.passphrase = credentials.synckey;
+        Weave.Identity.account = credentials.account;
+        Weave.Identity.basicPassword = credentials.password;
+        Weave.Identity.syncKey = credentials.synckey;
         Weave.Service.serverURL = credentials.serverURL;
         self.wizard.pageIndex = SETUP_SUCCESS_PAGE;
       },
@@ -567,8 +587,8 @@ var gSyncSetup = {
       onAbort: function onAbort(error) {
         delete self._jpakeclient;
 
-        // No error means manual abort, e.g. wizard is aborted. Ignore.
-        if (!error)
+        // Ignore if wizard is aborted.
+        if (error == JPAKE_ERROR_USERABORT)
           return;
 
         // Automatically go to manual setup if we couldn't acquire a channel.
@@ -901,7 +921,6 @@ var gSyncSetup = {
     }
     this._setFeedback(element, success, str);
   },
-
 
   onStateChange: function(webProgress, request, stateFlags, status) {
     // We're only looking for the end of the frame load

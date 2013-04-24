@@ -1,40 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Ben Bucksch <mozilla@bucksch.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "mimetpfl.h"
 #include "mimebuf.h"
@@ -49,29 +16,29 @@
 #include "prprf.h"
 #include "nsMsgI18N.h"
 
-static const PRUint32 kSpacesForATab = 4; // Must be at least 1.
-static const PRUint32 kInitialBufferSize = 100;
+static const uint32_t kSpacesForATab = 4; // Must be at least 1.
+static const uint32_t kInitialBufferSize = 100;
 
 #define MIME_SUPERCLASS mimeInlineTextClass
 MimeDefClass(MimeInlineTextPlainFlowed, MimeInlineTextPlainFlowedClass,
        mimeInlineTextPlainFlowedClass, &MIME_SUPERCLASS);
 
 static int MimeInlineTextPlainFlowed_parse_begin (MimeObject *);
-static int MimeInlineTextPlainFlowed_parse_line (const char *, PRInt32, MimeObject *);
-static int MimeInlineTextPlainFlowed_parse_eof (MimeObject *, PRBool);
+static int MimeInlineTextPlainFlowed_parse_line (const char *, int32_t, MimeObject *);
+static int MimeInlineTextPlainFlowed_parse_eof (MimeObject *, bool);
 
-static MimeInlineTextPlainFlowedExData *MimeInlineTextPlainFlowedExDataList = nsnull;
+static MimeInlineTextPlainFlowedExData *MimeInlineTextPlainFlowedExDataList = nullptr;
 
 // From mimetpla.cpp
 extern "C" void MimeTextBuildPrefixCSS(
-                       PRInt32 quotedSizeSetting,      // mail.quoted_size
-                       PRInt32    quotedStyleSetting,  // mail.quoted_style
+                       int32_t quotedSizeSetting,      // mail.quoted_size
+                       int32_t    quotedStyleSetting,  // mail.quoted_style
                        char       *citationColor,      // mail.citation_color
                        nsACString &style);
 // Definition below
 static
 nsresult Line_convert_whitespace(const nsString& a_line,
-                                 const PRBool a_convert_all_whitespace,
+                                 const bool a_convert_all_whitespace,
                                  nsString& a_out_line);
 
 static int
@@ -92,14 +59,14 @@ MimeInlineTextPlainFlowed_parse_begin (MimeObject *obj)
   int status = ((MimeObjectClass*)&MIME_SUPERCLASS)->parse_begin(obj);
   if (status < 0) return status;
 
-  status =  MimeObject_write(obj, "", 0, PR_TRUE); /* force out any separators... */
+  status =  MimeObject_write(obj, "", 0, true); /* force out any separators... */
   if(status<0) return status;
 
-  PRBool quoting = ( obj->options
+  bool quoting = ( obj->options
     && ( obj->options->format_out == nsMimeOutput::nsMimeMessageQuoting ||
          obj->options->format_out == nsMimeOutput::nsMimeMessageBodyQuoting
        )       );  // The output will be inserted in the composer as quotation
-  PRBool plainHTML = quoting || (obj->options &&
+  bool plainHTML = quoting || (obj->options &&
        obj->options->format_out == nsMimeOutput::nsMimeMessageSaveAs);
        // Just good(tm) HTML. No reliance on CSS.
 
@@ -120,15 +87,15 @@ MimeInlineTextPlainFlowed_parse_begin (MimeObject *obj)
   // Initialize data
 
   exdata->ownerobj = obj;
-  exdata->inflow = PR_FALSE;
+  exdata->inflow = false;
   exdata->quotelevel = 0;
-  exdata->isSig = PR_FALSE;
+  exdata->isSig = false;
 
   // check for DelSp=yes (RFC 3676)
 
   char *content_type_row =
     (obj->headers
-     ? MimeHeaders_get(obj->headers, HEADER_CONTENT_TYPE, PR_FALSE, PR_FALSE)
+     ? MimeHeaders_get(obj->headers, HEADER_CONTENT_TYPE, false, false)
      : 0);
   char *content_type_delsp =
     (content_type_row
@@ -140,11 +107,11 @@ MimeInlineTextPlainFlowed_parse_begin (MimeObject *obj)
 
   // Get Prefs for viewing
 
-  exdata->fixedwidthfont = PR_FALSE;
+  exdata->fixedwidthfont = false;
   //  Quotes
   text->mQuotedSizeSetting = 0;   // mail.quoted_size
   text->mQuotedStyleSetting = 0;  // mail.quoted_style
-  text->mCitationColor = nsnull;  // mail.citation_color
+  text->mCitationColor = nullptr;  // mail.citation_color
 
   nsIPrefBranch *prefBranch = GetPrefBranch(obj->options);
   if (prefBranch)
@@ -173,8 +140,8 @@ MimeInlineTextPlainFlowed_parse_begin (MimeObject *obj)
   if (nsMimeOutput::nsMimeMessageBodyDisplay == obj->options->format_out ||
       nsMimeOutput::nsMimeMessagePrintOutput == obj->options->format_out)
   {
-    PRInt32 fontSize;       // default font size
-    PRInt32 fontSizePercentage;   // size percentage
+    int32_t fontSize;       // default font size
+    int32_t fontSizePercentage;   // size percentage
     nsresult rv = GetMailNewsFont(obj, exdata->fixedwidthfont,
                                   &fontSize, &fontSizePercentage, fontLang);
     if (NS_SUCCEEDED(rv))
@@ -208,7 +175,7 @@ MimeInlineTextPlainFlowed_parse_begin (MimeObject *obj)
       openingDiv += '\"';
     }
     openingDiv += ">";
-    status = MimeObject_write(obj, openingDiv.get(), openingDiv.Length(), PR_FALSE);
+    status = MimeObject_write(obj, openingDiv.get(), openingDiv.Length(), false);
     if (status < 0) return status;
   }
 
@@ -216,12 +183,12 @@ MimeInlineTextPlainFlowed_parse_begin (MimeObject *obj)
 }
 
 static int
-MimeInlineTextPlainFlowed_parse_eof (MimeObject *obj, PRBool abort_p)
+MimeInlineTextPlainFlowed_parse_eof (MimeObject *obj, bool abort_p)
 {
   int status = 0;
-  struct MimeInlineTextPlainFlowedExData *exdata = nsnull;
+  struct MimeInlineTextPlainFlowedExData *exdata = nullptr;
 
-  PRBool quoting = ( obj->options
+  bool quoting = ( obj->options
     && ( obj->options->format_out == nsMimeOutput::nsMimeMessageQuoting ||
          obj->options->format_out == nsMimeOutput::nsMimeMessageBodyQuoting
        )           );  // see above
@@ -240,7 +207,7 @@ MimeInlineTextPlainFlowed_parse_eof (MimeObject *obj, PRBool abort_p)
   struct MimeInlineTextPlainFlowedExData **prevexdata;
   prevexdata = &MimeInlineTextPlainFlowedExDataList;
 
-  while ((exdata = *prevexdata) != nsnull) {
+  while ((exdata = *prevexdata) != nullptr) {
     if (exdata->ownerobj == obj) {
       // Fill hole
       *prevexdata = exdata->next;
@@ -256,17 +223,17 @@ MimeInlineTextPlainFlowed_parse_eof (MimeObject *obj, PRBool abort_p)
   }
 
   for(; exdata->quotelevel > 0; exdata->quotelevel--) {
-    status = MimeObject_write(obj, "</blockquote>", 13, PR_FALSE);
+    status = MimeObject_write(obj, "</blockquote>", 13, false);
     if(status<0) goto EarlyOut;
   }
 
   if (exdata->isSig && !quoting) {
-    status = MimeObject_write(obj, "</div>", 6, PR_FALSE); // .moz-txt-sig
+    status = MimeObject_write(obj, "</div>", 6, false); // .moz-txt-sig
     if (status<0) goto EarlyOut;
   }
   if (!quoting) // HACK (see above)
   {
-    status = MimeObject_write(obj, "</div>", 6, PR_FALSE); // .moz-text-flowed
+    status = MimeObject_write(obj, "</div>", 6, false); // .moz-text-flowed
     if (status<0) goto EarlyOut;
   }
 
@@ -278,21 +245,21 @@ EarlyOut:
   // Free mCitationColor
   MimeInlineTextPlainFlowed *text = (MimeInlineTextPlainFlowed *) obj;
   PR_FREEIF(text->mCitationColor);
-  text->mCitationColor = nsnull;
+  text->mCitationColor = nullptr;
 
   return status;
 }
 
 
 static int
-MimeInlineTextPlainFlowed_parse_line (const char *aLine, PRInt32 length, MimeObject *obj)
+MimeInlineTextPlainFlowed_parse_line (const char *aLine, int32_t length, MimeObject *obj)
 {
   int status;
-  PRBool quoting = ( obj->options
+  bool quoting = ( obj->options
     && ( obj->options->format_out == nsMimeOutput::nsMimeMessageQuoting ||
          obj->options->format_out == nsMimeOutput::nsMimeMessageBodyQuoting
        )           );  // see above
-  PRBool plainHTML = quoting || (obj->options &&
+  bool plainHTML = quoting || (obj->options &&
        obj->options->format_out == nsMimeOutput::nsMimeMessageSaveAs);
        // see above
 
@@ -331,9 +298,9 @@ MimeInlineTextPlainFlowed_parse_line (const char *aLine, PRInt32 length, MimeObj
   // flowed line. Normally we assume that the last two chars
   // are CR and LF as said in RFC822, but that doesn't seem to
   // be the case always.
-  PRBool flowed = PR_FALSE;
-  PRBool sigSeparator = PR_FALSE;
-  PRInt32 index = length-1;
+  bool flowed = false;
+  bool sigSeparator = false;
+  int32_t index = length-1;
   while(index >= 0 && ('\r' == line[index] || '\n' == line[index])) {
     index--;
   }
@@ -341,7 +308,7 @@ MimeInlineTextPlainFlowed_parse_line (const char *aLine, PRInt32 length, MimeObj
        /* Ignore space stuffing, i.e. lines with just
           (quote marks and) a space count as empty */
   {
-    flowed = PR_TRUE;
+    flowed = true;
     sigSeparator = (index - (linep - line) + 1 == 3) && !strncmp(linep, "-- ", 3);
     if (((MimeInlineTextPlainFlowed *) obj)->delSp && ! sigSeparator)
        /* If line is flowed and DelSp=yes, logically
@@ -357,7 +324,7 @@ MimeInlineTextPlainFlowed_parse_line (const char *aLine, PRInt32 length, MimeObj
 
   mozITXTToHTMLConv *conv = GetTextConverter(obj->options);
 
-  PRBool skipConversion = !conv ||
+  bool skipConversion = !conv ||
                           (obj->options && obj->options->force_user_charset);
 
   nsAutoString lineSource;
@@ -371,7 +338,7 @@ MimeInlineTextPlainFlowed_parse_line (const char *aLine, PRInt32 length, MimeObj
     // Convert only if the source string is not empty
     if (length - (linep - line) > 0)
     {
-      PRUint32 whattodo = obj->options->whattodo;
+      uint32_t whattodo = obj->options->whattodo;
       if (plainHTML)
       {
         if (quoting)
@@ -462,16 +429,16 @@ MimeInlineTextPlainFlowed_parse_line (const char *aLine, PRInt32 length, MimeObj
       {
         preface += "--&nbsp;<br>";
       } else {
-        exdata->isSig = PR_TRUE;
+        exdata->isSig = true;
         preface += "<div class=\"moz-txt-sig\"><span class=\"moz-txt-tag\">"
                    "--&nbsp;<br></span>";
       }
     } else {
-      Line_convert_whitespace(lineResult, PR_FALSE /* Allow wraps */,
+      Line_convert_whitespace(lineResult, false /* Allow wraps */,
                               lineResult2);
     }
 
-    exdata->inflow=PR_TRUE;
+    exdata->inflow=true;
   } else {
     // Fixed paragraph.
     Line_convert_whitespace(lineResult,
@@ -480,12 +447,12 @@ MimeInlineTextPlainFlowed_parse_line (const char *aLine, PRInt32 length, MimeObj
                                  a row into nbsp, otherwise all. */,
                             lineResult2);
     lineResult2.AppendLiteral("<br>");
-    exdata->inflow = PR_FALSE;
+    exdata->inflow = false;
   } // End Fixed line
 
   if (!(exdata->isSig && quoting))
   {
-    status = MimeObject_write(obj, preface.get(), preface.Length(), PR_TRUE);
+    status = MimeObject_write(obj, preface.get(), preface.Length(), true);
     if (status < 0) return status;
     nsCAutoString outString;
     if (obj->options->format_out != nsMimeOutput::nsMimeMessageSaveAs ||
@@ -496,7 +463,7 @@ MimeInlineTextPlainFlowed_parse_line (const char *aLine, PRInt32 length, MimeObj
       rv = nsMsgI18NConvertFromUnicode(mailCharset, lineResult2, outString);
       NS_ENSURE_SUCCESS(rv, -1);
     }
-    status = MimeObject_write(obj, outString.get(), outString.Length(), PR_TRUE);
+    status = MimeObject_write(obj, outString.get(), outString.Length(), true);
     return status;
   }
   else
@@ -517,8 +484,8 @@ MimeInlineTextPlainFlowed_parse_line (const char *aLine, PRInt32 length, MimeObj
  * @param in a_current_char, the next char. It decides which state
  *                           will be next.
  */
-static void Update_in_tag_info(PRBool *a_in_tag, /* IN/OUT */
-                   PRBool *a_in_quote_in_tag, /* IN/OUT */
+static void Update_in_tag_info(bool *a_in_tag, /* IN/OUT */
+                   bool *a_in_quote_in_tag, /* IN/OUT */
                    PRUnichar *a_quote_char, /* IN/OUT (pointer to single char) */
                    PRUnichar a_current_char) /* IN */
 {
@@ -530,7 +497,7 @@ static void Update_in_tag_info(PRBool *a_in_tag, /* IN/OUT */
       // We are in a quote. A quote is ended by the same
       // character that started it ('...' or "...")
       if(*a_quote_char == a_current_char) {
-        *a_in_quote_in_tag = PR_FALSE;
+        *a_in_quote_in_tag = false;
       }
     } else {
       // We are not currently in a quote, but we may enter
@@ -538,12 +505,12 @@ static void Update_in_tag_info(PRBool *a_in_tag, /* IN/OUT */
       switch(a_current_char) {
       case '"':
       case '\'':
-        *a_in_quote_in_tag = PR_TRUE;
+        *a_in_quote_in_tag = true;
         *a_quote_char = a_current_char;
         break;
       case '>':
         // Tag is ended
-        *a_in_tag = PR_FALSE;
+        *a_in_tag = false;
         break;
       default:
         // Do nothing
@@ -558,8 +525,8 @@ static void Update_in_tag_info(PRBool *a_in_tag, /* IN/OUT */
   // All normal occurrences of '<' should have been replaced
   // by &lt;
   if ('<' == a_current_char) {
-    *a_in_tag = PR_TRUE;
-    *a_in_quote_in_tag = PR_FALSE;
+    *a_in_tag = true;
+    *a_in_quote_in_tag = false;
   }
 }
 
@@ -576,14 +543,14 @@ static void Update_in_tag_info(PRBool *a_in_tag, /* IN/OUT */
 */
 static void Convert_whitespace(const PRUnichar a_current_char,
                                const PRUnichar a_next_char,
-                               const PRBool a_convert_all_whitespace,
+                               const bool a_convert_all_whitespace,
                                nsString& a_out_string)
 {
   NS_ASSERTION('\t' == a_current_char || ' ' == a_current_char,
                "Convert_whitespace got something else than a whitespace!");
 
-  PRUint32 number_of_nbsp = 0;
-  PRUint32 number_of_space = 1; // Assume we're going to output one space.
+  uint32_t number_of_nbsp = 0;
+  uint32_t number_of_space = 1; // Assume we're going to output one space.
 
   /* Output the spaces for a tab. All but the last are made into &nbsp;.
      The last is treated like a normal space.
@@ -619,14 +586,14 @@ static void Convert_whitespace(const PRUnichar a_current_char,
 */
 static
 nsresult Line_convert_whitespace(const nsString& a_line,
-                                 const PRBool a_convert_all_whitespace,
+                                 const bool a_convert_all_whitespace,
                                  nsString& a_out_line)
 {
-  PRBool in_tag = PR_FALSE;
-  PRBool in_quote_in_tag = PR_FALSE;
+  bool in_tag = false;
+  bool in_quote_in_tag = false;
   PRUnichar quote_char;
 
-  for (PRUint32 i = 0; a_line.Length() > i; i++)
+  for (uint32_t i = 0; a_line.Length() > i; i++)
   {
     const PRUnichar ic = a_line[i];  // Cache
 

@@ -1,40 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Sun Microsystems code.
- *
- * The Initial Developer of the Original Code is
- *   Sun Microsystems, Inc.
- * Portions created by the Initial Developer are Copyright (C) 2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Daniel Boelzle <daniel.boelzle@sun.com>
- *   Philipp Kewisch <mozilla@kewis.ch>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://calendar/modules/calAlarmUtils.jsm");
 Components.utils.import("resource://calendar/modules/calIteratorUtils.jsm");
@@ -617,10 +583,7 @@ function calWcapCalendar_storeItem(bAddItem, item, oldItem, request) {
             }
             var items = this_.parseItems(icalRootComp, calICalendar.ITEM_FILTER_ALL_ITEMS,
                                          0, null, null, true /* bLeaveMutable */);
-            if (items.length < 1) {
-                throw new Components.Exception("empty VCALENDAR returned!");
-            }
-            if (items.length > 1) {
+            if (items.length != 1) {
                 this_.notifyError(NS_ERROR_UNEXPECTED,
                                   "unexpected number of items: " + items.length);
             }
@@ -685,7 +648,7 @@ function calWcapCalendar_adoptItem(item, listener) {
                                           calIOperationListener.ADD,
                                           err ? item.id : newItem.id,
                                           err ? err : newItem);
-            if (!err) {
+            if (!err && this_ == this_.superCalendar) {
                 this_.notifyObservers("onAddItem", [newItem]);
             }
         },
@@ -713,7 +676,7 @@ function calWcapCalendar_modifyItem(newItem, oldItem, listener) {
                                           getResultCode(err),
                                           calIOperationListener.MODIFY,
                                           newItem.id, err ? err : item);
-            if (!err) {
+            if (!err && this_ == this_.superCalendar) {
                 this_.notifyObservers("onModifyItem", [item, oldItem]);
             }
         },
@@ -796,7 +759,7 @@ function calWcapCalendar_deleteItem(item, listener) {
                                           getResultCode(err),
                                           calIOperationListener.DELETE,
                                           item.id, err ? err : item);
-            if (!err) {
+            if (!err && this_ == this_.superCalendar) {
                 this_.notifyObservers("onDeleteItem", [item]);
             }
         },
@@ -919,13 +882,11 @@ calWcapCalendar.prototype.parseItems = function calWcapCalendar_parseItems(
                 switch (itemFilter & calICalendar.ITEM_FILTER_COMPLETED_ALL) {
                     case calICalendar.ITEM_FILTER_COMPLETED_YES:
                         if (!item.isCompleted) {
-                            delete item;
                             item = null;
                         }
                         break;
                     case calICalendar.ITEM_FILTER_COMPLETED_NO:
                         if (item.isCompleted) {
-                            delete item;
                             item = null;
                         }
                         break;
@@ -1351,13 +1312,15 @@ function calWcapCalendar_getItems(itemFilter, maxResults, rangeStart, rangeEnd, 
     return request;
 };
 
+calWcapCalendar.prototype.offlineStorage = null;
+
 calWcapCalendar.prototype.resetLog =
 function calWcapCalendar_resetLog() {
     this.deleteProperty("replay.last_stamp");
 };
 
 calWcapCalendar.prototype.replayChangesOn =
-function calWcapCalendar_replayChangesOn(destCal, listener) {
+function calWcapCalendar_replayChangesOn(listener) {
     var this_ = this;
     var itemFilter = calICalendar.ITEM_FILTER_ALL_ITEMS;
     var dtFrom = getDatetimeFromIcalString(this.getProperty("replay.last_stamp"));
@@ -1373,8 +1336,8 @@ function calWcapCalendar_replayChangesOn(destCal, listener) {
                 this_.setProperty("replay.last_stamp", getIcalUTC(now));
                 log("new replay stamp: " + getIcalUTC(now), this_);
             }
-            if (opListener) {
-                opListener.onResult(request, null);
+            if (listener) {
+                listener.onResult(request, null);
             }
         },
         log("replayChangesOn():\n\titemFilter=0x" + itemFilter.toString(0x10) +
@@ -1398,13 +1361,13 @@ function calWcapCalendar_replayChangesOn(destCal, listener) {
                     modifiedIds[item.id] = true;
                     if (bAdd) {
                         log("replayChangesOn(): new item " + item.id, this_);
-                        if (destCal) {
-                            destCal.addItem(item, writeListener);
+                        if (this_.offlineStorage) {
+                            this_.offlineStorage.addItem(item, writeListener);
                         }
                     } else {
                         log("replayChangesOn(): modified item " + item.id, this_);
-                        if (destCal) {
-                            destCal.modifyItem(item, null, writeListener);
+                        if (this_.offlineStorage) {
+                            this_.modifyItem(item, null, writeListener);
                         }
                     }
                 }
@@ -1414,16 +1377,16 @@ function calWcapCalendar_replayChangesOn(destCal, listener) {
                         log("replayChangesOn(): skipping deletion of " + item.id, this_);
                     } else if (isParent(item)) {
                         log("replayChangesOn(): deleted item " + item.id, this_);
-                        if (destCal) {
-                            destCal.deleteItem(item, writeListener);
+                        if (this_.offlineStorage) {
+                            this_.offlineStorage.deleteItem(item, writeListener);
                         }
                     } else { // modify parent instead of
                              // straight-forward deleteItem(). WTF.
                         var parent = item.parentItem.clone();
                         parent.recurrenceInfo.removeOccurrenceAt(item.recurrenceId);
                         log("replayChangesOn(): modified parent "+ parent.id, this_);
-                        if (destCal) {
-                            destCal.modifyItem(parent, item, writeListener);
+                        if (this_.offlineStorage) {
+                            this_.offlineStorage.modifyItem(parent, item, writeListener);
                         }
                     }
                 }

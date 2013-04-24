@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsImportTranslator_h___
 #define nsImportTranslator_h___
@@ -46,32 +14,32 @@ class ImportOutFile;
 
 class UMimeEncode {
 public:
-  static PRUint32  GetBufferSize( PRUint32 inByes);
-  static PRUint32  ConvertBuffer( const PRUint8 * pIn, PRUint32 inLen, PRUint8 *pOut, PRUint32 maxLen = 72, PRUint32 firstLineLen = 72, const char * pEolStr = nsnull);
+  static uint32_t  GetBufferSize(uint32_t inByes);
+  static uint32_t  ConvertBuffer(const uint8_t * pIn, uint32_t inLen, uint8_t *pOut, uint32_t maxLen = 72, uint32_t firstLineLen = 72, const char * pEolStr = nullptr);
 };
 
 
 class nsImportTranslator {
 public:
   virtual ~nsImportTranslator() {}
-  virtual PRBool    Supports8bitEncoding( void) { return( PR_FALSE);}
-  virtual PRUint32  GetMaxBufferSize( PRUint32 inLen) { return( inLen + 1);}
-  virtual void    ConvertBuffer( const PRUint8 * pIn, PRUint32 inLen, PRUint8 * pOut) { memcpy( pOut, pIn, inLen); pOut[inLen] = 0;}
-  virtual PRBool    ConvertToFile( const PRUint8 * pIn, PRUint32 inLen, ImportOutFile *pOutFile, PRUint32 *pProcessed = nsnull);
-  virtual PRBool    FinishConvertToFile( ImportOutFile * /* pOutFile */) { return( PR_TRUE);}
+  virtual bool      Supports8bitEncoding(void) { return false;}
+  virtual uint32_t  GetMaxBufferSize(uint32_t inLen) { return inLen + 1;}
+  virtual void    ConvertBuffer(const uint8_t * pIn, uint32_t inLen, uint8_t * pOut) { memcpy(pOut, pIn, inLen); pOut[inLen] = 0;}
+  virtual bool      ConvertToFile(const uint8_t * pIn, uint32_t inLen, ImportOutFile *pOutFile, uint32_t *pProcessed = nullptr);
+  virtual bool      FinishConvertToFile(ImportOutFile * /* pOutFile */) { return true;}
 
-  virtual void  GetCharset( nsCString& charSet) { charSet = "us-ascii";}
-  virtual void  GetLanguage( nsCString& lang) { lang = "en";}
-  virtual void  GetEncoding( nsCString& encoding) { encoding.Truncate();}
+  virtual void  GetCharset(nsCString& charSet) { charSet = "us-ascii";}
+  virtual void  GetLanguage(nsCString& lang) { lang = "en";}
+  virtual void  GetEncoding(nsCString& encoding) { encoding.Truncate();}
 };
 
 // Specialized encoder, not a vaild language translator, used for Mime headers.
 // rfc2231
 class CMHTranslator : public nsImportTranslator {
 public:
-  virtual PRUint32  GetMaxBufferSize( PRUint32 inLen) { return( (inLen * 3) + 1);}
-  virtual void    ConvertBuffer( const PRUint8 * pIn, PRUint32 inLen, PRUint8 * pOut);
-  virtual PRBool    ConvertToFile( const PRUint8 * pIn, PRUint32 inLen, ImportOutFile *pOutFile, PRUint32 *pProcessed = nsnull);
+  virtual uint32_t  GetMaxBufferSize(uint32_t inLen) { return (inLen * 3) + 1;}
+  virtual void    ConvertBuffer(const uint8_t * pIn, uint32_t inLen, uint8_t * pOut);
+  virtual bool      ConvertToFile(const uint8_t * pIn, uint32_t inLen, ImportOutFile *pOutFile, uint32_t *pProcessed = nullptr);
 };
 
 // Specialized encoder, not a vaild language translator, used for mail headers
@@ -80,17 +48,17 @@ class C2047Translator : public nsImportTranslator {
 public:
   virtual ~C2047Translator() {}
 
-  C2047Translator( const char *pCharset, PRUint32 headerLen) { m_charset = pCharset; m_startLen = headerLen; m_useQuotedPrintable = PR_FALSE;}
+  C2047Translator(const char *pCharset, uint32_t headerLen) { m_charset = pCharset; m_startLen = headerLen; m_useQuotedPrintable = false;}
 
-  void  SetUseQuotedPrintable( void) { m_useQuotedPrintable = PR_TRUE;}
+  void  SetUseQuotedPrintable(void) { m_useQuotedPrintable = true;}
 
-  virtual PRBool  ConvertToFile( const PRUint8 * pIn, PRUint32 inLen, ImportOutFile *pOutFile, PRUint32 *pProcessed = nsnull);
-  PRBool  ConvertToFileQ( const PRUint8 * pIn, PRUint32 inLen, ImportOutFile *pOutFile, PRUint32 *pProcessed);
+  virtual bool    ConvertToFile(const uint8_t * pIn, uint32_t inLen, ImportOutFile *pOutFile, uint32_t *pProcessed = nullptr);
+  bool    ConvertToFileQ(const uint8_t * pIn, uint32_t inLen, ImportOutFile *pOutFile, uint32_t *pProcessed);
 
 protected:
-  PRBool      m_useQuotedPrintable;
+  bool        m_useQuotedPrintable;
   nsCString    m_charset;
-  PRUint32    m_startLen;
+  uint32_t    m_startLen;
 };
 
 #endif /* nsImportTranslator_h__ */

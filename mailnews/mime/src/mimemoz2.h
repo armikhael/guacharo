@@ -1,39 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef _MIMEMOZ_H_
 #define _MIMEMOZ_H_
@@ -45,6 +13,7 @@
 #include "mozITXTToHTMLConv.h"
 #include "nsIMsgSend.h"
 #include "nsIMimeConverter.h"
+#include "nsMsgAttachmentData.h"
 
 // SHERRY - Need to get these out of here eventually
 
@@ -71,7 +40,7 @@ typedef unsigned int
 #define MAX_WRITE_READY (((unsigned) (~0) << 1) >> 1)   /* must be <= than MAXINT!!!!! */
 
 typedef int
-(*MKSessionWriteFunc) (nsMIMESession *stream, const char *str, PRInt32 len);
+(*MKSessionWriteFunc) (nsMIMESession *stream, const char *str, int32_t len);
 
 typedef void
 (*MKSessionCompleteFunc) (nsMIMESession *stream);
@@ -106,18 +75,21 @@ struct _nsMIMESession {
     MKSessionCompleteFunc    complete;         /* normal end */
     MKSessionAbortFunc       abort;            /* abnormal end */
 
-    PRBool                  is_multipart;    /* is the stream part of a multipart sequence */
+    bool                    is_multipart;    /* is the stream part of a multipart sequence */
 };
 
 /*
  * This is for the reworked mime parser.
  */
-struct mime_stream_data {           /* This struct is the state we pass around
+class mime_stream_data {           /* This object is the state we pass around
                                        amongst the various stream functions
                                        used by MIME_MessageConverter(). */
+public:
+  mime_stream_data();
+
   char                *url_name;
   char                *orig_url_name; /* original url name */
-  nsIChannel          *channel;
+  nsCOMPtr<nsIChannel> channel;
   nsMimeOutputType    format_out;
   void                *pluginObj2;  /* The new XP-COM stream converter object */
   nsMIMESession       *istream;     /* Holdover - new stream we're writing out image data-if any. */
@@ -126,38 +98,34 @@ struct mime_stream_data {           /* This struct is the state we pass around
   MimeHeaders         *headers;     /* Copy of outer most mime header */
 
   nsIMimeEmitter      *output_emitter;  /* Output emitter engine for libmime */
-  PRBool              firstCheck;   /* Is this the first look at the stream data */
+  bool                firstCheck;   /* Is this the first look at the stream data */
 };
 
 //
-// This struct is the state we use for loading drafts and templates...
+// This object is the state we use for loading drafts and templates...
 //
-struct mime_draft_data
+class mime_draft_data
 {
-  /* WARNING: You cannot use a c++ object, in that structure, which is dependent on its constructor or
-           destructor as mime_draft_data is not created using the new operator. nsCOMPtr however are ok
-           to use as long you set it to null before the structure get freed.
-  */
-
+public:
+  mime_draft_data();
   char                *url_name;           // original url name */
   nsMimeOutputType    format_out;          // intended output format; should be FO_OPEN_DRAFT */
   nsMIMESession       *stream;             // not used for now
   MimeObject          *obj;                // The root
   MimeDisplayOptions  *options;            // data for communicating with libmime
   MimeHeaders         *headers;            // Copy of outer most mime header
-  PRInt32             attachments_count;   // how many attachments we have
-  nsMsgAttachedFile   *attachments;        // attachments
+  nsTArray<nsMsgAttachedFile*> attachments;// attachments
   nsMsgAttachedFile   *messageBody;        // message body
   nsMsgAttachedFile   *curAttachment;       // temp
 
-  nsCOMPtr <nsILocalFile> tmpFile;
+  nsCOMPtr <nsIFile> tmpFile;
   nsCOMPtr <nsIOutputStream> tmpFileStream;      // output file handle
 
   MimeDecoderData     *decoder_data;
   char                *mailcharset;        // get it from CHARSET of Content-Type
-  PRBool              forwardInline;
-  PRBool              forwardInlineFilter;
-  PRBool              overrideComposeFormat; // Override compose format (for forward inline).
+  bool                forwardInline;
+  bool                forwardInlineFilter;
+  bool                overrideComposeFormat; // Override compose format (for forward inline).
   nsString            forwardToAddress;
   nsCOMPtr<nsIMsgIdentity>      identity;
   char                *originalMsgURI;     // the original URI of the message we are currently processing
@@ -174,7 +142,7 @@ void         *mime_bridge_create_display_stream(nsIMimeEmitter      *newEmitter,
                                                 nsStreamConverter   *newPluginObj2,
                                                 nsIURI              *uri,
                                                 nsMimeOutputType    format_out,
-                                                PRUint32            whattodo,
+                                                uint32_t            whattodo,
                                                 nsIChannel          *aChannel);
 
 // To get the mime emitter...
@@ -184,15 +152,15 @@ extern "C" nsIMimeEmitter   *GetMimeEmitter(MimeDisplayOptions *opt);
 extern "C" nsresult     mimeSetNewURL(nsMIMESession *stream, char *url);
 extern "C" nsresult     mimeEmitterAddAttachmentField(MimeDisplayOptions *opt, const char *field, const char *value);
 extern "C" nsresult     mimeEmitterAddHeaderField(MimeDisplayOptions *opt, const char *field, const char *value);
-extern "C" nsresult     mimeEmitterAddAllHeaders(MimeDisplayOptions *opt, const char *allheaders, const PRInt32 allheadersize);
+extern "C" nsresult     mimeEmitterAddAllHeaders(MimeDisplayOptions *opt, const char *allheaders, const int32_t allheadersize);
 extern "C" nsresult     mimeEmitterStartAttachment(MimeDisplayOptions *opt, const char *name, const char *contentType, const char *url,
-                                                   PRBool aIsExternalAttachment);
+                                                   bool aIsExternalAttachment);
 extern "C" nsresult     mimeEmitterEndAttachment(MimeDisplayOptions *opt);
 extern "C" nsresult     mimeEmitterEndAllAttachments(MimeDisplayOptions *opt);
-extern "C" nsresult     mimeEmitterStartBody(MimeDisplayOptions *opt, PRBool bodyOnly, const char *msgID, const char *outCharset);
+extern "C" nsresult     mimeEmitterStartBody(MimeDisplayOptions *opt, bool bodyOnly, const char *msgID, const char *outCharset);
 extern "C" nsresult     mimeEmitterEndBody(MimeDisplayOptions *opt);
-extern "C" nsresult     mimeEmitterEndHeader(MimeDisplayOptions *opt);
-extern "C" nsresult     mimeEmitterStartHeader(MimeDisplayOptions *opt, PRBool rootMailHeader, PRBool headerOnly, const char *msgID,
+extern "C" nsresult     mimeEmitterEndHeader(MimeDisplayOptions *opt, MimeObject *obj);
+extern "C" nsresult     mimeEmitterStartHeader(MimeDisplayOptions *opt, bool rootMailHeader, bool headerOnly, const char *msgID,
                                                const char *outCharset);
 extern "C" nsresult     mimeEmitterUpdateCharacterSet(MimeDisplayOptions *opt, const char *aCharset);
 
@@ -206,19 +174,19 @@ mozITXTToHTMLConv           *GetTextConverter(MimeDisplayOptions *opt);
 
 nsresult
 HTML2Plaintext(const nsString& inString, nsString& outString,
-               PRUint32 flags, PRUint32 wrapCol);
+               uint32_t flags, uint32_t wrapCol);
 nsresult
-HTMLSanitize(const nsString& inString, nsString& outString,
-             PRUint32 flags, const nsAString& allowedTags);
+HTMLSanitize(const nsString& inString, nsString& outString);
 
-extern "C" char             *MimeGetStringByID(PRInt32 stringID);
+extern "C" char             *MimeGetStringByID(int32_t stringID);
+extern "C" char             *MimeGetStringByName(const PRUnichar *stringName);
 
 // Utility to create a nsIURI object...
 extern "C" nsresult         nsMimeNewURI(nsIURI** aInstancePtrResult, const char *aSpec, nsIURI *aBase);
 
 extern "C" nsresult SetMailCharacterSetToMsgWindow(MimeObject *obj, const char *aCharacterSet);
 
-extern "C"  nsresult GetMailNewsFont(MimeObject *obj, PRBool styleFixed, PRInt32 *fontPixelSize, PRInt32 *fontSizePercentage, nsCString& fontLang);
+extern "C"  nsresult GetMailNewsFont(MimeObject *obj, bool styleFixed, int32_t *fontPixelSize, int32_t *fontSizePercentage, nsCString& fontLang);
 
 
 #ifdef __cplusplus

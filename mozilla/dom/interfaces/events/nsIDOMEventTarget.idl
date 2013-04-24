@@ -1,46 +1,15 @@
 /* -*- Mode: IDL; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Tom Pixley <joki@netscape.com> (original author)
- *   Johnny Stenback <jst@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "domstubs.idl"
 
 %{C++
 #include "nsEvent.h"
+#include "mozilla/dom/Nullable.h"
+
+using mozilla::dom::Nullable;
 
 class nsPresContext;
 class nsEventChainPreVisitor;
@@ -69,7 +38,7 @@ interface nsIScriptContext;
 interface nsIDOMEventListener;
 interface nsIDOMEvent;
 
-[scriptable, builtinclass, uuid(1797d5a4-b12a-428d-9eef-a0e13839728c)]
+[scriptable, builtinclass, uuid(8e375931-298d-4d0a-9cb4-5668f0cdc5a8)]
 interface nsIDOMEventTarget : nsISupports
 {
   /**
@@ -106,21 +75,59 @@ interface nsIDOMEventTarget : nsISupports
                                         [optional] in boolean useCapture,
                                         [optional] in boolean wantsUntrusted);
 
+  /**
+   * addSystemEventListener() adds an event listener of aType to the system
+   * group.  Typically, core code should use system group for listening to
+   * content (i.e., non-chrome) element's events.  If core code uses
+   * nsIDOMEventTarget::AddEventListener for a content node, it means
+   * that the listener cannot listen the event when web content calls
+   * stopPropagation() of the event.
+   *
+   * @param aType            An event name you're going to handle.
+   * @param aListener        An event listener.
+   * @param aUseCapture      TRUE if you want to listen the event in capturing
+   *                         phase.  Otherwise, FALSE.
+   * @param aWantsUntrusted  TRUE if you want to handle untrusted events.
+   *                         Otherwise, FALSE.
+   * @return                 NS_OK if succeed.  Otherwise, NS_ERROR_*.
+   */
+  [noscript, optional_argc] void addSystemEventListener(
+                                   in DOMString type,
+                                   in nsIDOMEventListener listener,
+                                   [optional] in boolean aUseCapture,
+                                   [optional] in boolean aWantsUntrusted);
+
 %{C++
   // non-virtual so it won't affect the vtable
   nsresult AddEventListener(const nsAString& aType,
                             nsIDOMEventListener* aListener,
-                            PRBool aUseCapture)
+                            bool aUseCapture)
   {
     return AddEventListener(aType, aListener, aUseCapture, PR_FALSE, 1);
   }
   // non-virtual so it won't affect the vtable
   nsresult AddEventListener(const nsAString& aType,
                             nsIDOMEventListener* aListener,
-                            PRBool aUseCapture,
-                            PRBool aWantsUntrusted)
+                            bool aUseCapture,
+                            bool aWantsUntrusted)
   {
     return AddEventListener(aType, aListener, aUseCapture, aWantsUntrusted, 2);
+  }
+  // non-virtual so it won't affect the vtable
+  nsresult AddSystemEventListener(const nsAString& aType,
+                                  nsIDOMEventListener* aListener,
+                                  bool aUseCapture)
+  {
+    return AddSystemEventListener(aType, aListener, aUseCapture, PR_FALSE, 1);
+  }
+  // non-virtual so it won't affect the vtable
+  nsresult AddSystemEventListener(const nsAString& aType,
+                                  nsIDOMEventListener* aListener,
+                                  bool aUseCapture,
+                                  bool aWantsUntrusted)
+  {
+    return AddSystemEventListener(aType, aListener, aUseCapture,
+                                  aWantsUntrusted, 2);
   }
 %}
 
@@ -149,6 +156,15 @@ interface nsIDOMEventTarget : nsISupports
                                                [optional] in boolean useCapture);
 
   /**
+   * removeSystemEventListener() should be used if you have used
+   * addSystemEventListener().
+   */
+  [noscript] void          removeSystemEventListener(
+                             in DOMString type,
+                             in nsIDOMEventListener listener,
+                             [optional] in boolean aUseCapture);
+
+  /**
    * This method allows the dispatch of events into the implementations 
    * event model. Events dispatched in this manner will have the same 
    * capturing and bubbling behavior as events dispatched directly by the 
@@ -160,7 +176,7 @@ interface nsIDOMEventTarget : nsISupports
    * @return  Indicates whether any of the listeners which handled the 
    *          event called preventDefault. If preventDefault was called 
    *          the value is false, else the value is true.
-   * @throws  UNSPECIFIED_EVENT_TYPE_ERR: Raised if the Event's type was 
+   * @throws  INVALID_STATE_ERR: Raised if the Event's type was 
    *              not specified by initializing the event before 
    *              dispatchEvent was called. Specification of the Event's 
    *              type as null or an empty string will also trigger this 
@@ -226,13 +242,13 @@ interface nsIDOMEventTarget : nsISupports
    * @param aEvent the event that is being dispatched.
    * @param aDOMEvent the event that is being dispatched, use if you want to
    *                  dispatch nsIDOMEvent, not only nsEvent.
-   * @param aPresContext the current presentation context, can be nsnull.
-   * @param aEventStatus the status returned from the function, can be nsnull.
+   * @param aPresContext the current presentation context, can be nullptr.
+   * @param aEventStatus the status returned from the function, can be nullptr.
    *
    * @note If both aEvent and aDOMEvent are used, aEvent must be the internal
    *       event of the aDOMEvent.
    *
-   * If aDOMEvent is not nsnull (in which case aEvent can be nsnull) it is used
+   * If aDOMEvent is not nullptr (in which case aEvent can be nullptr) it is used
    * for dispatching, otherwise aEvent is used.
    *
    * @deprecated This method is here just until all the callers outside Gecko
@@ -276,6 +292,22 @@ typedef nsIDOMEventTarget nsPIDOMEventTarget;
 nsPIDOMEventTarget* _class::GetTargetForDOMEvent() { return this; } \
 nsPIDOMEventTarget* _class::GetTargetForEventTargetChain() { return this; } \
 nsresult _class::WillHandleEvent(nsEventChainPostVisitor& aVisitor) { return NS_OK; } \
-JSContext* _class::GetJSContextForEventHandlers() { return nsnull; }
+JSContext* _class::GetJSContextForEventHandlers() { return nullptr; }
+
+#define NS_IMPL_REMOVE_SYSTEM_EVENT_LISTENER(aClass) \
+NS_IMETHODIMP \
+aClass::RemoveSystemEventListener(const nsAString& aType, \
+                                  nsIDOMEventListener *aListener, \
+                                  bool aUseCapture) \
+{ \
+  nsEventListenerManager* listenerManager = GetListenerManager(false); \
+  if (!listenerManager) { \
+    return NS_OK; \
+  } \
+  uint32_t flags = NS_EVENT_FLAG_SYSTEM_EVENT; \
+  flags |= aUseCapture ? NS_EVENT_FLAG_CAPTURE : NS_EVENT_FLAG_BUBBLE; \
+  listenerManager->RemoveEventListenerByType(aListener, aType, flags); \
+  return NS_OK; \
+}
 
 %}

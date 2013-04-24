@@ -1,4 +1,8 @@
 <?xml version="1.0"?>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
 
 <bindings id="progressmeterBindings"
    xmlns="http://www.mozilla.org/xbl"
@@ -81,19 +85,17 @@
           var startTime = window.mozAnimationStartTime;
           var self = this;
 
-          function nextStep(event) {
+          function nextStep(t) {
             try {
               var width = stack.boxObject.width;
               if (!width) {
                 // Maybe we've been removed from the document.
                 if (self._alive)
-                  mozRequestAnimationFrame();
-                else
-                  window.removeEventListener("MozBeforePaint", nextStep, false);
+                  mozRequestAnimationFrame(nextStep);
                 return;
               }
 
-              var elapsedTime = event.timeStamp - startTime;
+              var elapsedTime = t - startTime;
 
               // Width of chunk is 1/5 (determined by the ratio 2000:400) of the
               // total width of the progress bar. The left edge of the chunk
@@ -107,13 +109,11 @@
               spacer.width = width;
               spacer.left = width * position;
 
-              mozRequestAnimationFrame();
+              mozRequestAnimationFrame(nextStep);
             } catch (e) {
-              window.removeEventListener("MozBeforePaint", nextStep, false);
             }
           }
-          window.addEventListener("MozBeforePaint", nextStep, false);
-          mozRequestAnimationFrame();
+          mozRequestAnimationFrame(nextStep);
         ]]></body>
       </method>
 

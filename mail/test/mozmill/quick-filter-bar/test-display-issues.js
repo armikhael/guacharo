@@ -1,41 +1,12 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Mail Client.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Andrew Sutherland <asutherland@asutherland.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * Test things of a visual nature.
+ * 
+ * Note: this test requires a screen resolution of 1280 x 1024 which is standard on
+ * the unit test machines (see also testing/machine-configuration.json).
  */
 
 var MODULE_NAME = 'test-keyboard-interface';
@@ -61,7 +32,8 @@ function setupModule(module) {
 }
 
 function wait_for_resize(width) {
-  mc.waitForEval("subject.outerWidth == " + width, 1000, 50, mc.window);
+  mc.waitFor(function () (mc.window.outerWidth == width),
+             "Timeout waiting for resize (is the screen resolution 1280 x 1024?)", 1000, 50);
 }
 
 function resize_to(width, height) {
@@ -81,7 +53,6 @@ function collapse_folder_pane(shouldBeCollapsed) {
                                            shouldBeCollapsed ? "collapsed"
                                                              : "open");
 }
-
 
 /**
  * When the window gets too narrow the collapsible button labels need to get
@@ -159,6 +130,32 @@ function test_buttons_collapse_and_expand() {
   mc.sleep(0);
   logState("giant again!");
   assertExpanded(1200);
+}
+
+function test_buttons_collapse_and_expand_on_spawn_in_vertical_mode() {
+  // Assume we're in classic layout to start - since this is where we'll
+  // reset to once we're done.
+  assert_pane_layout(kClassicMailLayout);
+
+  // Put us in vertical mode
+  set_pane_layout(kVerticalMailLayout);
+
+  // Make our window nice and wide.
+  resize_to(1200, 600);
+  wait_for_resize(1200);
+
+  // Now expand the message pane to cause the QFB buttons to shrink
+  let messagePaneWrapper = mc.e("messagepaneboxwrapper");
+  messagePaneWrapper.width = 500;
+
+  // Now spawn a new 3pane...
+  let mc2 = open_folder_in_new_window(folder);
+  let qfb = mc2.e("quick-filter-bar-collapsible-buttons");
+  mc2.waitFor(function () (qfb.getAttribute("shrink") == "true"),
+              "New 3pane should have had a collapsed QFB");
+  close_window(mc2);
+
+  set_pane_layout(kClassicMailLayout);
 }
 
 function teardownModule() {

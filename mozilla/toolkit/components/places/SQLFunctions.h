@@ -1,41 +1,7 @@
 /* vim: sw=2 ts=2 et lcs=trail\:.,tab\:>~ :
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Places code.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- *
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Shawn Wilsher <me@shawnwilsher.com> (Original Author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef mozilla_places_SQLFunctions_h_
 #define mozilla_places_SQLFunctions_h_
@@ -46,6 +12,7 @@
  */
 
 #include "mozIStorageFunction.h"
+#include "mozilla/Attributes.h"
 
 class mozIStorageConnection;
 
@@ -86,7 +53,7 @@ namespace places {
  * @param aSearchBehavior
  *        A bitfield dictating the search behavior.
  */
-class MatchAutoCompleteFunction : public mozIStorageFunction
+class MatchAutoCompleteFunction MOZ_FINAL : public mozIStorageFunction
 {
 public:
   NS_DECL_ISUPPORTS
@@ -104,17 +71,17 @@ private:
   /**
    * Argument Indexes
    */
-  static const PRUint32 kArgSearchString = 0;
-  static const PRUint32 kArgIndexURL = 1;
-  static const PRUint32 kArgIndexTitle = 2;
-  static const PRUint32 kArgIndexTags = 3;
-  static const PRUint32 kArgIndexVisitCount = 4;
-  static const PRUint32 kArgIndexTyped = 5;
-  static const PRUint32 kArgIndexBookmark = 6;
-  static const PRUint32 kArgIndexOpenPageCount = 7;
-  static const PRUint32 kArgIndexMatchBehavior = 8;
-  static const PRUint32 kArgIndexSearchBehavior = 9;
-  static const PRUint32 kArgIndexLength = 10;
+  static const uint32_t kArgSearchString = 0;
+  static const uint32_t kArgIndexURL = 1;
+  static const uint32_t kArgIndexTitle = 2;
+  static const uint32_t kArgIndexTags = 3;
+  static const uint32_t kArgIndexVisitCount = 4;
+  static const uint32_t kArgIndexTyped = 5;
+  static const uint32_t kArgIndexBookmark = 6;
+  static const uint32_t kArgIndexOpenPageCount = 7;
+  static const uint32_t kArgIndexMatchBehavior = 8;
+  static const uint32_t kArgIndexSearchBehavior = 9;
+  static const uint32_t kArgIndexLength = 10;
 
   /**
    * Typedefs
@@ -132,7 +99,7 @@ private:
    *        mozIPlacesAutoComplete::MATCH_* values.
    * @return a pointer to the function that will perform the proper search.
    */
-  static searchFunctionPtr getSearchFunction(PRInt32 aBehavior);
+  static searchFunctionPtr getSearchFunction(int32_t aBehavior);
 
   /**
    * Tests if aSourceString starts with aToken.
@@ -145,6 +112,18 @@ private:
    */
   static bool findBeginning(const nsDependentCSubstring &aToken,
                             const nsACString &aSourceString);
+
+  /**
+   * Tests if aSourceString starts with aToken in a case sensitive way.
+   *
+   * @param aToken
+   *        The string to search for.
+   * @param aSourceString
+   *        The string to search.
+   * @return true if found, false otherwise.
+   */
+  static bool findBeginningCaseSensitive(const nsDependentCSubstring &aToken,
+                                         const nsACString &aSourceString);
 
   /**
    * Searches aSourceString for aToken anywhere in the string in a case-
@@ -185,7 +164,7 @@ private:
    * @param _fixedSpec
    *        An out parameter that is the fixed up string.
    */
-  static void fixupURISpec(const nsCString &aURISpec, PRInt32 aMatchBehavior,
+  static void fixupURISpec(const nsCString &aURISpec, int32_t aMatchBehavior,
                            nsCString &_fixedSpec);
 };
 
@@ -211,7 +190,7 @@ private:
  * @param [optional] isBookmarked
  *        Whether the page is bookmarked. Default is false.
  */
-class CalculateFrecencyFunction : public mozIStorageFunction
+class CalculateFrecencyFunction MOZ_FINAL : public mozIStorageFunction
 {
 public:
   NS_DECL_ISUPPORTS
@@ -232,7 +211,58 @@ public:
  *
  * @return a guid for the item.
  */
-class GenerateGUIDFunction : public mozIStorageFunction
+class GenerateGUIDFunction MOZ_FINAL : public mozIStorageFunction
+{
+public:
+  NS_DECL_ISUPPORTS
+  NS_DECL_MOZISTORAGEFUNCTION
+
+  /**
+   * Registers the function with the specified database connection.
+   *
+   * @param aDBConn
+   *        The database connection to register with.
+   */
+  static nsresult create(mozIStorageConnection *aDBConn);
+};
+
+/**
+ * SQL function to unreverse the rev_host of a page.
+ *
+ * @param rev_host
+ *        The rev_host value of the page.
+ *
+ * @return the unreversed host of the page.
+ */
+class GetUnreversedHostFunction MOZ_FINAL : public mozIStorageFunction
+{
+public:
+  NS_DECL_ISUPPORTS
+  NS_DECL_MOZISTORAGEFUNCTION
+
+  /**
+   * Registers the function with the specified database connection.
+   *
+   * @param aDBConn
+   *        The database connection to register with.
+   */
+  static nsresult create(mozIStorageConnection *aDBConn);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////
+//// Fixup URL Function
+
+/**
+ * Make a given URL more suitable for searches, by removing common prefixes
+ * such as "www."
+ *
+ * @param url
+ *        A URL.
+ * @return
+ *        The same URL, with redundant parts removed.
+ */
+class FixupURLFunction MOZ_FINAL : public mozIStorageFunction
 {
 public:
   NS_DECL_ISUPPORTS

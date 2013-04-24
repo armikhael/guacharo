@@ -75,14 +75,19 @@ var email = document.forms[0].elements[0];
 var values = [
   [ '', true ], // The empty string shouldn't be considered as invalid.
   [ 'foo@bar.com', true ],
-  [ ' foo@bar.com', false ],
-  [ 'foo@bar.com ', false ],
+  [ ' foo@bar.com', true ],
+  [ 'foo@bar.com ', true ],
+  [ '\r\n foo@bar.com', true ],
+  [ 'foo@bar.com \n\r', true ],
+  [ '\n\n \r\rfoo@bar.com\n\n   \r\r', true ],
+  [ '\n\r \n\rfoo@bar.com\n\r   \n\r', true ],
   [ 'tulip', false ],
   // Some checks on the user part of the address.
   [ '@bar.com', false ],
   [ 'f\noo@bar.com', true ],
   [ 'f\roo@bar.com', true ],
   [ 'f\r\noo@bar.com', true ],
+  [ 'fü@foo.com', true ],
   // Some checks for the domain part.
   [ 'foo@bar', true ],
   [ 'foo@b', true ],
@@ -100,6 +105,11 @@ var values = [
   [ 'foo@b\rar.com', true ],
   [ 'foo@b\r\nar.com', true ],
   [ 'foo@.', false ],
+  [ 'foo@fü.com', true ],
+  [ 'foo@fu.cüm', true ],
+  // Long strings with UTF-8.
+  [ 'this.is.email.should.be.longer.than.sixty.four.characters.föö@mözillä.tld', true ],
+  [ 'this-is-email-should-be-longer-than-sixty-four-characters-föö@mözillä.tld', true, true ],
 ];
 
 // Multiple values, we don't check e-mail validity, only multiple stuff.
@@ -163,11 +173,16 @@ values.push(["foo@bar.com" + legalCharacters, true]);
 // Add domain illegal characters.
 illegalCharacters = "()<>[]:;@\\,!#$%&'*+/=?^_`{|}~ \t";
 for each (c in illegalCharacters) {
-  values.push(['foo@foo.bar' + c, false]);
+  values.push(['foo@foo.ba' + c + 'r', false]);
 }
 
-values.forEach(function([value, valid]) {
-  testEmailAddress(email, value, false, valid);
+values.forEach(function([value, valid, todo]) {
+  if (todo === true) {
+    email.value = value;
+    todo_is(email.validity.valid, true, "value should be valid");
+  } else {
+    testEmailAddress(email, value, false, valid);
+  }
 });
 
 multipleValues.forEach(function([value, valid]) {

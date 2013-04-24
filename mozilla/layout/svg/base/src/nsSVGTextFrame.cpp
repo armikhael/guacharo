@@ -1,58 +1,23 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Mozilla SVG project.
- *
- * The Initial Developer of the Original Code is
- * Crocodile Clips Ltd..
- * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Alex Fritze <alex.fritze@crocodile-clips.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include "nsIDOMSVGTextElement.h"
+// Main header first:
 #include "nsSVGTextFrame.h"
-#include "nsWeakReference.h"
-#include "SVGLengthList.h"
-#include "nsIDOMSVGLength.h"
-#include "nsIDOMSVGAnimatedNumber.h"
+
+// Keep others in (case-insensitive) order:
+#include "nsGkAtoms.h"
+#include "nsIDOMSVGRect.h"
+#include "nsIDOMSVGTextElement.h"
 #include "nsISVGGlyphFragmentNode.h"
 #include "nsSVGGlyphFrame.h"
-#include "nsSVGOuterSVGFrame.h"
-#include "nsIDOMSVGRect.h"
-#include "nsSVGRect.h"
-#include "nsSVGMatrix.h"
-#include "nsGkAtoms.h"
-#include "nsSVGTextPathFrame.h"
-#include "nsSVGPathElement.h"
-#include "nsSVGUtils.h"
 #include "nsSVGGraphicElement.h"
+#include "nsSVGIntegrationUtils.h"
+#include "nsSVGPathElement.h"
+#include "nsSVGTextPathFrame.h"
+#include "nsSVGUtils.h"
+#include "SVGLengthList.h"
 
 using namespace mozilla;
 
@@ -83,26 +48,22 @@ nsSVGTextFrame::Init(nsIContent* aContent,
 #endif /* DEBUG */
 
 NS_IMETHODIMP
-nsSVGTextFrame::AttributeChanged(PRInt32         aNameSpaceID,
+nsSVGTextFrame::AttributeChanged(int32_t         aNameSpaceID,
                                  nsIAtom*        aAttribute,
-                                 PRInt32         aModType)
+                                 int32_t         aModType)
 {
   if (aNameSpaceID != kNameSpaceID_None)
     return NS_OK;
 
   if (aAttribute == nsGkAtoms::transform) {
-    // transform has changed
-
-    // make sure our cached transform matrix gets (lazily) updated
-    mCanvasTM = nsnull;
-
-    nsSVGUtils::NotifyChildrenOfSVGChange(this, TRANSFORM_CHANGED);
-   
+    nsSVGUtils::InvalidateAndScheduleReflowSVG(this);
+    NotifySVGChanged(TRANSFORM_CHANGED);
   } else if (aAttribute == nsGkAtoms::x ||
              aAttribute == nsGkAtoms::y ||
              aAttribute == nsGkAtoms::dx ||
              aAttribute == nsGkAtoms::dy ||
              aAttribute == nsGkAtoms::rotate) {
+    nsSVGUtils::InvalidateAndScheduleReflowSVG(this);
     NotifyGlyphMetricsChange();
   }
 
@@ -115,12 +76,21 @@ nsSVGTextFrame::GetType() const
   return nsGkAtoms::svgTextFrame;
 }
 
+NS_IMETHODIMP
+nsSVGTextFrame::BuildDisplayList(nsDisplayListBuilder*   aBuilder,
+                                 const nsRect&           aDirtyRect,
+                                 const nsDisplayListSet& aLists)
+{
+  UpdateGlyphPositioning(true);
+  return nsSVGTextFrameBase::BuildDisplayList(aBuilder, aDirtyRect, aLists);
+}
+
 //----------------------------------------------------------------------
 // nsSVGTextContainerFrame
-PRUint32
+uint32_t
 nsSVGTextFrame::GetNumberOfChars()
 {
-  UpdateGlyphPositioning(PR_FALSE);
+  UpdateGlyphPositioning(false);
 
   return nsSVGTextFrameBase::GetNumberOfChars();
 }
@@ -128,55 +98,55 @@ nsSVGTextFrame::GetNumberOfChars()
 float
 nsSVGTextFrame::GetComputedTextLength()
 {
-  UpdateGlyphPositioning(PR_FALSE);
+  UpdateGlyphPositioning(false);
 
   return nsSVGTextFrameBase::GetComputedTextLength();
 }
 
 float
-nsSVGTextFrame::GetSubStringLength(PRUint32 charnum, PRUint32 nchars)
+nsSVGTextFrame::GetSubStringLength(uint32_t charnum, uint32_t nchars)
 {
-  UpdateGlyphPositioning(PR_FALSE);
+  UpdateGlyphPositioning(false);
 
   return nsSVGTextFrameBase::GetSubStringLength(charnum, nchars);
 }
 
-PRInt32
+int32_t
 nsSVGTextFrame::GetCharNumAtPosition(nsIDOMSVGPoint *point)
 {
-  UpdateGlyphPositioning(PR_FALSE);
+  UpdateGlyphPositioning(false);
 
   return nsSVGTextFrameBase::GetCharNumAtPosition(point);
 }
 
 NS_IMETHODIMP
-nsSVGTextFrame::GetStartPositionOfChar(PRUint32 charnum, nsIDOMSVGPoint **_retval)
+nsSVGTextFrame::GetStartPositionOfChar(uint32_t charnum, nsIDOMSVGPoint **_retval)
 {
-  UpdateGlyphPositioning(PR_FALSE);
+  UpdateGlyphPositioning(false);
 
   return nsSVGTextFrameBase::GetStartPositionOfChar(charnum,  _retval);
 }
 
 NS_IMETHODIMP
-nsSVGTextFrame::GetEndPositionOfChar(PRUint32 charnum, nsIDOMSVGPoint **_retval)
+nsSVGTextFrame::GetEndPositionOfChar(uint32_t charnum, nsIDOMSVGPoint **_retval)
 {
-  UpdateGlyphPositioning(PR_FALSE);
+  UpdateGlyphPositioning(false);
 
   return nsSVGTextFrameBase::GetEndPositionOfChar(charnum,  _retval);
 }
 
 NS_IMETHODIMP
-nsSVGTextFrame::GetExtentOfChar(PRUint32 charnum, nsIDOMSVGRect **_retval)
+nsSVGTextFrame::GetExtentOfChar(uint32_t charnum, nsIDOMSVGRect **_retval)
 {
-  UpdateGlyphPositioning(PR_FALSE);
+  UpdateGlyphPositioning(false);
 
   return nsSVGTextFrameBase::GetExtentOfChar(charnum,  _retval);
 }
 
 NS_IMETHODIMP
-nsSVGTextFrame::GetRotationOfChar(PRUint32 charnum, float *_retval)
+nsSVGTextFrame::GetRotationOfChar(uint32_t charnum, float *_retval)
 {
-  UpdateGlyphPositioning(PR_FALSE);
+  UpdateGlyphPositioning(false);
 
   return nsSVGTextFrameBase::GetRotationOfChar(charnum,  _retval);
 }
@@ -185,16 +155,39 @@ nsSVGTextFrame::GetRotationOfChar(PRUint32 charnum, float *_retval)
 // nsISVGChildFrame methods
 
 void
-nsSVGTextFrame::NotifySVGChanged(PRUint32 aFlags)
+nsSVGTextFrame::NotifySVGChanged(uint32_t aFlags)
 {
+  NS_ABORT_IF_FALSE(aFlags & (TRANSFORM_CHANGED | COORD_CONTEXT_CHANGED),
+                    "Invalidation logic may need adjusting");
+
+  bool updateGlyphMetrics = false;
+  
+  if (aFlags & COORD_CONTEXT_CHANGED) {
+    updateGlyphMetrics = true;
+  }
+
   if (aFlags & TRANSFORM_CHANGED) {
+    if (mCanvasTM && mCanvasTM->IsSingular()) {
+      // We won't have calculated the glyph positions correctly
+      updateGlyphMetrics = true;
+    }
     // make sure our cached transform matrix gets (lazily) updated
-    mCanvasTM = nsnull;
+    mCanvasTM = nullptr;
+  }
+
+  if (updateGlyphMetrics) {
+    // Ancestor changes can't affect how we render from the perspective of
+    // any rendering observers that we may have, so we don't need to
+    // invalidate them. We also don't need to invalidate ourself, since our
+    // changed ancestor will have invalidated its entire area, which includes
+    // our area.
+    // For perf reasons we call this before calling NotifySVGChanged() below.
+    nsSVGUtils::ScheduleReflowSVG(this);
   }
 
   nsSVGTextFrameBase::NotifySVGChanged(aFlags);
 
-  if (aFlags & COORD_CONTEXT_CHANGED) {
+  if (updateGlyphMetrics) {
     // If we are positioned using percentage values we need to update our
     // position whenever our viewport's dimensions change.
 
@@ -206,26 +199,15 @@ nsSVGTextFrame::NotifySVGChanged(PRUint32 aFlags)
 }
 
 NS_IMETHODIMP
-nsSVGTextFrame::NotifyRedrawSuspended()
-{
-  mMetricsState = suspended;
-
-  return nsSVGTextFrameBase::NotifyRedrawSuspended();
-}
-
-NS_IMETHODIMP
-nsSVGTextFrame::NotifyRedrawUnsuspended()
-{
-  mMetricsState = unsuspended;
-  UpdateGlyphPositioning(PR_FALSE);
-  return nsSVGTextFrameBase::NotifyRedrawUnsuspended();
-}
-
-NS_IMETHODIMP
-nsSVGTextFrame::PaintSVG(nsSVGRenderState* aContext,
+nsSVGTextFrame::PaintSVG(nsRenderingContext* aContext,
                          const nsIntRect *aDirtyRect)
 {
-  UpdateGlyphPositioning(PR_TRUE);
+  NS_ASSERTION(!NS_SVGDisplayListPaintingEnabled() ||
+               (mState & NS_STATE_SVG_NONDISPLAY_CHILD),
+               "If display lists are enabled, only painting of non-display "
+               "SVG should take this code path");
+
+  UpdateGlyphPositioning(true);
   
   return nsSVGTextFrameBase::PaintSVG(aContext, aDirtyRect);
 }
@@ -233,65 +215,127 @@ nsSVGTextFrame::PaintSVG(nsSVGRenderState* aContext,
 NS_IMETHODIMP_(nsIFrame*)
 nsSVGTextFrame::GetFrameForPoint(const nsPoint &aPoint)
 {
-  UpdateGlyphPositioning(PR_TRUE);
+  NS_ASSERTION(!NS_SVGDisplayListHitTestingEnabled() ||
+               (mState & NS_STATE_SVG_NONDISPLAY_CHILD),
+               "If display lists are enabled, only hit-testing of non-display "
+               "SVG should take this code path");
+
+  UpdateGlyphPositioning(true);
   
   return nsSVGTextFrameBase::GetFrameForPoint(aPoint);
 }
 
-NS_IMETHODIMP
-nsSVGTextFrame::UpdateCoveredRegion()
+void
+nsSVGTextFrame::ReflowSVG()
 {
-  UpdateGlyphPositioning(PR_TRUE);
-  
-  return nsSVGTextFrameBase::UpdateCoveredRegion();
+  NS_ASSERTION(nsSVGUtils::OuterSVGIsCallingReflowSVG(this),
+               "This call is probably a wasteful mistake");
+
+  NS_ABORT_IF_FALSE(!(GetStateBits() & NS_STATE_SVG_NONDISPLAY_CHILD),
+                    "ReflowSVG mechanism not designed for this");
+
+  if (!nsSVGUtils::NeedsReflowSVG(this)) {
+    NS_ASSERTION(!mPositioningDirty, "How did this happen?");
+    return;
+  }
+
+  // UpdateGlyphPositioning may have been called under DOM calls and set
+  // mPositioningDirty to false. We may now have better positioning, though, so
+  // set it to true so that UpdateGlyphPositioning will do its work.
+  mPositioningDirty = true;
+
+  UpdateGlyphPositioning(false);
+
+  // We only invalidate if we are dirty, if our outer-<svg> has already had its
+  // initial reflow (since if it hasn't, its entire area will be invalidated
+  // when it gets that initial reflow), and if our parent is not dirty (since
+  // if it is, then it will invalidate its entire new area, which will include
+  // our new area).
+  bool invalidate = (mState & NS_FRAME_IS_DIRTY) &&
+    !(GetParent()->GetStateBits() &
+       (NS_FRAME_FIRST_REFLOW | NS_FRAME_IS_DIRTY));
+
+  // With glyph positions updated, our descendants can invalidate their new
+  // areas correctly:
+  nsSVGTextFrameBase::ReflowSVG();
+
+  if (invalidate) {
+    // XXXSDL Let FinishAndStoreOverflow do this.
+    nsSVGUtils::InvalidateBounds(this, true);
+  }
 }
 
-NS_IMETHODIMP
-nsSVGTextFrame::InitialUpdate()
+SVGBBox
+nsSVGTextFrame::GetBBoxContribution(const gfxMatrix &aToBBoxUserspace,
+                                    uint32_t aFlags)
 {
-  nsresult rv = nsSVGTextFrameBase::InitialUpdate();
-  
-  UpdateGlyphPositioning(PR_FALSE);
+  UpdateGlyphPositioning(true);
 
-  return rv;
-}  
-
-gfxRect
-nsSVGTextFrame::GetBBoxContribution(const gfxMatrix &aToBBoxUserspace)
-{
-  UpdateGlyphPositioning(PR_TRUE);
-
-  return nsSVGTextFrameBase::GetBBoxContribution(aToBBoxUserspace);
+  return nsSVGTextFrameBase::GetBBoxContribution(aToBBoxUserspace, aFlags);
 }
 
 //----------------------------------------------------------------------
 // nsSVGContainerFrame methods:
 
 gfxMatrix
-nsSVGTextFrame::GetCanvasTM()
+nsSVGTextFrame::GetCanvasTM(uint32_t aFor)
 {
+  if (!(GetStateBits() & NS_STATE_SVG_NONDISPLAY_CHILD)) {
+    if ((aFor == FOR_PAINTING && NS_SVGDisplayListPaintingEnabled()) ||
+        (aFor == FOR_HIT_TESTING && NS_SVGDisplayListHitTestingEnabled())) {
+      return nsSVGIntegrationUtils::GetCSSPxToDevPxMatrix(this);
+    }
+  }
+
   if (!mCanvasTM) {
     NS_ASSERTION(mParent, "null parent");
 
     nsSVGContainerFrame *parent = static_cast<nsSVGContainerFrame*>(mParent);
     nsSVGGraphicElement *content = static_cast<nsSVGGraphicElement*>(mContent);
 
-    gfxMatrix tm = content->PrependLocalTransformTo(parent->GetCanvasTM());
+    gfxMatrix tm =
+      content->PrependLocalTransformsTo(parent->GetCanvasTM(aFor));
 
-    mCanvasTM = NS_NewSVGMatrix(tm);
+    mCanvasTM = new gfxMatrix(tm);
   }
 
-  return nsSVGUtils::ConvertSVGMatrixToThebes(mCanvasTM);
+  return *mCanvasTM;
 }
 
 //----------------------------------------------------------------------
 //
 
+static void
+MarkDirtyBitsOnDescendants(nsIFrame *aFrame)
+{
+  // Do not skip marking of aFrame or any of its descendants if they have
+  // the NS_FRAME_IS_DIRTY set, because some of their descendants may not
+  // have it set, and we need all descendants to be dirty.
+  if (aFrame->GetStateBits() & (NS_FRAME_FIRST_REFLOW)) {
+    // Nothing to do if our outer-<svg> hasn't yet had its initial reflow.
+    return;
+  }
+  nsIFrame* kid = aFrame->GetFirstPrincipalChild();
+  while (kid) {
+    nsISVGChildFrame* svgkid = do_QueryFrame(kid);
+    if (svgkid) {
+      MarkDirtyBitsOnDescendants(kid);
+      kid->AddStateBits(NS_FRAME_IS_DIRTY);
+    }
+    kid = kid->GetNextSibling();
+  }
+}
+
 void
 nsSVGTextFrame::NotifyGlyphMetricsChange()
 {
-  mPositioningDirty = PR_TRUE;
-  UpdateGlyphPositioning(PR_FALSE);
+  // NotifySVGChanged isn't appropriate here, so we just mark our descendants
+  // as fully dirty to get ReflowSVG() called on them:
+  MarkDirtyBitsOnDescendants(this);
+
+  nsSVGUtils::InvalidateAndScheduleReflowSVG(this);
+
+  mPositioningDirty = true;
 }
 
 void
@@ -299,9 +343,13 @@ nsSVGTextFrame::SetWhitespaceHandling(nsSVGGlyphFrame *aFrame)
 {
   SetWhitespaceCompression();
 
-  PRBool trimLeadingWhitespace = PR_TRUE;
+  nsSVGGlyphFrame* firstFrame = aFrame;
+  bool trimLeadingWhitespace = true;
   nsSVGGlyphFrame* lastNonWhitespaceFrame = aFrame;
 
+  // If the previous frame ended with whitespace
+  // then display of leading whitespace should be suppressed
+  // when we are compressing whitespace.
   while (aFrame) {
     if (!aFrame->IsAllWhitespace()) {
       lastNonWhitespaceFrame = aFrame;
@@ -313,16 +361,32 @@ nsSVGTextFrame::SetWhitespaceHandling(nsSVGGlyphFrame *aFrame)
     aFrame = aFrame->GetNextGlyphFrame();
   }
 
-  lastNonWhitespaceFrame->SetTrimTrailingWhitespace(PR_TRUE);
+  // When there is only whitespace left we need to trim off
+  // the end of the last frame that isn't entirely whitespace.
+  // Making sure that we reset earlier frames as they may once
+  // have been the last non-whitespace frame.
+  aFrame = firstFrame;
+  while (aFrame != lastNonWhitespaceFrame) {
+    aFrame->SetTrimTrailingWhitespace(false);
+    aFrame = aFrame->GetNextGlyphFrame();
+  }
+
+  // We're at the last non-whitespace frame so trim off the end
+  // and make sure we set one of the trim bits so that any
+  // further whitespace is compressed to nothing
+  while (aFrame) {
+    aFrame->SetTrimTrailingWhitespace(true);
+    aFrame = aFrame->GetNextGlyphFrame();
+  }
 }
 
 void
-nsSVGTextFrame::UpdateGlyphPositioning(PRBool aForceGlobalTransform)
+nsSVGTextFrame::UpdateGlyphPositioning(bool aForceGlobalTransform)
 {
-  if (mMetricsState == suspended || !mPositioningDirty)
+  if (!mPositioningDirty)
     return;
 
-  mPositioningDirty = PR_FALSE;
+  mPositioningDirty = false;
 
   nsISVGGlyphFragmentNode* node = GetFirstGlyphFragmentChildNode();
   if (!node)
@@ -362,7 +426,7 @@ nsSVGTextFrame::UpdateGlyphPositioning(PRBool aForceGlobalTransform)
 
     // determine x offset based on text_anchor:
   
-    PRUint8 anchor = firstFrame->GetTextAnchor();
+    uint8_t anchor = firstFrame->GetTextAnchor();
 
     /**
      * XXXsmontagu: The SVG spec is very vague as to how 'text-anchor'
@@ -427,5 +491,4 @@ nsSVGTextFrame::UpdateGlyphPositioning(PRBool aForceGlobalTransform)
     }
     firstFrame = frame;
   }
-  nsSVGUtils::UpdateGraphic(this);
 }

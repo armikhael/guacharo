@@ -91,9 +91,11 @@ public:
         DoubleLessThanOrUnordered = X86Assembler::ConditionB,
         DoubleLessThanOrEqualOrUnordered = X86Assembler::ConditionBE
     };
-    COMPILE_ASSERT(
-        !((X86Assembler::ConditionE | X86Assembler::ConditionNE | X86Assembler::ConditionA | X86Assembler::ConditionAE | X86Assembler::ConditionB | X86Assembler::ConditionBE) & DoubleConditionBits),
-        DoubleConditionBits_should_not_interfere_with_X86Assembler_Condition_codes);
+    static void staticAsserts() {
+        COMPILE_ASSERT(
+            !((X86Assembler::ConditionE | X86Assembler::ConditionNE | X86Assembler::ConditionA | X86Assembler::ConditionAE | X86Assembler::ConditionB | X86Assembler::ConditionBE) & DoubleConditionBits),
+            DoubleConditionBits_should_not_interfere_with_X86Assembler_Condition_codes);
+    }
 
     static const RegisterID stackPointerRegister = X86Registers::esp;
 
@@ -545,7 +547,7 @@ public:
     {
         union {
             float f;
-            uint32 u32;
+            uint32_t u32;
         } u;
         u.f = imm.u.d;
         store32(Imm32(u.u32), address);
@@ -555,7 +557,7 @@ public:
     {
         union {
             float f;
-            uint32 u32;
+            uint32_t u32;
         } u;
         u.f = imm.u.d;
         store32(Imm32(u.u32), address);
@@ -639,6 +641,21 @@ public:
         m_assembler.xorpd_rr(src, dest);
     }
 
+    void andDouble(FPRegisterID src, FPRegisterID dest)
+    {
+        ASSERT(isSSE2Present());
+        m_assembler.andpd_rr(src, dest);
+    }
+
+    void absDouble(FPRegisterID src, FPRegisterID dest)
+    {
+        ASSERT(isSSE2Present());
+        /* Compile abs(x) as x & -x. */
+        zeroDouble(dest);
+        subDouble(src, dest);
+        andDouble(src, dest);
+    }
+
     void convertInt32ToDouble(RegisterID src, FPRegisterID dest)
     {
         ASSERT(isSSE2Present());
@@ -696,6 +713,7 @@ public:
     void branchConvertDoubleToInt32(FPRegisterID src, RegisterID dest, JumpList& failureCases, FPRegisterID fpTemp)
     {
         ASSERT(isSSE2Present());
+        ASSERT(src != fpTemp); 
         m_assembler.cvttsd2si_rr(src, dest);
 
         // If the result is zero, it might have been -0.0, and the double comparison won't catch this!

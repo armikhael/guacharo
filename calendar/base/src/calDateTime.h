@@ -1,45 +1,9 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Oracle Corporation code.
- *
- * The Initial Developer of the Original Code is
- *  Oracle Corporation
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Vladimir Vukicevic <vladimir.vukicevic@oracle.com>
- *   Daniel Boelzle <daniel.boelzle@sun.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #if !defined(INCLUDED_CALDATETIME_H)
 #define INCLUDED_CALDATETIME_H
 
-#include "jsapi.h"
-#include "nsIXPCScriptable.h"
 #include "calIDateTime.h"
 #include "calITimezoneProvider.h"
 #include "calUtils.h"
@@ -48,7 +12,6 @@ struct icaltimetype;
 typedef struct _icaltimezone icaltimezone;
 
 class calDateTime : public calIDateTime,
-                    public nsIXPCScriptable,
                     public cal::XpcomBase
 {
 public:
@@ -57,21 +20,20 @@ public:
 
     NS_DECL_ISUPPORTS
     NS_DECL_CALIDATETIME
-    NS_DECL_NSIXPCSCRIPTABLE
 
 protected:
-    PRBool mImmutable;
-    PRBool mIsValid;
-    PRBool mIsDate;
+    bool mImmutable;
+    bool mIsValid;
+    bool mIsDate;
 
-    PRInt16 mYear;
-    PRInt16 mMonth;
-    PRInt16 mDay;
-    PRInt16 mHour;
-    PRInt16 mMinute;
-    PRInt16 mSecond;
-    PRInt16 mWeekday;
-    PRInt16 mYearday;
+    int16_t mYear;
+    int16_t mMonth;
+    int16_t mDay;
+    int16_t mHour;
+    int16_t mMinute;
+    int16_t mSecond;
+    int16_t mWeekday;
+    int16_t mYearday;
 
     PRTime mNativeTime;
     nsCOMPtr<calITimezone> mTimezone;
@@ -81,7 +43,7 @@ protected:
     void ensureTimezone();
 
     static PRTime IcaltimeToPRTime(icaltimetype const* icalt, icaltimezone const* tz);
-    static void PRTimeToIcaltime(PRTime time, PRBool isdate,
+    static void PRTimeToIcaltime(PRTime time, bool isdate,
                                  icaltimezone const* tz, icaltimetype *icalt);
 };
 

@@ -1,41 +1,7 @@
 /* -*- Mode: IDL; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Alec Flett <alecf@netscape.com>
- *   Brian Nesse <bnesse@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsISupports.idl"
 #include "nsIPrefBranch.idl"
@@ -51,7 +17,6 @@ struct nsTArrayInfallibleAllocator;
 [ptr] native nsPreferencePtrConst(const PrefTuple);
 
 interface nsIFile;
-interface nsILocalFile;
 
 /**
  * The nsIPrefService interface is the main entry point into the back end
@@ -72,7 +37,7 @@ interface nsIPrefService : nsISupports
    * @param aFile The file to be read.
    *
    * @note
-   * If nsnull is passed in for the aFile parameter the default preferences
+   * If nullptr is passed in for the aFile parameter the default preferences
    * file(s) [prefs.js, user.js] will be read and processed.
    *
    * @return NS_OK File was read and processed.
@@ -105,7 +70,7 @@ interface nsIPrefService : nsISupports
    * @param aFile The file to be written.
    *
    * @note
-   * If nsnull is passed in for the aFile parameter the preference data is
+   * If nullptr is passed in for the aFile parameter the preference data is
    * written out to the current preferences file (usually prefs.js.)
    *
    * @return NS_OK File was written.
@@ -127,7 +92,7 @@ interface nsIPrefService : nsISupports
    *                  branch will be able to easily access the preferences
    *                  "browser.startup.page", "browser.startup.homepage", or
    *                  "browser.startup.homepage_override" by simply requesting
-   *                  "page", "homepage", or "homepage_override". nsnull or "" 
+   *                  "page", "homepage", or "homepage_override". nullptr or "" 
    *                  may be used to access to the entire preference "tree".
    *
    * @return nsIPrefBranch The object representing the requested branch.
@@ -147,7 +112,7 @@ interface nsIPrefService : nsISupports
    *                  branch will be able to easily access the preferences
    *                  "browser.startup.page", "browser.startup.homepage", or
    *                  "browser.startup.homepage_override" by simply requesting
-   *                  "page", "homepage", or "homepage_override". nsnull or "" 
+   *                  "page", "homepage", or "homepage_override". nullptr or "" 
    *                  may be used to access to the entire preference "tree".
    *
    * @note
@@ -161,29 +126,6 @@ interface nsIPrefService : nsISupports
    */
   nsIPrefBranch getDefaultBranch(in string aPrefRoot);
 
-};
-
-[scriptable, uuid(08c8cd2f-8345-45ee-938d-37ee6d3661b2)]
-interface nsIPrefServiceInternal : nsISupports
-{
-  /**
-   * Called to read the preferences in the defaults/preferences/
-   * directory of a zip file
-   *
-   * @param aFile The zip file to be read.
-   *
-   * @return NS_OK The file was read and processed.
-   * @return Other The file failed to read or contained invalid data.
-   *
-   * @see readUserPrefs
-   */
-  void readExtensionPrefs(in nsILocalFile aFile);
-
-  [noscript] void mirrorPreferences(in nsPreferencesArrayPtr aArray);
-  [noscript] void mirrorPreference(in ACString aPrefName, in nsPreferencePtr aPref);
-  [noscript] boolean prefHasUserValue(in ACString aPrefName);
-  [noscript] void setPreference(in nsPreferencePtrConst aPref);
-  [noscript] void clearContentPref(in ACString aPrefName);
 };
 
 %{C++

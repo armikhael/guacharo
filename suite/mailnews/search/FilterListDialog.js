@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Mark Banner <mark@standard8.demon.co.uk>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var gRDF = Components.classes["@mozilla.org/rdf/rdf-service;1"].getService(Components.interfaces.nsIRDFService);
 
@@ -202,7 +168,10 @@ function onLoad()
     // Focus the list.
     gFilterTree.focus();
 
-    window.tryToClose = onFilterClose;
+    Services.obs.addObserver(onFilterClose,
+                             "quit-application-requested", false);
+
+    top.controllers.insertControllerAt(0, gFilterController);
 }
 
 /*
@@ -383,14 +352,17 @@ function onEditFilter()
 function onNewFilter(emailAddress)
 {
   var curFilterList = currentFilterList();
-  var args = {filterList: curFilterList, refresh: false};
+  var position = Math.max(gFilterTree.currentIndex, 0);
+  var args = {filterList: curFilterList,
+              filterPosition: position, refresh: false};
   
   window.openDialog("chrome://messenger/content/FilterEditor.xul", "FilterEditor", "chrome,modal,titlebar,resizable,centerscreen", args);
 
   if (args.refresh)
   {
-    gFilterTreeView.tree.rowCountChanged(0, 1);
-    gFilterTree.view.selection.select(0);
+    gFilterTreeView.tree.rowCountChanged(position, 1);
+    gFilterTree.view.selection.select(position);
+    gFilterTree.treeBoxObject.ensureRowIsVisible(position);
   }
 }
 
@@ -445,10 +417,18 @@ function onFilterUnload()
   var filterList = currentFilterList();
   if (filterList) 
     filterList.saveToDefaultFile();
+
+  Services.obs.removeObserver(onFilterClose, "quit-application-requested");
+  top.controllers.removeController(gFilterController);
 }
 
-function onFilterClose()
+function onFilterClose(aCancelQuit, aTopic, aData)
 {
+  if (aTopic == "quit-application-requested" &&
+      aCancelQuit instanceof Components.interfaces.nsISupportsPRBool &&
+      aCancelQuit.data)
+    return false;
+
   if (gRunFiltersButton.getAttribute("label") == gRunFiltersButton.getAttribute("stoplabel")) {
     var promptTitle = gFilterBundle.getString("promptTitle");
     var promptMsg = gFilterBundle.getString("promptMsg");;
@@ -459,10 +439,12 @@ function onFilterClose()
         (Services.prompt.BUTTON_TITLE_IS_STRING *
          Services.prompt.BUTTON_POS_0) +
         (Services.prompt.BUTTON_TITLE_IS_STRING * Services.prompt.BUTTON_POS_1),
-        continueButtonLabel, stopButtonLabel, null, null, {value:0}))
-      gFilterListMsgWindow.StopUrls();
-    else
+        continueButtonLabel, stopButtonLabel, null, null, {value:0}) == 0) {
+      if (aTopic == "quit-application-requested")
+        aCancelQuit.data = true;
       return false;
+    }
+    gFilterListMsgWindow.StopUrls();
   }
 
   return true;
@@ -702,3 +684,26 @@ function getFirstFolderURI(msgFolder)
   }
   return msgFolder.URI;
 }
+
+var gFilterController =
+{
+  supportsCommand: function(aCommand)
+  {
+    return aCommand == "cmd_selectAll";
+  },
+
+  isCommandEnabled: function(aCommand)
+  {
+    return aCommand == "cmd_selectAll";
+  },
+
+  doCommand: function(aCommand)
+  {
+    if (aCommand == "cmd_selectAll")
+      gFilterTree.view.selection.selectAll();
+  },
+
+  onEvent: function(aEvent)
+  {
+  }
+};

@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifdef MOZ_LOGGING
 #define FORCE_PR_LOG /* Allow logging in the release build */
@@ -52,12 +20,13 @@
 #include "nsComponentManagerUtils.h"
 #include "nsServiceManagerUtils.h"
 #include "nsMsgUtils.h"
+#include "mozilla/Services.h"
 
 #define PREF_BIFF_JITTER "mail.biff.add_interval_jitter"
 
 static NS_DEFINE_CID(kStatusBarBiffManagerCID, NS_STATUSBARBIFFMANAGER_CID);
 
-static PRLogModuleInfo *MsgBiffLogModule = nsnull;
+static PRLogModuleInfo *MsgBiffLogModule = nullptr;
 
 NS_IMPL_ISUPPORTS4(nsMsgBiffManager, nsIMsgBiffManager,
                    nsIIncomingServerListener, nsIObserver,
@@ -71,8 +40,8 @@ void OnBiffTimer(nsITimer *timer, void *aBiffManager)
 
 nsMsgBiffManager::nsMsgBiffManager()
 {
-  mHaveShutdown = PR_FALSE;
-  mInited = PR_FALSE;
+  mHaveShutdown = false;
+  mInited = false;
 }
 
 nsMsgBiffManager::~nsMsgBiffManager()
@@ -83,10 +52,9 @@ nsMsgBiffManager::~nsMsgBiffManager()
   if (!mHaveShutdown)
     Shutdown();
 
-  nsresult rv;
   nsCOMPtr<nsIObserverService> observerService =
-       do_GetService("@mozilla.org/observer-service;1", &rv);
-  if (NS_SUCCEEDED(rv))
+    mozilla::services::GetObserverService();
+  if (observerService)
   {
     observerService->RemoveObserver(this, "wake_notification");
     observerService->RemoveObserver(this, "sleep_notification");
@@ -98,7 +66,7 @@ NS_IMETHODIMP nsMsgBiffManager::Init()
   if (mInited)
     return NS_OK;
 
-  mInited = PR_TRUE;
+  mInited = true;
   nsresult rv;
 
   nsCOMPtr<nsIMsgAccountManager> accountManager = 
@@ -109,7 +77,7 @@ NS_IMETHODIMP nsMsgBiffManager::Init()
   // in turbo mode on profile change we don't need to do anything below this
   if (mHaveShutdown)
   {
-    mHaveShutdown = PR_FALSE;
+    mHaveShutdown = false;
     return NS_OK;
   }
 
@@ -121,11 +89,11 @@ NS_IMETHODIMP nsMsgBiffManager::Init()
     MsgBiffLogModule = PR_NewLogModule("MsgBiff");
 
   nsCOMPtr<nsIObserverService> observerService =
-           do_GetService("@mozilla.org/observer-service;1", &rv);
-  if (NS_SUCCEEDED(rv))
+    mozilla::services::GetObserverService();
+  if (observerService)
   {
-    observerService->AddObserver(this, "sleep_notification", PR_TRUE);
-    observerService->AddObserver(this, "wake_notification", PR_TRUE);
+    observerService->AddObserver(this, "sleep_notification", true);
+    observerService->AddObserver(this, "wake_notification", true);
   }
   return NS_OK;
 }
@@ -135,7 +103,7 @@ NS_IMETHODIMP nsMsgBiffManager::Shutdown()
   if (mBiffTimer) 
   {
     mBiffTimer->Cancel();
-    mBiffTimer = nsnull;
+    mBiffTimer = nullptr;
   }
 
   nsresult rv;
@@ -144,8 +112,8 @@ NS_IMETHODIMP nsMsgBiffManager::Shutdown()
   if (NS_SUCCEEDED(rv))
     accountManager->RemoveIncomingServerListener(this);
 
-  mHaveShutdown = PR_TRUE;
-  mInited = PR_FALSE;
+  mHaveShutdown = true;
+  mInited = false;
   return NS_OK;
 }
 
@@ -154,7 +122,7 @@ NS_IMETHODIMP nsMsgBiffManager::Observe(nsISupports *aSubject, const char *aTopi
   if (!strcmp(aTopic, "sleep_notification") && mBiffTimer)
   {
     mBiffTimer->Cancel();
-    mBiffTimer = nsnull;
+    mBiffTimer = nullptr;
   }
   else if (!strcmp(aTopic, "wake_notification"))
   {
@@ -168,24 +136,24 @@ NS_IMETHODIMP nsMsgBiffManager::Observe(nsISupports *aSubject, const char *aTopi
 
 NS_IMETHODIMP nsMsgBiffManager::AddServerBiff(nsIMsgIncomingServer *server)
 {
-  PRInt32 biffMinutes;
+  NS_ENSURE_ARG_POINTER(server);
+
+  int32_t biffMinutes;
 
   nsresult rv = server->GetBiffMinutes(&biffMinutes);
-  if (NS_FAILED(rv))
-    return rv;
+  NS_ENSURE_SUCCESS(rv, rv);
 
   // Don't add if biffMinutes isn't > 0
   if (biffMinutes > 0)
   {
-    PRInt32 serverIndex = FindServer(server);
+    int32_t serverIndex = FindServer(server);
     // Only add it if it hasn't been added already.
     if (serverIndex == -1)
     {
       nsBiffEntry biffEntry;
       biffEntry.server = server;
       rv = SetNextBiffTime(biffEntry, PR_Now());
-      if (NS_FAILED(rv))
-        return rv;
+      NS_ENSURE_SUCCESS(rv, rv);
 
       AddBiffEntry(biffEntry);
       SetupNextBiff();
@@ -196,7 +164,7 @@ NS_IMETHODIMP nsMsgBiffManager::AddServerBiff(nsIMsgIncomingServer *server)
 
 NS_IMETHODIMP nsMsgBiffManager::RemoveServerBiff(nsIMsgIncomingServer *server)
 {
-  PRInt32 pos = FindServer(server);
+  int32_t pos = FindServer(server);
   if (pos != -1)
     mBiffArray.RemoveElementAt(pos);
 
@@ -218,7 +186,9 @@ NS_IMETHODIMP nsMsgBiffManager::ForceBiffAll()
 
 NS_IMETHODIMP nsMsgBiffManager::OnServerLoaded(nsIMsgIncomingServer *server)
 {
-  PRBool doBiff = PR_FALSE;
+  NS_ENSURE_ARG_POINTER(server);
+
+  bool doBiff = false;
   nsresult rv = server->GetDoBiff(&doBiff);
 
   if (NS_SUCCEEDED(rv) && doBiff)
@@ -239,10 +209,10 @@ NS_IMETHODIMP nsMsgBiffManager::OnServerChanged(nsIMsgIncomingServer *server)
   return NS_OK;
 }
 
-PRInt32 nsMsgBiffManager::FindServer(nsIMsgIncomingServer *server)
+int32_t nsMsgBiffManager::FindServer(nsIMsgIncomingServer *server)
 {
-  PRUint32 count = mBiffArray.Length();
-  for (PRUint32 i = 0; i < count; i++)
+  uint32_t count = mBiffArray.Length();
+  for (uint32_t i = 0; i < count; i++)
   {
     if (server == mBiffArray[i].server.get())
       return i;
@@ -252,8 +222,8 @@ PRInt32 nsMsgBiffManager::FindServer(nsIMsgIncomingServer *server)
 
 nsresult nsMsgBiffManager::AddBiffEntry(nsBiffEntry &biffEntry)
 {
-  PRUint32 i;
-  PRUint32 count = mBiffArray.Length();
+  uint32_t i;
+  uint32_t count = mBiffArray.Length();
   for (i = 0; i < count; i++)
   {
     if (biffEntry.nextBiffTime < mBiffArray[i].nextBiffTime)
@@ -267,10 +237,9 @@ nsresult nsMsgBiffManager::AddBiffEntry(nsBiffEntry &biffEntry)
 nsresult nsMsgBiffManager::SetNextBiffTime(nsBiffEntry &biffEntry, PRTime currentTime)
 {
   nsIMsgIncomingServer *server = biffEntry.server;
-  if (!server)
-    return NS_ERROR_FAILURE;
+  NS_ENSURE_TRUE(server, NS_ERROR_FAILURE);
 
-  PRInt32 biffInterval;
+  int32_t biffInterval;
   nsresult rv = server->GetBiffMinutes(&biffInterval);
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -283,15 +252,15 @@ nsresult nsMsgBiffManager::SetNextBiffTime(nsBiffEntry &biffEntry, PRTime curren
   nsCOMPtr<nsIPrefBranch> prefs = do_GetService(NS_PREFSERVICE_CONTRACTID);
   if (prefs)
   {
-    PRBool shouldUseBiffJitter = PR_FALSE;
+    bool shouldUseBiffJitter = false;
     prefs->GetBoolPref(PREF_BIFF_JITTER, &shouldUseBiffJitter);
     if (shouldUseBiffJitter)
     {
       // Calculate a jitter of +/-5% on chosenTimeInterval
       // - minimum 1 second (to avoid a modulo with 0)
       // - maximum 30 seconds (to avoid problems when biffInterval is very large)
-      PRInt64 jitter = (PRInt64)(0.05 * (PRInt64)chosenTimeInterval);
-      jitter = PR_MAX(1000000LL, PR_MIN(jitter, 30000000LL));
+      int64_t jitter = (int64_t)(0.05 * (int64_t)chosenTimeInterval);
+      jitter = NS_MAX<int64_t>(1000000LL, NS_MIN<int64_t>(jitter, 30000000LL));
       jitter = ((rand() % 2) ? 1 : -1) * (rand() % jitter);
 
       biffEntry.nextBiffTime += jitter;
@@ -308,22 +277,20 @@ nsresult nsMsgBiffManager::SetupNextBiff()
     // Get the next biff entry
     const nsBiffEntry &biffEntry = mBiffArray[0];
     PRTime currentTime = PR_Now();
-    PRInt64 biffDelay;
-    PRInt64 ms(1000);
+    int64_t biffDelay;
+    int64_t ms(1000);
 
     if (currentTime > biffEntry.nextBiffTime)
     {
-      PRInt64 microSecondsPerSecond;
-
-      LL_I2L(microSecondsPerSecond, PR_USEC_PER_SEC);
-      LL_MUL(biffDelay, 30, microSecondsPerSecond); //let's wait 30 seconds before firing biff again
+      // Let's wait 30 seconds before firing biff again
+      biffDelay = 30 * PR_USEC_PER_SEC;
     }
     else
       biffDelay = biffEntry.nextBiffTime - currentTime;
 
     // Convert biffDelay into milliseconds
-    PRInt64 timeInMS = biffDelay / ms;
-    PRUint32 timeInMSUint32 = (PRUint32)timeInMS;
+    int64_t timeInMS = biffDelay / ms;
+    uint32_t timeInMSUint32 = (uint32_t)timeInMS;
 
     // Can't currently reset a timer when it's in the process of
     // calling Notify. So, just release the timer here and create a new one.
@@ -346,17 +313,17 @@ nsresult nsMsgBiffManager::PerformBiff()
   nsCOMArray<nsIMsgFolder> targetFolders;
   PR_LOG(MsgBiffLogModule, PR_LOG_ALWAYS, ("performing biffs\n"));
 
-  PRUint32 count = mBiffArray.Length();
-  for (PRUint32 i = 0; i < count; i++)
+  uint32_t count = mBiffArray.Length();
+  for (uint32_t i = 0; i < count; i++)
   {
     // Take a copy of the entry rather than the a reference so that we can
     // remove and add if necessary, but keep the references and memory alive.
     nsBiffEntry current = mBiffArray[i];
     if (current.nextBiffTime < currentTime)
     {
-      PRBool serverBusy = PR_FALSE;
-      PRBool serverRequiresPassword = PR_TRUE;
-      PRBool passwordPromptRequired; 
+      bool serverBusy = false;
+      bool serverRequiresPassword = true;
+      bool passwordPromptRequired; 
 
       current.server->GetPasswordPromptRequired(&passwordPromptRequired);
       current.server->GetServerBusy(&serverBusy);
@@ -364,7 +331,7 @@ nsresult nsMsgBiffManager::PerformBiff()
       // find the dest folder we're actually downloading to...
       nsCOMPtr<nsIMsgFolder> rootMsgFolder;
       current.server->GetRootMsgFolder(getter_AddRefs(rootMsgFolder));
-      PRInt32 targetFolderIndex = targetFolders.IndexOfObject(rootMsgFolder);
+      int32_t targetFolderIndex = targetFolders.IndexOfObject(rootMsgFolder);
       if (targetFolderIndex == kNotFound)
         targetFolders.AppendObject(rootMsgFolder);
 
@@ -378,7 +345,7 @@ nsresult nsMsgBiffManager::PerformBiff()
       {
         nsCString serverKey;
         current.server->GetKey(serverKey);
-        nsresult rv = current.server->PerformBiff(nsnull);
+        nsresult rv = current.server->PerformBiff(nullptr);
         PR_LOG(MsgBiffLogModule, PR_LOG_ALWAYS, ("biffing server %s rv = %x\n", serverKey.get(), rv));
       }
       else

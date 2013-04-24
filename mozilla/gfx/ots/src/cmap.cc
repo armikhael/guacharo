@@ -4,6 +4,7 @@
 
 #include "cmap.h"
 
+#include <algorithm>
 #include <set>
 #include <utility>
 #include <vector>
@@ -211,7 +212,7 @@ bool ParseFormat4(ots::OpenTypeFile *file, int platform, int encoding,
   // A format 4 CMAP subtable is complex. To be safe we simulate a lookup of
   // each code-point defined in the table and make sure that they are all valid
   // glyphs and that we don't access anything out-of-bounds.
-  for (unsigned i = 1; i < segcount; ++i) {
+  for (unsigned i = 0; i < segcount; ++i) {
     for (unsigned cp = ranges[i].start_range; cp <= ranges[i].end_range; ++cp) {
       const uint16_t code_point = cp;
       if (ranges[i].id_range_offset == 0) {
@@ -694,9 +695,10 @@ bool ots_cmap_parse(OpenTypeFile *file, const uint8_t *data, size_t length) {
       continue;
     }
     overlap_checker.push_back(
-        std::make_pair(subtable_headers[i].offset, 1 /* start */));
+        std::make_pair(subtable_headers[i].offset,
+                       static_cast<uint8_t>(1) /* start */));
     overlap_checker.push_back(
-        std::make_pair(end_byte, 0 /* end */));
+        std::make_pair(end_byte, static_cast<uint8_t>(0) /* end */));
   }
   std::sort(overlap_checker.begin(), overlap_checker.end());
   int overlap_count = 0;

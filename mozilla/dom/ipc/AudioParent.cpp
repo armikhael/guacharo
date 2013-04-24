@@ -1,41 +1,8 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set sw=2 ts=8 et tw=80 : */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Audio IPC
- *
- * The Initial Developer of the Original Code is
- *   The Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Doug Turner <dougt@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "mozilla/dom/AudioParent.h"
 #include "mozilla/unused.h"
@@ -45,32 +12,54 @@
 namespace mozilla {
 namespace dom {
 
-class AudioWriteEvent : public nsRunnable
+class AudioWriteDoneEvent : public nsRunnable
 {
  public:
-  AudioWriteEvent(nsAudioStream* owner, nsCString data, PRUint32 count)
+  AudioWriteDoneEvent(AudioParent* owner)
   {
     mOwner = owner;
-    mData  = data;
-    mCount = count;
   }
 
   NS_IMETHOD Run()
   {
-    mOwner->Write(mData.get(), mCount, true);
+    mOwner->SendWriteDone();
     return NS_OK;
   }
 
  private:
+    nsRefPtr<AudioParent> mOwner;
+};
+
+class AudioWriteEvent : public nsRunnable
+{
+ public:
+  AudioWriteEvent(AudioParent* parent, nsAudioStream* owner, nsCString data, uint32_t frames)
+  {
+    mParent = parent;
+    mOwner = owner;
+    mData  = data;
+    mFrames = frames;
+  }
+
+  NS_IMETHOD Run()
+  {
+    mOwner->Write(mData.get(), mFrames);
+    nsCOMPtr<nsIRunnable> event = new AudioWriteDoneEvent(mParent);
+    NS_DispatchToMainThread(event);
+    return NS_OK;
+  }
+
+ private:
+    nsRefPtr<AudioParent> mParent;
     nsRefPtr<nsAudioStream> mOwner;
     nsCString mData;
-    PRUint32  mCount;
+    uint32_t  mFrames;
 };
 
 class AudioPauseEvent : public nsRunnable
 {
  public:
-  AudioPauseEvent(nsAudioStream* owner, PRBool aPause)
+  AudioPauseEvent(nsAudioStream* owner, bool aPause)
   {
     mOwner = owner;
     mPause = aPause;
@@ -87,7 +76,7 @@ class AudioPauseEvent : public nsRunnable
 
  private:
     nsRefPtr<nsAudioStream> mOwner;
-    PRBool mPause;
+    bool mPause;
 };
 
 class AudioStreamShutdownEvent : public nsRunnable
@@ -109,30 +98,30 @@ class AudioStreamShutdownEvent : public nsRunnable
 };
 
 
-class AudioMinWriteSampleDone : public nsRunnable
+class AudioMinWriteSizeDone : public nsRunnable
 {
  public:
-  AudioMinWriteSampleDone(AudioParent* owner, PRInt32 minSamples)
+  AudioMinWriteSizeDone(AudioParent* owner, int32_t minFrames)
   {
     mOwner = owner;
-    mMinSamples = minSamples;
+    mMinFrames = minFrames;
   }
 
   NS_IMETHOD Run()
   {
-    mOwner->SendMinWriteSampleDone(mMinSamples);
+    mOwner->SendMinWriteSizeDone(mMinFrames);
     return NS_OK;
   }
 
  private:
     nsRefPtr<AudioParent> mOwner;
-    PRInt32 mMinSamples;
+    int32_t mMinFrames;
 };
 
-class AudioMinWriteSampleEvent : public nsRunnable
+class AudioMinWriteSizeEvent : public nsRunnable
 {
  public:
-  AudioMinWriteSampleEvent(AudioParent* parent, nsAudioStream* owner)
+  AudioMinWriteSizeEvent(AudioParent* parent, nsAudioStream* owner)
   {
     mParent = parent;
     mOwner = owner;
@@ -140,8 +129,8 @@ class AudioMinWriteSampleEvent : public nsRunnable
 
   NS_IMETHOD Run()
   {
-    PRInt32 minSamples = mOwner->GetMinWriteSamples();
-    nsCOMPtr<nsIRunnable> event = new AudioMinWriteSampleDone(mParent, minSamples);
+    int32_t minFrames = mOwner->GetMinWriteSize();
+    nsCOMPtr<nsIRunnable> event = new AudioMinWriteSizeDone(mParent, minFrames);
     NS_DispatchToMainThread(event);
     return NS_OK;
   }
@@ -202,19 +191,17 @@ AudioParent::Notify(nsITimer* timer)
   }
 
   NS_ASSERTION(mStream, "AudioStream not initialized.");
-  PRInt64 offset = mStream->GetSampleOffset();
-  unused << SendSampleOffsetUpdate(offset, PR_IntervalNow());
+  int64_t position = mStream->GetPositionInFrames();
+  unused << SendPositionInFramesUpdate(position, PR_IntervalNow());
   return NS_OK;
 }
 
 bool
-AudioParent::RecvWrite(
-        const nsCString& data,
-        const PRUint32& count)
+AudioParent::RecvWrite(const nsCString& data, const uint32_t& frames)
 {
   if (!mStream)
     return false;
-  nsCOMPtr<nsIRunnable> event = new AudioWriteEvent(mStream, data, count);
+  nsCOMPtr<nsIRunnable> event = new AudioWriteEvent(this, mStream, data, frames);
   nsCOMPtr<nsIThread> thread = mStream->GetThread();
   thread->Dispatch(event, nsIEventTarget::DISPATCH_NORMAL);
   return true;
@@ -230,11 +217,11 @@ AudioParent::RecvSetVolume(const float& aVolume)
 }
 
 bool
-AudioParent::RecvMinWriteSample()
+AudioParent::RecvMinWriteSize()
 {
   if (!mStream)
     return false;
-  nsCOMPtr<nsIRunnable> event = new AudioMinWriteSampleEvent(this, mStream);
+  nsCOMPtr<nsIRunnable> event = new AudioMinWriteSizeEvent(this, mStream);
   nsCOMPtr<nsIThread> thread = mStream->GetThread();
   thread->Dispatch(event, nsIEventTarget::DISPATCH_NORMAL);
   return true;
@@ -256,7 +243,7 @@ AudioParent::RecvPause()
 {
   if (!mStream)
     return false;
-  nsCOMPtr<nsIRunnable> event = new AudioPauseEvent(mStream, PR_TRUE);
+  nsCOMPtr<nsIRunnable> event = new AudioPauseEvent(mStream, true);
   nsCOMPtr<nsIThread> thread = mStream->GetThread();
   thread->Dispatch(event, nsIEventTarget::DISPATCH_NORMAL);
   return true;
@@ -267,7 +254,7 @@ AudioParent::RecvResume()
 {
   if (!mStream)
     return false;
-  nsCOMPtr<nsIRunnable> event = new AudioPauseEvent(mStream, PR_FALSE);
+  nsCOMPtr<nsIRunnable> event = new AudioPauseEvent(mStream, false);
   nsCOMPtr<nsIThread> thread = mStream->GetThread();
   thread->Dispatch(event, nsIEventTarget::DISPATCH_NORMAL);
   return true;
@@ -282,10 +269,10 @@ AudioParent::RecvShutdown()
 }
 
 bool
-AudioParent::SendMinWriteSampleDone(PRInt32 minSamples)
+AudioParent::SendMinWriteSizeDone(int32_t minFrames)
 {
   if (mIPCOpen)
-    return PAudioParent::SendMinWriteSampleDone(minSamples);
+    return PAudioParent::SendMinWriteSizeDone(minFrames);
   return true;
 }
 
@@ -297,16 +284,22 @@ AudioParent::SendDrainDone()
   return true;
 }
 
-AudioParent::AudioParent(PRInt32 aNumChannels, PRInt32 aRate, PRInt32 aFormat)
-  : mIPCOpen(PR_TRUE)
+bool
+AudioParent::SendWriteDone()
+{
+  if (mIPCOpen)
+    return PAudioParent::SendWriteDone();
+  return true;
+}
+
+AudioParent::AudioParent(int32_t aNumChannels, int32_t aRate, int32_t aFormat)
+  : mIPCOpen(true)
 {
   mStream = nsAudioStream::AllocateStream();
   NS_ASSERTION(mStream, "AudioStream allocation failed.");
-  if (NS_FAILED(mStream->Init(aNumChannels,
-                              aRate,
-                              (nsAudioStream::SampleFormat) aFormat))) {
+  if (NS_FAILED(mStream->Init(aNumChannels, aRate))) {
       NS_WARNING("AudioStream initialization failed.");
-      mStream = nsnull;
+      mStream = nullptr;
       return;
   }
 
@@ -321,7 +314,7 @@ AudioParent::~AudioParent()
 void
 AudioParent::ActorDestroy(ActorDestroyReason aWhy)
 {
-  mIPCOpen = PR_FALSE;
+  mIPCOpen = false;
 
   Shutdown();
 }
@@ -331,14 +324,14 @@ AudioParent::Shutdown()
 {
   if (mTimer) {
     mTimer->Cancel();
-    mTimer = nsnull;
+    mTimer = nullptr;
   }
 
   if (mStream) {
       nsCOMPtr<nsIRunnable> event = new AudioStreamShutdownEvent(mStream);
       nsCOMPtr<nsIThread> thread = mStream->GetThread();
       thread->Dispatch(event, nsIEventTarget::DISPATCH_NORMAL);
-      mStream = nsnull;
+      mStream = nullptr;
   }
 }
 

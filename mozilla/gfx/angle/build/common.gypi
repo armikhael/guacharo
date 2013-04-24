@@ -4,10 +4,38 @@
 
 {
   'variables': {
-    'library%': 'shared_library',
+    'component%': 'static_library',
+    'gcc_or_clang_warnings': [
+      '-Wall',
+      '-Wchar-subscripts',
+      '-Werror',
+      '-Wextra',
+      '-Wformat=2',
+      '-Winit-self',
+      '-Wno-sign-compare',
+      '-Wno-unused-function',
+      '-Wno-unused-parameter',
+      '-Wno-unknown-pragmas',
+      '-Wpacked',
+      '-Wpointer-arith',
+      '-Wundef',
+      '-Wwrite-strings',
+    ],
   },
   'target_defaults': {
     'default_configuration': 'Debug',
+    'variables': {
+      'warn_as_error%': 1,
+    },
+    'target_conditions': [
+      ['warn_as_error == 1', {
+        'msvs_settings': {
+          'VCCLCompilerTool': {
+            'WarnAsError': 'true',
+          },
+        },
+      }],
+    ],
     'configurations': {
       'Common': {
         'abstract': 1,
@@ -28,7 +56,6 @@
             'PreprocessorDefinitions': [
               '_CRT_SECURE_NO_DEPRECATE',
               '_HAS_EXCEPTIONS=0',
-              '_HAS_TR1=0',
               '_WIN32_WINNT=0x0600',
               '_WINDOWS',
               'NOMINMAX',
@@ -37,7 +64,8 @@
               'WINVER=0x0600',
             ],
             'RuntimeTypeInfo': 'false',
-            'WarningLevel': '3',
+            'WarningLevel': '4',
+            'DisableSpecificWarnings': '4100;4127;4189;4239;4244;4245;4512;4702',
           },
           'VCLinkerTool': {
             'FixedBaseAddress': '1',
@@ -81,6 +109,11 @@
         },
       },  # Release
     },  # configurations
+    'conditions': [
+      ['component=="shared_library"', {
+        'defines': ['COMPONENT_BUILD'],
+      }],
+    ],
   },  # target_defaults
   'conditions': [
     ['OS=="win"', {

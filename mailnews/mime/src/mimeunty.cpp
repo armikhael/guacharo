@@ -1,39 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "mimeunty.h"
 #include "prmem.h"
@@ -51,7 +19,7 @@ MimeDefClass(MimeUntypedText, MimeUntypedTextClass,
 static int MimeUntypedText_initialize (MimeObject *);
 static void MimeUntypedText_finalize (MimeObject *);
 static int MimeUntypedText_parse_begin (MimeObject *);
-static int MimeUntypedText_parse_line (const char *, PRInt32, MimeObject *);
+static int MimeUntypedText_parse_line (const char *, int32_t, MimeObject *);
 
 static int MimeUntypedText_open_subpart (MimeObject *obj,
                      MimeUntypedTextSubpartType ttype,
@@ -61,23 +29,23 @@ static int MimeUntypedText_open_subpart (MimeObject *obj,
                      const char *desc);
 static int MimeUntypedText_close_subpart (MimeObject *obj);
 
-static PRBool MimeUntypedText_uu_begin_line_p(const char *line, PRInt32 length,
+static bool MimeUntypedText_uu_begin_line_p(const char *line, int32_t length,
                          MimeDisplayOptions *opt,
                          char **type_ret,
                          char **name_ret);
-static PRBool MimeUntypedText_uu_end_line_p(const char *line, PRInt32 length);
+static bool MimeUntypedText_uu_end_line_p(const char *line, int32_t length);
 
-static PRBool MimeUntypedText_yenc_begin_line_p(const char *line, PRInt32 length,
+static bool MimeUntypedText_yenc_begin_line_p(const char *line, int32_t length,
                          MimeDisplayOptions *opt,
                          char **type_ret,
                          char **name_ret);
-static PRBool MimeUntypedText_yenc_end_line_p(const char *line, PRInt32 length);
+static bool MimeUntypedText_yenc_end_line_p(const char *line, int32_t length);
 
-static PRBool MimeUntypedText_binhex_begin_line_p(const char *line,
-                           PRInt32 length,
+static bool MimeUntypedText_binhex_begin_line_p(const char *line,
+                           int32_t length,
                            MimeDisplayOptions *opt);
-static PRBool MimeUntypedText_binhex_end_line_p(const char *line,
-                         PRInt32 length);
+static bool MimeUntypedText_binhex_end_line_p(const char *line,
+                         int32_t length);
 
 static int
 MimeUntypedTextClassInitialize(MimeUntypedTextClass *clazz)
@@ -124,12 +92,12 @@ MimeUntypedText_parse_begin (MimeObject *obj)
 }
 
 static int
-MimeUntypedText_parse_line (const char *line, PRInt32 length, MimeObject *obj)
+MimeUntypedText_parse_line (const char *line, int32_t length, MimeObject *obj)
 {
   MimeUntypedText *uty = (MimeUntypedText *) obj;
   int status = 0;
   char *name = 0, *type = 0;
-  PRBool begin_line_p = PR_FALSE;
+  bool begin_line_p = false;
 
   NS_ASSERTION(line && *line, "empty line in mime untyped parse_line");
   if (!line || !*line) return -1;
@@ -140,7 +108,7 @@ MimeUntypedText_parse_line (const char *line, PRInt32 length, MimeObject *obj)
     obj->options &&
     !obj->options->write_html_p &&
     obj->options->output_fn)
-  return MimeObject_write(obj, line, length, PR_TRUE);
+  return MimeObject_write(obj, line, length, true);
 
 
   /* Open a new sub-part if this line demands it.
@@ -157,7 +125,7 @@ MimeUntypedText_parse_line (const char *line, PRInt32 length, MimeObject *obj)
     PR_FREEIF(name);
     PR_FREEIF(type);
     if (status < 0) return status;
-    begin_line_p = PR_TRUE;
+    begin_line_p = true;
   }
 
   else if (line[0] == '=' &&
@@ -172,7 +140,7 @@ MimeUntypedText_parse_line (const char *line, PRInt32 length, MimeObject *obj)
     PR_FREEIF(name);
     PR_FREEIF(type);
     if (status < 0) return status;
-    begin_line_p = PR_TRUE;
+    begin_line_p = true;
   }
 
   else if (line[0] == '(' && line[1] == 'T' &&
@@ -184,7 +152,7 @@ MimeUntypedText_parse_line (const char *line, PRInt32 length, MimeObject *obj)
                        APPLICATION_BINHEX, NULL,
                        NULL, NULL);
     if (status < 0) return status;
-    begin_line_p = PR_TRUE;
+    begin_line_p = true;
   }
 
   /* Open a text/plain sub-part if there is no sub-part open.
@@ -253,7 +221,7 @@ MimeUntypedText_close_subpart (MimeObject *obj)
 
   if (uty->open_subpart)
   {
-    status = uty->open_subpart->clazz->parse_eof(uty->open_subpart, PR_FALSE);
+    status = uty->open_subpart->clazz->parse_eof(uty->open_subpart, false);
     uty->open_subpart = 0;
 
     PR_ASSERT(uty->open_hdrs);
@@ -270,7 +238,7 @@ MimeUntypedText_close_subpart (MimeObject *obj)
      have separators before and after them.)
      */
     if (obj->options && obj->options->state)
-    obj->options->state->separator_suppressed_p = PR_TRUE;
+    obj->options->state->separator_suppressed_p = true;
   }
 
   PR_ASSERT(!uty->open_hdrs);
@@ -320,7 +288,7 @@ MimeUntypedText_open_subpart (MimeObject *obj,
   uty->open_hdrs = MimeHeaders_new();
   if (!uty->open_hdrs) return MIME_OUT_OF_MEMORY;
 
-  PRUint32 hlen = strlen(type) +
+  uint32_t hlen = strlen(type) +
                 (enc ? strlen(enc) : 0) +
                 (desc ? strlen(desc) : 0) +
                 (name ? strlen(name) : 0) +
@@ -368,15 +336,15 @@ MimeUntypedText_open_subpart (MimeObject *obj,
 
   /* Create a child... */
   {
-  PRBool horrid_kludge = (obj->options && obj->options->state &&
+  bool horrid_kludge = (obj->options && obj->options->state &&
                obj->options->state->first_part_written_p);
   if (horrid_kludge)
-    obj->options->state->first_part_written_p = PR_FALSE;
+    obj->options->state->first_part_written_p = false;
 
   uty->open_subpart = mime_create(type, uty->open_hdrs, obj->options);
 
   if (horrid_kludge)
-    obj->options->state->first_part_written_p = PR_TRUE;
+    obj->options->state->first_part_written_p = true;
 
   if (!uty->open_subpart)
     {
@@ -418,8 +386,8 @@ MimeUntypedText_open_subpart (MimeObject *obj,
   return status;
 }
 
-static PRBool
-MimeUntypedText_uu_begin_line_p(const char *line, PRInt32 length,
+static bool
+MimeUntypedText_uu_begin_line_p(const char *line, int32_t length,
                 MimeDisplayOptions *opt,
                 char **type_ret, char **name_ret)
 {
@@ -430,29 +398,29 @@ MimeUntypedText_uu_begin_line_p(const char *line, PRInt32 length,
   if (type_ret) *type_ret = 0;
   if (name_ret) *name_ret = 0;
 
-  if (strncmp (line, "begin ", 6)) return PR_FALSE;
+  if (strncmp (line, "begin ", 6)) return false;
   /* ...then three or four octal digits. */
   s = line + 6;
-  if (*s < '0' || *s > '7') return PR_FALSE;
+  if (*s < '0' || *s > '7') return false;
   s++;
-  if (*s < '0' || *s > '7') return PR_FALSE;
+  if (*s < '0' || *s > '7') return false;
   s++;
-  if (*s < '0' || *s > '7') return PR_FALSE;
+  if (*s < '0' || *s > '7') return false;
   s++;
   if (*s == ' ')
   s++;
   else
   {
-    if (*s < '0' || *s > '7') return PR_FALSE;
+    if (*s < '0' || *s > '7') return false;
     s++;
-    if (*s != ' ') return PR_FALSE;
+    if (*s != ' ') return false;
   }
 
   while (IS_SPACE(*s))
   s++;
 
   name = (char *) PR_MALLOC(((line+length)-s) + 1);
-  if (!name) return PR_FALSE; /* grr... */
+  if (!name) return false; /* grr... */
   memcpy(name, s, (line+length)-s);
   name[(line+length)-s] = 0;
 
@@ -477,11 +445,11 @@ MimeUntypedText_uu_begin_line_p(const char *line, PRInt32 length,
   else
   PR_FREEIF(type);
 
-  return PR_TRUE;
+  return true;
 }
 
-static PRBool
-MimeUntypedText_uu_end_line_p(const char *line, PRInt32 length)
+static bool
+MimeUntypedText_uu_end_line_p(const char *line, int32_t length)
 {
 #if 0
   /* A strictly conforming uuencode end line. */
@@ -512,8 +480,8 @@ MimeUntypedText_uu_end_line_p(const char *line, PRInt32 length)
 #endif
 }
 
-static PRBool
-MimeUntypedText_yenc_begin_line_p(const char *line, PRInt32 length,
+static bool
+MimeUntypedText_yenc_begin_line_p(const char *line, int32_t length,
                 MimeDisplayOptions *opt,
                 char **type_ret, char **name_ret)
 {
@@ -527,7 +495,7 @@ MimeUntypedText_yenc_begin_line_p(const char *line, PRInt32 length,
 
   /* we don't support yenc V2 neither multipart yencode,
      therefore the second parameter should always be "line="*/
-  if (length < 13 || strncmp (line, "=ybegin line=", 13)) return PR_FALSE;
+  if (length < 13 || strncmp (line, "=ybegin line=", 13)) return false;
 
   /* ...then couple digits. */
   for (s = line + 13; s < endofline; s ++)
@@ -535,7 +503,7 @@ MimeUntypedText_yenc_begin_line_p(const char *line, PRInt32 length,
       break;
 
   /* ...next, look for <space>size= */
-  if ((endofline - s) < 6 || strncmp (s, " size=", 6)) return PR_FALSE;
+  if ((endofline - s) < 6 || strncmp (s, " size=", 6)) return false;
 
   /* ...then couple digits. */
   for (s += 6; s < endofline; s ++)
@@ -543,12 +511,12 @@ MimeUntypedText_yenc_begin_line_p(const char *line, PRInt32 length,
       break;
 
    /* ...next, look for <space>name= */
-  if ((endofline - s) < 6 || strncmp (s, " name=", 6)) return PR_FALSE;
+  if ((endofline - s) < 6 || strncmp (s, " name=", 6)) return false;
 
   /* anything left is the file name */
   s += 6;
   name = (char *) PR_MALLOC((endofline-s) + 1);
-  if (!name) return PR_FALSE; /* grr... */
+  if (!name) return false; /* grr... */
   memcpy(name, s, endofline-s);
   name[endofline-s] = 0;
 
@@ -573,48 +541,48 @@ MimeUntypedText_yenc_begin_line_p(const char *line, PRInt32 length,
   else
   PR_FREEIF(type);
 
-  return PR_TRUE;
+  return true;
 }
 
-static PRBool
-MimeUntypedText_yenc_end_line_p(const char *line, PRInt32 length)
+static bool
+MimeUntypedText_yenc_end_line_p(const char *line, int32_t length)
 {
-  if (length < 11 || strncmp (line, "=yend size=", 11)) return PR_FALSE;
+  if (length < 11 || strncmp (line, "=yend size=", 11)) return false;
 
-  return PR_TRUE;
+  return true;
 }
 
 
 #define BINHEX_MAGIC "(This file must be converted with BinHex 4.0)"
 #define BINHEX_MAGIC_LEN 45
 
-static PRBool
-MimeUntypedText_binhex_begin_line_p(const char *line, PRInt32 length,
+static bool
+MimeUntypedText_binhex_begin_line_p(const char *line, int32_t length,
                   MimeDisplayOptions *opt)
 {
   if (length <= BINHEX_MAGIC_LEN)
-  return PR_FALSE;
+  return false;
 
   while(length > 0 && IS_SPACE(line[length-1]))
   length--;
 
   if (length != BINHEX_MAGIC_LEN)
-  return PR_FALSE;
+  return false;
 
   if (!strncmp(line, BINHEX_MAGIC, BINHEX_MAGIC_LEN))
-  return PR_TRUE;
+  return true;
   else
-  return PR_FALSE;
+  return false;
 }
 
-static PRBool
-MimeUntypedText_binhex_end_line_p(const char *line, PRInt32 length)
+static bool
+MimeUntypedText_binhex_end_line_p(const char *line, int32_t length)
 {
   if (length > 0 && line[length-1] == '\n') length--;
   if (length > 0 && line[length-1] == '\r') length--;
 
   if (length != 0 && length != 64)
-  return PR_TRUE;
+  return true;
   else
-  return PR_FALSE;
+  return false;
 }

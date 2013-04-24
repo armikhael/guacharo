@@ -1,42 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Seth Spitzer <sspitzer@netscape.com>
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *   Mark Banner <mark@standard8.demon.co.uk>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsAbManager.h"
 #include "nsAbBaseCID.h"
@@ -60,7 +25,7 @@
 #include "nsVCardObj.h"
 #include "nsIAbLDAPAttributeMap.h"
 #include "nsICommandLine.h"
-#include "nsILocalFile.h"
+#include "nsIFile.h"
 #include "nsIMutableArray.h"
 #include "nsArrayUtils.h"
 #include "nsDirectoryServiceUtils.h"
@@ -71,11 +36,14 @@
 #include "nsComponentManagerUtils.h"
 #include "nsIIOService.h"
 #include "nsAbQueryStringToExpression.h"
+#include "mozilla/Services.h"
+#include "mozilla/Util.h"
+using namespace mozilla;
 
 struct ExportAttributesTableStruct
 {
   const char* abPropertyName;
-  PRUint32 plainTextStringID;
+  uint32_t plainTextStringID;
 };
 
 // our schema is not fixed yet, but we still want some sort of objectclass
@@ -83,7 +51,7 @@ struct ExportAttributesTableStruct
 // see bugs bug #116692 and #118454
 #define MOZ_AB_OBJECTCLASS "mozillaAbPersonAlpha"
 
-// for now, the oder of the attributes with PR_TRUE for includeForPlainText
+// for now, the oder of the attributes with true for includeForPlainText
 // should be in the same order as they are in the import code
 // see importMsgProperties and nsImportStringBundle.
 // 
@@ -172,16 +140,15 @@ nsresult nsAbManager::Init()
 {
   NS_ENSURE_TRUE(NS_IsMainThread(), NS_ERROR_FAILURE);
 
-  nsresult rv;
   nsCOMPtr<nsIObserverService> observerService =
-    do_GetService("@mozilla.org/observer-service;1", &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
+    mozilla::services::GetObserverService();
+  NS_ENSURE_TRUE(observerService, NS_ERROR_UNEXPECTED);
 
-  rv = observerService->AddObserver(this, "profile-do-change", PR_FALSE);
+  nsresult rv = observerService->AddObserver(this, "profile-do-change", false);
   NS_ENSURE_SUCCESS(rv, rv);
 
   rv = observerService->AddObserver(this, NS_XPCOM_SHUTDOWN_OBSERVER_ID,
-                                    PR_FALSE);
+                                    false);
   NS_ENSURE_SUCCESS(rv, rv);
 
   return NS_OK;
@@ -206,12 +173,11 @@ NS_IMETHODIMP nsAbManager::Observe(nsISupports *aSubject, const char *aTopic,
   {
     DIR_ShutDown();
 
-    nsresult rv;
     nsCOMPtr<nsIObserverService> observerService =
-      do_GetService("@mozilla.org/observer-service;1", &rv);
-    NS_ENSURE_SUCCESS(rv, rv);
+      mozilla::services::GetObserverService();
+    NS_ENSURE_TRUE(observerService, NS_ERROR_UNEXPECTED);
 
-    rv = observerService->RemoveObserver(this, "profile-do-change");
+    nsresult rv = observerService->RemoveObserver(this, "profile-do-change");
     NS_ENSURE_SUCCESS(rv, rv);
 
     rv = observerService->RemoveObserver(this, NS_XPCOM_SHUTDOWN_OBSERVER_ID);
@@ -270,7 +236,7 @@ NS_IMETHODIMP nsAbManager::GetDirectory(const nsACString &aURI,
   nsCOMPtr<nsIAbDirectory> directory;
 
   // Was the directory root requested?
-  if (aURI.Equals(NS_LITERAL_CSTRING(kAllDirectoryRoot)))
+  if (aURI.EqualsLiteral(kAllDirectoryRoot))
   {
     rv = GetRootDirectory(getter_AddRefs(directory));
     NS_ENSURE_SUCCESS(rv, rv);
@@ -286,7 +252,7 @@ NS_IMETHODIMP nsAbManager::GetDirectory(const nsACString &aURI,
 
     nsCAutoString scheme;
 
-    PRInt32 colon = aURI.FindChar(':');
+    int32_t colon = aURI.FindChar(':');
     if (colon <= 0)
       return NS_ERROR_MALFORMED_URI;
     scheme = Substring(aURI, 0, colon);
@@ -299,14 +265,12 @@ NS_IMETHODIMP nsAbManager::GetDirectory(const nsACString &aURI,
     NS_ENSURE_SUCCESS(rv, rv);
 
     // Init it with the URI
-    const nsAFlatCString& flatURI = PromiseFlatCString(aURI);
-
-    rv = directory->Init(flatURI.get());
+    rv = directory->Init(PromiseFlatCString(aURI).get());
     NS_ENSURE_SUCCESS(rv, rv);
 
     // Check if this directory was initiated with a search query.  If so,
     // we don't cache it.
-    PRBool isQuery = PR_FALSE;
+    bool isQuery = false;
     rv = directory->GetIsQuery(&isQuery);
     NS_ENSURE_SUCCESS(rv, rv);
 
@@ -320,7 +284,7 @@ NS_IMETHODIMP nsAbManager::GetDirectory(const nsACString &aURI,
 
 NS_IMETHODIMP nsAbManager::NewAddressBook(const nsAString &aDirName,
                                             const nsACString &aURI,
-                                            const PRUint32 aType,
+                                            const uint32_t aType,
                                             const nsACString &aPrefName,
                                             nsACString &aResult)
 {
@@ -354,7 +318,7 @@ NS_IMETHODIMP nsAbManager::DeleteAddressBook(const nsACString &aURI)
 
   nsCOMPtr<nsISupports> item;
   nsCOMPtr<nsIAbDirectory> childDirectory;
-  PRBool hasMore = PR_FALSE;
+  bool hasMore = false;
   while (NS_SUCCEEDED(enumerator->HasMoreElements(&hasMore)) && hasMore)
   {
     rv = enumerator->GetNext(getter_AddRefs(item));
@@ -373,7 +337,7 @@ NS_IMETHODIMP nsAbManager::DeleteAddressBook(const nsACString &aURI)
 
   mAbStore.Remove(aURI);
 
-  PRBool isMailList;
+  bool isMailList;
   rv = directory->GetIsMailList(&isMailList);
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -384,7 +348,7 @@ NS_IMETHODIMP nsAbManager::DeleteAddressBook(const nsACString &aURI)
 
   nsCString parentUri;
   parentUri.Append(aURI);
-  PRInt32 pos = parentUri.RFindChar('/');
+  int32_t pos = parentUri.RFindChar('/');
 
   // If we didn't find a /, we're in trouble.
   if (pos == -1)
@@ -459,10 +423,10 @@ NS_IMETHODIMP nsAbManager::NotifyDirectoryDeleted(nsIAbDirectory *aParentDirecto
   return NS_OK;
 }
 
-NS_IMETHODIMP nsAbManager::GetUserProfileDirectory(nsILocalFile **userDir)
+NS_IMETHODIMP nsAbManager::GetUserProfileDirectory(nsIFile **userDir)
 {
   NS_ENSURE_ARG_POINTER(userDir);
-  *userDir = nsnull;
+  *userDir = nullptr;
 
   nsresult rv;
   nsCOMPtr<nsIFile> profileDir;
@@ -474,12 +438,12 @@ NS_IMETHODIMP nsAbManager::GetUserProfileDirectory(nsILocalFile **userDir)
   return CallQueryInterface(profileDir, userDir);
 }
 
-NS_IMETHODIMP nsAbManager::MailListNameExists(const PRUnichar *name, PRBool *exist)
+NS_IMETHODIMP nsAbManager::MailListNameExists(const PRUnichar *name, bool *exist)
 {
   nsresult rv;
   NS_ENSURE_ARG_POINTER(exist);
 
-  *exist = PR_FALSE;
+  *exist = false;
 
   // now get the top-level book
   nsCOMPtr<nsIAbDirectory> topDirectory;
@@ -493,7 +457,7 @@ NS_IMETHODIMP nsAbManager::MailListNameExists(const PRUnichar *name, PRBool *exi
   nsCOMPtr<nsISupports> item;
   nsCOMPtr<nsIAbMDBDirectory> directory;
 
-  PRBool hasMore;
+  bool hasMore;
   // XXX Make this not MDB specific.
   while (NS_SUCCEEDED(enumerator->HasMoreElements(&hasMore)) && hasMore)
   {
@@ -542,8 +506,9 @@ NS_IMETHODIMP nsAbManager::ExportAddressBook(nsIDOMWindow *aParentWin, nsIAbDire
   nsCOMPtr<nsIFilePicker> filePicker = do_CreateInstance("@mozilla.org/filepicker;1", &rv);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  nsCOMPtr<nsIStringBundleService> bundleService = do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
+  nsCOMPtr<nsIStringBundleService> bundleService =
+    mozilla::services::GetStringBundleService();
+  NS_ENSURE_TRUE(bundleService, NS_ERROR_UNEXPECTED);
   nsCOMPtr<nsIStringBundle> bundle;
   rv = bundleService->CreateBundle("chrome://messenger/locale/addressbook/addressBook.properties", getter_AddRefs(bundle));
   NS_ENSURE_SUCCESS(rv, rv);
@@ -574,29 +539,29 @@ NS_IMETHODIMP nsAbManager::ExportAddressBook(nsIDOMWindow *aParentWin, nsIAbDire
   rv = filePicker->AppendFilter(filterString, NS_LITERAL_STRING("*.tab; *.txt"));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRInt16 dialogResult;
+  int16_t dialogResult;
   filePicker->Show(&dialogResult);
 
   if (dialogResult == nsIFilePicker::returnCancel)
     return rv;
 
-  nsCOMPtr<nsILocalFile> localFile;
+  nsCOMPtr<nsIFile> localFile;
   rv = filePicker->GetFile(getter_AddRefs(localFile));
   NS_ENSURE_SUCCESS(rv, rv);
 
   if (dialogResult == nsIFilePicker::returnReplace) {
     // be extra safe and only delete when the file is really a file
-    PRBool isFile;
+    bool isFile;
     rv = localFile->IsFile(&isFile);
     if (NS_SUCCEEDED(rv) && isFile) {
-      rv = localFile->Remove(PR_FALSE /* recursive delete */);
+      rv = localFile->Remove(false /* recursive delete */);
       NS_ENSURE_SUCCESS(rv, rv);
     }
   }
 
   // The type of export is determined by the drop-down in
   // the file picker dialog.
-  PRInt32 exportType;
+  int32_t exportType;
   rv = filePicker->GetFilterIndex(&exportType);
   NS_ENSURE_SUCCESS(rv,rv);
 
@@ -609,8 +574,8 @@ NS_IMETHODIMP nsAbManager::ExportAddressBook(nsIDOMWindow *aParentWin, nsIAbDire
     default:
     case LDIF_EXPORT_TYPE: // ldif
       // If filename does not have the correct ext, add one.
-      if ((MsgFind(fileName, LDIF_FILE_EXTENSION, PR_TRUE, fileName.Length() - strlen(LDIF_FILE_EXTENSION)) == -1) &&
-          (MsgFind(fileName, LDIF_FILE_EXTENSION2, PR_TRUE, fileName.Length() - strlen(LDIF_FILE_EXTENSION2)) == -1)) {
+      if ((MsgFind(fileName, LDIF_FILE_EXTENSION, true, fileName.Length() - strlen(LDIF_FILE_EXTENSION)) == -1) &&
+          (MsgFind(fileName, LDIF_FILE_EXTENSION2, true, fileName.Length() - strlen(LDIF_FILE_EXTENSION2)) == -1)) {
 
        // Add the extension and build a new localFile.
        fileName.AppendLiteral(LDIF_FILE_EXTENSION2);
@@ -621,7 +586,7 @@ NS_IMETHODIMP nsAbManager::ExportAddressBook(nsIDOMWindow *aParentWin, nsIAbDire
 
     case CSV_EXPORT_TYPE: // csv
       // If filename does not have the correct ext, add one.
-      if (MsgFind(fileName, CSV_FILE_EXTENSION, PR_TRUE, fileName.Length() - strlen(CSV_FILE_EXTENSION)) == -1) {
+      if (MsgFind(fileName, CSV_FILE_EXTENSION, true, fileName.Length() - strlen(CSV_FILE_EXTENSION)) == -1) {
 
        // Add the extension and build a new localFile.
        fileName.AppendLiteral(CSV_FILE_EXTENSION);
@@ -632,8 +597,8 @@ NS_IMETHODIMP nsAbManager::ExportAddressBook(nsIDOMWindow *aParentWin, nsIAbDire
 
     case TAB_EXPORT_TYPE: // tab & text
       // If filename does not have the correct ext, add one.
-      if ((MsgFind(fileName, TXT_FILE_EXTENSION, PR_TRUE, fileName.Length() - strlen(TXT_FILE_EXTENSION)) == -1) &&
-          (MsgFind(fileName, TAB_FILE_EXTENSION, PR_TRUE, fileName.Length() - strlen(TAB_FILE_EXTENSION)) == -1)) {
+      if ((MsgFind(fileName, TXT_FILE_EXTENSION, true, fileName.Length() - strlen(TXT_FILE_EXTENSION)) == -1) &&
+          (MsgFind(fileName, TAB_FILE_EXTENSION, true, fileName.Length() - strlen(TAB_FILE_EXTENSION)) == -1)) {
 
        // Add the extension and build a new localFile.
        fileName.AppendLiteral(TXT_FILE_EXTENSION);
@@ -647,7 +612,7 @@ NS_IMETHODIMP nsAbManager::ExportAddressBook(nsIDOMWindow *aParentWin, nsIAbDire
 }
 
 nsresult
-nsAbManager::ExportDirectoryToDelimitedText(nsIAbDirectory *aDirectory, const char *aDelim, PRUint32 aDelimLen, nsILocalFile *aLocalFile)
+nsAbManager::ExportDirectoryToDelimitedText(nsIAbDirectory *aDirectory, const char *aDelim, uint32_t aDelimLen, nsIFile *aLocalFile)
 {
   nsCOMPtr <nsISimpleEnumerator> cardsEnumerator;
   nsCOMPtr <nsIAbCard> card;
@@ -664,12 +629,13 @@ nsAbManager::ExportDirectoryToDelimitedText(nsIAbDirectory *aDirectory, const ch
   if (NS_FAILED(rv))
     return rv;
 
-  PRUint32 i;
-  PRUint32 writeCount;
-  PRUint32 length;
+  uint32_t i;
+  uint32_t writeCount;
+  uint32_t length;
 
-  nsCOMPtr<nsIStringBundleService> bundleService = do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
+  nsCOMPtr<nsIStringBundleService> bundleService =
+    mozilla::services::GetStringBundleService();
+  NS_ENSURE_TRUE(bundleService, NS_ERROR_UNEXPECTED);
 
   nsCOMPtr<nsIStringBundle> bundle;
   rv = bundleService->CreateBundle("chrome://messenger/locale/importMsgs.properties", getter_AddRefs(bundle));
@@ -678,7 +644,7 @@ nsAbManager::ExportDirectoryToDelimitedText(nsIAbDirectory *aDirectory, const ch
   nsCString revisedName;
   nsString columnName;
 
-  for (i = 0; i < NS_ARRAY_LENGTH(EXPORT_ATTRIBUTES_TABLE); i++) {
+  for (i = 0; i < ArrayLength(EXPORT_ATTRIBUTES_TABLE); i++) {
     if (EXPORT_ATTRIBUTES_TABLE[i].plainTextStringID != 0) {
 
       // We don't need to truncate the string here as getter_Copies will
@@ -698,7 +664,7 @@ nsAbManager::ExportDirectoryToDelimitedText(nsIAbDirectory *aDirectory, const ch
       if (revisedName.Length() != writeCount)
         return NS_ERROR_FAILURE;
 
-      if (i < NS_ARRAY_LENGTH(EXPORT_ATTRIBUTES_TABLE) - 1) {
+      if (i < ArrayLength(EXPORT_ATTRIBUTES_TABLE) - 1) {
         rv = outputStream->Write(aDelim, aDelimLen, &writeCount);
         NS_ENSURE_SUCCESS(rv,rv);
 
@@ -715,14 +681,14 @@ nsAbManager::ExportDirectoryToDelimitedText(nsIAbDirectory *aDirectory, const ch
   rv = aDirectory->GetChildCards(getter_AddRefs(cardsEnumerator));
   if (NS_SUCCEEDED(rv) && cardsEnumerator) {
     nsCOMPtr<nsISupports> item;
-    PRBool more;
+    bool more;
     while (NS_SUCCEEDED(cardsEnumerator->HasMoreElements(&more)) && more) {
       rv = cardsEnumerator->GetNext(getter_AddRefs(item));
       if (NS_SUCCEEDED(rv)) {
         nsCOMPtr <nsIAbCard> card = do_QueryInterface(item, &rv);
         NS_ENSURE_SUCCESS(rv,rv);
 
-        PRBool isMailList;
+        bool isMailList;
         rv = card->GetIsMailList(&isMailList);
         NS_ENSURE_SUCCESS(rv,rv);
 
@@ -735,7 +701,7 @@ nsAbManager::ExportDirectoryToDelimitedText(nsIAbDirectory *aDirectory, const ch
           nsString value;
           nsCString valueCStr;
 
-          for (i = 0; i < NS_ARRAY_LENGTH(EXPORT_ATTRIBUTES_TABLE); i++) {
+          for (i = 0; i < ArrayLength(EXPORT_ATTRIBUTES_TABLE); i++) {
             if (EXPORT_ATTRIBUTES_TABLE[i].plainTextStringID != 0) {
               rv = card->GetPropertyAsAString(EXPORT_ATTRIBUTES_TABLE[i].abPropertyName, value);
               if (NS_FAILED(rv))
@@ -745,13 +711,13 @@ nsAbManager::ExportDirectoryToDelimitedText(nsIAbDirectory *aDirectory, const ch
               // we need to quote the entire string. Also if double quote is part
               // of the string we need to quote the double quote(s) as well.
               nsAutoString newValue(value);
-              PRBool needsQuotes = PR_FALSE;
+              bool needsQuotes = false;
               if(newValue.FindChar('"') != -1)
               {
-                needsQuotes = PR_TRUE;
+                needsQuotes = true;
                 
-                PRInt32 match = 0;
-                PRUint32 offset = 0;
+                int32_t match = 0;
+                uint32_t offset = 0;
                 nsString oldSubstr = NS_LITERAL_STRING("\"");
                 nsString newSubstr = NS_LITERAL_STRING("\"\""); 
                 while (offset < newValue.Length()) {
@@ -764,12 +730,12 @@ nsAbManager::ExportDirectoryToDelimitedText(nsIAbDirectory *aDirectory, const ch
                 }
               }
               if (!needsQuotes && (newValue.FindChar(',') != -1 || newValue.FindChar('\x09') != -1))
-                needsQuotes = PR_TRUE;
+                needsQuotes = true;
 
               // Make sure we quote if containing CR/LF.
               if (newValue.FindChar('\r') != -1 ||
                   newValue.FindChar('\n') != -1)
-                  needsQuotes = PR_TRUE;
+                  needsQuotes = true;
 
               if (needsQuotes)
               {
@@ -801,7 +767,7 @@ nsAbManager::ExportDirectoryToDelimitedText(nsIAbDirectory *aDirectory, const ch
               continue; // go to next field
             }
 
-            if (i < NS_ARRAY_LENGTH(EXPORT_ATTRIBUTES_TABLE) - 1) {
+            if (i < ArrayLength(EXPORT_ATTRIBUTES_TABLE) - 1) {
               rv = outputStream->Write(aDelim, aDelimLen, &writeCount);
               NS_ENSURE_SUCCESS(rv,rv);
               if (aDelimLen != writeCount)
@@ -828,7 +794,7 @@ nsAbManager::ExportDirectoryToDelimitedText(nsIAbDirectory *aDirectory, const ch
 }
 
 nsresult
-nsAbManager::ExportDirectoryToLDIF(nsIAbDirectory *aDirectory, nsILocalFile *aLocalFile)
+nsAbManager::ExportDirectoryToLDIF(nsIAbDirectory *aDirectory, nsIFile *aLocalFile)
 {
   nsCOMPtr <nsISimpleEnumerator> cardsEnumerator;
   nsCOMPtr <nsIAbCard> card;
@@ -857,21 +823,21 @@ nsAbManager::ExportDirectoryToLDIF(nsIAbDirectory *aDirectory, nsILocalFile *aLo
                                    getter_AddRefs(attrMap));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRUint32 i;
-  PRUint32 writeCount;
-  PRUint32 length;
+  uint32_t i;
+  uint32_t writeCount;
+  uint32_t length;
 
   rv = aDirectory->GetChildCards(getter_AddRefs(cardsEnumerator));
   if (NS_SUCCEEDED(rv) && cardsEnumerator) {
     nsCOMPtr<nsISupports> item;
-    PRBool more;
+    bool more;
     while (NS_SUCCEEDED(cardsEnumerator->HasMoreElements(&more)) && more) {
       rv = cardsEnumerator->GetNext(getter_AddRefs(item));
       if (NS_SUCCEEDED(rv)) {
         nsCOMPtr <nsIAbCard> card = do_QueryInterface(item, &rv);
         NS_ENSURE_SUCCESS(rv,rv);
 
-        PRBool isMailList;
+        bool isMailList;
         rv = card->GetIsMailList(&isMailList);
         NS_ENSURE_SUCCESS(rv,rv);
 
@@ -904,7 +870,7 @@ nsAbManager::ExportDirectoryToLDIF(nsIAbDirectory *aDirectory, nsILocalFile *aLo
 
           nsCAutoString ldapAttribute;
 
-          for (i = 0; i < NS_ARRAY_LENGTH(EXPORT_ATTRIBUTES_TABLE); i++) {
+          for (i = 0; i < ArrayLength(EXPORT_ATTRIBUTES_TABLE); i++) {
             if (NS_SUCCEEDED(attrMap->GetFirstAttribute(nsDependentCString(EXPORT_ATTRIBUTES_TABLE[i].abPropertyName),
                                                         ldapAttribute)) &&
                 !ldapAttribute.IsEmpty()) {
@@ -914,9 +880,9 @@ nsAbManager::ExportDirectoryToLDIF(nsIAbDirectory *aDirectory, nsILocalFile *aLo
                 value.Truncate();
 
               if (!PL_strcmp(EXPORT_ATTRIBUTES_TABLE[i].abPropertyName, kPreferMailFormatProperty)) {
-                if (value.Equals(NS_LITERAL_STRING("html").get()))
+                if (value.EqualsLiteral("html"))
                   value.AssignLiteral("true");
-                else if (value.Equals(NS_LITERAL_STRING("plaintext").get()))
+                else if (value.EqualsLiteral("plaintext"))
                   value.AssignLiteral("false");
                 else
                   value.Truncate(); // unknown.
@@ -1022,10 +988,10 @@ nsresult nsAbManager::AppendLDIFForMailList(nsIAbCard *aCard, nsIAbLDAPAttribute
   nsCOMPtr<nsIMutableArray> addresses;
   rv = mailList->GetAddressLists(getter_AddRefs(addresses));
   if (addresses) {
-    PRUint32 total = 0;
+    uint32_t total = 0;
     addresses->GetLength(&total);
     if (total) {
-      PRUint32 i;
+      uint32_t i;
       for (i = 0; i < total; i++) {
         nsCOMPtr <nsIAbCard> listCard = do_QueryElementAt(addresses, i, &rv);
         NS_ENSURE_SUCCESS(rv,rv);
@@ -1097,25 +1063,25 @@ nsresult nsAbManager::AppendBasicLDIFForCard(nsIAbCard *aCard, nsIAbLDAPAttribut
   return rv;
 }
 
-PRBool nsAbManager::IsSafeLDIFString(const PRUnichar *aStr)
+bool nsAbManager::IsSafeLDIFString(const PRUnichar *aStr)
 {
   // follow RFC 2849 to determine if something is safe "as is" for LDIF
   if (aStr[0] == PRUnichar(' ') ||
       aStr[0] == PRUnichar(':') ||
       aStr[0] == PRUnichar('<'))
-    return PR_FALSE;
+    return false;
 
-  PRUint32 i;
-  PRUint32 len = NS_strlen(aStr);
+  uint32_t i;
+  uint32_t len = NS_strlen(aStr);
   for (i=0; i<len; i++) {
     // If string contains CR or LF, it is not safe for LDIF
     // and MUST be base64 encoded
     if ((aStr[i] == PRUnichar('\n')) ||
         (aStr[i] == PRUnichar('\r')) ||
         (!NS_IsAscii(aStr[i])))
-      return PR_FALSE;
+      return false;
   }
-  return PR_TRUE;
+  return true;
 }
 
 nsresult nsAbManager::AppendProperty(const char *aProperty, const PRUnichar *aValue, nsACString &aResult)
@@ -1130,7 +1096,7 @@ nsresult nsAbManager::AppendProperty(const char *aProperty, const PRUnichar *aVa
     aResult.Append(NS_LossyConvertUTF16toASCII(aValue));
   }
   else {
-    char *base64Str = PL_Base64Encode(NS_ConvertUTF16toUTF8(aValue).get(), 0, nsnull);
+    char *base64Str = PL_Base64Encode(NS_ConvertUTF16toUTF8(aValue).get(), 0, nullptr);
     if (!base64Str)
       return NS_ERROR_OUT_OF_MEMORY;
 
@@ -1268,9 +1234,9 @@ NS_IMETHODIMP
 nsAbManager::Handle(nsICommandLine* aCmdLine)
 {
   nsresult rv;
-  PRBool found;
+  bool found;
 
-  rv = aCmdLine->HandleFlag(NS_LITERAL_STRING("addressbook"), PR_FALSE, &found);
+  rv = aCmdLine->HandleFlag(NS_LITERAL_STRING("addressbook"), false, &found);
   NS_ENSURE_SUCCESS(rv, rv);
 
   if (!found)
@@ -1280,9 +1246,9 @@ nsAbManager::Handle(nsICommandLine* aCmdLine)
   NS_ENSURE_TRUE(wwatch, NS_ERROR_FAILURE);
 
   nsCOMPtr<nsIDOMWindow> opened;
-  wwatch->OpenWindow(nsnull, "chrome://messenger/content/addressbook/addressbook.xul",
-                     "_blank", "chrome,extrachrome,menubar,resizable,scrollbars,status,toolbar", nsnull, getter_AddRefs(opened));
-  aCmdLine->SetPreventDefault(PR_TRUE);
+  wwatch->OpenWindow(nullptr, "chrome://messenger/content/addressbook/addressbook.xul",
+                     "_blank", "chrome,extrachrome,menubar,resizable,scrollbars,status,toolbar", nullptr, getter_AddRefs(opened));
+  aCmdLine->SetPreventDefault(true);
   return NS_OK;
 }
 
@@ -1304,9 +1270,10 @@ nsAbManager::GenerateUUID(const nsACString &aDirectoryId,
 }
 
 NS_IMETHODIMP
-nsAbManager::ConvertQueryStringToExpression(const char *aQueryString,
+nsAbManager::ConvertQueryStringToExpression(const nsACString &aQueryString,
                                             nsIAbBooleanExpression **_retval)
 {
   NS_ENSURE_ARG_POINTER(_retval);
-  return nsAbQueryStringToExpression::Convert(aQueryString, _retval);
+  return nsAbQueryStringToExpression::Convert(aQueryString,
+                                              _retval);
 }

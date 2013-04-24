@@ -20,7 +20,7 @@
 
 var server;
 var daemon;
-var handler;
+var authSchemes;
 var incomingServer;
 var pop3Service;
 var acctMgr;
@@ -119,7 +119,7 @@ function testNext() {
     test = thisTest.title;
     dump("NEXT test is: " + thisTest.title + "\n");
 
-    handler.kAuthSchemes = thisTest.serverAuthMethods;
+    authSchemes = thisTest.serverAuthMethods;
 
     // Mailnews caches server capabilities, so try to reset it
     deletePop3Server();
@@ -191,17 +191,18 @@ GSSAPIFail_handler.prototype = {
 
 function run_test() {
   // Disable new mail notifications
-  var prefSvc = Components.classes["@mozilla.org/preferences-service;1"]
-    .getService(Components.interfaces.nsIPrefBranch);
-
-  prefSvc.setBoolPref("mail.biff.play_sound", false);
-  prefSvc.setBoolPref("mail.biff.show_alert", false);
-  prefSvc.setBoolPref("mail.biff.show_tray_icon", false);
-  prefSvc.setBoolPref("mail.biff.animate_dock_icon", false);
+  Services.prefs.setBoolPref("mail.biff.play_sound", false);
+  Services.prefs.setBoolPref("mail.biff.show_alert", false);
+  Services.prefs.setBoolPref("mail.biff.show_tray_icon", false);
+  Services.prefs.setBoolPref("mail.biff.animate_dock_icon", false);
 
   daemon = new pop3Daemon();
-  handler = new GSSAPIFail_handler(daemon);
-  server = new nsMailServer(handler);
+  function createHandler(d) {
+    var handler = new GSSAPIFail_handler(d);
+    handler.kAuthSchemes = authSchemes;
+    return handler;
+  }
+  server = new nsMailServer(createHandler, daemon);
   server.start(POP3_PORT);
 
   //incomingServer = createPop3ServerAndLocalFolders();

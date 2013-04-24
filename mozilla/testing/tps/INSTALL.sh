@@ -1,4 +1,8 @@
 #!/bin/bash
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 
 # This scripts sets up a virutalenv and installs TPS into it.
 # It's probably best to specify a path NOT inside the repo, otherwise
@@ -57,6 +61,11 @@ fi
 cd ${CWD}
 python setup.py install
 
+# clean up files created by setup.py
+rm -rf build/
+rm -rf dist/
+rm -rf tps.egg-info/
+
 if [ "$?" -gt 0 ]
 then
   exit 1
@@ -68,7 +77,7 @@ NEWCONFIG=${CONFIG:0:${#CONFIG}-3}
 cd "../../services/sync/tests/tps"
 TESTDIR="`pwd`"
 
-cd "../../tps"
+cd "../../tps/extensions"
 EXTDIR="`pwd`"
 
 sed 's|__TESTDIR__|'"${TESTDIR}"'|' "${CONFIG}" | sed 's|__EXTENSIONDIR__|'"${EXTDIR}"'|' > "${NEWCONFIG}"

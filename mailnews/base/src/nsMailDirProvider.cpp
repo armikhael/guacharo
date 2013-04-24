@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Mail Directory Provider.
- *
- * The Initial Developer of the Original Code is
- *   Scott MacGregor <mscott@mozilla.org>.
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsMailDirProvider.h"
 #include "nsMailDirServiceDefs.h"
@@ -48,6 +16,7 @@
 #include "nsICategoryManager.h"
 #include "nsServiceManagerUtils.h"
 #include "nsDirectoryServiceUtils.h"
+#include "mozilla/Services.h"
 
 #define MAIL_DIR_50_NAME             "Mail"
 #define IMAP_MAIL_DIR_50_NAME        "ImapMail"
@@ -57,7 +26,7 @@
 nsresult
 nsMailDirProvider::EnsureDirectory(nsIFile *aDirectory)
 {
-  PRBool exists;
+  bool exists;
   nsresult rv = aDirectory->Exists(&exists);
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -72,14 +41,14 @@ NS_IMPL_ISUPPORTS2(nsMailDirProvider,
                    nsIDirectoryServiceProvider2)
 
 NS_IMETHODIMP
-nsMailDirProvider::GetFile(const char *aKey, PRBool *aPersist,
+nsMailDirProvider::GetFile(const char *aKey, bool *aPersist,
                            nsIFile **aResult)
 {
   // NOTE: This function can be reentrant through the NS_GetSpecialDirectory
   // call, so be careful not to cause infinite recursion.
   // i.e. the check for supported files must come first.
-  const char* leafName = nsnull;
-  PRBool isDirectory = PR_TRUE;
+  const char* leafName = nullptr;
+  bool isDirectory = true;
 
   if (!strcmp(aKey, NS_APP_MAIL_50_DIR))
     leafName = MAIL_DIR_50_NAME;
@@ -88,7 +57,7 @@ nsMailDirProvider::GetFile(const char *aKey, PRBool *aPersist,
   else if (!strcmp(aKey, NS_APP_NEWS_50_DIR))
     leafName = NEWS_DIR_50_NAME;
   else if (!strcmp(aKey, NS_APP_MESSENGER_FOLDER_CACHE_50_FILE)) {
-    isDirectory = PR_FALSE;
+    isDirectory = false;
     leafName = MSG_FOLDER_CACHE_DIR_50_NAME;
   }
   else
@@ -110,11 +79,11 @@ nsMailDirProvider::GetFile(const char *aKey, PRBool *aPersist,
   if (NS_FAILED(rv))
     return rv;
 
-  PRBool exists;
+  bool exists;
   if (isDirectory && NS_SUCCEEDED(file->Exists(&exists)) && !exists)
     rv = EnsureDirectory(file);
 
-  *aPersist = PR_TRUE;
+  *aPersist = true;
   file.swap(*aResult);
 
   return rv;
@@ -165,9 +134,9 @@ NS_IMPL_ISUPPORTS1(nsMailDirProvider::AppendingEnumerator,
                    nsISimpleEnumerator)
 
 NS_IMETHODIMP
-nsMailDirProvider::AppendingEnumerator::HasMoreElements(PRBool *aResult)
+nsMailDirProvider::AppendingEnumerator::HasMoreElements(bool *aResult)
 {
-  *aResult = mNext || mNextWithLocale ? PR_TRUE : PR_FALSE;
+  *aResult = mNext || mNextWithLocale ? true : false;
   return NS_OK;
 }
 
@@ -181,15 +150,15 @@ nsMailDirProvider::AppendingEnumerator::GetNext(nsISupports* *aResult)
   if (mNextWithLocale)
   {
     mNext = mNextWithLocale;
-    mNextWithLocale = nsnull;
+    mNextWithLocale = nullptr;
     return NS_OK;
   }
 
-  mNext = nsnull;
+  mNext = nullptr;
 
   // Ignore all errors
 
-  PRBool more;
+  bool more;
   while (NS_SUCCEEDED(mBase->HasMoreElements(&more)) && more) {
     nsCOMPtr<nsISupports> nextbasesupp;
     mBase->GetNext(getter_AddRefs(nextbasesupp));
@@ -203,7 +172,7 @@ nsMailDirProvider::AppendingEnumerator::GetNext(nsISupports* *aResult)
       continue;
 
     mNext->AppendNative(NS_LITERAL_CSTRING("isp"));
-    PRBool exists;
+    bool exists;
     nsresult rv = mNext->Exists(&exists);
     if (NS_SUCCEEDED(rv) && exists)
     {
@@ -213,12 +182,12 @@ nsMailDirProvider::AppendingEnumerator::GetNext(nsISupports* *aResult)
         mNextWithLocale->AppendNative(mLocale);
         rv = mNextWithLocale->Exists(&exists);
         if (NS_FAILED(rv) || !exists)
-          mNextWithLocale = nsnull; // clear out mNextWithLocale, so we don't try to iterate over it
+          mNextWithLocale = nullptr; // clear out mNextWithLocale, so we don't try to iterate over it
       } 
       break;
     }
 
-    mNext = nsnull;
+    mNext = nullptr;
   }
 
   return NS_OK;
@@ -228,9 +197,10 @@ nsMailDirProvider::AppendingEnumerator::AppendingEnumerator
     (nsISimpleEnumerator* aBase) :
   mBase(aBase)
 {
-  nsCOMPtr<nsIXULChromeRegistry> packageRegistry = do_GetService("@mozilla.org/chrome/chrome-registry;1");
+  nsCOMPtr<nsIXULChromeRegistry> packageRegistry =
+    mozilla::services::GetXULChromeRegistryService();
   if (packageRegistry)
     packageRegistry->GetSelectedLocale(NS_LITERAL_CSTRING("global"), mLocale);
   // Initialize mNext to begin
-  GetNext(nsnull);
+  GetNext(nullptr);
 }

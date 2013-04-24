@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Strict-Transport-Security.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Sid Stamm <sid@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
  * This wraps nsSimpleURI so that all calls to it are done on the main thread.
@@ -62,12 +29,15 @@
 // permissions.
 //
 // Each nsSTSHostEntry contains:
-//  - Expiry time
-//  - Deleted flag (boolean, default PR_FALSE)
-//  - Subdomains flag (boolean, default PR_FALSE)
+//  - Expiry time (PRTime, milliseconds)
+//  - Expired flag (bool, default false)
+//  - STS permission (uint32_t, default STS_UNSET)
+//  - Include subdomains flag (bool, default false)
+//
+// Note: the subdomains flag has no meaning if the STS permission is STS_UNSET.
 //
 // The existence of the nsSTSHostEntry implies STS state is set for the given
-// host -- unless the deleted flag is set, in which case not only is the STS
+// host -- unless the expired flag is set, in which case not only is the STS
 // state not set for the host, but any permission actually present in the
 // permission manager should be ignored.
 //
@@ -91,9 +61,10 @@ class nsSTSHostEntry : public PLDHashEntryHdr
     explicit nsSTSHostEntry(const nsSTSHostEntry& toCopy);
 
     nsCString    mHost;
-    PRInt64      mExpireTime;
-    PRPackedBool mDeleted;
-    PRPackedBool mIncludeSubdomains;
+    PRTime       mExpireTime;
+    uint32_t     mStsPermission;
+    bool         mExpired;
+    bool         mIncludeSubdomains;
 
     // Hash methods
     typedef const char* KeyType;
@@ -104,7 +75,7 @@ class nsSTSHostEntry : public PLDHashEntryHdr
       return mHost.get();
     }
 
-    PRBool KeyEquals(KeyTypePointer aKey) const
+    bool KeyEquals(KeyTypePointer aKey) const
     {
       return !strcmp(mHost.get(), aKey);
     }
@@ -116,13 +87,38 @@ class nsSTSHostEntry : public PLDHashEntryHdr
 
     static PLDHashNumber HashKey(KeyTypePointer aKey)
     {
-      return PL_DHashStringKey(nsnull, aKey);
+      return PL_DHashStringKey(nullptr, aKey);
+    }
+
+    void SetExpireTime(PRTime aExpireTime)
+    {
+      mExpireTime = aExpireTime;
+      mExpired = false;
+    }
+
+    bool IsExpired()
+    {
+      // If mExpireTime is 0, this entry never expires (this is the case for
+      // knockout entries).
+      // If we've already expired or we never expire, return early.
+      if (mExpired || mExpireTime == 0) {
+        return mExpired;
+      }
+
+      PRTime now = PR_Now() / PR_USEC_PER_MSEC;
+      if (now > mExpireTime) {
+        mExpired = true;
+      }
+
+      return mExpired;
     }
 
     // force the hashtable to use the copy constructor.
-    enum { ALLOW_MEMMOVE = PR_FALSE };
+    enum { ALLOW_MEMMOVE = false };
 };
 ////////////////////////////////////////////////////////////////////////////////
+
+class nsSTSPreload;
 
 class nsStrictTransportSecurityService : public nsIStrictTransportSecurityService
                                        , public nsIObserver
@@ -138,27 +134,25 @@ public:
 
 private:
   nsresult GetHost(nsIURI *aURI, nsACString &aResult);
-  nsresult SetStsState(nsIURI* aSourceURI, PRInt64 maxage, PRBool includeSubdomains);
+  nsresult GetPrincipalForURI(nsIURI *aURI, nsIPrincipal **aPrincipal);
+  nsresult SetStsState(nsIURI* aSourceURI, int64_t maxage, bool includeSubdomains);
   nsresult ProcessStsHeaderMutating(nsIURI* aSourceURI, char* aHeader);
+  const nsSTSPreload *GetPreloadListEntry(const char *aHost);
 
   // private-mode-preserving permission manager overlay functions
   nsresult AddPermission(nsIURI     *aURI,
                          const char *aType,
-                         PRUint32   aPermission,
-                         PRUint32   aExpireType,
-                         PRInt64    aExpireTime);
+                         uint32_t   aPermission,
+                         uint32_t   aExpireType,
+                         int64_t    aExpireTime);
   nsresult RemovePermission(const nsCString  &aHost,
                             const char       *aType);
-  nsresult TestPermission(nsIURI     *aURI,
-                          const char *aType,
-                          PRUint32   *aPermission,
-                          PRBool     testExact);
 
   // cached services
   nsCOMPtr<nsIPermissionManager> mPermMgr;
   nsCOMPtr<nsIObserverService> mObserverService;
 
-  PRBool mInPrivateMode;
+  bool mInPrivateMode;
   nsTHashtable<nsSTSHostEntry> mPrivateModeHostTable;
 };
 

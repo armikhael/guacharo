@@ -1,43 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-2002
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Mark Smith <mcs@netscape.com>
- *   Michael Hein <mhein@sun.com>
- *   Dan Mosedale <dmose@netscape.com>
- *   Seth Spitzer <sspitzer@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Only build this code if PSM is being built also
 //
@@ -54,6 +17,8 @@
 #include "plstr.h"
 #include "ldap.h"
 #include "ldappr.h"
+#include "nsComponentManagerUtils.h"
+#include "nsServiceManagerUtils.h"
 
 // LDAP per-session data structure.
 //
@@ -77,7 +42,7 @@ nsLDAPSSLFreeSocketClosure(nsLDAPSSLSocketClosure **aClosure)
 {
     if (aClosure && *aClosure) {
 	nsMemory::Free(*aClosure);
-	*aClosure = nsnull;
+	*aClosure = nullptr;
     }
 }
 
@@ -128,7 +93,7 @@ nsLDAPSSLConnect(const char *hostlist, int defport, int timeout,
 {
     PRLDAPSocketInfo socketInfo;
     PRLDAPSessionInfo sessionInfo;
-    nsLDAPSSLSocketClosure *socketClosure = nsnull;
+    nsLDAPSSLSocketClosure *socketClosure = nullptr;
     nsLDAPSSLSessionClosure *sessionClosure;
     int	intfd = -1;
     nsCOMPtr <nsISupports> securityInfo;
@@ -149,7 +114,7 @@ nsLDAPSSLConnect(const char *hostlist, int defport, int timeout,
     //
     memset(&sessionInfo, 0, sizeof(sessionInfo));
     sessionInfo.seinfo_size = PRLDAP_SESSIONINFO_SIZE;
-    if (prldap_get_session_info(nsnull, sessionarg, &sessionInfo) 
+    if (prldap_get_session_info(nullptr, sessionarg, &sessionInfo) 
 	!= LDAP_SUCCESS) {
 	NS_ERROR("nsLDAPSSLConnect(): unable to get session info");
         return -1;
@@ -211,7 +176,7 @@ nsLDAPSSLConnect(const char *hostlist, int defport, int timeout,
     //
     rv = tlsSocketProvider->AddToSocket(PR_AF_INET,
                                         sessionClosure->hostname, defport,
-                                        nsnull, 0, 0, socketInfo.soinfo_prfd,
+                                        nullptr, 0, 0, socketInfo.soinfo_prfd,
                                         getter_AddRefs(securityInfo));
     if (NS_FAILED(rv)) {
 	NS_ERROR("nsLDAPSSLConnect(): unable to add SSL layer to socket");
@@ -270,13 +235,13 @@ nsLDAPSSLFreeSessionClosure(nsLDAPSSLSessionClosure **aSessionClosure)
 	//
 	if ( (*aSessionClosure)->hostname ) {
 	    PL_strfree((*aSessionClosure)->hostname);
-	    (*aSessionClosure)->hostname = nsnull;
+	    (*aSessionClosure)->hostname = nullptr;
 	}
 
 	// free the structure itself
 	//
 	nsMemory::Free(*aSessionClosure);
-	*aSessionClosure = nsnull;
+	*aSessionClosure = nullptr;
     }
 }
 
@@ -292,7 +257,7 @@ nsLDAPSSLDisposeHandle(LDAP *ld, struct lextiof_session_private *sessionarg)
 
     memset(&sessionInfo, 0, sizeof(sessionInfo));
     sessionInfo.seinfo_size = PRLDAP_SESSIONINFO_SIZE;
-    if (prldap_get_session_info(ld, nsnull, &sessionInfo) == LDAP_SUCCESS) {
+    if (prldap_get_session_info(ld, nullptr, &sessionInfo) == LDAP_SUCCESS) {
 	sessionClosure = reinterpret_cast<nsLDAPSSLSessionClosure *>
                                   (sessionInfo.seinfo_appdata);
 	disposehdl_fn = sessionClosure->realDisposeHandle;
@@ -364,7 +329,7 @@ nsLDAPInstallSSL( LDAP *ld, const char *aHostName)
     sessionInfo.seinfo_size = PRLDAP_SESSIONINFO_SIZE;
     sessionInfo.seinfo_appdata = reinterpret_cast<prldap_session_private *>
                                                  (sessionClosure);
-    if (prldap_set_session_info(ld, nsnull, &sessionInfo) != LDAP_SUCCESS) {
+    if (prldap_set_session_info(ld, nullptr, &sessionInfo) != LDAP_SUCCESS) {
 	NS_ERROR("nsLDAPInstallSSL(): error setting prldap session info");
 	nsMemory::Free(sessionClosure);
 	return NS_ERROR_UNEXPECTED;

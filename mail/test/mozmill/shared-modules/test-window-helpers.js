@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Mail Client.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Andrew Sutherland <asutherland@asutherland.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var Ci = Components.interfaces;
 var Cc = Components.classes;
@@ -47,8 +14,11 @@ var elib = {};
 Cu.import('resource://mozmill/modules/elementslib.js', elib);
 var frame = {};
 Cu.import('resource://mozmill/modules/frame.js', frame);
+var utils = {};
+Cu.import('resource://mozmill/modules/utils.js', utils);
 
 Cu.import('resource:///modules/iteratorUtils.jsm');
+Cu.import('resource://gre/modules/NetUtil.jsm');
 
 const MODULE_NAME = 'window-helpers';
 
@@ -125,6 +95,9 @@ function installInto(module) {
   module.close_window = close_window;
   module.wait_for_existing_window = wait_for_existing_window;
 
+  module.wait_for_browser_load = wait_for_browser_load;
+  module.wait_for_frame_load = wait_for_frame_load;
+
   module.plan_for_observable_event = plan_for_observable_event;
   module.wait_for_observable_event = wait_for_observable_event;
 
@@ -167,7 +140,15 @@ function getWindowTypeForXulWindow(aXULWindow, aBusyOk) {
   // finally, we can now have a windowtype!
   let windowType = outerDoc.documentElement.getAttribute("windowtype") ||
                    outerDoc.documentElement.getAttribute("id");
-  return windowType;
+
+  if (windowType)
+    return windowType;
+
+  // As a last resort, use the name given to the DOM window.
+  let domWindow = aXULWindow.docShell.QueryInterface(Ci.nsIInterfaceRequestor)
+                                     .getInterface(Ci.nsIDOMWindow);
+
+  return domWindow.name;
 }
 
 /**
@@ -275,14 +256,14 @@ var WindowWatcher = {
    */
   waitForWindowOpen: function WindowWatcher_waitForWindowOpen(aWindowType) {
     this.waitingForOpen = aWindowType;
-    if (!controller.waitForEval(
-          'subject.monitorizeOpen()',
-          this._firstWindowOpened ? WINDOW_OPEN_TIMEOUT_MS
-            : FIRST_WINDOW_EVER_TIMEOUT_MS,
-          this._firstWindowOpened ? WINDOW_OPEN_CHECK_INTERVAL_MS
-            : FIRST_WINDOW_CHECK_INTERVAL_MS,
-          this))
-      throw new Error("Timed out waiting for window open!");
+    utils.waitFor(function () this.monitorizeOpen(),
+                  "Timed out waiting for window open!",
+                  this._firstWindowOpened ? WINDOW_OPEN_TIMEOUT_MS
+                    : FIRST_WINDOW_EVER_TIMEOUT_MS,
+                  this._firstWindowOpened ? WINDOW_OPEN_CHECK_INTERVAL_MS
+                    : FIRST_WINDOW_CHECK_INTERVAL_MS,
+                  this);
+
     this.waitingForOpen = null;
     let xulWindow = this.waitingList[aWindowType];
     let domWindow = xulWindow.docShell.QueryInterface(Ci.nsIInterfaceRequestor)
@@ -301,8 +282,8 @@ var WindowWatcher = {
 
   /**
    * Because the modal dialog spins its own event loop, the mozmill idiom of
-   *  spinning your own event-loop as performed by waitForEval is no good.  We
-   *  use this timer to generate our events so that we can have a waitForEval
+   *  spinning your own event-loop as performed by waitFor is no good.  We use
+   *  this timer to generate our events so that we can have a waitFor
    *  equivalent.
    *
    * We only have one timer right now because modal dialogs that spawn modal
@@ -377,10 +358,11 @@ var WindowWatcher = {
     if (this.subTestFunc == null)
       return;
     // spin the event loop until we the window has come and gone.
-    if (!controller.waitForEval(
-           'subject.waitingForOpen == null && subject.monitorizeClose()',
-            aTimeout || WINDOW_OPEN_TIMEOUT_MS, WINDOW_OPEN_CHECK_INTERVAL_MS, this))
-      throw new Error("Timeout waiting for modal dialog to open.");
+    utils.waitFor(function () (this.waitingForOpen == null &&
+                               this.monitorizeClose()),
+                  "Timeout waiting for modal dialog to open.",
+                  aTimeout || WINDOW_OPEN_TIMEOUT_MS,
+                  WINDOW_OPEN_CHECK_INTERVAL_MS, this);
     this.waitingForClose = null;
   },
 
@@ -398,10 +380,9 @@ var WindowWatcher = {
    */
   waitingForClose: null,
   waitForWindowClose: function WindowWatcher_waitForWindowClose() {
-    if (!controller.waitForEval('subject.monitorizeClose()',
-                                WINDOW_CLOSE_TIMEOUT_MS,
-                                WINDOW_CLOSE_CHECK_INTERVAL_MS, this))
-      throw new Error("Timeout waiting for window to close!");
+    utils.waitFor(function () this.monitorizeClose(),
+                  "Timeout waiting for window to close!",
+      WINDOW_CLOSE_TIMEOUT_MS, WINDOW_CLOSE_CHECK_INTERVAL_MS, this);
     let didDisappear = this.waitingList[this.waitingForClose] == null;
     delete this.waitingList[windowType];
     let windowType = this.waitingForClose;
@@ -654,6 +635,82 @@ function close_window(aController) {
   wait_for_window_close();
 }
 
+/**
+ * Given a <browser>, waits for it to completely load.
+ *
+ * @param aBrowser The <browser> element to wait for.
+ * @param aURLOrPredicate The URL that should be loaded (string) or a predicate
+ *                        for the URL (function).
+ * @returns The browser's content window wrapped in a MozMillController.
+ */
+function wait_for_browser_load(aBrowser, aURLOrPredicate) {
+  // aBrowser has all the fields we need already.
+  return _wait_for_generic_load(aBrowser, aURLOrPredicate);
+}
+
+/**
+ * Given an HTML <frame> or <iframe>, waits for it to completely load.
+ *
+ * @param aFrame The element to wait for.
+ * @param aURLOrPredicate The URL that should be loaded (string) or a predicate
+ *                        for the URL (function).
+ * @returns The frame wrapped in a MozMillController.
+ */
+function wait_for_frame_load(aFrame, aURLOrPredicate) {
+  let details = {
+    // Not sure whether all of these really need to be getters, but this is the
+    // safest thing to do.
+    get webProgress () (aFrame.contentWindow.QueryInterface(Ci.nsIInterfaceRequestor)
+                              .getInterface(Ci.nsIWebNavigation)
+                              .QueryInterface(Ci.nsIWebProgress)),
+    get currentURI () (NetUtil.newURI(aFrame.contentDocument.location)),
+    get contentWindow () (aFrame.contentWindow),
+  };
+  return _wait_for_generic_load(details, aURLOrPredicate);
+}
+
+/**
+ * Generic function to wait for some sort of document to load. We expect
+ * aDetails to have three fields:
+ * - webProgress: an nsIWebProgress associated with the contentWindow.
+ * - currentURI: the currently loaded page (nsIURI). 
+ * - contentWindow: the content window.
+ */
+function _wait_for_generic_load(aDetails, aURLOrPredicate) {
+  let predicate;
+  if (typeof aURLOrPredicate == "string") {
+    let expectedURL = NetUtil.newURI(aURLOrPredicate);
+    predicate = function (url) (expectedURL.equals(url));
+  }
+  else {
+    predicate = aURLOrPredicate;
+  }
+
+  function isLoadedChecker() {
+    if (aDetails.webProgress.isLoadingDocument !== false)
+      return false;
+
+    return predicate(aDetails.currentURI);
+  }
+
+  try {
+    utils.waitFor(isLoadedChecker);
+  } catch (e if e instanceof utils.TimeoutError) {
+    mark_failure(["Timeout waiting for content page to load. Current URL is:",
+                  aDetails.currentURI.spec]);
+  }
+
+  // Lie to mozmill to convince it to not explode because these frames never
+  // get a mozmillDocumentLoaded attribute (bug 666438).
+  let contentWindow = aDetails.contentWindow;
+  let windowId = contentWindow.QueryInterface(Ci.nsIInterfaceRequestor)
+                              .getInterface(Ci.nsIDOMWindowUtils)
+                              .outerWindowID;
+  controller.windowMap.update(windowId, "loaded", true);
+  let cwc = new controller.MozMillController(contentWindow);
+  return augment_controller(cwc);
+}
+
 
 let obsService = Cc["@mozilla.org/observer-service;1"]
                    .getService(Ci.nsIObserverService);
@@ -688,11 +745,8 @@ function wait_for_observable_event(aTopic) {
     function areWeThereYet() {
       return observationSaw[aTopic];
     }
-    if (!controller.waitForEval(
-          'subject()',
-          3000, 50,
-          areWeThereYet))
-      throw new Error("Timed out waiting for notification: " + aTopic);
+    utils.waitFor(areWeThereYet,
+                  "Timed out waiting for notification: " + aTopic);
   }
   finally {
     obsService.removeObserver(observationWaitFuncs[aTopic], aTopic);
@@ -850,10 +904,9 @@ var AugmentEverybodyWith = {
       if (aRootPopup.state == "closed")
         aRootPopup.openPopup(null, "", 0, 0, true, true);
       if (aRootPopup.state != "open") { // handle "showing"
-        if (!controller.waitForEval("subject.state == 'open'", 1000, 50,
-                                    aRootPopup)) {
-          throw new Error("Popup never opened!");
-        }
+        utils.waitFor(function() { return aRootPopup.state == "open"; },
+                      "Popup never opened! id=" + aRootPopup.id +
+                      ", state=" + aRootPopup.state, 5000, 50);
       }
       // These popups sadly do not close themselves, so we need to keep track
       //  of them so we can make sure they end up closed.
@@ -889,19 +942,19 @@ var AugmentEverybodyWith = {
         if ("menupopup" in matchingNode) {
           curPopup = matchingNode.menupopup;
           closeStack.push(curPopup);
-          if (!controller.waitForEval("subject.state == 'open'", 1000, 50,
-                                      curPopup)) {
-            throw new Error("Popup never opened at action depth: " + iAction);
-          }
+          utils.waitFor(function() { return curPopup.state == "open"; },
+                        "Popup never opened at action depth " + iAction +
+                        "; id=" + curPopup.id + ", state=" + curPopup.state,
+                        5000, 50);
         }
       }
 
       while (closeStack.length) {
         curPopup = closeStack.pop();
         this.keypress(new elib.Elem(curPopup), "VK_ESCAPE", {});
-        if (!controller.waitForEval("subject.state == 'closed'", 1000, 50,
-                                    curPopup))
-          throw new Error("Popup did not close!");
+        utils.waitFor(function() { return curPopup.state == "closed"; },
+                      "Popup did not close! id=" + curPopup.id +
+                      ", state=" +  curPopup.state, 5000, 50);
       }
     },
 
@@ -1163,7 +1216,7 @@ var PerWindowTypeAugmentations = {
         return this.folderDisplay.view.dbView;
       }
     }
-  }
+  },
 };
 
 function _augment_helper(aController, aAugmentDef) {
@@ -1640,22 +1693,16 @@ function screenshotToDataURL(aWindow) {
   // (We may need to do this for popups...)
   /*
   // - find all the sub-windows and render them
-  function isVisible(aElem) {
-    if (aElem.hidden || aElem.collapsed)
-      return false;
-    let parent = aElem.parentNode;
-    if (parent == null)
-      return true;
-    if (("selectedPanel" in parent) &&
-        parent.selectedPanel != aElem)
-      return false;
-    return isVisible(parent);
-  }
+
+  // function isVisible(aElem) has been moved to test-dom-helpers.js and
+  // renamed into element_visible_recursive(). If you resurrect the following
+  // function subrenderCandidates, then make sure that you import
+  // test-dom-helpers.js.
 
   function subrenderCandidates(aElements) {
     for (let i = 0; i < aElements.length; i++) {
       let elem = aElements[i];
-      if (isVisible(elem)) {
+      if (element_visible_recursive(elem)) {
         let rect = elem.getBoundingClientRect();
         ctx.save();
         ctx.translate(rect.left, rect.top);

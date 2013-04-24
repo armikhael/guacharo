@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef _nsMsgSendLater_H_
 #define _nsMsgSendLater_H_
@@ -92,38 +60,38 @@ public:
   NS_DECL_NSIMSGSHUTDOWNTASK
 
   // Methods needed for implementing interface...
-  nsresult                  StartNextMailFileSend();
+  nsresult                  StartNextMailFileSend(nsresult prevStatus);
   nsresult                  CompleteMailFileSend();
 
   nsresult                  DeleteCurrentMessage();
   nsresult                  SetOrigMsgDisposition();
   // Necessary for creating a valid list of recipients
   nsresult                  BuildHeaders();
-  nsresult                  DeliverQueuedLine(char *line, PRInt32 length);
-  nsresult                  RebufferLeftovers(char *startBuf,  PRUint32 aLen);
-  nsresult                  BuildNewBuffer(const char* aBuf, PRUint32 aCount, PRUint32 *totalBufSize);
+  nsresult                  DeliverQueuedLine(char *line, int32_t length);
+  nsresult                  RebufferLeftovers(char *startBuf,  uint32_t aLen);
+  nsresult                  BuildNewBuffer(const char* aBuf, uint32_t aCount, uint32_t *totalBufSize);
 
   // methods for listener array processing...
-  void NotifyListenersOnStartSending(PRUint32 aTotalMessageCount);
-  void NotifyListenersOnMessageStartSending(PRUint32 aCurrentMessage,
-                                            PRUint32 aTotalMessage,
+  void NotifyListenersOnStartSending(uint32_t aTotalMessageCount);
+  void NotifyListenersOnMessageStartSending(uint32_t aCurrentMessage,
+                                            uint32_t aTotalMessage,
                                             nsIMsgIdentity *aIdentity);
-  void NotifyListenersOnProgress(PRUint32 aCurrentMessage,
-                                 PRUint32 aTotalMessage,
-                                 PRUint32 aSendPercent,
-                                 PRUint32 aCopyPercent);
-  void NotifyListenersOnMessageSendError(PRUint32 aCurrentMessage,
+  void NotifyListenersOnProgress(uint32_t aCurrentMessage,
+                                 uint32_t aTotalMessage,
+                                 uint32_t aSendPercent,
+                                 uint32_t aCopyPercent);
+  void NotifyListenersOnMessageSendError(uint32_t aCurrentMessage,
                                          nsresult aStatus,
                                          const PRUnichar *aMsg);
   void EndSendMessages(nsresult aStatus, const PRUnichar *aMsg, 
-                       PRUint32 aTotalTried, PRUint32 aSuccessful);
+                       uint32_t aTotalTried, uint32_t aSuccessful);
 
-  PRBool OnSendStepFinished(nsresult aStatus);
+  bool OnSendStepFinished(nsresult aStatus);
   void OnCopyStepFinished(nsresult aStatus);
 
   // counters and things for enumeration 
-  PRUint32                  mTotalSentSuccessfully;
-  PRUint32                  mTotalSendCount;
+  uint32_t                  mTotalSentSuccessfully;
+  uint32_t                  mTotalSendCount;
   nsCOMArray<nsIMsgDBHdr> mMessagesToSend;
   nsCOMPtr<nsISimpleEnumerator> mEnumerator;
   nsCOMPtr<nsIMsgFolder>    mMessageFolder;
@@ -133,13 +101,13 @@ public:
 private:
   nsresult GetIdentityFromKey(const char *aKey, nsIMsgIdentity **aIdentity);
   nsresult ReparseDBIfNeeded(nsIUrlListener *aListener);
-  nsresult InternalSendMessages(PRBool aUserInitiated,
+  nsresult InternalSendMessages(bool aUserInitiated,
                                 nsIMsgIdentity *aIdentity);
 
   nsTObserverArray<nsCOMPtr<nsIMsgSendLaterListener> > mListenerArray;
   nsCOMPtr<nsIMsgDBHdr> mMessage;
   nsCOMPtr<nsITimer> mTimer;
-  PRBool mTimerSet;
+  bool mTimerSet;
   nsCOMPtr<nsIUrlListener> mShutdownListener;
 
   //
@@ -157,20 +125,20 @@ private:
   char                      *m_newsgroups;
   char                      *m_newshost;
   char                      *m_headers;
-  PRInt32                   m_flags;
-  PRInt32                   m_headersFP;
-  PRBool                    m_inhead;
-  PRInt32                   m_headersPosition;
-  PRInt32                   m_bytesRead;
-  PRInt32                   m_position;
-  PRInt32                   m_flagsPosition;
-  PRInt32                   m_headersSize;
+  int32_t                   m_flags;
+  int32_t                   m_headersFP;
+  bool                      m_inhead;
+  int32_t                   m_headersPosition;
+  int32_t                   m_bytesRead;
+  int32_t                   m_position;
+  int32_t                   m_flagsPosition;
+  int32_t                   m_headersSize;
   char                      *mLeftoverBuffer;
   char                      *mIdentityKey;
   char                      *mAccountKey;
 
-  PRBool mSendingMessages;
-  PRBool mUserInitiated;
+  bool mSendingMessages;
+  bool mUserInitiated;
   nsCOMPtr<nsIMsgIdentity> mIdentity;
 };
 

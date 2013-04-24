@@ -1,64 +1,31 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Daniel Glazman <glazman@netscape.com>
- *   Ms2ger <ms2ger@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "mozilla/Util.h"
+
 #include "nscore.h"
 #include "nsCOMPtr.h"
 #include "nsIDOMHTMLBodyElement.h"
-#include "nsIDOMEventTarget.h"
 #include "nsGenericHTMLElement.h"
 #include "nsGkAtoms.h"
 #include "nsStyleConsts.h"
 #include "nsPresContext.h"
 #include "nsIPresShell.h"
 #include "nsIDocument.h"
-#include "nsIHTMLDocument.h"
 #include "nsHTMLStyleSheet.h"
-#include "nsIContentViewer.h"
 #include "nsIMarkupDocumentViewer.h"
 #include "nsMappedAttributes.h"
 #include "nsRuleData.h"
-#include "nsIFrame.h"
 #include "nsIDocShell.h"
 #include "nsIEditorDocShell.h"
-#include "nsCOMPtr.h"
 #include "nsRuleWalker.h"
+#include "jsapi.h"
 
 //----------------------------------------------------------------------
+
+using namespace mozilla;
 
 class nsHTMLBodyElement;
 
@@ -72,7 +39,7 @@ public:
   // nsIStyleRule interface
   virtual void MapRuleInfoInto(nsRuleData* aRuleData);
 #ifdef DEBUG
-  virtual void List(FILE* out = stdout, PRInt32 aIndent = 0) const;
+  virtual void List(FILE* out = stdout, int32_t aIndent = 0) const;
 #endif
 
   nsHTMLBodyElement*  mPart;  // not ref-counted, cleared by content 
@@ -105,18 +72,29 @@ public:
   // nsIDOMHTMLBodyElement
   NS_DECL_NSIDOMHTMLBODYELEMENT
 
-  virtual PRBool ParseAttribute(PRInt32 aNamespaceID,
-                                nsIAtom* aAttribute,
-                                const nsAString& aValue,
-                                nsAttrValue& aResult);
-  virtual void UnbindFromTree(PRBool aDeep = PR_TRUE,
-                              PRBool aNullParent = PR_TRUE);
+  // Event listener stuff; we need to declare only the ones we need to
+  // forward to window that don't come from nsIDOMHTMLBodyElement.
+#define EVENT(name_, id_, type_, struct_) /* nothing; handled by the shim */
+#define FORWARDED_EVENT(name_, id_, type_, struct_)               \
+    NS_IMETHOD GetOn##name_(JSContext *cx, jsval *vp);            \
+    NS_IMETHOD SetOn##name_(JSContext *cx, const jsval &v);
+#include "nsEventNameList.h"
+#undef FORWARDED_EVENT
+#undef EVENT
+
+  virtual bool ParseAttribute(int32_t aNamespaceID,
+                              nsIAtom* aAttribute,
+                              const nsAString& aValue,
+                              nsAttrValue& aResult);
+  virtual void UnbindFromTree(bool aDeep = true,
+                              bool aNullParent = true);
   virtual nsMapRuleToAttributesFunc GetAttributeMappingFunction() const;
   NS_IMETHOD WalkContentStyleRules(nsRuleWalker* aRuleWalker);
-  NS_IMETHOD_(PRBool) IsAttributeMapped(const nsIAtom* aAttribute) const;
+  NS_IMETHOD_(bool) IsAttributeMapped(const nsIAtom* aAttribute) const;
   virtual already_AddRefed<nsIEditor> GetAssociatedEditor();
   virtual nsresult Clone(nsINodeInfo *aNodeInfo, nsINode **aResult) const;
   virtual nsXPCClassInfo* GetClassInfo();
+  virtual nsIDOMNode* AsDOMNode() { return this; }
 private:
   nsresult GetColorHelper(nsIAtom* aAtom, nsAString& aColor);
 
@@ -143,12 +121,12 @@ BodyRule::MapRuleInfoInto(nsRuleData* aData)
   if (!(aData->mSIDs & NS_STYLE_INHERIT_BIT(Margin)) || !mPart)
     return; // We only care about margins.
 
-  PRInt32 bodyMarginWidth  = -1;
-  PRInt32 bodyMarginHeight = -1;
-  PRInt32 bodyTopMargin = -1;
-  PRInt32 bodyBottomMargin = -1;
-  PRInt32 bodyLeftMargin = -1;
-  PRInt32 bodyRightMargin = -1;
+  int32_t bodyMarginWidth  = -1;
+  int32_t bodyMarginHeight = -1;
+  int32_t bodyTopMargin = -1;
+  int32_t bodyBottomMargin = -1;
+  int32_t bodyLeftMargin = -1;
+  int32_t bodyRightMargin = -1;
 
   // check the mode (fortunately, the ruleData has a presContext for us to use!)
   NS_ASSERTION(aData->mPresContext, "null presContext in ruleNode was unexpected");
@@ -274,7 +252,7 @@ BodyRule::MapRuleInfoInto(nsRuleData* aData)
 
 #ifdef DEBUG
 /* virtual */ void
-BodyRule::List(FILE* out, PRInt32 aIndent) const
+BodyRule::List(FILE* out, int32_t aIndent) const
 {
 }
 #endif
@@ -287,14 +265,14 @@ NS_IMPL_NS_NEW_HTML_ELEMENT(Body)
 
 nsHTMLBodyElement::nsHTMLBodyElement(already_AddRefed<nsINodeInfo> aNodeInfo)
   : nsGenericHTMLElement(aNodeInfo),
-    mContentStyleRule(nsnull)
+    mContentStyleRule(nullptr)
 {
 }
 
 nsHTMLBodyElement::~nsHTMLBodyElement()
 {
   if (mContentStyleRule) {
-    mContentStyleRule->mPart = nsnull;
+    mContentStyleRule->mPart = nullptr;
     NS_RELEASE(mContentStyleRule);
   }
 }
@@ -322,8 +300,8 @@ NS_IMPL_STRING_ATTR(nsHTMLBodyElement, Link, link)
 NS_IMPL_STRING_ATTR(nsHTMLBodyElement, Text, text)
 NS_IMPL_STRING_ATTR(nsHTMLBodyElement, BgColor, bgcolor)
 
-PRBool
-nsHTMLBodyElement::ParseAttribute(PRInt32 aNamespaceID,
+bool
+nsHTMLBodyElement::ParseAttribute(int32_t aNamespaceID,
                                   nsIAtom* aAttribute,
                                   const nsAString& aValue,
                                   nsAttrValue& aResult)
@@ -346,15 +324,18 @@ nsHTMLBodyElement::ParseAttribute(PRInt32 aNamespaceID,
     }
   }
 
-  return nsGenericHTMLElement::ParseAttribute(aNamespaceID, aAttribute, aValue,
+  return nsGenericHTMLElement::ParseBackgroundAttribute(aNamespaceID,
+                                                        aAttribute, aValue,
+                                                        aResult) ||
+         nsGenericHTMLElement::ParseAttribute(aNamespaceID, aAttribute, aValue,
                                               aResult);
 }
 
 void
-nsHTMLBodyElement::UnbindFromTree(PRBool aDeep, PRBool aNullParent)
+nsHTMLBodyElement::UnbindFromTree(bool aDeep, bool aNullParent)
 {
   if (mContentStyleRule) {
-    mContentStyleRule->mPart = nsnull;
+    mContentStyleRule->mPart = nullptr;
 
     // destroy old style rule
     NS_RELEASE(mContentStyleRule);
@@ -423,7 +404,7 @@ nsHTMLBodyElement::WalkContentStyleRules(nsRuleWalker* aRuleWalker)
   nsGenericHTMLElement::WalkContentStyleRules(aRuleWalker);
 
   if (!mContentStyleRule && IsInDoc()) {
-    // XXXbz should this use GetOwnerDoc() or GetCurrentDoc()?
+    // XXXbz should this use OwnerDoc() or GetCurrentDoc()?
     // sXBL/XBL2 issue!
     mContentStyleRule = new BodyRule(this);
     NS_IF_ADDREF(mContentStyleRule);
@@ -434,7 +415,7 @@ nsHTMLBodyElement::WalkContentStyleRules(nsRuleWalker* aRuleWalker)
   return NS_OK;
 }
 
-NS_IMETHODIMP_(PRBool)
+NS_IMETHODIMP_(bool)
 nsHTMLBodyElement::IsAttributeMapped(const nsIAtom* aAttribute) const
 {
   static const MappedAttributeEntry attributes[] = {
@@ -448,7 +429,7 @@ nsHTMLBodyElement::IsAttributeMapped(const nsIAtom* aAttribute) const
     // dynamic changes...
     { &nsGkAtoms::marginwidth },
     { &nsGkAtoms::marginheight },
-    { nsnull },
+    { nullptr },
   };
 
   static const MappedAttributeEntry* const map[] = {
@@ -457,34 +438,85 @@ nsHTMLBodyElement::IsAttributeMapped(const nsIAtom* aAttribute) const
     sBackgroundAttributeMap,
   };
 
-  return FindAttributeDependence(aAttribute, map, NS_ARRAY_LENGTH(map));
+  return FindAttributeDependence(aAttribute, map);
 }
 
 already_AddRefed<nsIEditor>
 nsHTMLBodyElement::GetAssociatedEditor()
 {
-  nsIEditor* editor = nsnull;
+  nsIEditor* editor = nullptr;
   if (NS_SUCCEEDED(GetEditorInternal(&editor)) && editor) {
     return editor;
   }
 
   // Make sure this is the actual body of the document
   if (!IsCurrentBodyElement()) {
-    return nsnull;
+    return nullptr;
   }
 
   // For designmode, try to get document's editor
   nsPresContext* presContext = GetPresContext();
   if (!presContext) {
-    return nsnull;
+    return nullptr;
   }
 
   nsCOMPtr<nsISupports> container = presContext->GetContainer();
   nsCOMPtr<nsIEditorDocShell> editorDocShell = do_QueryInterface(container);
   if (!editorDocShell) {
-    return nsnull;
+    return nullptr;
   }
 
   editorDocShell->GetEditor(&editor);
   return editor;
 }
+
+// Event listener stuff
+// FIXME (https://bugzilla.mozilla.org/show_bug.cgi?id=431767)
+// nsDocument::GetInnerWindow can return an outer window in some
+// cases.  We don't want to stick an event listener on an outer
+// window, so bail if it does.  See also similar code in
+// nsGenericHTMLElement::GetEventListenerManagerForAttr.
+#define EVENT(name_, id_, type_, struct_) /* nothing; handled by the superclass */
+#define FORWARDED_EVENT(name_, id_, type_, struct_)                 \
+  NS_IMETHODIMP nsHTMLBodyElement::GetOn##name_(JSContext *cx,      \
+                                           jsval *vp) {             \
+    /* XXXbz note to self: add tests for this! */                   \
+    nsPIDOMWindow* win = OwnerDoc()->GetInnerWindow();           \
+    if (win && win->IsInnerWindow()) {                              \
+      nsCOMPtr<nsIInlineEventHandlers> ev = do_QueryInterface(win); \
+      return ev->GetOn##name_(cx, vp);                              \
+    }                                                               \
+    *vp = JSVAL_NULL;                                               \
+    return NS_OK;                                                   \
+  }                                                                 \
+  NS_IMETHODIMP nsHTMLBodyElement::SetOn##name_(JSContext *cx,      \
+                                           const jsval &v) {        \
+    nsPIDOMWindow* win = OwnerDoc()->GetInnerWindow();           \
+    if (win && win->IsInnerWindow()) {                              \
+      nsCOMPtr<nsIInlineEventHandlers> ev = do_QueryInterface(win); \
+      return ev->SetOn##name_(cx, v);                               \
+    }                                                               \
+    return NS_OK;                                                   \
+  }
+#define WINDOW_EVENT(name_, id_, type_, struct_)                  \
+  NS_IMETHODIMP nsHTMLBodyElement::GetOn##name_(JSContext *cx,    \
+                                                jsval *vp) {      \
+    nsPIDOMWindow* win = OwnerDoc()->GetInnerWindow();         \
+    if (win && win->IsInnerWindow()) {                            \
+      return win->GetOn##name_(cx, vp);                           \
+    }                                                             \
+    *vp = JSVAL_NULL;                                             \
+    return NS_OK;                                                 \
+  }                                                               \
+  NS_IMETHODIMP nsHTMLBodyElement::SetOn##name_(JSContext *cx,    \
+                                                const jsval &v) { \
+    nsPIDOMWindow* win = OwnerDoc()->GetInnerWindow();         \
+    if (win && win->IsInnerWindow()) {                            \
+      return win->SetOn##name_(cx, v);                            \
+    }                                                             \
+    return NS_OK;                                                 \
+  }
+#include "nsEventNameList.h"
+#undef WINDOW_EVENT
+#undef FORWARDED_EVENT
+#undef EVENT

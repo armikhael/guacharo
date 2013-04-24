@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Don Bragg <dbragg@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*****************************************************************************
  * 
@@ -44,6 +10,8 @@
  *
  *****************************************************************************
  */
+
+#include "mozilla/Util.h"
 
 #include "nsCOMPtr.h"
 #include "nsAutoPtr.h"
@@ -96,15 +64,16 @@ NS_IMPL_THREADSAFE_ISUPPORTS2(nsProcess, nsIProcess,
 
 //Constructor
 nsProcess::nsProcess()
-    : mThread(nsnull)
+    : mThread(nullptr)
     , mLock("nsProcess.mLock")
-    , mShutdown(PR_FALSE)
+    , mShutdown(false)
+    , mBlocking(false)
     , mPid(-1)
-    , mObserver(nsnull)
-    , mWeakObserver(nsnull)
+    , mObserver(nullptr)
+    , mWeakObserver(nullptr)
     , mExitValue(-1)
 #if !defined(XP_MACOSX)
-    , mProcess(nsnull)
+    , mProcess(nullptr)
 #endif
 {
 }
@@ -121,7 +90,7 @@ nsProcess::Init(nsIFile* executable)
         return NS_ERROR_ALREADY_INITIALIZED;
 
     NS_ENSURE_ARG_POINTER(executable);
-    PRBool isFile;
+    bool isFile;
 
     //First make sure the file exists
     nsresult rv = executable->IsFile(&isFile);
@@ -244,7 +213,7 @@ static int assembleCmdLine(char *const *argv, PRUnichar **wideCmdLine,
     } 
 
     *p = '\0';
-    PRInt32 numChars = MultiByteToWideChar(codePage, 0, cmdLine, -1, NULL, 0); 
+    int32_t numChars = MultiByteToWideChar(codePage, 0, cmdLine, -1, NULL, 0); 
     *wideCmdLine = (PRUnichar *) PR_MALLOC(numChars*sizeof(PRUnichar));
     MultiByteToWideChar(codePage, 0, cmdLine, -1, *wideCmdLine, numChars); 
     PR_Free(cmdLine);
@@ -255,6 +224,10 @@ static int assembleCmdLine(char *const *argv, PRUnichar **wideCmdLine,
 void PR_CALLBACK nsProcess::Monitor(void *arg)
 {
     nsRefPtr<nsProcess> process = dont_AddRef(static_cast<nsProcess*>(arg));
+
+    if (!process->mBlocking)
+        PR_SetCurrentThreadName("RunProcess");
+
 #if defined(PROCESSMODEL_WINAPI)
     DWORD dwRetVal;
     unsigned long exitCode = -1;
@@ -287,7 +260,7 @@ void PR_CALLBACK nsProcess::Monitor(void *arg)
         }
     }
 #else
-    PRInt32 exitCode = -1;
+    int32_t exitCode = -1;
     if (PR_WaitProcess(process->mProcess, &exitCode) != PR_SUCCESS)
         exitCode = -1;
 #endif
@@ -296,7 +269,7 @@ void PR_CALLBACK nsProcess::Monitor(void *arg)
     {
         MutexAutoLock lock(process->mLock);
 #if !defined(XP_MACOSX)
-        process->mProcess = nsnull;
+        process->mProcess = nullptr;
 #endif
         process->mExitValue = exitCode;
         if (process->mShutdown)
@@ -324,7 +297,7 @@ void nsProcess::ProcessComplete()
         if (os)
             os->RemoveObserver(this, "xpcom-shutdown");
         PR_JoinThread(mThread);
-        mThread = nsnull;
+        mThread = nullptr;
     }
 
     const char* topic;
@@ -339,32 +312,32 @@ void nsProcess::ProcessComplete()
         observer = do_QueryReferent(mWeakObserver);
     else if (mObserver)
         observer = mObserver;
-    mObserver = nsnull;
-    mWeakObserver = nsnull;
+    mObserver = nullptr;
+    mWeakObserver = nullptr;
 
     if (observer)
-        observer->Observe(NS_ISUPPORTS_CAST(nsIProcess*, this), topic, nsnull);
+        observer->Observe(NS_ISUPPORTS_CAST(nsIProcess*, this), topic, nullptr);
 }
 
 // XXXldb |args| has the wrong const-ness
 NS_IMETHODIMP  
-nsProcess::Run(PRBool blocking, const char **args, PRUint32 count)
+nsProcess::Run(bool blocking, const char **args, uint32_t count)
 {
-    return CopyArgsAndRunProcess(blocking, args, count, nsnull, PR_FALSE);
+    return CopyArgsAndRunProcess(blocking, args, count, nullptr, false);
 }
 
 // XXXldb |args| has the wrong const-ness
 NS_IMETHODIMP  
-nsProcess::RunAsync(const char **args, PRUint32 count,
-                    nsIObserver* observer, PRBool holdWeak)
+nsProcess::RunAsync(const char **args, uint32_t count,
+                    nsIObserver* observer, bool holdWeak)
 {
-    return CopyArgsAndRunProcess(PR_FALSE, args, count, observer, holdWeak);
+    return CopyArgsAndRunProcess(false, args, count, observer, holdWeak);
 }
 
 nsresult
-nsProcess::CopyArgsAndRunProcess(PRBool blocking, const char** args,
-                                 PRUint32 count, nsIObserver* observer,
-                                 PRBool holdWeak)
+nsProcess::CopyArgsAndRunProcess(bool blocking, const char** args,
+                                 uint32_t count, nsIObserver* observer,
+                                 bool holdWeak)
 {
     // Add one to the count for the program name and one for NULL termination.
     char **my_argv = NULL;
@@ -375,13 +348,13 @@ nsProcess::CopyArgsAndRunProcess(PRBool blocking, const char** args,
 
     my_argv[0] = ToNewUTF8String(mTargetPath);
 
-    for (PRUint32 i = 0; i < count; i++) {
+    for (uint32_t i = 0; i < count; i++) {
         my_argv[i + 1] = const_cast<char*>(args[i]);
     }
 
     my_argv[count + 1] = NULL;
 
-    nsresult rv = RunProcess(blocking, my_argv, observer, holdWeak, PR_FALSE);
+    nsresult rv = RunProcess(blocking, my_argv, observer, holdWeak, false);
 
     NS_Free(my_argv[0]);
     NS_Free(my_argv);
@@ -390,23 +363,23 @@ nsProcess::CopyArgsAndRunProcess(PRBool blocking, const char** args,
 
 // XXXldb |args| has the wrong const-ness
 NS_IMETHODIMP  
-nsProcess::Runw(PRBool blocking, const PRUnichar **args, PRUint32 count)
+nsProcess::Runw(bool blocking, const PRUnichar **args, uint32_t count)
 {
-    return CopyArgsAndRunProcessw(blocking, args, count, nsnull, PR_FALSE);
+    return CopyArgsAndRunProcessw(blocking, args, count, nullptr, false);
 }
 
 // XXXldb |args| has the wrong const-ness
 NS_IMETHODIMP  
-nsProcess::RunwAsync(const PRUnichar **args, PRUint32 count,
-                    nsIObserver* observer, PRBool holdWeak)
+nsProcess::RunwAsync(const PRUnichar **args, uint32_t count,
+                    nsIObserver* observer, bool holdWeak)
 {
-    return CopyArgsAndRunProcessw(PR_FALSE, args, count, observer, holdWeak);
+    return CopyArgsAndRunProcessw(false, args, count, observer, holdWeak);
 }
 
 nsresult
-nsProcess::CopyArgsAndRunProcessw(PRBool blocking, const PRUnichar** args,
-                                  PRUint32 count, nsIObserver* observer,
-                                  PRBool holdWeak)
+nsProcess::CopyArgsAndRunProcessw(bool blocking, const PRUnichar** args,
+                                  uint32_t count, nsIObserver* observer,
+                                  bool holdWeak)
 {
     // Add one to the count for the program name and one for NULL termination.
     char **my_argv = NULL;
@@ -417,15 +390,15 @@ nsProcess::CopyArgsAndRunProcessw(PRBool blocking, const PRUnichar** args,
 
     my_argv[0] = ToNewUTF8String(mTargetPath);
 
-    for (PRUint32 i = 0; i < count; i++) {
+    for (uint32_t i = 0; i < count; i++) {
         my_argv[i + 1] = ToNewUTF8String(nsDependentString(args[i]));
     }
 
     my_argv[count + 1] = NULL;
 
-    nsresult rv = RunProcess(blocking, my_argv, observer, holdWeak, PR_TRUE);
+    nsresult rv = RunProcess(blocking, my_argv, observer, holdWeak, true);
 
-    for (PRUint32 i = 0; i <= count; i++) {
+    for (uint32_t i = 0; i <= count; i++) {
         NS_Free(my_argv[i]);
     }
     NS_Free(my_argv);
@@ -433,8 +406,8 @@ nsProcess::CopyArgsAndRunProcessw(PRBool blocking, const PRUnichar** args,
 }
 
 nsresult  
-nsProcess::RunProcess(PRBool blocking, char **my_argv, nsIObserver* observer,
-                      PRBool holdWeak, PRBool argsUTF8)
+nsProcess::RunProcess(bool blocking, char **my_argv, nsIObserver* observer,
+                      bool holdWeak, bool argsUTF8)
 {
     NS_ENSURE_TRUE(mExecutable, NS_ERROR_NOT_INITIALIZED);
     NS_ENSURE_FALSE(mThread, NS_ERROR_ALREADY_INITIALIZED);
@@ -470,7 +443,7 @@ nsProcess::RunProcess(PRBool blocking, char **my_argv, nsIObserver* observer,
      */
 
     // The program name in my_argv[0] is always UTF-8
-    PRInt32 numChars = MultiByteToWideChar(CP_UTF8, 0, my_argv[0], -1, NULL, 0); 
+    int32_t numChars = MultiByteToWideChar(CP_UTF8, 0, my_argv[0], -1, NULL, 0); 
     PRUnichar* wideFile = (PRUnichar *) PR_MALLOC(numChars * sizeof(PRUnichar));
     MultiByteToWideChar(CP_UTF8, 0, my_argv[0], -1, wideFile, numChars); 
 
@@ -498,13 +471,7 @@ nsProcess::RunProcess(PRBool blocking, char **my_argv, nsIObserver* observer,
     if (cmdLine)
         PR_Free(cmdLine);
 
-    HMODULE kernelDLL = ::LoadLibraryW(L"kernel32.dll");
-    if (kernelDLL) {
-        GetProcessIdPtr getProcessId = (GetProcessIdPtr)GetProcAddress(kernelDLL, "GetProcessId");
-        if (getProcessId)
-            mPid = getProcessId(mProcess);
-        FreeLibrary(kernelDLL);
-    }
+    mPid = GetProcessId(mProcess);
 #elif defined(XP_MACOSX)
     // Initialize spawn attributes.
     posix_spawnattr_t spawnattr;
@@ -513,7 +480,7 @@ nsProcess::RunProcess(PRBool blocking, char **my_argv, nsIObserver* observer,
     }
 
     // Set spawn attributes.
-    size_t attr_count = NS_ARRAY_LENGTH(pref_cpu_types);
+    size_t attr_count = ArrayLength(pref_cpu_types);
     size_t attr_ocount = 0;
     if (posix_spawnattr_setbinpref_np(&spawnattr, attr_count, pref_cpu_types, &attr_ocount) != 0 ||
         attr_ocount != attr_count) {
@@ -524,7 +491,7 @@ nsProcess::RunProcess(PRBool blocking, char **my_argv, nsIObserver* observer,
     // Note that the 'argv' array is already null-terminated, which 'posix_spawnp' requires.
     pid_t newPid = 0;
     int result = posix_spawnp(&newPid, my_argv[0], NULL, &spawnattr, my_argv, *_NSGetEnviron());
-    mPid = static_cast<PRInt32>(newPid);
+    mPid = static_cast<int32_t>(newPid);
 
     posix_spawnattr_destroy(&spawnattr);
 
@@ -536,13 +503,14 @@ nsProcess::RunProcess(PRBool blocking, char **my_argv, nsIObserver* observer,
     if (!mProcess)
         return NS_ERROR_FAILURE;
     struct MYProcess {
-        PRUint32 pid;
+        uint32_t pid;
     };
     MYProcess* ptrProc = (MYProcess *) mProcess;
     mPid = ptrProc->pid;
 #endif
 
     NS_ADDREF_THIS();
+    mBlocking = blocking;
     if (blocking) {
         Monitor(this);
         if (mExitValue < 0)
@@ -561,24 +529,24 @@ nsProcess::RunProcess(PRBool blocking, char **my_argv, nsIObserver* observer,
         nsCOMPtr<nsIObserverService> os =
           mozilla::services::GetObserverService();
         if (os)
-            os->AddObserver(this, "xpcom-shutdown", PR_FALSE);
+            os->AddObserver(this, "xpcom-shutdown", false);
     }
 
     return NS_OK;
 }
 
-NS_IMETHODIMP nsProcess::GetIsRunning(PRBool *aIsRunning)
+NS_IMETHODIMP nsProcess::GetIsRunning(bool *aIsRunning)
 {
     if (mThread)
-        *aIsRunning = PR_TRUE;
+        *aIsRunning = true;
     else
-        *aIsRunning = PR_FALSE;
+        *aIsRunning = false;
 
     return NS_OK;
 }
 
 NS_IMETHODIMP
-nsProcess::GetPid(PRUint32 *aPid)
+nsProcess::GetPid(uint32_t *aPid)
 {
     if (!mThread)
         return NS_ERROR_FAILURE;
@@ -614,13 +582,13 @@ nsProcess::Kill()
     if (os)
         os->RemoveObserver(this, "xpcom-shutdown");
     PR_JoinThread(mThread);
-    mThread = nsnull;
+    mThread = nullptr;
 
     return NS_OK;
 }
 
 NS_IMETHODIMP
-nsProcess::GetExitValue(PRInt32 *aExitValue)
+nsProcess::GetExitValue(int32_t *aExitValue)
 {
     MutexAutoLock lock(mLock);
 
@@ -638,14 +606,14 @@ nsProcess::Observe(nsISupports* subject, const char* topic, const PRUnichar* dat
           mozilla::services::GetObserverService();
         if (os)
             os->RemoveObserver(this, "xpcom-shutdown");
-        mThread = nsnull;
+        mThread = nullptr;
     }
 
-    mObserver = nsnull;
-    mWeakObserver = nsnull;
+    mObserver = nullptr;
+    mWeakObserver = nullptr;
 
     MutexAutoLock lock(mLock);
-    mShutdown = PR_TRUE;
+    mShutdown = true;
 
     return NS_OK;
 }

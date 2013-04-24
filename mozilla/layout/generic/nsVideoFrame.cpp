@@ -1,40 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim:set ts=2 sw=2 sts=2 et cindent: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla code.
- *
- * The Initial Developer of the Original Code is the Mozilla Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Chris Double <chris.double@double.co.nz>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* rendering object for the HTML <video> element */
 
@@ -46,6 +14,7 @@
 #include "nsVideoFrame.h"
 #include "nsHTMLVideoElement.h"
 #include "nsIDOMHTMLVideoElement.h"
+#include "nsIDOMHTMLImageElement.h"
 #include "nsDisplayList.h"
 #include "gfxContext.h"
 #include "gfxImageSurface.h"
@@ -56,12 +25,13 @@
 #include "nsBoxFrame.h"
 #include "nsImageFrame.h"
 #include "nsIImageLoadingContent.h"
-#include "nsDisplayList.h"
 #include "nsCSSRendering.h"
 #include "nsContentUtils.h"
+#include "mozilla/layers/ShadowLayers.h"
+#include "ImageContainer.h"
+#include "ImageLayers.h"
 
 #ifdef ACCESSIBILITY
-#include "nsIServiceManager.h"
 #include "nsAccessibilityService.h"
 #endif
 
@@ -100,7 +70,7 @@ nsVideoFrame::CreateAnonymousContent(nsTArray<ContentInfo>& aElements)
     // image. We may not have a poster image now, but one could be added
     // before we load, or on a subsequent load.
     nodeInfo = nodeInfoManager->GetNodeInfo(nsGkAtoms::img,
-                                            nsnull,
+                                            nullptr,
                                             kNameSpaceID_XHTML,
                                             nsIDOMNode::ELEMENT_NODE);
     NS_ENSURE_TRUE(nodeInfo, NS_ERROR_OUT_OF_MEMORY);
@@ -121,11 +91,11 @@ nsVideoFrame::CreateAnonymousContent(nsTArray<ContentInfo>& aElements)
     nsCOMPtr<nsIImageLoadingContent> imgContent = do_QueryInterface(mPosterImage);
     NS_ENSURE_TRUE(imgContent, NS_ERROR_FAILURE);
 
-    imgContent->ForceImageState(PR_TRUE, 0);
+    imgContent->ForceImageState(true, 0);
     // And now have it update its internal state
     element->UpdateState(false);
 
-    nsresult res = UpdatePosterSource(PR_FALSE);
+    nsresult res = UpdatePosterSource(false);
     NS_ENSURE_SUCCESS(res,res);
 
     if (!aElements.AppendElement(mPosterImage))
@@ -135,7 +105,7 @@ nsVideoFrame::CreateAnonymousContent(nsTArray<ContentInfo>& aElements)
   // Set up "videocontrols" XUL element which will be XBL-bound to the
   // actual controls.
   nodeInfo = nodeInfoManager->GetNodeInfo(nsGkAtoms::videocontrols,
-                                          nsnull,
+                                          nullptr,
                                           kNameSpaceID_XUL,
                                           nsIDOMNode::ELEMENT_NODE);
   NS_ENSURE_TRUE(nodeInfo, NS_ERROR_OUT_OF_MEMORY);
@@ -149,7 +119,7 @@ nsVideoFrame::CreateAnonymousContent(nsTArray<ContentInfo>& aElements)
 
 void
 nsVideoFrame::AppendAnonymousContentTo(nsBaseContentList& aElements,
-                                       PRUint32 aFliter)
+                                       uint32_t aFliter)
 {
   aElements.MaybeAppendElement(mPosterImage);
   aElements.MaybeAppendElement(mVideoControls);
@@ -163,10 +133,10 @@ nsVideoFrame::DestroyFrom(nsIFrame* aDestructRoot)
   nsContainerFrame::DestroyFrom(aDestructRoot);
 }
 
-PRBool
+bool
 nsVideoFrame::IsLeaf() const
 {
-  return PR_TRUE;
+  return true;
 }
 
 // Return the largest rectangle that fits in aRect and has the
@@ -192,70 +162,21 @@ nsVideoFrame::BuildLayer(nsDisplayListBuilder* aBuilder,
 {
   nsRect area = GetContentRect() - GetPosition() + aItem->ToReferenceFrame();
   nsHTMLVideoElement* element = static_cast<nsHTMLVideoElement*>(GetContent());
-  nsIntSize videoSize = element->GetVideoSize(nsIntSize(0, 0));
-  if (videoSize.width <= 0 || videoSize.height <= 0 || area.IsEmpty())
-    return nsnull;
+  nsIntSize videoSize;
+  if (NS_FAILED(element->GetVideoSize(&videoSize)) || area.IsEmpty()) {
+    return nullptr;
+  }
 
   nsRefPtr<ImageContainer> container = element->GetImageContainer();
-  // If we have a container with a different layer manager, try to hand
-  // off the container to the new one.
-  if (container && container->Manager() != aManager) {
-    // we don't care about the return type here -- if the set didn't take, it'll
-    // be handled when we next check the manager
-    container->SetLayerManager(aManager);
-  }
-
-  // If we have a container of the correct type already, we don't need
-  // to do anything here. Otherwise we need to set up a temporary
-  // ImageContainer, capture the video data and store it in the temp
-  // container. For now we also check if the manager is equal since not all
-  // image containers are manager independent yet.
-  if (!container || 
-      (container->Manager() && container->Manager() != aManager) ||
-      container->GetBackendType() != aManager->GetBackendType())
-  {
-    nsRefPtr<ImageContainer> tmpContainer = aManager->CreateImageContainer();
-    if (!tmpContainer)
-      return nsnull;
-    
-    // We get a reference to the video data as a cairo surface.
-    CairoImage::Data cairoData;
-    nsRefPtr<gfxASurface> imageSurface;
-    if (container) {
-      // Get video from the existing container. It was created for a
-      // different layer manager, so we do fallback through cairo.
-      imageSurface = container->GetCurrentAsSurface(&cairoData.mSize);
-      if (!imageSurface) {
-        // we couldn't do fallback, so we've got nothing to do here
-        return nsnull;
-      }
-      cairoData.mSurface = imageSurface;
-    } else {
-      // We're probably printing.
-      cairoData.mSurface = element->GetPrintSurface();
-      if (!cairoData.mSurface)
-        return nsnull;
-      cairoData.mSize = gfxIntSize(videoSize.width, videoSize.height);
-    }
-
-    // Now create a CairoImage to display the surface.
-    Image::Format cairoFormat = Image::CAIRO_SURFACE;
-    nsRefPtr<Image> image = tmpContainer->CreateImage(&cairoFormat, 1);
-    if (!image)
-      return nsnull;
-
-    NS_ASSERTION(image->GetFormat() == cairoFormat, "Wrong format");
-    static_cast<CairoImage*>(image.get())->SetData(cairoData);
-    tmpContainer->SetCurrentImage(image);
-    container = tmpContainer.forget();
-  }
-
+  if (!container)
+    return nullptr;
+  
   // Retrieve the size of the decoded video frame, before being scaled
   // by pixel aspect ratio.
   gfxIntSize frameSize = container->GetCurrentSize();
   if (frameSize.width == 0 || frameSize.height == 0) {
     // No image, or zero-sized image. No point creating a layer.
-    return nsnull;
+    return nullptr;
   }
 
   // Compute the rectangle in which to paint the video. We need to use
@@ -268,16 +189,16 @@ nsVideoFrame::BuildLayer(nsDisplayListBuilder* aBuilder,
                       presContext->AppUnitsToGfxUnits(area.height));
   r = CorrectForAspectRatio(r, videoSize);
   r.Round();
-  gfxIntSize scaleHint(static_cast<PRInt32>(r.Width()),
-                       static_cast<PRInt32>(r.Height()));
+  gfxIntSize scaleHint(static_cast<int32_t>(r.Width()),
+                       static_cast<int32_t>(r.Height()));
   container->SetScaleHint(scaleHint);
 
   nsRefPtr<ImageLayer> layer = static_cast<ImageLayer*>
-    (aBuilder->LayerBuilder()->GetLeafLayerFor(aBuilder, aManager, aItem));
+    (aManager->GetLayerBuilder()->GetLeafLayerFor(aBuilder, aManager, aItem));
   if (!layer) {
     layer = aManager->CreateImageLayer();
     if (!layer)
-      return nsnull;
+      return nullptr;
   }
 
   layer->SetContainer(container);
@@ -287,8 +208,8 @@ nsVideoFrame::BuildLayer(nsDisplayListBuilder* aBuilder,
   gfxMatrix transform;
   transform.Translate(r.TopLeft());
   transform.Scale(r.Width()/frameSize.width, r.Height()/frameSize.height);
-  layer->SetTransform(gfx3DMatrix::From2D(transform));
-  layer->SetVisibleRegion(nsIntRect(0, 0, videoSize.width, videoSize.height));
+  layer->SetBaseTransform(gfx3DMatrix::From2D(transform));
+  layer->SetVisibleRegion(nsIntRect(0, 0, frameSize.width, frameSize.height));
   nsRefPtr<Layer> result = layer.forget();
   return result.forget();
 }
@@ -335,18 +256,34 @@ nsVideoFrame::Reflow(nsPresContext*           aPresContext,
                                        availableSize,
                                        aMetrics.width,
                                        aMetrics.height);
-      if (ShouldDisplayPoster()) {
-        kidReflowState.SetComputedWidth(aReflowState.ComputedWidth());
-        kidReflowState.SetComputedHeight(aReflowState.ComputedHeight());
-      } else {
-        kidReflowState.SetComputedWidth(0);
-        kidReflowState.SetComputedHeight(0);
+
+      uint32_t posterHeight, posterWidth;
+      nsSize scaledPosterSize(0, 0);
+      nsSize computedArea(aReflowState.ComputedWidth(), aReflowState.ComputedHeight());
+      nsPoint posterTopLeft(0, 0);
+
+      nsCOMPtr<nsIDOMHTMLImageElement> posterImage = do_QueryInterface(mPosterImage);
+      NS_ENSURE_TRUE(posterImage, NS_ERROR_FAILURE);
+      posterImage->GetNaturalHeight(&posterHeight);
+      posterImage->GetNaturalWidth(&posterWidth);
+
+      if (ShouldDisplayPoster() && posterHeight && posterWidth) {
+        gfxFloat scale =
+          NS_MIN(static_cast<float>(computedArea.width)/nsPresContext::CSSPixelsToAppUnits(static_cast<float>(posterWidth)),
+                 static_cast<float>(computedArea.height)/nsPresContext::CSSPixelsToAppUnits(static_cast<float>(posterHeight)));
+        gfxSize scaledRatio = gfxSize(scale*posterWidth, scale*posterHeight);
+        scaledPosterSize.width = nsPresContext::CSSPixelsToAppUnits(static_cast<float>(scaledRatio.width));
+        scaledPosterSize.height = nsPresContext::CSSPixelsToAppUnits(static_cast<int32_t>(scaledRatio.height));
       }
+      kidReflowState.SetComputedWidth(scaledPosterSize.width);
+      kidReflowState.SetComputedHeight(scaledPosterSize.height);
+      posterTopLeft.x = ((computedArea.width - scaledPosterSize.width) / 2) + mBorderPadding.left;
+      posterTopLeft.y = ((computedArea.height - scaledPosterSize.height) / 2) + mBorderPadding.top;
+
       ReflowChild(imageFrame, aPresContext, kidDesiredSize, kidReflowState,
-                  mBorderPadding.left, mBorderPadding.top, 0, aStatus);
-      FinishReflowChild(imageFrame, aPresContext,
-                        &kidReflowState, kidDesiredSize,
-                        mBorderPadding.left, mBorderPadding.top, 0);
+                        posterTopLeft.x, posterTopLeft.y, 0, aStatus);
+      FinishReflowChild(imageFrame, aPresContext, &kidReflowState, kidDesiredSize,
+                        posterTopLeft.x, posterTopLeft.y, 0);
     } else if (child->GetType() == nsGkAtoms::boxFrame) {
       // Reflow the video controls frame.
       nsBoxLayoutState boxState(PresContext(), aReflowState.rendContext);
@@ -397,8 +334,9 @@ public:
   // away completely (e.g. because of a decoder error). The problem would
   // be especially acute if we have off-main-thread rendering.
 
-  virtual nsRect GetBounds(nsDisplayListBuilder* aBuilder)
+  virtual nsRect GetBounds(nsDisplayListBuilder* aBuilder, bool* aSnap)
   {
+    *aSnap = false;
     nsIFrame* f = GetUnderlyingFrame();
     return f->GetContentRect() - f->GetPosition() + ToReferenceFrame();
   }
@@ -411,16 +349,16 @@ public:
   }
 
   virtual LayerState GetLayerState(nsDisplayListBuilder* aBuilder,
-                                   LayerManager* aManager)
+                                   LayerManager* aManager,
+                                   const FrameLayerBuilder::ContainerParameters& aParameters)
   {
-    if (aManager->GetBackendType() != LayerManager::LAYERS_BASIC) {
-      // For non-basic layer managers we can assume that compositing
-      // layers is very cheap, and since ImageLayers don't require
-      // additional memory of the video frames we have to have anyway,
-      // we can't save much by making layers inactive. Also, for many
-      // accelerated layer managers calling
-      // imageContainer->GetCurrentAsSurface can be very expensive. So
-      // just always be active for these managers.
+    if (aManager->IsCompositingCheap()) {
+      // Since ImageLayers don't require additional memory of the
+      // video frames we have to have anyway, we can't save much by
+      // making layers inactive. Also, for many accelerated layer
+      // managers calling imageContainer->GetCurrentAsSurface can be
+      // very expensive. So just always be active when compositing is
+      // cheap (i.e. hardware accelerated).
       return LAYER_ACTIVE;
     }
     nsHTMLMediaElement* elem =
@@ -480,13 +418,13 @@ nsVideoFrame::GetType() const
 }
 
 #ifdef ACCESSIBILITY
-already_AddRefed<nsAccessible>
+already_AddRefed<Accessible>
 nsVideoFrame::CreateAccessible()
 {
   nsAccessibilityService* accService = nsIPresShell::AccService();
   return accService ?
     accService->CreateHTMLMediaAccessible(mContent, PresContext()->PresShell()) :
-    nsnull;
+    nullptr;
 }
 #endif
 
@@ -504,7 +442,7 @@ nsSize nsVideoFrame::ComputeSize(nsRenderingContext *aRenderingContext,
                                      nsSize aMargin,
                                      nsSize aBorder,
                                      nsSize aPadding,
-                                     PRBool aShrinkWrap)
+                                     uint32_t aFlags)
 {
   nsSize size = GetVideoIntrinsicSize(aRenderingContext);
 
@@ -540,34 +478,34 @@ nscoord nsVideoFrame::GetPrefWidth(nsRenderingContext *aRenderingContext)
 
 nsSize nsVideoFrame::GetIntrinsicRatio()
 {
-  return GetVideoIntrinsicSize(nsnull);
+  return GetVideoIntrinsicSize(nullptr);
 }
 
-PRBool nsVideoFrame::ShouldDisplayPoster()
+bool nsVideoFrame::ShouldDisplayPoster()
 {
   if (!HasVideoElement())
-    return PR_FALSE;
+    return false;
 
   nsHTMLVideoElement* element = static_cast<nsHTMLVideoElement*>(GetContent());
   if (element->GetPlayedOrSeeked() && HasVideoData())
-    return PR_FALSE;
+    return false;
 
   nsCOMPtr<nsIImageLoadingContent> imgContent = do_QueryInterface(mPosterImage);
-  NS_ENSURE_TRUE(imgContent, PR_FALSE);
+  NS_ENSURE_TRUE(imgContent, false);
 
   nsCOMPtr<imgIRequest> request;
   nsresult res = imgContent->GetRequest(nsIImageLoadingContent::CURRENT_REQUEST,
                                         getter_AddRefs(request));
   if (NS_FAILED(res) || !request) {
-    return PR_FALSE;
+    return false;
   }
 
-  PRUint32 status = 0;
+  uint32_t status = 0;
   res = request->GetImageStatus(&status);
   if (NS_FAILED(res) || (status & imgIRequest::STATUS_ERROR))
-    return PR_FALSE;
+    return false;
 
-  return PR_TRUE;
+  return true;
 }
 
 nsSize
@@ -575,19 +513,7 @@ nsVideoFrame::GetVideoIntrinsicSize(nsRenderingContext *aRenderingContext)
 {
   // Defaulting size to 300x150 if no size given.
   nsIntSize size(300, 150);
-
-  if (ShouldDisplayPoster()) {
-    // Use the poster image frame's size.
-    nsIFrame *child = mFrames.FirstChild();
-    if (child && child->GetType() == nsGkAtoms::imageFrame) {
-      nsImageFrame* imageFrame = static_cast<nsImageFrame*>(child);
-      nsSize imgsize;
-      if (NS_SUCCEEDED(imageFrame->GetIntrinsicImageSize(imgsize))) {
-        return imgsize;
-      }
-    }
-  }
-
+  
   if (!HasVideoElement()) {
     if (!aRenderingContext || !mFrames.FirstChild()) {
       // We just want our intrinsic ratio, but audio elements need no
@@ -603,14 +529,22 @@ nsVideoFrame::GetVideoIntrinsicSize(nsRenderingContext *aRenderingContext)
   }
 
   nsHTMLVideoElement* element = static_cast<nsHTMLVideoElement*>(GetContent());
-  size = element->GetVideoSize(size);
+  if (NS_FAILED(element->GetVideoSize(&size)) && ShouldDisplayPoster()) {
+    // Use the poster image frame's size.
+    nsIFrame *child = mPosterImage->GetPrimaryFrame();
+    nsImageFrame* imageFrame = do_QueryFrame(child);
+    nsSize imgsize;
+    if (NS_SUCCEEDED(imageFrame->GetIntrinsicImageSize(imgsize))) {
+      return imgsize;
+    }
+  }
 
   return nsSize(nsPresContext::CSSPixelsToAppUnits(size.width),
                 nsPresContext::CSSPixelsToAppUnits(size.height));
 }
 
 nsresult
-nsVideoFrame::UpdatePosterSource(PRBool aNotify)
+nsVideoFrame::UpdatePosterSource(bool aNotify)
 {
   NS_ASSERTION(HasVideoElement(), "Only call this on <video> elements.");
   nsHTMLVideoElement* element = static_cast<nsHTMLVideoElement*>(GetContent());
@@ -626,12 +560,12 @@ nsVideoFrame::UpdatePosterSource(PRBool aNotify)
 }
 
 NS_IMETHODIMP
-nsVideoFrame::AttributeChanged(PRInt32 aNameSpaceID,
+nsVideoFrame::AttributeChanged(int32_t aNameSpaceID,
                                nsIAtom* aAttribute,
-                               PRInt32 aModType)
+                               int32_t aModType)
 {
   if (aAttribute == nsGkAtoms::poster && HasVideoElement()) {
-    nsresult res = UpdatePosterSource(PR_TRUE);
+    nsresult res = UpdatePosterSource(true);
     NS_ENSURE_SUCCESS(res,res);
   }
   return nsContainerFrame::AttributeChanged(aNameSpaceID,
@@ -639,16 +573,17 @@ nsVideoFrame::AttributeChanged(PRInt32 aNameSpaceID,
                                             aModType);
 }
 
-PRBool nsVideoFrame::HasVideoElement() {
+bool nsVideoFrame::HasVideoElement() {
   nsCOMPtr<nsIDOMHTMLVideoElement> videoDomElement = do_QueryInterface(mContent);
-  return videoDomElement != nsnull;
+  return videoDomElement != nullptr;
 }
 
-PRBool nsVideoFrame::HasVideoData()
+bool nsVideoFrame::HasVideoData()
 {
   if (!HasVideoElement())
-    return PR_FALSE;
+    return false;
   nsHTMLVideoElement* element = static_cast<nsHTMLVideoElement*>(GetContent());
-  nsIntSize size = element->GetVideoSize(nsIntSize(0,0));
+  nsIntSize size(0, 0);
+  element->GetVideoSize(&size);
   return size != nsIntSize(0,0);
 }

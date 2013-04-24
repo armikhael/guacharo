@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Mail Client.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Messaging, Inc.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jim Porter <jvporter@wisc.edu>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var Ci = Components.interfaces;
 var Cc = Components.classes;
@@ -41,7 +8,7 @@ var Cu = Components.utils;
 
 const MODULE_NAME = "address-book-helpers";
 const RELATIVE_ROOT = "../shared-modules";
-const MODULE_REQUIRES = ['window-helpers'];
+const MODULE_REQUIRES = ['folder-display-helpers', 'window-helpers'];
 
 const ABMDB_PREFIX = "moz-abmdbdirectory://";
 const ABLDAP_PREFIX = "moz-abldapdirectory://";
@@ -53,7 +20,14 @@ var collectedAddresses;
 
 var abController;
 
+var folderDisplayHelper;
+var mc;
+var windowHelper;
+
 function setupModule() {
+  folderDisplayHelper = collector.getModule('folder-display-helpers');
+  mc = folderDisplayHelper.mc;
+  windowHelper = collector.getModule('window-helpers');
   // Ensure all the directories are initialised.
   MailServices.ab.directories;
   collectedAddresses = MailServices.ab
@@ -67,6 +41,7 @@ function installInto(module) {
   module.ensure_card_exists = ensure_card_exists;
   module.ensure_no_card_exists = ensure_no_card_exists;
   module.open_address_book_window = open_address_book_window;
+  module.close_address_book_window = close_address_book_window;
   module.create_mork_address_book = create_mork_address_book;
   module.create_ldap_address_book = create_ldap_address_book;
   module.create_contact = create_contact;
@@ -94,6 +69,9 @@ function installInto(module) {
   // share the same code.
   module.select_contact = select_contacts;
   module.select_contacts = select_contacts;
+  module.edit_selected_contact = edit_selected_contact;
+  module.accept_contact_changes = accept_contact_changes;
+  module.delete_address_book = delete_address_book;
 }
 
 /**
@@ -157,10 +135,31 @@ function get_cards_in_all_address_books_for_email(aEmailAddress)
  * Opens the address book interface
  * @returns a controller for the address book
  */
-function open_address_book_window()
+function open_address_book_window(aController)
 {
-  abController = mozmill.getAddrbkController();
+  if (aController === undefined)
+    aController = mc;
+
+  windowHelper.plan_for_new_window("mail:addressbook");
+  aController.keypress(null, "b", {shiftKey: true, accelKey: true});
+
+  // XXX this should probably be changed to making callers pass in which address
+  // book they want to work with, just like test-compose-helpers.
+  abController = windowHelper.wait_for_new_window("mail:addressbook");
+  windowHelper.augment_controller(abController);
   return abController;
+}
+
+/**
+ * Closes the address book interface
+ * @param abc the controller for the address book window to close
+ * @return the result from wait_for_window_close
+ */
+function close_address_book_window(abc)
+{
+  windowHelper.plan_for_window_close(abc);
+  abc.window.close();
+  return windowHelper.wait_for_window_close(abc);
 }
 
 /**
@@ -254,7 +253,7 @@ function load_contacts_into_address_book(aAddressBook, aContacts)
 
     if (!(contact instanceof Ci.nsIAbCard))
       contact = create_contact(contact.email,
-                                 contact.displayName, true);
+                               contact.displayName, true);
 
     aAddressBook.addCard(contact);
   }
@@ -423,3 +422,39 @@ function select_contacts(aContacts)
   }
 }
 
+/**
+ * Opens the contact editing dialog for the selected contact. Callers
+ * are responsible for closing the dialog.
+ *
+ * @param aController the address book window controller to use.
+ * @param aFunction the function to execute when the editing dialog
+ *                  is opened (since it's a modal dialog).  The function
+ *                  should take a single parameter, which will be the
+ *                  augmented controller for the editing dialog.
+ */
+function edit_selected_contact(aController, aFunction)
+{
+  windowHelper.plan_for_modal_dialog("abcardWindow", aFunction);
+  aController.click(aController.eid("button-editcard"));
+  windowHelper.wait_for_modal_dialog("abcardWindow");
+}
+
+/**
+ * Accepts the changes entered into the contact editing dialog, and closes
+ * the dialog.
+ *
+ * @param aController the contact editing dialog controller to use.
+ */
+function accept_contact_changes(aController)
+{
+  if (!aController.window.document.documentElement.acceptDialog())
+    throw new Error("Could not close the contact editing dialog!");
+}
+
+/**
+ * Deletes an address book.
+ */
+function delete_address_book(aAddrBook)
+{
+  MailServices.ab.deleteAddressBook(aAddrBook.URI);
+}

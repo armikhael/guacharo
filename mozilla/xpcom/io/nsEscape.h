@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*	First checked in on 98/12/03 by John R. McMullen, derived from net.h/mkparse.c. */
 
@@ -51,7 +19,7 @@
  * in sync.
  */
 typedef enum {
- 	url_All       = 0         /**< %-escape every byte uncondtionally */
+ 	url_All       = 0         /**< %-escape every byte unconditionally */
 ,	url_XAlphas   = PR_BIT(0) /**< Normal escape - leave alphas intact, escape the rest */
 ,	url_XPAlphas  = PR_BIT(1) /**< As url_XAlphas, but convert spaces (0x20) to '+' and plus to %2B */
 ,	url_Path      = PR_BIT(2) /**< As url_XAlphas, but don't escape slash ('/') */
@@ -68,25 +36,25 @@ extern "C" {
  * @return A newly allocated escaped string that must be free'd with
  *         nsCRT::free, or null on failure
  */
-NS_COM char * nsEscape(const char * str, nsEscapeMask mask);
+char * nsEscape(const char * str, nsEscapeMask mask);
 
-NS_COM char * nsUnescape(char * str);
+char * nsUnescape(char * str);
 	/* decode % escaped hex codes into character values,
 	 * modifies the parameter, returns the same buffer
 	 */
 
-NS_COM PRInt32 nsUnescapeCount (char * str);
+int32_t nsUnescapeCount (char * str);
 	/* decode % escaped hex codes into character values,
 	 * modifies the parameter buffer, returns the length of the result
 	 * (result may contain \0's).
 	 */
 
-NS_COM char *
+char *
 nsEscapeHTML(const char * string);
 
-NS_COM PRUnichar *
+PRUnichar *
 nsEscapeHTML2(const PRUnichar *aSourceBuffer,
-              PRInt32 aSourceBufferLen = -1);
+              int32_t aSourceBufferLen = -1);
  /*
   * Escape problem char's for HTML display 
   */
@@ -142,9 +110,9 @@ enum EscapeMask {
  *
  * @return TRUE if escaping was performed, FALSE otherwise.
  */
-NS_COM PRBool NS_EscapeURL(const char *str,
-                           PRInt32 len,
-                           PRUint32 flags,
+bool NS_EscapeURL(const char *str,
+                           int32_t len,
+                           uint32_t flags,
                            nsACString &result);
 
 /**
@@ -158,13 +126,13 @@ NS_COM PRBool NS_EscapeURL(const char *str,
  *
  * @return TRUE if unescaping was performed, FALSE otherwise.
  */
-NS_COM PRBool NS_UnescapeURL(const char *str,
-                             PRInt32 len,
-                             PRUint32 flags,
+bool NS_UnescapeURL(const char *str,
+                             int32_t len,
+                             uint32_t flags,
                              nsACString &result);
 
 /** returns resultant string length **/
-inline PRInt32 NS_UnescapeURL(char *str) {
+inline int32_t NS_UnescapeURL(char *str) {
     return nsUnescapeCount(str);
 }
 
@@ -172,13 +140,13 @@ inline PRInt32 NS_UnescapeURL(char *str) {
  * String friendly versions...
  */
 inline const nsCSubstring &
-NS_EscapeURL(const nsCSubstring &str, PRUint32 flags, nsCSubstring &result) {
+NS_EscapeURL(const nsCSubstring &str, uint32_t flags, nsCSubstring &result) {
     if (NS_EscapeURL(str.Data(), str.Length(), flags, result))
         return result;
     return str;
 }
 inline const nsCSubstring &
-NS_UnescapeURL(const nsCSubstring &str, PRUint32 flags, nsCSubstring &result) {
+NS_UnescapeURL(const nsCSubstring &str, uint32_t flags, nsCSubstring &result) {
     if (NS_UnescapeURL(str.Data(), str.Length(), flags, result))
         return result;
     return str;
@@ -188,15 +156,15 @@ NS_UnescapeURL(const nsCSubstring &str, PRUint32 flags, nsCSubstring &result) {
  * CString version of nsEscape. Returns true on success, false
  * on out of memory. To reverse this function, use NS_UnescapeURL.
  */
-inline PRBool
+inline bool
 NS_Escape(const nsCString& aOriginal, nsCString& aEscaped,
           nsEscapeMask aMask)
 {
   char* esc = nsEscape(aOriginal.get(), aMask);
   if (! esc)
-    return PR_FALSE;
+    return false;
   aEscaped.Adopt(esc);
-  return PR_TRUE;
+  return true;
 }
 
 /**

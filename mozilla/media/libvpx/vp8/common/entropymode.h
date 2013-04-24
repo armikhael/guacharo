@@ -15,6 +15,15 @@
 #include "onyxc_int.h"
 #include "treecoder.h"
 
+typedef enum
+{
+    SUBMVREF_NORMAL,
+    SUBMVREF_LEFT_ZED,
+    SUBMVREF_ABOVE_ZED,
+    SUBMVREF_LEFT_ABOVE_SAME,
+    SUBMVREF_LEFT_ABOVE_ZED
+} sumvfref_t;
+
 typedef const int vp8_mbsplit[16];
 
 #define VP8_NUMMBSPLITS 4
@@ -25,7 +34,7 @@ extern const int vp8_mbsplit_count [VP8_NUMMBSPLITS];    /* # of subsets */
 
 extern const vp8_prob vp8_mbsplit_probs [VP8_NUMMBSPLITS-1];
 
-extern int vp8_mv_cont(const MV *l, const MV *a);
+extern int vp8_mv_cont(const int_mv *l, const int_mv *a);
 #define SUBMVREF_COUNT 5
 extern const vp8_prob vp8_sub_mv_ref_prob2 [SUBMVREF_COUNT][VP8_SUBMVREFS-1];
 

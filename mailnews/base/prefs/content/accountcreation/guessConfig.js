@@ -1,41 +1,7 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Incoming Mail Auto discovery.
- *
- * The Initial Developer of the Original Code is
- * Brian Kirsch.
- * Portions created by the Initial Developer are Copyright (C) 2008-2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- * David Ascher
- * Ben Bucksch <mozilla bucksch.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Cu.import("resource:///modules/gloda/log4moz.js");
 Cu.import("resource://gre/modules/Services.jsm");
@@ -128,7 +94,7 @@ function guessConfig(domain, progressCallback, successCallback, errorCallback,
       auth: Ci.nsMsgAuthMethod.passwordCleartext
     });
     successCallback(resultConfig);
-    return;
+    return null;
   }
   var progress = function(thisTry)
   {
@@ -519,22 +485,30 @@ HostDetector.prototype =
    */
   _processResult : function(thisTry, wiredata)
   {
-    if (thisTry._gotCertError == Ci.nsICertOverrideService.ERROR_MISMATCH)
+    if (thisTry._gotCertError)
     {
-      thisTry._gotCertError = false;
-      thisTry.status = kFailed;
-      return;
-    }
+      this._log.info("clearing validity override for " + thisTry.hostname);
+      Cc["@mozilla.org/security/certoverride;1"]
+        .getService(Ci.nsICertOverrideService)
+        .clearValidityOverride(thisTry.hostname, thisTry.port);
 
-    if (thisTry._gotCertError == Ci.nsICertOverrideService.ERROR_UNTRUSTED ||
-        thisTry._gotCertError == Ci.nsICertOverrideService.ERROR_TIME)
-    {
-      this._log.info("TRYING AGAIN, hopefully with exception recorded");
-      thisTry._gotCertError = false;
-      thisTry.selfSignedCert = true; // _next_ run gets this exception
-      thisTry.status = kNotTried; // try again (with exception)
-      this._tryAll();
-      return;
+      if (thisTry._gotCertError == Ci.nsICertOverrideService.ERROR_MISMATCH)
+      {
+        thisTry._gotCertError = false;
+        thisTry.status = kFailed;
+        return;
+      }
+
+      if (thisTry._gotCertError == Ci.nsICertOverrideService.ERROR_UNTRUSTED ||
+          thisTry._gotCertError == Ci.nsICertOverrideService.ERROR_TIME)
+      {
+        this._log.info("TRYING AGAIN, hopefully with exception recorded");
+        thisTry._gotCertError = false;
+        thisTry.selfSignedCert = true; // _next_ run gets this exception
+        thisTry.status = kNotTried; // try again (with exception)
+        this._tryAll();
+        return;
+      }
     }
 
     if (wiredata == null || wiredata === undefined)
@@ -551,15 +525,6 @@ HostDetector.prototype =
       this._log.info("STARTTLS wanted, but not offered");
       thisTry.status = kFailed;
       return;
-    }
-    if (thisTry.selfSignedCert)
-    {
-      // the callback will put up the cert exception dialog, so
-      // clear the override here.
-      this._log.info("clearing validity override for " + thisTry.hostname);
-      Cc["@mozilla.org/security/certoverride;1"]
-        .getService(Ci.nsICertOverrideService)
-        .clearValidityOverride(thisTry.hostname, thisTry.port);
     }
     this._log.info("success with " + thisTry.hostname + ":" +
         thisTry.port + " " + protocolToString(thisTry.protocol) +
@@ -805,15 +770,15 @@ function getIncomingTryOrder(host, protocol, ssl, port)
   if (protocol != UNKNOWN) {
     if (ssl == UNKNOWN)
       return [getHostEntry(protocol, TLS, port),
-              getHostEntry(protocol, SSL, port),
+              //getHostEntry(protocol, SSL, port),
               getHostEntry(protocol, NONE, port)];
     return [getHostEntry(protocol, ssl, port)];
   }
   if (ssl == UNKNOWN)
     return [getHostEntry(IMAP, TLS, port),
-            getHostEntry(IMAP, SSL, port),
+            //getHostEntry(IMAP, SSL, port),
             getHostEntry(POP, TLS, port),
-            getHostEntry(POP, SSL, port),
+            //getHostEntry(POP, SSL, port),
             getHostEntry(IMAP, NONE, port),
             getHostEntry(POP, NONE, port)];
   return [getHostEntry(IMAP, ssl, port),
@@ -832,12 +797,12 @@ function getOutgoingTryOrder(host, protocol, ssl, port)
       // neither SSL nor port known
       return [getHostEntry(SMTP, TLS, UNKNOWN),
               getHostEntry(SMTP, TLS, 25),
-              getHostEntry(SMTP, SSL, UNKNOWN),
+              //getHostEntry(SMTP, SSL, UNKNOWN),
               getHostEntry(SMTP, NONE, UNKNOWN),
               getHostEntry(SMTP, NONE, 25)];
     // port known, SSL not
     return [getHostEntry(SMTP, TLS, port),
-            getHostEntry(SMTP, SSL, port),
+            //getHostEntry(SMTP, SSL, port),
             getHostEntry(SMTP, NONE, port)];
   }
   // SSL known, port not
@@ -902,16 +867,13 @@ function sslConvertToSocketType(ssl)
 // AccountConfig -> here
 function ConvertSocketTypeToSSL(socketType)
 {
-  switch (socketType) {
-    case 1:
-      return NONE;
-    case 2:
-      return SSL;
-    case 3:
-      return TLS;
-    default:
-      return UNKNOWN;
-  }
+  if (socketType == 1)
+    return NONE;
+  if (socketType == 2)
+    return SSL;
+  if (socketType == 3)
+    return TLS;
+  return UNKNOWN;
 }
 
 // here -> AccountConfig
@@ -959,55 +921,65 @@ SSLErrorHandler.prototype =
     let host = parts[0];
     let port = parts[1];
 
+    /* The following 2 cert problems are unfortunately common:
+     * 1) hostname mismatch:
+     * user is custeromer at a domain hoster, he owns yourname.org,
+     * and the IMAP server is imap.hoster.com (but also reachable as
+     * imap.yourname.org), and has a cert for imap.hoster.com.
+     * 2) self-signed:
+     * a company has an internal IMAP server, and it's only for
+     * 30 employees, and they didn't want to buy a cert, so
+     * they use a self-signed cert.
+     *
+     * We would like the above to pass, somehow, with user confirmation.
+     * The following case should *not* pass:
+     *
+     * 1) MITM
+     * User has @gmail.com, and an attacker is between the user and
+     * the Internet and runs a man-in-the-middle (MITM) attack.
+     * Attacker controls DNS and sends imap.gmail.com to his own
+     * imap.attacker.com. He has either a valid, CA-issued
+     * cert for imap.attacker.com, or a self-signed cert.
+     * Of course, attacker.com could also be legit-sounding gmailservers.com.
+     *
+     * What makes it dangerous is that we (!) propose the server to the user,
+     * and he cannot judge whether imap.gmailservers.com is correct or not,
+     * and he will likely approve it.
+     */
+
     if (status.isDomainMismatch) {
       this._try._gotCertError = Ci.nsICertOverrideService.ERROR_MISMATCH;
       flags |= Ci.nsICertOverrideService.ERROR_MISMATCH;
-
-      // If it was just a domain mismatch error
-      // TODO "just"??? disabling it for now
-      if (false && !(status.isUntrusted || status.isNotValidAtThisTime)) {
-        // then, if we didn't get a wildcard in the certificate,
-        if (cert.commonName.charAt(0) != "*") {
-          // then add this host to the hosts to try, and skip to the end.
-          /* TODO This is logically broken, I think
-           * The hostname is in the cert, because the cert is only valid for
-           * this host. Anybody can get a cert (even from a CA) for
-           * imap.badsite.com . If you MITM me (which is what SSL certs try
-           * to prevent), we'll get imap.badsite.com here. Now, if we treat
-           * this as "cool, let's see whether imap.badsite.com also works!",
-           * the SSL cert was kind of pointless, no?
-           * Sure, we can let the user confirm it first (not sure whether we
-           * do that!), but that may be too risky, because users are likely
-           * to just accept. See phishing. */
-          if (this._hostsToTry.indexOf(cert.commonName) == -1) 
-            this._hostsToTry.push(cert.commonName);
-          this._tryIndex = this.tryOrder.length - 1;
-        }
-        return true;
-      }
     }
-
-    if (status.isUntrusted) {
+    else if (status.isUntrusted) {
       this._try._gotCertError = Ci.nsICertOverrideService.ERROR_UNTRUSTED;
       flags |= Ci.nsICertOverrideService.ERROR_UNTRUSTED;
     }
-    if (status.isNotValidAtThisTime) {
+    else if (status.isNotValidAtThisTime) {
       this._try._gotCertError = Ci.nsICertOverrideService.ERROR_TIME;
       flags |= Ci.nsICertOverrideService.ERROR_TIME;
     }
+    else {
+      this._try._gotCertError = -1; // other
+    }
 
-    // If domain mismatch, then we shouldn't accept, and instead try the domain
-    // in the cert to the list of tries.
-    // Not skipping mismatches for now because it's too common, and until we can
-    // poke around the cert and find out what domain to try, best to live
-    // w/ orange than red.
+    /* We will add a temporary cert exception here, so that
+     * we can continue and connect and try.
+     * But we will remove it again as soon as we close the
+     * connection, in _processResult().
+     * _gotCertError will serve as the marker that we
+     * have to clear the override later.
+     *
+     * In verifyConfig(), before we send the password, we *must*
+     * get another cert exception, this time with dialog to the user
+     * so that he gets informed about this and can make a choice.
+     */
 
     this._try.targetSite = targetSite;
-    this._try._certOverrideProcessed = false;
     Cc["@mozilla.org/security/certoverride;1"]
       .getService(Ci.nsICertOverrideService)
       .rememberValidityOverride(host, port, cert, flags,
-        false); // last bit is temporary -- should it be true? XXX
+        true); // temporary override
     this._log.warn("!! Overrode bad cert temporarily " + host + " " + port +
                    "flags = " + flags + "\n");
     return true;
@@ -1146,6 +1118,7 @@ function SocketUtil(hostname, port, ssl, commands, timeout,
     pump.asyncRead(dataListener, null);
     return new SocketAbortable(transport);
   } catch (e) { _error(e); }
+  return null;
 }
 
 function SocketAbortable(transport)

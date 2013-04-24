@@ -1,40 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Kent James <kent@caspia.com>.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Mark Banner <bugzilla@standard8.plus.com>
- *   Siddharth Agarwal <sid.bugzilla@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Make sure we execute this file exactly once
 var gMailTestUtils_js__;
@@ -55,6 +21,7 @@ Components.utils.import("resource:///modules/mailServices.js");
 // Local Mail Folders. Requires prior setup of profile directory
 
 var gLocalIncomingServer;
+var gLocalRootFolder;
 var gLocalMsgAccount;
 var gLocalInboxFolder;
 var _localAccountInitialized = false;
@@ -71,12 +38,12 @@ function loadLocalMailAccount()
   gLocalMsgAccount = MailServices.accounts.FindAccountForServer(
     gLocalIncomingServer);
 
-  var rootFolder = gLocalIncomingServer.rootMsgFolder
+  gLocalRootFolder = gLocalIncomingServer.rootMsgFolder
                      .QueryInterface(Ci.nsIMsgLocalMailFolder);
 
   // Note: Inbox is not created automatically when there is no deferred server,
   // so we need to create it.
-  gLocalInboxFolder = rootFolder.createLocalSubfolder("Inbox")
+  gLocalInboxFolder = gLocalRootFolder.createLocalSubfolder("Inbox")
                        .QueryInterface(Ci.nsIMsgLocalMailFolder);
   // a local inbox should have a Mail flag!
   gLocalInboxFolder.setFlag(Ci.nsMsgFolderFlags.Mail);
@@ -94,7 +61,7 @@ function loadLocalMailAccount()
  * @param aPort The port the server is on.
  * @param aUsername The username for the server.
  * @param aPassword The password for the server.
- * @returns The newly-created nsIMsgIncomingServer.
+ * @return The newly-created nsIMsgIncomingServer.
  */
 function create_incoming_server(aType, aPort, aUsername, aPassword) {
   let server = MailServices.accounts.createIncomingServer(aUsername, "localhost",
@@ -127,7 +94,7 @@ function create_incoming_server(aType, aPort, aUsername, aPassword) {
  * @param aPort The port the server is on.
  * @param aUsername The username for the server
  * @param aPassword The password for the server
- * @returns The newly-created nsISmtpServer.
+ * @return The newly-created nsISmtpServer.
  */
 function create_outgoing_server(aPort, aUsername, aPassword) {
   let server = MailServices.smtp.createSmtpServer();
@@ -219,67 +186,6 @@ function atob(str, c62, c63) {
  */
 var btoa = IOUtils.btoa;
 
-// Gets the first message header in a folder.
-function firstMsgHdr(folder)
-{
-  let enumerator = folder.msgDatabase.EnumerateMessages();
-  if (enumerator.hasMoreElements())
-    return enumerator.getNext().QueryInterface(Ci.nsIMsgDBHdr);
-  return null;
-}
-
-// Loads a message to a string
-// If aCharset is specified, treats the file as being of that charset
-function loadMessageToString(aFolder, aMsgHdr, aCharset)
-{
-  var data = "";
-  let offset = aMsgHdr.messageOffset;
-  let bytesLeft = aMsgHdr.messageSize;
-  var fstream = Cc["@mozilla.org/network/file-input-stream;1"]
-                  .createInstance(Ci.nsIFileInputStream);
-  fstream.init(aFolder.filePath, -1, 0, 0);
-  let seekableStream = fstream.QueryInterface(Ci.nsISeekableStream);
-  seekableStream.seek(Ci.nsISeekableStream.NS_SEEK_SET, offset);
-  if (aCharset)
-  {
-    let cstream = Cc["@mozilla.org/intl/converter-input-stream;1"]
-                    .createInstance(Ci.nsIConverterInputStream);
-    cstream.init(stream, aCharset, 4096, 0x0000);
-    let str = {};
-    let bytesToRead = Math.min(bytesLeft, 4096);
-    while (cstream.readString(bytesToRead, str) != 0) {
-      data += str.value;
-      bytesLeft -= bytesToRead;
-      if (bytesLeft <= 0)
-        break;
-      bytesToRead = Math.min(bytesLeft, 4096);
-    }
-    cstream.close();
-  }
-  else
-  {
-    var sstream = Cc["@mozilla.org/scriptableinputstream;1"]
-                    .createInstance(Ci.nsIScriptableInputStream);
-
-    sstream.init(fstream);
-
-    let bytesToRead = Math.min(bytesLeft, 4096);
-    var str = sstream.read(bytesToRead);
-    bytesLeft -= bytesToRead;
-    while (str.length > 0) {
-      data += str;
-      if (bytesLeft <= 0)
-        break;
-      bytesToRead = Math.min(bytesLeft, 4096);
-      str = sstream.read(bytesToRead);
-      bytesLeft -= bytesToRead;
-    }
-    sstream.close();
-  }
-  fstream.close();
-  return data;
-}
-
 // Loads a file to a string
 // If aCharset is specified, treats the file as being of that charset
 function loadFileToString(aFile, aCharset) {
@@ -320,15 +226,76 @@ function loadFileToString(aFile, aCharset) {
   return data;
 }
 
+// Gets the first message header in a folder.
+function firstMsgHdr(folder)
+{
+  let enumerator = folder.msgDatabase.EnumerateMessages();
+  if (enumerator.hasMoreElements())
+    return enumerator.getNext().QueryInterface(Ci.nsIMsgDBHdr);
+  return null;
+}
+
+// Loads a message to a string
+// If aCharset is specified, treats the file as being of that charset
+function loadMessageToString(aFolder, aMsgHdr, aCharset)
+{
+  var data = "";
+  let reusable = new Object;
+  let bytesLeft = aMsgHdr.messageSize;
+  let stream = aFolder.getMsgInputStream(aMsgHdr, reusable);
+  if (aCharset)
+  {
+    let cstream = Cc["@mozilla.org/intl/converter-input-stream;1"]
+                    .createInstance(Ci.nsIConverterInputStream);
+    cstream.init(stream, aCharset, 4096, 0x0000);
+    let str = {};
+    let bytesToRead = Math.min(bytesLeft, 4096);
+    while (cstream.readString(bytesToRead, str) != 0) {
+      data += str.value;
+      bytesLeft -= bytesToRead;
+      if (bytesLeft <= 0)
+        break;
+      bytesToRead = Math.min(bytesLeft, 4096);
+    }
+    cstream.close();
+  }
+  else
+  {
+    var sstream = Cc["@mozilla.org/scriptableinputstream;1"]
+                    .createInstance(Ci.nsIScriptableInputStream);
+
+    sstream.init(stream);
+
+    let bytesToRead = Math.min(bytesLeft, 4096);
+    var str = sstream.read(bytesToRead);
+    bytesLeft -= bytesToRead;
+    while (str.length > 0) {
+      data += str;
+      if (bytesLeft <= 0)
+        break;
+      bytesToRead = Math.min(bytesLeft, 4096);
+      str = sstream.read(bytesToRead);
+      bytesLeft -= bytesToRead;
+    }
+    sstream.close();
+  }
+  stream.close();
+
+  return data;
+}
+
 /**
- * Return the file system a particular file is on. Currently only supported on
- * Windows.
+ * Returns the file system a particular file is on.
+ * Currently supported on Windows only.
  *
  * @param aFile The file to get the file system for.
+ * @return The file system a particular file is on, or 'null' if not on Windows.
  */
 function get_file_system(aFile) {
-  if (!("@mozilla.org/windows-registry-key;1" in Cc))
-    throw new Error("get_file_system is only supported on Windows");
+  if (!("@mozilla.org/windows-registry-key;1" in Cc)) {
+    do_print("get_file_system() is supported on Windows only.");
+    return null;
+  }
 
   // Win32 type and other constants.
   const BOOL = ctypes.int32_t;
@@ -410,7 +377,7 @@ function get_file_system(aFile) {
  * @param aFile The file to mark as sparse.
  * @param aRegionStart The start position of the sparse region, in bytes.
  * @param aRegionBytes The number of bytes to mark as sparse.
- * @returns Whether the OS and file system supports marking files as sparse. If
+ * @return Whether the OS and file system supports marking files as sparse. If
  *          this is true, then the file has been marked as sparse. If this is
  *          false, then the underlying system doesn't support marking files as
  *          sparse. If an exception is thrown, then the system does support
@@ -418,9 +385,16 @@ function get_file_system(aFile) {
  *
  */
 function mark_file_region_sparse(aFile, aRegionStart, aRegionBytes) {
+  let fileSystem = get_file_system(aFile);
+  do_print("[mark_file_region_sparse()] File system = " + (fileSystem || "(unknown)") +
+           ", file region = at " + toMiBString(aRegionStart) +
+           " for " + toMiBString(aRegionBytes));
+
   if ("@mozilla.org/windows-registry-key;1" in Cc) {
-    // If the file system is not NTFS, sorry, we don't support sparse files.
-    if (get_file_system(aFile) != "NTFS")
+    // On Windows, check whether the drive is NTFS. If it is, proceed.
+    // If it isn't, then bail out now, because in all probability it is
+    // FAT32, which doesn't support sparse files.
+    if (fileSystem != "NTFS")
       return false;
 
     // Win32 type and other constants.
@@ -575,6 +549,17 @@ function mark_file_region_sparse(aFile, aRegionStart, aRegionBytes) {
     // files.
     return true;
   }
+}
+
+/**
+ * Converts a size in bytes into its mebibytes string representation.
+ * NB: 1 MiB = 1024 * 1024 = 1048576 B.
+ *
+ * @param aSize The size in bytes.
+ * @return A string representing the size in medibytes.
+ */
+function toMiBString(aSize) {
+  return (aSize / 1048576) + " MiB";
 }
 
 /**

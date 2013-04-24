@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Global Database.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Andrew Sutherland <asutherland@asutherland.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 const EXPORTED_SYMBOLS = ["GlodaMsgSearcher"];
 
@@ -53,7 +20,7 @@ Cu.import("resource:///modules/gloda/public.js");
 const FUZZSCORE_TIMESTAMP_FACTOR = 1000 * 1000 * 60 * 60 * 24 * 7;
 
 const RANK_USAGE =
-  "glodaRank(matchinfo(messagesText), 2.0, 1.0, 2.0, 1.5, 1.5)";
+  "glodaRank(matchinfo(messagesText), 1.0, 2.0, 2.0, 1.5, 1.5)";
 
 const DASCORE =
   "(((" + RANK_USAGE + " + messages.notability) * " +
@@ -138,7 +105,7 @@ function reduceSum(accum, curValue) {
 }
 
 /*
- * Columns are: subject, body, attachment names, author, recipients
+ * Columns are: body, subject, attachment names, author, recipients
  */
 
 /**
@@ -151,12 +118,12 @@ function reduceSum(accum, curValue) {
  *  display name on the address book card associated with the e-mail adress)
  *  a contact is going to bias towards matching multiple times.
  */
-const COLUMN_ALL_MATCH_SCORES = [20, 4, 20, 16, 12];
+const COLUMN_ALL_MATCH_SCORES = [4, 20, 20, 16, 12];
 /**
  * Score for each distinct term that matches in the column.  This is capped
  *  by COLUMN_ALL_SCORES.
  */
-const COLUMN_PARTIAL_PER_MATCH_SCORES = [4, 1, 4, 4, 3];
+const COLUMN_PARTIAL_PER_MATCH_SCORES = [1, 4, 4, 4, 3];
 /**
  * If a term matches multiple times, what is the marginal score for each
  *  additional match.  We count the total number of matches beyond the
@@ -166,8 +133,8 @@ const COLUMN_PARTIAL_PER_MATCH_SCORES = [4, 1, 4, 4, 3];
  *  and the value in COLUMN_MULTIPLE_MATCH_LIMIT and multiply by the value in
  *  COLUMN_MULTIPLE_MATCH_SCORES.
  */
-const COLUMN_MULTIPLE_MATCH_SCORES = [0, 1, 0, 0, 0];
-const COLUMN_MULTIPLE_MATCH_LIMIT = [0, 10, 0, 0, 0];
+const COLUMN_MULTIPLE_MATCH_SCORES = [1, 0, 0, 0, 0];
+const COLUMN_MULTIPLE_MATCH_LIMIT = [10, 0, 0, 0, 0];
 
 /**
  * Score the message on its offsets (from stashedColumns).
@@ -310,7 +277,12 @@ GlodaMsgSearcher.prototype = {
       // Our tokenizer treats anything at/above 0x2000 as CJK for now.
       else if (term.length == 1 && term.charCodeAt(0) >= 0x2000)
         fulltextQueryString += term + "*";
-      else
+      else if (
+          term.length == 2 &&
+            term.charCodeAt(0) >= 0x2000 &&
+            term.charCodeAt(1) >= 0x2000
+          || term.length >= 3
+      )
         fulltextQueryString += '"' + term + '"';
 
     }

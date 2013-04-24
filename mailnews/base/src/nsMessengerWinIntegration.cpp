@@ -1,43 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Seth Spitzer <sspitzer@netscape.com>
- *   Bhuvan Racham <racham@netscape.com>
- *   Howard Chu <hyc@symas.com>
- *   Jens Bannmann <jens.b@web.de>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <windows.h>
 #include <shellapi.h>
@@ -64,7 +28,6 @@
 #include "nsIBaseWindow.h"
 #include "nsIWidget.h"
 #include "nsWidgetsCID.h"
-#include "nsILookAndFeel.h"
 #include "MailNewsTypes.h"
 #include "nsIMessengerWindowService.h"
 #include "prprf.h"
@@ -73,20 +36,25 @@
 #include "nsIAlertsService.h"
 #include "nsIPrefService.h"
 #include "nsIPrefBranch.h"
+#include "nsIProperties.h"
 #include "nsISupportsPrimitives.h"
 #include "nsIInterfaceRequestorUtils.h"
+#include "nsIWeakReferenceUtils.h"
+#include "nsComponentManagerUtils.h"
 #include "nsNativeCharsetUtils.h"
 #include "nsMsgUtils.h"
+#ifdef MOZ_THUNDERBIRD
+#include "mozilla/LookAndFeel.h"
+#endif
+#include "mozilla/Services.h"
 
 #include "nsToolkitCompsCID.h"
 #include <stdlib.h>
 #define PROFILE_COMMANDLINE_ARG " -profile "
 
-#define XP_SHSetUnreadMailCounts "SHSetUnreadMailCountW"
-#define XP_SHEnumerateUnreadMailAccounts "SHEnumerateUnreadMailAccountsW"
 #define NOTIFICATIONCLASSNAME "MailBiffNotificationMessageWindow"
 #define UNREADMAILNODEKEY "Software\\Microsoft\\Windows\\CurrentVersion\\UnreadMail\\"
-#define SHELL32_DLL NS_LITERAL_CSTRING("shell32.dll")
+#define SHELL32_DLL L"shell32.dll"
 #define DOUBLE_QUOTE "\""
 #define MAIL_COMMANDLINE_ARG " -mail"
 #define IDI_MAILBIFF 32576
@@ -114,10 +82,7 @@
 #define NIN_BALLOONUSERCLICK (WM_USER + 5)
 #endif
 
-#if _WIN32_IE < 0x600
-#undef NOTIFYICONDATAW_V2_SIZE
-#define NOTIFYICONDATAW_V2_SIZE sizeof(NOTIFYICONDATAW)
-#endif
+using namespace mozilla;
 
 // begin shameless copying from nsNativeAppSupportWin
 HWND hwndForDOMWindow( nsISupports *window )
@@ -206,7 +171,7 @@ static void CALLBACK delayedSingleClick(HWND msgWindow, UINT msg, INT_PTR idEven
     // we know we are dealing with the windows integration object
     nsMessengerWinIntegration * winIntegrationService = static_cast<nsMessengerWinIntegration*>
                                                                    (static_cast<nsIMessengerOSIntegration*>(integrationService.get()));
-    winIntegrationService->ShowNewAlertNotification(PR_TRUE, EmptyString(), EmptyString());
+    winIntegrationService->ShowNewAlertNotification(true, EmptyString(), EmptyString());
   }
 #endif
 }
@@ -273,14 +238,13 @@ nsMessengerWinIntegration::nsMessengerWinIntegration()
   mDefaultServerAtom = MsgGetAtom("DefaultServer");
   mTotalUnreadMessagesAtom = MsgGetAtom("TotalUnreadMessages");
 
-  mUnreadTimerActive = PR_FALSE;
-  mStoreUnreadCounts = PR_FALSE;
+  mUnreadTimerActive = false;
 
   mBiffStateAtom = MsgGetAtom("BiffState");
-  mBiffIconVisible = PR_FALSE;
-  mSuppressBiffIcon = PR_FALSE;
-  mAlertInProgress = PR_FALSE;
-  mBiffIconInitialized = PR_FALSE;
+  mBiffIconVisible = false;
+  mSuppressBiffIcon = false;
+  mAlertInProgress = false;
+  mBiffIconInitialized = false;
   NS_NewISupportsArray(getter_AddRefs(mFoldersWithNewMail));
 }
 
@@ -288,7 +252,7 @@ nsMessengerWinIntegration::~nsMessengerWinIntegration()
 {
   if (mUnreadCountUpdateTimer) {
     mUnreadCountUpdateTimer->Cancel();
-    mUnreadCountUpdateTimer = nsnull;
+    mUnreadCountUpdateTimer = nullptr;
   }
 
   // one last attempt, update the registry
@@ -317,7 +281,7 @@ nsMessengerWinIntegration::ResetCurrent()
   mCurrentUnreadCount = -1;
   mLastUnreadCountWrittenToRegistry = -1;
 
-  mDefaultAccountMightHaveAnInbox = PR_TRUE;
+  mDefaultAccountMightHaveAnInbox = true;
   return NS_OK;
 }
 
@@ -335,11 +299,11 @@ NOTIFYICONDATAW sBiffIconData = { NOTIFYICONDATAW_V2_SIZE,
                                   L"",
                                   NIIF_USER | NIIF_NOSOUND };
 // allow for the null terminator
-static const PRUint32 kMaxTooltipSize = sizeof(sBiffIconData.szTip) /
+static const uint32_t kMaxTooltipSize = sizeof(sBiffIconData.szTip) /
                                         sizeof(sBiffIconData.szTip[0]) - 1;
-static const PRUint32 kMaxBalloonSize = sizeof(sBiffIconData.szInfo) /
+static const uint32_t kMaxBalloonSize = sizeof(sBiffIconData.szInfo) /
                                         sizeof(sBiffIconData.szInfo[0]) - 1;
-static const PRUint32 kMaxBalloonTitle = sizeof(sBiffIconData.szInfoTitle) /
+static const uint32_t kMaxBalloonTitle = sizeof(sBiffIconData.szInfoTitle) /
                                          sizeof(sBiffIconData.szInfoTitle[0]) - 1;
 
 void nsMessengerWinIntegration::InitializeBiffStatusIcon()
@@ -350,7 +314,7 @@ void nsMessengerWinIntegration::InitializeBiffStatusIcon()
   sBiffIconData.hWnd = (HWND) msgWindow;
   sBiffIconData.hIcon = ::LoadIcon( ::GetModuleHandle( NULL ), MAKEINTRESOURCE(IDI_MAILBIFF) );
 
-  mBiffIconInitialized = PR_TRUE;
+  mBiffIconInitialized = true;
 }
 
 nsresult
@@ -358,40 +322,13 @@ nsMessengerWinIntegration::Init()
 {
   nsresult rv;
 
-  // get directory service to build path for shell dll
-  nsCOMPtr<nsIProperties> directoryService =
-    do_GetService(NS_DIRECTORY_SERVICE_CONTRACTID, &rv);
-  NS_ENSURE_SUCCESS(rv,rv);
+  // Get shell32.dll handle
+  HMODULE hModule = ::GetModuleHandleW(SHELL32_DLL);
 
-  // get path strings needed for unread mail count update
-  nsCOMPtr<nsIFile> systemDir;
-  rv = directoryService->Get(NS_OS_SYSTEM_DIR,
-                             NS_GET_IID(nsIFile),
-                             getter_AddRefs(systemDir));
-  NS_ENSURE_SUCCESS(rv,rv);
-
-  // get path to shell dll.
-  nsCAutoString shellFile;
-  rv = systemDir->GetNativePath(shellFile);
-  NS_ENSURE_SUCCESS(rv,rv);
-
-  mShellDllPath.Assign(shellFile + NS_LITERAL_CSTRING("\\") + SHELL32_DLL);
-
-  // load shell dll. If no such dll found, return
-  HMODULE hModule = ::LoadLibrary(mShellDllPath.get());
-  if (!hModule)
-    return NS_OK;
-
-  // get process addresses for the unread mail count functions
   if (hModule) {
-    mSHSetUnreadMailCount = (fnSHSetUnreadMailCount)GetProcAddress(hModule, XP_SHSetUnreadMailCounts);
-    mSHEnumerateUnreadMailAccounts = (fnSHEnumerateUnreadMailAccounts)GetProcAddress(hModule, XP_SHEnumerateUnreadMailAccounts);
+    // SHQueryUserNotificationState is available from Vista
+    mSHQueryUserNotificationState = (fnSHQueryUserNotificationState)GetProcAddress(hModule, "SHQueryUserNotificationState");
   }
-
-  // if failed to get either of the process addresses, this is not XP platform
-  // so we aren't storing unread counts
-  if (mSHSetUnreadMailCount && mSHEnumerateUnreadMailAccounts)
-    mStoreUnreadCounts = PR_TRUE;
 
   nsCOMPtr <nsIMsgAccountManager> accountManager =
     do_GetService(NS_MSGACCOUNTMANAGER_CONTRACTID, &rv);
@@ -408,26 +345,27 @@ nsMessengerWinIntegration::Init()
   rv = mailSession->AddFolderListener(this, nsIFolderListener::boolPropertyChanged | nsIFolderListener::intPropertyChanged);
   NS_ENSURE_SUCCESS(rv,rv);
 
-  if (mStoreUnreadCounts)
-  {
-    // get current profile path for the commandliner
-    nsCOMPtr<nsIFile> profilePath;
-    rv = directoryService->Get(NS_APP_USER_PROFILE_50_DIR,
-                               NS_GET_IID(nsIFile),
-                               getter_AddRefs(profilePath));
-    NS_ENSURE_SUCCESS(rv,rv);
+  // get current profile path for the commandliner
+  nsCOMPtr<nsIProperties> directoryService =
+    do_GetService(NS_DIRECTORY_SERVICE_CONTRACTID, &rv);
+  NS_ENSURE_SUCCESS(rv,rv);
 
-    rv = profilePath->GetPath(mProfilePath);
-    NS_ENSURE_SUCCESS(rv, rv);
+  nsCOMPtr<nsIFile> profilePath;
+  rv = directoryService->Get(NS_APP_USER_PROFILE_50_DIR,
+                             NS_GET_IID(nsIFile),
+                             getter_AddRefs(profilePath));
+  NS_ENSURE_SUCCESS(rv,rv);
 
-    // get application path
-    WCHAR appPath[_MAX_PATH] = {0};
-    ::GetModuleFileNameW(nsnull, appPath, sizeof(appPath));
-    mAppName.Assign((PRUnichar *)appPath);
+  rv = profilePath->GetPath(mProfilePath);
+  NS_ENSURE_SUCCESS(rv, rv);
 
-    rv = ResetCurrent();
-    NS_ENSURE_SUCCESS(rv,rv);
-  }
+  // get application path
+  WCHAR appPath[_MAX_PATH] = {0};
+  ::GetModuleFileNameW(nullptr, appPath, sizeof(appPath));
+  mAppName.Assign((PRUnichar *)appPath);
+
+  rv = ResetCurrent();
+  NS_ENSURE_SUCCESS(rv,rv);
 
   return NS_OK;
 }
@@ -452,14 +390,15 @@ nsMessengerWinIntegration::OnItemRemoved(nsIMsgFolder *, nsISupports *)
 
 nsresult nsMessengerWinIntegration::GetStringBundle(nsIStringBundle **aBundle)
 {
-  nsresult rv = NS_OK;
   NS_ENSURE_ARG_POINTER(aBundle);
-  nsCOMPtr<nsIStringBundleService> bundleService = do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
+  nsCOMPtr<nsIStringBundleService> bundleService =
+    mozilla::services::GetStringBundleService();
+  NS_ENSURE_TRUE(bundleService, NS_ERROR_UNEXPECTED);
   nsCOMPtr<nsIStringBundle> bundle;
-  if (bundleService && NS_SUCCEEDED(rv))
-    bundleService->CreateBundle("chrome://messenger/locale/messenger.properties", getter_AddRefs(bundle));
+  bundleService->CreateBundle("chrome://messenger/locale/messenger.properties",
+                              getter_AddRefs(bundle));
   NS_IF_ADDREF(*aBundle = bundle);
-  return rv;
+  return NS_OK;
 }
 
 #ifndef MOZ_THUNDERBIRD
@@ -476,7 +415,7 @@ nsresult nsMessengerWinIntegration::ShowAlertMessage(const nsString& aAlertTitle
   nsCOMPtr<nsIPrefBranch> prefBranch(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool showBalloon = PR_FALSE;
+  bool showBalloon = false;
   prefBranch->GetBoolPref(SHOW_BALLOON_PREF, &showBalloon);
   sBiffIconData.szInfo[0] = '\0';
   if (showBalloon) {
@@ -484,7 +423,7 @@ nsresult nsMessengerWinIntegration::ShowAlertMessage(const nsString& aAlertTitle
     ::wcsncpy( sBiffIconData.szInfo, aAlertText.get(), kMaxBalloonSize);
   }
 
-  PRBool showAlert = PR_TRUE;
+  bool showAlert = true;
   prefBranch->GetBoolPref(SHOW_ALERT_PREF, &showAlert);
 
   if (showAlert)
@@ -493,10 +432,10 @@ nsresult nsMessengerWinIntegration::ShowAlertMessage(const nsString& aAlertTitle
     if (NS_SUCCEEDED(rv))
     {
       rv = alertsService->ShowAlertNotification(NS_LITERAL_STRING(NEW_MAIL_ALERT_ICON), aAlertTitle,
-                                                aAlertText, PR_TRUE,
+                                                aAlertText, true,
                                                 NS_ConvertASCIItoUTF16(aFolderURI), this,
                                                 EmptyString());
-      mAlertInProgress = PR_TRUE;
+      mAlertInProgress = true;
     }
   }
 
@@ -509,7 +448,7 @@ nsresult nsMessengerWinIntegration::ShowAlertMessage(const nsString& aAlertTitle
 // Opening Thunderbird's new mail alert notification window
 // aUserInitiated --> true if we are opening the alert notification in response to a user action
 //                    like clicking on the biff icon
-nsresult nsMessengerWinIntegration::ShowNewAlertNotification(PRBool aUserInitiated, const nsString& aAlertTitle, const nsString& aAlertText)
+nsresult nsMessengerWinIntegration::ShowNewAlertNotification(bool aUserInitiated, const nsString& aAlertTitle, const nsString& aAlertText)
 {
   nsresult rv;
 
@@ -520,7 +459,7 @@ nsresult nsMessengerWinIntegration::ShowNewAlertNotification(PRBool aUserInitiat
   nsCOMPtr<nsIPrefBranch> prefBranch(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool showBalloon = PR_FALSE;
+  bool showBalloon = false;
   prefBranch->GetBoolPref(SHOW_BALLOON_PREF, &showBalloon);
   sBiffIconData.szInfo[0] = '\0';
   if (showBalloon) {
@@ -528,10 +467,20 @@ nsresult nsMessengerWinIntegration::ShowNewAlertNotification(PRBool aUserInitiat
     ::wcsncpy( sBiffIconData.szInfo, aAlertText.get(), kMaxBalloonSize);
   }
 
-  PRBool showAlert = PR_TRUE;
+  bool showAlert = true;
 
   if (prefBranch)
     prefBranch->GetBoolPref(SHOW_ALERT_PREF, &showAlert);
+
+  // check if we are allowed to show a notification
+  if (showAlert && mSHQueryUserNotificationState) {
+    MOZ_QUERY_USER_NOTIFICATION_STATE qstate;    
+    if (SUCCEEDED(mSHQueryUserNotificationState(&qstate))) {
+      if (qstate != QUNS_ACCEPTS_NOTIFICATIONS) {
+        showAlert = false;
+      }
+    }
+  }
 
   if (showAlert)
   {
@@ -567,15 +516,10 @@ nsresult nsMessengerWinIntegration::ShowNewAlertNotification(PRBool aUserInitiat
     nsCOMPtr<nsISupportsPRUint8> scriptableOrigin (do_CreateInstance(NS_SUPPORTS_PRUINT8_CONTRACTID));
     NS_ENSURE_TRUE(scriptableOrigin, NS_ERROR_FAILURE);
     scriptableOrigin->SetData(0);
-    nsCOMPtr<nsILookAndFeel> lookAndFeel = do_GetService("@mozilla.org/widget/lookandfeel;1");
-    if (lookAndFeel)
-    {
-      PRInt32 origin;
-      lookAndFeel->GetMetric(nsILookAndFeel::eMetric_AlertNotificationOrigin,
-                             origin);
-      if (origin && origin >= 0 && origin <= 7)
-        scriptableOrigin->SetData(origin);
-    }
+    int32_t origin = LookAndFeel::GetInt(LookAndFeel::eIntID_AlertNotificationOrigin);
+    if (origin && origin >= 0 && origin <= 7)
+      scriptableOrigin->SetData(origin);
+
     rv = argsArray->AppendElement(scriptableOrigin);
     NS_ENSURE_SUCCESS(rv, rv);
 
@@ -585,7 +529,7 @@ nsresult nsMessengerWinIntegration::ShowNewAlertNotification(PRBool aUserInitiat
                 "chrome,dialog=yes,titlebar=no,popup=yes", argsArray,
                  getter_AddRefs(newWindow));
 
-    mAlertInProgress = PR_TRUE;
+    mAlertInProgress = true;
   }
 
   // if the user has turned off the mail alert, or  openWindow generated an error,
@@ -601,7 +545,7 @@ nsresult nsMessengerWinIntegration::AlertFinished()
 {
   // okay, we are done showing the alert
   // now put an icon in the system tray, if allowed
-  PRBool showTrayIcon = !mSuppressBiffIcon;
+  bool showTrayIcon = !mSuppressBiffIcon;
   if (showTrayIcon)
   {
     nsCOMPtr<nsIPrefBranch> prefBranch(do_GetService(NS_PREFSERVICE_CONTRACTID));
@@ -611,10 +555,10 @@ nsresult nsMessengerWinIntegration::AlertFinished()
   if (showTrayIcon || sBiffIconData.szInfo[0])
   {
     GenericShellNotify(NIM_ADD);
-    mBiffIconVisible = PR_TRUE;
+    mBiffIconVisible = true;
   }
-  mSuppressBiffIcon = PR_FALSE;
-  mAlertInProgress = PR_FALSE;
+  mSuppressBiffIcon = false;
+  mAlertInProgress = false;
   return NS_OK;
 }
 
@@ -638,7 +582,7 @@ nsresult nsMessengerWinIntegration::AlertClicked()
   }
 #endif
   // make sure we don't insert the icon in the system tray since the user clicked on the alert.
-  mSuppressBiffIcon = PR_TRUE;
+  mSuppressBiffIcon = true;
   nsCString folderURI;
   GetFirstFolderWithNewMail(folderURI);
   openMailWindow(folderURI);
@@ -657,21 +601,50 @@ nsMessengerWinIntegration::Observe(nsISupports* aSubject, const char* aTopic, co
   return NS_OK;
 }
 
+static void EscapeAmpersands(nsString& aToolTip)
+{
+  // First, check to see whether we have any ampersands.
+  int32_t pos = aToolTip.FindChar('&');
+  if (pos == kNotFound)
+    return;
+
+  // Next, see if we only have bare ampersands.
+  pos = MsgFind(aToolTip, "&&", false, pos);
+
+  // Windows tooltip code removes one ampersand from each run,
+  // then collapses pairs of amperands. This means that in the easy case,
+  // we need to replace each ampersand with three.
+  MsgReplaceSubstring(aToolTip, NS_LITERAL_STRING("&"), NS_LITERAL_STRING("&&&"));
+  if (pos == kNotFound)
+    return;
+
+  // We inserted too many ampersands. Remove some.
+  for (;;) {
+    pos = MsgFind(aToolTip, "&&&&&&", false, pos);
+    if (pos == kNotFound)
+      return;
+
+    aToolTip.Cut(pos, 1);
+    pos += 2;
+  }
+}
+
 void nsMessengerWinIntegration::FillToolTipInfo()
 {
   // iterate over all the folders in mFoldersWithNewMail
   nsString accountName;
   nsCString hostName;
+  nsString toolTipLine;
   nsAutoString toolTipText;
   nsAutoString animatedAlertText;
   nsCOMPtr<nsIMsgFolder> folder;
   nsCOMPtr<nsIWeakReference> weakReference;
-  PRInt32 numNewMessages = 0;
+  int32_t numNewMessages = 0;
 
-  PRUint32 count = 0;
+  uint32_t count = 0;
   mFoldersWithNewMail->Count(&count);
 
-  for (PRUint32 index = 0; index < count; index++)
+  for (uint32_t index = 0; index < count; index++)
   {
     weakReference = do_QueryElementAt(mFoldersWithNewMail, index);
     folder = do_QueryReferent(weakReference);
@@ -680,7 +653,7 @@ void nsMessengerWinIntegration::FillToolTipInfo()
       folder->GetPrettiestName(accountName);
 
       numNewMessages = 0;
-      folder->GetNumNewMessages(PR_TRUE, &numNewMessages);
+      folder->GetNumNewMessages(true, &numNewMessages);
       nsCOMPtr<nsIStringBundle> bundle;
       GetStringBundle(getter_AddRefs(bundle));
       if (bundle)
@@ -704,15 +677,17 @@ void nsMessengerWinIntegration::FillToolTipInfo()
         if (animatedAlertText.IsEmpty()) // if we haven't filled in the animated alert text yet
           animatedAlertText = finalText;
 
+        toolTipLine.Append(accountName);
+        toolTipLine.Append(' ');
+        toolTipLine.Append(finalText);
+        EscapeAmpersands(toolTipLine);
+
         // only add this new string if it will fit without truncation....
-        if (kMaxTooltipSize >= toolTipText.Length() + accountName.Length() + finalText.Length() + 2)
-        {
-          if (index > 0)
-            toolTipText.Append(PRUnichar('\n'));
-          toolTipText.Append(accountName);
-          toolTipText.Append(' ');
-          toolTipText.Append(finalText);
-        }
+        if (toolTipLine.Length() + toolTipText.Length() <= kMaxTooltipSize)
+          toolTipText.Append(toolTipLine);
+
+        // clear out the tooltip line for the next folder
+        toolTipLine.Assign('\n');
       } // if we got a bundle
     } // if we got a folder
   } // for each folder
@@ -724,7 +699,7 @@ void nsMessengerWinIntegration::FillToolTipInfo()
 #ifndef MOZ_THUNDERBIRD
     ShowAlertMessage(accountName, animatedAlertText, EmptyCString());
 #else
-    ShowNewAlertNotification(PR_FALSE, accountName, animatedAlertText);
+    ShowNewAlertNotification(false, accountName, animatedAlertText);
 #endif
   }
   else
@@ -740,9 +715,9 @@ nsresult nsMessengerWinIntegration::GetFirstFolderWithNewMail(nsACString& aFolde
 
   nsCOMPtr<nsIMsgFolder> folder;
   nsCOMPtr<nsIWeakReference> weakReference;
-  PRInt32 numNewMessages = 0;
+  int32_t numNewMessages = 0;
 
-  PRUint32 count = 0;
+  uint32_t count = 0;
   mFoldersWithNewMail->Count(&count);
 
   if (!count)  // kick out if we don't have any folders with new mail
@@ -775,7 +750,7 @@ nsresult nsMessengerWinIntegration::GetFirstFolderWithNewMail(nsACString& aFolde
           if (msgFolder)
           {
             numNewMessages = 0;
-            msgFolder->GetNumNewMessages(PR_FALSE, &numNewMessages);
+            msgFolder->GetNumNewMessages(false, &numNewMessages);
             if (numNewMessages)
               break; // kick out of the while loop
             more = enumerator->Next();
@@ -803,7 +778,7 @@ void nsMessengerWinIntegration::GenericShellNotify(DWORD aMessage)
 }
 
 NS_IMETHODIMP
-nsMessengerWinIntegration::OnItemPropertyFlagChanged(nsIMsgDBHdr *item, nsIAtom *property, PRUint32 oldFlag, PRUint32 newFlag)
+nsMessengerWinIntegration::OnItemPropertyFlagChanged(nsIMsgDBHdr *item, nsIAtom *property, uint32_t oldFlag, uint32_t newFlag)
 {
   return NS_OK;
 }
@@ -817,8 +792,8 @@ nsMessengerWinIntegration::OnItemAdded(nsIMsgFolder *, nsISupports *)
 NS_IMETHODIMP
 nsMessengerWinIntegration::OnItemBoolPropertyChanged(nsIMsgFolder *aItem,
                                                          nsIAtom *aProperty,
-                                                         PRBool aOldValue,
-                                                         PRBool aNewValue)
+                                                         bool aOldValue,
+                                                         bool aNewValue)
 {
   if (aProperty == mDefaultServerAtom) {
     nsresult rv;
@@ -851,13 +826,13 @@ nsMessengerWinIntegration::OnItemEvent(nsIMsgFolder *, nsIAtom *)
 }
 
 NS_IMETHODIMP
-nsMessengerWinIntegration::OnItemIntPropertyChanged(nsIMsgFolder *aItem, nsIAtom *aProperty, PRInt32 aOldValue, PRInt32 aNewValue)
+nsMessengerWinIntegration::OnItemIntPropertyChanged(nsIMsgFolder *aItem, nsIAtom *aProperty, int32_t aOldValue, int32_t aNewValue)
 {
   // if we got new mail show a icon in the system tray
   if (mBiffStateAtom == aProperty && mFoldersWithNewMail)
   {
     nsCOMPtr<nsIWeakReference> weakFolder = do_GetWeakReference(aItem);
-    PRInt32 indexInNewArray = mFoldersWithNewMail->IndexOf(weakFolder);
+    int32_t indexInNewArray = mFoldersWithNewMail->IndexOf(weakFolder);
 
     if (!mBiffIconInitialized)
       InitializeBiffStatusIcon();
@@ -868,7 +843,7 @@ nsMessengerWinIntegration::OnItemIntPropertyChanged(nsIMsgFolder *aItem, nsIAtom
       // we are performing biff (as opposed to the user getting new mail)
       if (!mBiffIconVisible)
       {
-        PRBool performingBiff = PR_FALSE;
+        bool performingBiff = false;
         nsCOMPtr<nsIMsgIncomingServer> server;
         aItem->GetServer(getter_AddRefs(server));
         if (server)
@@ -890,19 +865,17 @@ nsMessengerWinIntegration::OnItemIntPropertyChanged(nsIMsgFolder *aItem, nsIAtom
       // added it to the system tray. This happens when the user reads a new message before
       // the animated alert has gone away.
       if (mAlertInProgress)
-        mSuppressBiffIcon = PR_TRUE;
+        mSuppressBiffIcon = true;
 
       if (indexInNewArray != -1)
         mFoldersWithNewMail->RemoveElementAt(indexInNewArray);
       if (mBiffIconVisible)
       {
-        mBiffIconVisible = PR_FALSE;
+        mBiffIconVisible = false;
         GenericShellNotify(NIM_DELETE);
       }
     }
   } // if the biff property changed
-
-  if (!mStoreUnreadCounts) return NS_OK; // don't do anything here if we aren't storing unread counts...
 
   if (aProperty == mTotalUnreadMessagesAtom) {
     nsCString itemURI;
@@ -939,7 +912,7 @@ nsMessengerWinIntegration::OnUnreadCountUpdateTimer(nsITimer *timer, void *osInt
 {
   nsMessengerWinIntegration *winIntegration = (nsMessengerWinIntegration*)osIntegration;
 
-  winIntegration->mUnreadTimerActive = PR_FALSE;
+  winIntegration->mUnreadTimerActive = false;
   nsresult rv = winIntegration->UpdateUnreadCount();
   NS_ASSERTION(NS_SUCCEEDED(rv), "updating unread count failed");
 }
@@ -947,8 +920,6 @@ nsMessengerWinIntegration::OnUnreadCountUpdateTimer(nsITimer *timer, void *osInt
 nsresult
 nsMessengerWinIntegration::RemoveCurrentFromRegistry()
 {
-  if (!mStoreUnreadCounts) return NS_OK; // don't do anything here if we aren't storing unread counts...
-
   // If Windows XP, open the registry and get rid of old account registry entries
   // If there is a email prefix, get it and use it to build the registry key.
   // Otherwise, just the email address will be the registry key.
@@ -964,7 +935,7 @@ nsMessengerWinIntegration::RemoveCurrentFromRegistry()
   // Enumerate through registry entries to delete the key matching
   // currentUnreadMailCountKey
   int index = 0;
-  while (SUCCEEDED(mSHEnumerateUnreadMailAccounts(HKEY_CURRENT_USER,
+  while (SUCCEEDED(SHEnumerateUnreadMailAccountsW(HKEY_CURRENT_USER,
                                                   index,
                                                   registryUnreadMailCountKey,
                                                   sizeof(registryUnreadMailCountKey))))
@@ -994,8 +965,6 @@ nsMessengerWinIntegration::RemoveCurrentFromRegistry()
 nsresult
 nsMessengerWinIntegration::UpdateRegistryWithCurrent()
 {
-  if (!mStoreUnreadCounts) return NS_OK; // don't do anything here if we aren't storing unread counts...
-
   if (mInboxURI.IsEmpty() || mEmail.IsEmpty())
     return NS_OK;
 
@@ -1031,7 +1000,7 @@ nsMessengerWinIntegration::UpdateRegistryWithCurrent()
       CopyASCIItoUTF16(mEmail, pBuffer);
 
     // Write the info into the registry
-    HRESULT hr = mSHSetUnreadMailCount(pBuffer.get(),
+    HRESULT hr = SHSetUnreadMailCountW(pBuffer.get(),
                                        mCurrentUnreadCount,
                                        commandLinerForAppLaunch.get());
   }
@@ -1046,7 +1015,6 @@ nsresult
 nsMessengerWinIntegration::SetupInbox()
 {
   nsresult rv;
-  if (!mStoreUnreadCounts) return NS_OK; // don't do anything here if we aren't storing unread counts...
 
   // get default account
   nsCOMPtr <nsIMsgAccountManager> accountManager =
@@ -1058,7 +1026,7 @@ nsMessengerWinIntegration::SetupInbox()
   if (NS_FAILED(rv)) {
     // this can happen if we launch mail on a new profile
     // we don't have a default account yet
-    mDefaultAccountMightHaveAnInbox = PR_FALSE;
+    mDefaultAccountMightHaveAnInbox = false;
     return NS_OK;
   }
 
@@ -1076,7 +1044,7 @@ nsMessengerWinIntegration::SetupInbox()
   // we only care about imap and pop3
   if (type.EqualsLiteral("imap") || type.EqualsLiteral("pop3")) {
     // imap and pop3 account should have an Inbox
-    mDefaultAccountMightHaveAnInbox = PR_TRUE;
+    mDefaultAccountMightHaveAnInbox = true;
 
     mEmailPrefix.Truncate();
 
@@ -1106,7 +1074,7 @@ nsMessengerWinIntegration::SetupInbox()
     rv = inboxFolder->GetURI(mInboxURI);
     NS_ENSURE_SUCCESS(rv,rv);
 
-    rv = inboxFolder->GetNumUnread(PR_FALSE, &mCurrentUnreadCount);
+    rv = inboxFolder->GetNumUnread(false, &mCurrentUnreadCount);
     NS_ENSURE_SUCCESS(rv,rv);
   }
   else {
@@ -1114,7 +1082,7 @@ nsMessengerWinIntegration::SetupInbox()
     // that we expect to have an inbox.  (local folders, news accounts)
     // set this flag to avoid calling SetupInbox() every time
     // the timer goes off.
-    mDefaultAccountMightHaveAnInbox = PR_FALSE;
+    mDefaultAccountMightHaveAnInbox = false;
   }
 
   return NS_OK;
@@ -1124,7 +1092,6 @@ nsresult
 nsMessengerWinIntegration::UpdateUnreadCount()
 {
   nsresult rv;
-  if (!mStoreUnreadCounts) return NS_OK; // don't do anything here if we aren't storing unread counts...
 
   if (mDefaultAccountMightHaveAnInbox && mInboxURI.IsEmpty()) {
     rv = SetupInbox();
@@ -1137,8 +1104,7 @@ nsMessengerWinIntegration::UpdateUnreadCount()
 nsresult
 nsMessengerWinIntegration::SetupUnreadCountUpdateTimer()
 {
-  if (!mStoreUnreadCounts) return NS_OK; // don't do anything here if we aren't storing unread counts...
-  mUnreadTimerActive = PR_TRUE;
+  mUnreadTimerActive = true;
   if (mUnreadCountUpdateTimer)
     mUnreadCountUpdateTimer->Cancel();
   else

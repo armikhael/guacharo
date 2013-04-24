@@ -1,45 +1,13 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set ts=2 et sw=2 tw=80: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   William Chen <wchen@mozilla.com> (Original Author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#include "nsError.h"
 #include "nsDOMStringMap.h"
 
-#include "nsDOMClassInfo.h"
+#include "nsDOMClassInfoID.h"
 #include "nsGenericHTMLElement.h"
 #include "nsContentUtils.h"
 
@@ -50,9 +18,12 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN(nsDOMStringMap)
 NS_IMPL_CYCLE_COLLECTION_TRAVERSE_NSCOMPTR(mElement)
 NS_IMPL_CYCLE_COLLECTION_TRAVERSE_END
 NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN(nsDOMStringMap)
-  // Call back to element to null out weak reference to this object.
-  tmp->mElement->ClearDataset();
-  tmp->mElement = nsnull;
+  // Check that mElement exists in case the unlink code is run more than once.
+  if (tmp->mElement) {
+    // Call back to element to null out weak reference to this object.
+    tmp->mElement->ClearDataset();
+    tmp->mElement = nullptr;
+  }
 NS_IMPL_CYCLE_COLLECTION_UNLINK_END
 
 NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(nsDOMStringMap)
@@ -66,7 +37,7 @@ NS_IMPL_CYCLE_COLLECTING_RELEASE(nsDOMStringMap)
 
 nsDOMStringMap::nsDOMStringMap(nsGenericHTMLElement* aElement)
   : mElement(aElement),
-    mRemovingProp(PR_FALSE)
+    mRemovingProp(false)
 {
 }
 
@@ -102,16 +73,16 @@ protected:
 };
 
 /* [notxpcom] boolean hasDataAttr (in DOMString prop); */
-NS_IMETHODIMP_(PRBool) nsDOMStringMap::HasDataAttr(const nsAString& aProp)
+NS_IMETHODIMP_(bool) nsDOMStringMap::HasDataAttr(const nsAString& aProp)
 {
   nsAutoString attr;
   if (!DataPropToAttr(aProp, attr)) {
-    return PR_FALSE;
+    return false;
   }
 
   nsCOMPtr<nsIAtom> attrAtom = do_GetAtom(attr);
   if (!attrAtom) {
-    return PR_FALSE;
+    return false;
   }
 
   return mElement->HasAttr(kNameSpaceID_None, attrAtom);
@@ -119,12 +90,12 @@ NS_IMETHODIMP_(PRBool) nsDOMStringMap::HasDataAttr(const nsAString& aProp)
 
 /* [noscript] DOMString getDataAttr (in DOMString prop); */
 NS_IMETHODIMP nsDOMStringMap::GetDataAttr(const nsAString& aProp,
-                                          nsAString& aResult NS_OUTPARAM)
+                                          nsAString& aResult)
 {
   nsAutoString attr;
 
   if (!DataPropToAttr(aProp, attr)) {
-    aResult.SetIsVoid(PR_TRUE);
+    aResult.SetIsVoid(true);
     return NS_OK;
   }
 
@@ -132,7 +103,7 @@ NS_IMETHODIMP nsDOMStringMap::GetDataAttr(const nsAString& aProp,
   NS_ENSURE_TRUE(attrAtom, NS_ERROR_OUT_OF_MEMORY);
 
   if (!mElement->GetAttr(kNameSpaceID_None, attrAtom, aResult)) {
-    aResult.SetIsVoid(PR_TRUE);
+    aResult.SetIsVoid(true);
     return NS_OK;
   }
 
@@ -146,13 +117,13 @@ NS_IMETHODIMP nsDOMStringMap::SetDataAttr(const nsAString& aProp,
   nsAutoString attr;
   NS_ENSURE_TRUE(DataPropToAttr(aProp, attr), NS_ERROR_DOM_SYNTAX_ERR);
 
-  nsresult rv = nsContentUtils::CheckQName(attr, PR_FALSE);
+  nsresult rv = nsContentUtils::CheckQName(attr, false);
   NS_ENSURE_SUCCESS(rv, rv);
 
   nsCOMPtr<nsIAtom> attrAtom = do_GetAtom(attr);
   NS_ENSURE_TRUE(attrAtom, NS_ERROR_OUT_OF_MEMORY);
 
-  return mElement->SetAttr(kNameSpaceID_None, attrAtom, aValue, PR_TRUE);
+  return mElement->SetAttr(kNameSpaceID_None, attrAtom, aValue, true);
 }
 
 /* [notxpcom] void removeDataAttr (in DOMString prop); */
@@ -173,7 +144,7 @@ NS_IMETHODIMP_(void) nsDOMStringMap::RemoveDataAttr(const nsAString& aProp)
     return;
   }
 
-  mElement->UnsetAttr(kNameSpaceID_None, attrAtom, PR_TRUE);
+  mElement->UnsetAttr(kNameSpaceID_None, attrAtom, true);
 }
 
 nsGenericHTMLElement* nsDOMStringMap::GetElement()
@@ -196,14 +167,11 @@ nsresult nsDOMStringMap::RemovePropInternal(nsIAtom* aAttr)
 
   jsval val;
   JSContext* cx = nsContentUtils::GetCurrentJSContext();
-  nsresult rv = nsContentUtils::WrapNative(cx, JS_GetScopeChain(cx),
+  nsresult rv = nsContentUtils::WrapNative(cx, JS_GetGlobalForScopeChain(cx),
                                            this, &val);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  JSAutoEnterCompartment ac;
-  if (!ac.enter(cx, JSVAL_TO_OBJECT(val))) {
-    return NS_ERROR_FAILURE;
-  }
+  JSAutoCompartment ac(cx, JSVAL_TO_OBJECT(val));
 
   // Guard against infinite recursion. Prevents the stack from looking like
   // ...
@@ -212,11 +180,11 @@ nsresult nsDOMStringMap::RemovePropInternal(nsIAtom* aAttr)
   // RemoveDataAttr
   // ...
   // RemoveProp
-  mRemovingProp = PR_TRUE;
+  mRemovingProp = true;
   jsval dummy;
   JS_DeleteUCProperty2(cx, JSVAL_TO_OBJECT(val), prop.get(), prop.Length(),
                        &dummy);
-  mRemovingProp = PR_FALSE;
+  mRemovingProp = false;
 
   return NS_OK;
 }
@@ -227,11 +195,11 @@ nsresult nsDOMStringMap::RemovePropInternal(nsIAtom* aAttr)
  */
 nsresult nsDOMStringMap::GetDataPropList(nsTArray<nsString>& aResult)
 {
-  PRUint32 attrCount = mElement->GetAttrCount();
+  uint32_t attrCount = mElement->GetAttrCount();
 
   // Iterate through all the attributes and add property
   // names corresponding to data attributes to return array.
-  for (PRUint32 i = 0; i < attrCount; ++i) {
+  for (uint32_t i = 0; i < attrCount; ++i) {
     nsAutoString attrString;
     const nsAttrName* attrName = mElement->GetAttrNameAt(i);
     attrName->LocalName()->ToString(attrString);
@@ -251,7 +219,7 @@ nsresult nsDOMStringMap::GetDataPropList(nsTArray<nsString>& aResult)
  * Converts a dataset property name to the corresponding data attribute name.
  * (ex. aBigFish to data-a-big-fish).
  */
-PRBool nsDOMStringMap::DataPropToAttr(const nsAString& aProp,
+bool nsDOMStringMap::DataPropToAttr(const nsAString& aProp,
                                       nsAString& aResult)
 {
   const PRUnichar* cur = aProp.BeginReading();
@@ -274,7 +242,7 @@ PRBool nsDOMStringMap::DataPropToAttr(const nsAString& aProp,
     if (PRUnichar('-') == *cur && next < end &&
         PRUnichar('a') <= *next && *next <= PRUnichar('z')) {
       // Syntax error if character following "-" is in range "a" to "z".
-      return PR_FALSE;
+      return false;
     }
 
     if (PRUnichar('A') <= *cur && *cur <= PRUnichar('Z')) {
@@ -287,20 +255,20 @@ PRBool nsDOMStringMap::DataPropToAttr(const nsAString& aProp,
   }
 
   aResult.Assign(attr);
-  return PR_TRUE;
+  return true;
 }
 
 /**
  * Converts a data attribute name to the corresponding dataset property name.
  * (ex. data-a-big-fish to aBigFish).
  */
-PRBool nsDOMStringMap::AttrToDataProp(const nsAString& aAttr,
+bool nsDOMStringMap::AttrToDataProp(const nsAString& aAttr,
                                       nsAString& aResult)
 {
   // If the attribute name does not begin with "data-" then it can not be
   // a data attribute.
   if (!StringBeginsWith(aAttr, NS_LITERAL_STRING("data-"))) {
-    return PR_FALSE;
+    return false;
   }
 
   // Start reading attribute from first character after "data-".
@@ -330,5 +298,5 @@ PRBool nsDOMStringMap::AttrToDataProp(const nsAString& aAttr,
   }
 
   aResult.Assign(prop);
-  return PR_TRUE;
+  return true;
 }

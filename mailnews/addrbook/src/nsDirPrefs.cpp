@@ -1,47 +1,12 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Seth Spitzer <sspitzer@netscape.com>
- *   Dan Mosedale <dmose@mozilla.org>
- *   Mark Banner <mark@standard8.demon.co.uk>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* directory server preferences (used to be dirprefs.c in 4.x) */
 
 #include "nsIPrefService.h"
-#include "nsIPrefBranch2.h"
+#include "nsIPrefBranch.h"
 #include "nsDirPrefs.h"
 #include "nsIPrefLocalizedString.h"
 #include "nsIObserver.h"
@@ -51,7 +16,7 @@
 #include "nsIAddrDatabase.h"
 #include "nsAbBaseCID.h"
 #include "nsIAbManager.h"
-#include "nsILocalFile.h"
+#include "nsIFile.h"
 #include "nsWeakReference.h"
 #include "nsIAbMDBDirectory.h"
 #if defined(MOZ_LDAP_XPCOM)
@@ -63,6 +28,7 @@
 #include "nsQuickSort.h"
 #include "nsComponentManagerUtils.h"
 #include "msgCore.h"
+#include "nsStringGlue.h"
 
 #include <ctype.h>
 
@@ -72,17 +38,17 @@
 
 /* Default settings for site-configurable prefs */
 #define kDefaultPosition 1
-static PRBool dir_IsServerDeleted(DIR_Server * server);
+static bool dir_IsServerDeleted(DIR_Server * server);
 
 static char *DIR_GetStringPref(const char *prefRoot, const char *prefLeaf, const char *defaultValue);
-static PRInt32 DIR_GetIntPref(const char *prefRoot, const char *prefLeaf, PRInt32 defaultValue);
+static int32_t DIR_GetIntPref(const char *prefRoot, const char *prefLeaf, int32_t defaultValue);
 
 static char * dir_ConvertDescriptionToPrefName(DIR_Server * server);
 
 void DIR_SetFileName(char** filename, const char* leafName);
-static void DIR_SetIntPref(const char *prefRoot, const char *prefLeaf, PRInt32 value, PRInt32 defaultValue);
+static void DIR_SetIntPref(const char *prefRoot, const char *prefLeaf, int32_t value, int32_t defaultValue);
 static DIR_Server *dir_MatchServerPrefToServer(nsVoidArray *wholeList, const char *pref);
-static PRBool dir_ValidateAndAddNewServer(nsVoidArray *wholeList, const char *fullprefname);
+static bool dir_ValidateAndAddNewServer(nsVoidArray *wholeList, const char *fullprefname);
 static void DIR_DeleteServerList(nsVoidArray *wholeList);
 
 static char *dir_CreateServerPrefName(DIR_Server *server);
@@ -91,9 +57,9 @@ static void DIR_GetPrefsForOneServer(DIR_Server *server);
 static void DIR_InitServer(DIR_Server *server, DirectoryType dirType = (DirectoryType)0);
 static DIR_PrefId  DIR_AtomizePrefName(const char *prefname);
 
-#define DIR_POS_APPEND                     0x80000000
-#define DIR_POS_DELETE                     0x80000001
-static PRBool DIR_SetServerPosition(nsVoidArray *wholeList, DIR_Server *server, PRInt32 position);
+const int32_t DIR_POS_APPEND = -1;
+const int32_t DIR_POS_DELETE = -2;
+static bool DIR_SetServerPosition(nsVoidArray *wholeList, DIR_Server *server, int32_t position);
 
 /* These two routines should be called to initialize and save 
  * directory preferences from the XP Java Script preferences
@@ -101,8 +67,8 @@ static PRBool DIR_SetServerPosition(nsVoidArray *wholeList, DIR_Server *server, 
 static nsresult DIR_GetServerPreferences(nsVoidArray** list);
 static void DIR_SaveServerPreferences(nsVoidArray *wholeList);
 
-static PRInt32 dir_UserId = 0;
-nsVoidArray *dir_ServerList = nsnull;
+static int32_t dir_UserId = 0;
+nsVoidArray *dir_ServerList = nullptr;
 
 /*****************************************************************************
  * Functions for creating the new back end managed DIR_Server list.
@@ -120,8 +86,9 @@ NS_IMPL_ISUPPORTS2(DirPrefObserver, nsISupportsWeakReference, nsIObserver)
 NS_IMETHODIMP DirPrefObserver::Observe(nsISupports *aSubject, const char *aTopic, const PRUnichar *aData)
 {
   nsCOMPtr<nsIPrefBranch> prefBranch(do_QueryInterface(aSubject));
-
-  const char *prefname = NS_ConvertUTF16toUTF8(aData).get();
+  nsCString strPrefName;
+  strPrefName.Assign(NS_ConvertUTF16toUTF8(aData));
+  const char *prefname = strPrefName.get();
 
   DIR_PrefId id = DIR_AtomizePrefName(prefname);
 
@@ -145,7 +112,7 @@ NS_IMETHODIMP DirPrefObserver::Observe(nsISupports *aSubject, const char *aTopic
      */
     if (id == idPosition)
     {
-      PRInt32 position;
+      int32_t position;
 
       /* We must not do anything if the new position is the same as the
        * position in the DIR_Server.  This avoids recursion in cases
@@ -162,7 +129,7 @@ NS_IMETHODIMP DirPrefObserver::Observe(nsISupports *aSubject, const char *aTopic
 
     if (id == idDescription)
       // Ensure the local copy of the description is kept up to date.
-      server->description = DIR_GetStringPref(prefname, "description", nsnull);
+      server->description = DIR_GetStringPref(prefname, "description", nullptr);
   }
   /* If the server is not in the unified list, we may need to add it.  Servers
    * are only added when the position, serverName and description are valid.
@@ -176,7 +143,7 @@ NS_IMETHODIMP DirPrefObserver::Observe(nsISupports *aSubject, const char *aTopic
 }
 
 // A pointer to the pref observer
-static DirPrefObserver *prefObserver = nsnull;
+static DirPrefObserver *prefObserver = nullptr;
 
 static nsresult DIR_GetDirServers()
 {
@@ -190,7 +157,7 @@ static nsresult DIR_GetDirServers()
     /* Register the preference call back if necessary. */
     if (NS_SUCCEEDED(rv) && !prefObserver)
     {
-      nsCOMPtr<nsIPrefBranch2> pbi(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
+      nsCOMPtr<nsIPrefBranch> pbi(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
       if (NS_FAILED(rv))
         return rv;
       prefObserver = new DirPrefObserver();
@@ -200,7 +167,7 @@ static nsresult DIR_GetDirServers()
 
       NS_ADDREF(prefObserver);
 
-      pbi->AddObserver(PREF_LDAP_SERVER_TREE_NAME, prefObserver, PR_TRUE);
+      pbi->AddObserver(PREF_LDAP_SERVER_TREE_NAME, prefObserver, true);
     }
   }
   return rv;
@@ -215,15 +182,15 @@ nsVoidArray* DIR_GetDirectories()
 
 DIR_Server* DIR_GetServerFromList(const char* prefName)
 {
-  DIR_Server* result = nsnull;
+  DIR_Server* result = nullptr;
 
   if (!dir_ServerList)
     DIR_GetDirServers();
 
   if (dir_ServerList)
   {
-    PRInt32 count = dir_ServerList->Count();
-    PRInt32 i;
+    int32_t count = dir_ServerList->Count();
+    int32_t i;
     for (i = 0; i < count; ++i)
     {
       DIR_Server *server = (DIR_Server *)dir_ServerList->ElementAt(i);
@@ -244,7 +211,7 @@ static nsresult SavePrefsFile()
   nsCOMPtr<nsIPrefService> pPref(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
   if (NS_FAILED(rv))
     return rv;
-  return pPref->SavePrefFile(nsnull);
+  return pPref->SavePrefFile(nullptr);
 }
 
 nsresult DIR_ShutDown()  /* FEs should call this when the app is shutting down. It frees all DIR_Servers regardless of ref count values! */
@@ -253,7 +220,7 @@ nsresult DIR_ShutDown()  /* FEs should call this when the app is shutting down. 
   NS_ENSURE_SUCCESS(rv, rv);
 
   DIR_DeleteServerList(dir_ServerList);
-  dir_ServerList = nsnull;
+  dir_ServerList = nullptr;
 
   /* unregister the preference call back, if necessary.
   * we need to do this as DIR_Shutdown() is called when switching profiles
@@ -268,23 +235,23 @@ nsresult DIR_ShutDown()  /* FEs should call this when the app is shutting down. 
   return NS_OK;
 }
 
-nsresult DIR_ContainsServer(DIR_Server* pServer, PRBool *hasDir)
+nsresult DIR_ContainsServer(DIR_Server* pServer, bool *hasDir)
 {
   if (dir_ServerList)
   {
-    PRInt32 count = dir_ServerList->Count();
-    PRInt32 i;
+    int32_t count = dir_ServerList->Count();
+    int32_t i;
     for (i = 0; i < count; i++)
     {
       DIR_Server* server = (DIR_Server *)(dir_ServerList->ElementAt(i));
       if (server == pServer)
       {
-        *hasDir = PR_TRUE;
+        *hasDir = true;
         return NS_OK;
       }
     }
   }
-  *hasDir = PR_FALSE;
+  *hasDir = false;
   return NS_OK;
 }
 
@@ -346,8 +313,8 @@ static void DIR_InitServer(DIR_Server *server, DirectoryType dirType)
 
   memset(server, 0, sizeof(DIR_Server));
   server->position = kDefaultPosition;
-  server->uri = nsnull;
-  server->savingServer = PR_FALSE;
+  server->uri = nullptr;
+  server->savingServer = false;
   server->dirType = dirType;
 }
 
@@ -363,15 +330,15 @@ static void DIR_InitServer(DIR_Server *server, DirectoryType dirType)
  *   DIR_POS_DELETE - Deletes the given server from the list.  Note that this
  *                    does not cause the server structure to be freed.
  *
- * Returns PR_TRUE if the server list was re-sorted.
+ * Returns true if the server list was re-sorted.
  */
-static PRBool DIR_SetServerPosition(nsVoidArray *wholeList, DIR_Server *server, PRInt32 position)
+static bool DIR_SetServerPosition(nsVoidArray *wholeList, DIR_Server *server, int32_t position)
  {
-   NS_ENSURE_TRUE(wholeList, PR_FALSE);
+   NS_ENSURE_TRUE(wholeList, false);
 
-   PRInt32    i, count, num;
-   PRBool     resort = PR_FALSE;
-   DIR_Server *s=nsnull;
+   int32_t    i, count, num;
+   bool       resort = false;
+   DIR_Server *s=nullptr;
    
    switch (position) {
    case DIR_POS_APPEND:
@@ -381,9 +348,9 @@ static PRBool DIR_SetServerPosition(nsVoidArray *wholeList, DIR_Server *server, 
      count = wholeList->Count();
      for (i= 0; i < count; i++)
      {
-       if  ((s = (DIR_Server *)wholeList->ElementAt(i)) != nsnull)
+       if  ((s = (DIR_Server *)wholeList->ElementAt(i)) != nullptr)
          if (s == server)
-           return PR_FALSE;
+           return false;
      }
      /* In general, if there are any servers already in the list, set the
      * position to the position of the last server plus one.  If there
@@ -402,7 +369,7 @@ static PRBool DIR_SetServerPosition(nsVoidArray *wholeList, DIR_Server *server, 
      
    case DIR_POS_DELETE:
        /* Remove the prefs corresponding to the given server.  If the prefName
-       * value is nsnull, the server has never been saved and there are no
+       * value is nullptr, the server has never been saved and there are no
        * prefs to remove.
      */
      if (server->prefName)
@@ -410,7 +377,7 @@ static PRBool DIR_SetServerPosition(nsVoidArray *wholeList, DIR_Server *server, 
        nsresult rv;
        nsCOMPtr<nsIPrefBranch> pPref(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
        if (NS_FAILED(rv))
-         return PR_FALSE;
+         return false;
 
        pPref->DeleteBranch(server->prefName);
 
@@ -433,7 +400,7 @@ static PRBool DIR_SetServerPosition(nsVoidArray *wholeList, DIR_Server *server, 
        }
        else
        {
-         resort = PR_TRUE;
+         resort = true;
          wholeList->RemoveElement(server);
        }
      }
@@ -445,18 +412,18 @@ static PRBool DIR_SetServerPosition(nsVoidArray *wholeList, DIR_Server *server, 
      count = wholeList->Count();
      for (i= 0; i < count; i++)
      {
-       if  ((s = (DIR_Server *)wholeList->ElementAt(i)) != nsnull)
+       if  ((s = (DIR_Server *)wholeList->ElementAt(i)) != nullptr)
          if (s == server)
            break;
      }
      
      /* If the server is not in the list, add it to the beginning and re-sort.
      */
-     if (s == nsnull)
+     if (s == nullptr)
      {
        server->position = position;
        wholeList->AppendElement(server);
-       resort = PR_TRUE;
+       resort = true;
      }
      
        /* Don't re-sort if the server is already in the requested position.
@@ -466,7 +433,7 @@ static PRBool DIR_SetServerPosition(nsVoidArray *wholeList, DIR_Server *server, 
        server->position = position;
        wholeList->RemoveElement(server);
        wholeList->AppendElement(server);
-       resort = PR_TRUE;
+       resort = true;
      }
      break;
         }
@@ -491,11 +458,11 @@ static DIR_Server *dir_MatchServerPrefToServer(nsVoidArray *wholeList, const cha
 {
   DIR_Server *server;
 
-  PRInt32 count = wholeList->Count();
-  PRInt32 i;
+  int32_t count = wholeList->Count();
+  int32_t i;
   for (i = 0; i < count; i++)
   {
-    if ((server = (DIR_Server *)wholeList->ElementAt(i)) != nsnull)
+    if ((server = (DIR_Server *)wholeList->ElementAt(i)) != nullptr)
     {
       if (server->prefName && PL_strstr(pref, server->prefName) == pref)
       {
@@ -505,7 +472,7 @@ static DIR_Server *dir_MatchServerPrefToServer(nsVoidArray *wholeList, const cha
       }
     }
   }
-  return nsnull;
+  return nullptr;
 }
 
 /* dir_ValidateAndAddNewServer
@@ -514,9 +481,9 @@ static DIR_Server *dir_MatchServerPrefToServer(nsVoidArray *wholeList, const cha
  * are set for the given prefName.  If they are then it adds the server to the
  * unified server list.
  */
-static PRBool dir_ValidateAndAddNewServer(nsVoidArray *wholeList, const char *fullprefname)
+static bool dir_ValidateAndAddNewServer(nsVoidArray *wholeList, const char *fullprefname)
 {
-  PRBool rc = PR_FALSE;
+  bool rc = false;
 
   const char *endname = PL_strchr(&fullprefname[PL_strlen(PREF_LDAP_SERVER_TREE_NAME) + 1], '.');
   if (endname)
@@ -524,18 +491,18 @@ static PRBool dir_ValidateAndAddNewServer(nsVoidArray *wholeList, const char *fu
     char *prefname = (char *)PR_Malloc(endname - fullprefname + 1);
     if (prefname)
     {
-      PRInt32 dirType;
-      char *t1 = nsnull, *t2 = nsnull;
+      int32_t dirType;
+      char *t1 = nullptr, *t2 = nullptr;
 
       PL_strncpyz(prefname, fullprefname, endname - fullprefname + 1);
 
       dirType = DIR_GetIntPref(prefname, "dirType", -1);
       if (dirType != -1 &&
           DIR_GetIntPref(prefname, "position", 0) != 0 &&
-          (t1 = DIR_GetStringPref(prefname, "description", nsnull)) != nsnull)
+          (t1 = DIR_GetStringPref(prefname, "description", nullptr)) != nullptr)
       {
         if (dirType == PABDirectory ||
-           (t2 = DIR_GetStringPref(prefname, "serverName",  nsnull)) != nsnull)
+           (t2 = DIR_GetStringPref(prefname, "serverName",  nullptr)) != nullptr)
         {
           DIR_Server *server = (DIR_Server *)PR_Malloc(sizeof(DIR_Server));
           if (server)
@@ -544,7 +511,7 @@ static PRBool dir_ValidateAndAddNewServer(nsVoidArray *wholeList, const char *fu
             server->prefName = prefname;
             DIR_GetPrefsForOneServer(server);
             DIR_SetServerPosition(wholeList, server, server->position);
-            rc = PR_TRUE;
+            rc = true;
           }
           PR_FREEIF(t2);
         }
@@ -618,7 +585,7 @@ static DIR_PrefId DIR_AtomizePrefName(const char *prefname)
 
 /* this function determines if the passed in server is no longer part of the of
    the global server list. */
-static PRBool dir_IsServerDeleted(DIR_Server * server)
+static bool dir_IsServerDeleted(DIR_Server * server)
 {
   return (server && server->position == 0);
 }
@@ -651,7 +618,7 @@ nsresult DIR_DeleteServerFromList(DIR_Server *server)
     return NS_ERROR_NULL_POINTER;
 
   nsresult rv = NS_OK;
-  nsCOMPtr<nsILocalFile> dbPath;
+  nsCOMPtr<nsIFile> dbPath;
 
   nsCOMPtr<nsIAbManager> abManager = do_GetService(NS_ABMANAGER_CONTRACTID, &rv); 
   if (NS_SUCCEEDED(rv))
@@ -678,11 +645,11 @@ nsresult DIR_DeleteServerFromList(DIR_Server *server)
                do_GetService(NS_ADDRDATABASE_CONTRACTID, &rv);
 
       if (NS_SUCCEEDED(rv) && addrDBFactory)
-        rv = addrDBFactory->Open(dbPath, PR_FALSE, PR_TRUE, getter_AddRefs(database));
+        rv = addrDBFactory->Open(dbPath, false, true, getter_AddRefs(database));
       if (database)  /* database exists */
       {
         database->ForceClosed();
-        rv = dbPath->Remove(PR_FALSE);
+        rv = dbPath->Remove(false);
         NS_ENSURE_SUCCESS(rv, rv);
       }
     }
@@ -701,15 +668,15 @@ static void DIR_DeleteServerList(nsVoidArray *wholeList)
 {
   if (wholeList)
   {
-    DIR_Server *server = nsnull;
+    DIR_Server *server = nullptr;
   
     /* TBD: Send notifications? */
-    PRInt32 count = wholeList->Count();
-    PRInt32 i;
+    int32_t count = wholeList->Count();
+    int32_t i;
     for (i = count - 1; i >=0; i--)
     {
       server = (DIR_Server *)wholeList->ElementAt(i);
-      if (server != nsnull)
+      if (server != nullptr)
         DIR_DeleteServer(server);
     }
     delete wholeList;
@@ -725,7 +692,7 @@ comparePrefArrayMembers(const void* aElement1, const void* aElement2, void* aDat
 {
     const char* element1 = *static_cast<const char* const *>(aElement1);
     const char* element2 = *static_cast<const char* const *>(aElement2);
-    const PRUint32 offset = *((const PRUint32*)aData);
+    const uint32_t offset = *((const uint32_t*)aData);
 
     // begin the comparison at |offset| chars into the string -
     // this avoids comparing the "ldap_2.servers." portion of every element,
@@ -734,9 +701,9 @@ comparePrefArrayMembers(const void* aElement1, const void* aElement2, void* aDat
 }
 
 static nsresult dir_GetChildList(const nsCString &aBranch,
-                                 PRUint32 *aCount, char ***aChildList)
+                                 uint32_t *aCount, char ***aChildList)
 {
-    PRUint32 branchLen = aBranch.Length();
+    uint32_t branchLen = aBranch.Length();
 
     nsCOMPtr<nsIPrefBranch> prefBranch = do_GetService(NS_PREFSERVICE_CONTRACTID);
     if (!prefBranch) {
@@ -750,7 +717,7 @@ static nsresult dir_GetChildList(const nsCString &aBranch,
 
     // traverse the list, and truncate all the descendant strings to just
     // one branch level below the root branch.
-    for (PRUint32 i = *aCount; i--; ) {
+    for (uint32_t i = *aCount; i--; ) {
         // The prefname we passed to GetChildList was of the form
         // "ldap_2.servers." and we are returned the descendants
         // in the form of "ldap_2.servers.servername.foo"
@@ -772,8 +739,8 @@ static nsresult dir_GetChildList(const nsCString &aBranch,
         // later) entry to test, at any given point. we know we have >= 2
         // elements in the list here, so we just init the two counters sensibly
         // to begin with.
-        PRUint32 cur = 0;
-        for (PRUint32 next = 1; next < *aCount; ++next) {
+        uint32_t cur = 0;
+        for (uint32_t next = 1; next < *aCount; ++next) {
             // check if the elements are equal or unique
             if (!comparePrefArrayMembers(&((*aChildList)[cur]), &((*aChildList)[next]), &branchLen)) {
                 // equal - just free & increment the next element ptr
@@ -799,7 +766,7 @@ static char *DIR_GetStringPref(const char *prefRoot, const char *prefLeaf, const
     nsresult rv;
     nsCOMPtr<nsIPrefBranch> pPref(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
     if (NS_FAILED(rv))
-        return nsnull;
+        return nullptr;
 
     nsCString value;
     nsCAutoString prefLocation(prefRoot);
@@ -843,7 +810,7 @@ static char *DIR_GetDescription(const char *prefRoot)
   nsCOMPtr<nsIPrefBranch> pPref(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
 
   if (NS_FAILED(rv))
-    return nsnull;
+    return nullptr;
 
   nsCAutoString prefLocation(prefRoot);
   prefLocation.AppendLiteral(".description");
@@ -855,7 +822,7 @@ static char *DIR_GetDescription(const char *prefRoot)
   if (NS_SUCCEEDED(rv))
     rv = locStr->ToString(getter_Copies(wvalue));
 
-  char *value = nsnull;
+  char *value = nullptr;
   if (!wvalue.IsEmpty())
   {
     value = ToNewCString(NS_ConvertUTF16toUTF8(wvalue));
@@ -876,13 +843,13 @@ static char *DIR_GetDescription(const char *prefRoot)
     // back here.
     rv = pPref->GetCharPref(prefLocation.get(), &value);
     if (NS_FAILED(rv))
-      value = nsnull;
+      value = nullptr;
   }
 
   return value;
 }
 
-static PRInt32 DIR_GetIntPref(const char *prefRoot, const char *prefLeaf, PRInt32 defaultValue)
+static int32_t DIR_GetIntPref(const char *prefRoot, const char *prefLeaf, int32_t defaultValue)
 {
   nsresult rv;
   nsCOMPtr<nsIPrefBranch> pPref(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
@@ -890,7 +857,7 @@ static PRInt32 DIR_GetIntPref(const char *prefRoot, const char *prefLeaf, PRInt3
   if (NS_FAILED(rv))
     return defaultValue;
 
-  PRInt32 value;
+  int32_t value;
   nsCAutoString prefLocation(prefRoot);
 
   prefLocation.Append('.');
@@ -907,7 +874,7 @@ static PRInt32 DIR_GetIntPref(const char *prefRoot, const char *prefLeaf, PRInt3
 static void DIR_ConvertServerFileName(DIR_Server* pServer)
 {
   char* leafName = pServer->fileName;
-  char* newLeafName = nsnull;
+  char* newLeafName = nullptr;
 #if defined(XP_WIN) || defined(XP_OS2)
   /* jefft -- bug 73349 This is to allow users share same address book.
    * It only works if the user specify a full path filename.
@@ -934,9 +901,9 @@ void DIR_SetFileName(char** fileName, const char* defaultName)
     return;
 
   nsresult rv = NS_OK;
-  nsCOMPtr<nsILocalFile> dbPath;
+  nsCOMPtr<nsIFile> dbPath;
 
-  *fileName = nsnull;
+  *fileName = nullptr;
 
   nsCOMPtr<nsIAbManager> abManager = do_GetService(NS_ABMANAGER_CONTRACTID, &rv); 
   if (NS_SUCCEEDED(rv))
@@ -966,12 +933,12 @@ An extension is not applied
 static char * dir_ConvertDescriptionToPrefName(DIR_Server * server)
 {
 #define MAX_PREF_NAME_SIZE 25
-  char * fileName = nsnull;
+  char * fileName = nullptr;
   char fileNameBuf[MAX_PREF_NAME_SIZE];
-  PRInt32 srcIndex = 0;
-  PRInt32 destIndex = 0;
-  PRInt32 numSrcBytes = 0;
-  const char * descr = nsnull;
+  int32_t srcIndex = 0;
+  int32_t destIndex = 0;
+  int32_t numSrcBytes = 0;
+  const char * descr = nullptr;
   if (server && server->description)
   {
     descr = server->description;
@@ -999,9 +966,9 @@ static char * dir_ConvertDescriptionToPrefName(DIR_Server * server)
 
 void DIR_SetServerFileName(DIR_Server *server)
 {
-  char * tempName = nsnull; 
-  const char * prefName = nsnull;
-  PRUint32 numHeaderBytes = 0; 
+  char * tempName = nullptr; 
+  const char * prefName = nullptr;
+  uint32_t numHeaderBytes = 0; 
 
   if (server && (!server->fileName || !(*server->fileName)) )
   {
@@ -1049,8 +1016,8 @@ static char *dir_CreateServerPrefName (DIR_Server *server)
      pref name. We'll try to convert the description into a pref name
      and then verify that it is unique. If it is unique then use it... */
   char * leafName = dir_ConvertDescriptionToPrefName(server);
-  char * prefName = nsnull;
-  PRBool isUnique = PR_FALSE;
+  char * prefName = nullptr;
+  bool isUnique = false;
 
   if (!leafName || !*leafName)
   {
@@ -1061,23 +1028,23 @@ static char *dir_CreateServerPrefName (DIR_Server *server)
 
   if (leafName)
   {
-    PRInt32 uniqueIDCnt = 0;
-        char **children = nsnull;
+    int32_t uniqueIDCnt = 0;
+        char **children = nullptr;
     /* we need to verify that this pref string name is unique */
     prefName = PR_smprintf(PREF_LDAP_SERVER_TREE_NAME".%s", leafName);
-    isUnique = PR_FALSE;
-    PRUint32 prefCount;
+    isUnique = false;
+    uint32_t prefCount;
     nsresult rv = dir_GetChildList(NS_LITERAL_CSTRING(PREF_LDAP_SERVER_TREE_NAME "."),
                                    &prefCount, &children);
     if (NS_SUCCEEDED(rv))
     {
       while (!isUnique && prefName)
       {
-        isUnique = PR_TRUE; /* now flip the logic and assume we are unique until we find a match */
-        for (PRUint32 i = 0; i < prefCount && isUnique; ++i)
+        isUnique = true; /* now flip the logic and assume we are unique until we find a match */
+        for (uint32_t i = 0; i < prefCount && isUnique; ++i)
         {
           if (!PL_strcasecmp(children[i], prefName)) /* are they the same branch? */
-            isUnique = PR_FALSE;
+            isUnique = false;
         }
         if (!isUnique) /* then try generating a new pref name and try again */
         {
@@ -1093,7 +1060,7 @@ static char *dir_CreateServerPrefName (DIR_Server *server)
     if (!isUnique && prefName)
     {
       PR_smprintf_free(prefName);
-      prefName = nsnull;
+      prefName = nullptr;
     }
 
     PR_Free(leafName);
@@ -1157,7 +1124,7 @@ static nsresult dir_GetPrefs(nsVoidArray **list)
         return NS_ERROR_OUT_OF_MEMORY;
 
     char **children;
-    PRUint32 prefCount;
+    uint32_t prefCount;
 
     rv = dir_GetChildList(NS_LITERAL_CSTRING(PREF_LDAP_SERVER_TREE_NAME "."),
                           &prefCount, &children);
@@ -1170,7 +1137,7 @@ static nsresult dir_GetPrefs(nsVoidArray **list)
     if (dir_UserId == 0)
         pPref->GetIntPref(PREF_LDAP_GLOBAL_TREE_NAME".user_id", &dir_UserId);
 
-    for (PRUint32 i = 0; i < prefCount; ++i)
+    for (uint32_t i = 0; i < prefCount; ++i)
     {
         DIR_Server *server;
 
@@ -1233,8 +1200,8 @@ static nsresult DIR_GetServerPreferences(nsVoidArray** list)
   if (NS_FAILED(err))
     return err;
 
-  PRInt32 version = -1;
-  nsVoidArray *newList = nsnull;
+  int32_t version = -1;
+  nsVoidArray *newList = nullptr;
   
   /* Update the ldap list version and see if there are old prefs to migrate. */
   err = pPref->GetIntPref(PREF_LDAP_VERSION_NAME, &version);
@@ -1386,14 +1353,14 @@ static void DIR_SetLocalizedStringPref
 }
 
 
-static void DIR_SetIntPref(const char *prefRoot, const char *prefLeaf, PRInt32 value, PRInt32 defaultValue)
+static void DIR_SetIntPref(const char *prefRoot, const char *prefLeaf, int32_t value, int32_t defaultValue)
 {
   nsresult rv;
   nsCOMPtr<nsIPrefBranch> pPref(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv)); 
   if (NS_FAILED(rv)) 
     return;
 
-  PRInt32 defaultPref;
+  int32_t defaultPref;
   nsCAutoString prefLocation(prefRoot);
 
   prefLocation.Append('.');
@@ -1406,7 +1373,7 @@ static void DIR_SetIntPref(const char *prefRoot, const char *prefLeaf, PRInt32 v
   }
   else
   {
-    PRInt32 userPref;
+    int32_t userPref;
     if (NS_SUCCEEDED(pPref->GetIntPref(prefLocation.get(), &userPref)))
     {
       if (value != defaultValue)
@@ -1431,11 +1398,11 @@ void DIR_SavePrefsForOneServer(DIR_Server *server)
 
   char *prefstring;
 
-  if (server->prefName == nsnull)
+  if (server->prefName == nullptr)
     server->prefName = dir_CreateServerPrefName(server);
   prefstring = server->prefName;
 
-  server->savingServer = PR_TRUE;
+  server->savingServer = true;
 
   DIR_SetIntPref (prefstring, "position", server->position, kDefaultPosition);
 
@@ -1448,7 +1415,7 @@ void DIR_SavePrefsForOneServer(DIR_Server *server)
   if (server->dirType != PABDirectory)
     DIR_SetStringPref(prefstring, "uri", server->uri, "");
 
-  server->savingServer = PR_FALSE;
+  server->savingServer = false;
 }
 
 static void DIR_SaveServerPreferences(nsVoidArray *wholeList)
@@ -1462,8 +1429,8 @@ static void DIR_SaveServerPreferences(nsVoidArray *wholeList)
       return;
     }
 
-    PRInt32  i;
-    PRInt32  count = wholeList->Count();
+    int32_t  i;
+    int32_t  count = wholeList->Count();
     DIR_Server *server;
 
     for (i = 0; i < count; i++)

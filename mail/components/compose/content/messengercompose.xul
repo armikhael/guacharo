@@ -1,44 +1,7 @@
 <?xml version="1.0"?>
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
-# The Original Code is Mozilla Communicator client code, released
-# March 31, 1998.
-#
-# The Initial Developer of the Original Code is
-# Netscape Communications Corporation.
-# Portions created by the Initial Developer are Copyright (C) 1999
-# the Initial Developer. All Rights Reserved.
-#
-# Contributor(s):
-#   Ben Goodger <ben@netscape.com> (ass'td polish fixes)
-#   Hkan Waara <hwaara@chello.se>
-#   Neil Rashbrook <neil@parkwaycc.co.uk> (ass'td polish fix)
-#   Olivier Parniere BT Global Services / Etat francais Ministere de la Defense
-#
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 <?xml-stylesheet href="chrome://messenger/skin/messengercompose/messengercompose.css" type="text/css"?>
 <?xml-stylesheet href="chrome://messenger/skin/folderMenus.css" type="text/css"?>
@@ -71,8 +34,12 @@
         onfocus="EditorOnFocus()"
         title="&msgComposeWindow.title;"
         windowtype="msgcompose"
+        macanimationtype="document"
         toggletoolbar="true"
-        persist="screenX screenY width height sizemode"> 
+        persist="screenX screenY width height sizemode"
+        lightweightthemes="true"
+        fullscreenbutton="true"
+        lightweightthemesfooter="status-bar">
 
 <stringbundleset id="stringbundleset">
   <stringbundle id="bundle_composeMsgs" src="chrome://messenger/locale/messengercompose/composeMsgs.properties"/>
@@ -85,8 +52,11 @@
 <script type="application/javascript" src="chrome://messenger/content/accountUtils.js"/>
 <script type="application/javascript" src="chrome://messenger/content/widgetglue.js"/>
 <script type="application/javascript" src="chrome://messenger/content/mailCore.js"/>
+<script type="application/javascript" src="chrome://communicator/content/contentAreaClick.js"/>
 <script type="application/javascript" src="chrome://editor/content/editor.js"/>
 <script type="application/javascript" src="chrome://messenger/content/messengercompose/MsgComposeCommands.js"/>
+<script type="application/javascript" src="chrome://messenger/content/messengercompose/bigFileObserver.js"/>
+<script type="application/javascript" src="chrome://messenger/content/messengercompose/cloudAttachmentLinkManager.js"/>
 
 <!-- drag and drop -->
 <script type="application/javascript" src="chrome://messenger/content/addressbook/abDragDrop.js"/>
@@ -130,6 +100,7 @@
   <!-- File Menu -->
   <command id="cmd_new" oncommand="goDoCommand('cmd_newMessage')"/>
   <command id="cmd_attachFile" oncommand="goDoCommand('cmd_attachFile')"/>
+  <command id="cmd_attachCloud" oncommand="attachToCloud(event.target.cloudProvider); event.stopPropagation();"/>
   <command id="cmd_attachPage" oncommand="goDoCommand('cmd_attachPage')"/>
   <command id="cmd_attachVCard" checked="false" oncommand="ToggleAttachVCard(event.target)"/>
   <command id="cmd_close" oncommand="goDoCommand('cmd_close')"/>
@@ -155,9 +126,9 @@
   <command id="cmd_paste" oncommand="goDoCommand('cmd_paste')" disabled="true"/>
   <command id="cmd_rewrap" oncommand="goDoCommand('cmd_rewrap')"/>
   <command id="cmd_delete" oncommand="goDoCommand('cmd_delete')" valueDefault="&deleteCmd.label;" valueDefaultAccessKey="&deleteCmd.accesskey;" valueRemoveAttachmentAccessKey="&removeAttachment.accesskey;" disabled="true"/>
-  <command id="cmd_renameAttachment" oncommand="goDoCommand('cmd_renameAttachment')" disabled="true"/>
   <command id="cmd_selectAll" oncommand="goDoCommand('cmd_selectAll')" disabled="true"/>
-  <command id="cmd_openAttachment" oncommand="goDoCommand('cmd_openAttachment')" disabled="true"/>  
+  <command id="cmd_openAttachment" oncommand="goDoCommand('cmd_openAttachment')" disabled="true"/>
+  <command id="cmd_renameAttachment" oncommand="goDoCommand('cmd_renameAttachment')" disabled="true"/>
   <command id="cmd_account" oncommand="goDoCommand('cmd_account')"/>
 
   <!-- View Menu -->
@@ -177,6 +148,10 @@
 
   <command id="cmd_CustomizeComposeToolbar"
            oncommand="CustomizeMailToolbar('compose-toolbox', 'CustomizeComposeToolbar')"/>
+
+  <command id="cmd_convertCloud" oncommand="convertSelectedToCloudAttachment(event.target.cloudProvider); event.stopPropagation();"/>
+  <command id="cmd_convertAttachment" oncommand="goDoCommand('cmd_convertAttachment')"/>
+  <command id="cmd_cancelUpload" oncommand="goDoCommand('cmd_cancelUpload')"/>
 </commandset>
 
 <broadcasterset id="composeBroadcasters">
@@ -193,6 +168,8 @@
   <key id="key_newMessage" key="&newMessage.key;" oncommand="goOpenNewMessage();" modifiers="accel"/>
   <key id="key_newMessage2" key="&newMessageCmd2.key;" oncommand="goOpenNewMessage();" modifiers="accel"/>
 #endif
+  <key id="key_attachFile" key="&attachFileCmd.key;" command="cmd_attachFile"
+       modifiers="accel,shift"/>
   <key id="key_close" key="&closeCmd.key;" command="cmd_close"  modifiers="accel"/>
   <key id="key_save" key="&saveCmd.key;" command="cmd_saveDefault" modifiers="accel"/>
   <key id="key_send" keycode="&sendCmd.keycode;" observes="cmd_sendWithCheck" modifiers="accel"/>
@@ -218,10 +195,11 @@
        modifiers="accel, shift" observes="cmd_pasteNoFormatting"/>
   <key id="key_rewrap" key="&editRewrapCmd.key;" command="cmd_rewrap" modifiers="accel"/>
 #ifdef XP_MACOSX
-  <key id="key_delete" keycode="VK_BACK"/>
-  <key id="key_delete2" keycode="VK_DELETE"/>
+  <key id="key_delete" keycode="VK_BACK" command="cmd_delete"/>
+  <key id="key_delete2" keycode="VK_DELETE" command="cmd_delete"/>
 #else
-  <key id="key_delete" keycode="VK_DELETE"/>
+  <key id="key_delete" keycode="VK_DELETE" command="cmd_delete"/>
+  <key id="key_renameAttachment" keycode="VK_F2" oncommand="goDoCommand('cmd_renameAttachment');"/>
 #endif
   <key id="key_selectAll" key="&selectAllCmd.key;" modifiers="accel"/>
   <key id="key_find" key="&findCmd.key;" command="cmd_find" modifiers="accel"/>
@@ -314,7 +292,7 @@
 </menupopup>
 
 <menupopup id="msgComposeAttachmentItemContext"
-           onpopupshowing="updateEditItems();">
+           onpopupshowing="updateAttachmentItems();">
   <menuitem label="&openAttachment.label;"
             accesskey="&openAttachment.accesskey;"
             command="cmd_openAttachment"/>
@@ -324,6 +302,22 @@
   <menuitem label="&renameAttachment.label;"
             accesskey="&renameAttachment.accesskey;"
             command="cmd_renameAttachment"/>
+  <menu label="&convertCloud.label;"
+        accesskey="&convertCloud.accesskey;"
+        command="cmd_convertCloud">
+    <menupopup onpopupshowing="addConvertCloudMenuItems(this, 'context_convertCloudSeparator', 'context_convertCloud');">
+      <menuitem id="context_convertAttachment"
+                type="radio" name="context_convertCloud"
+                label="&convertRegularAttachment.label;"
+                accesskey="&convertRegularAttachment.accesskey;"
+                command="cmd_convertAttachment"/>
+      <menuseparator id="context_convertCloudSeparator"/>
+    </menupopup>
+  </menu>
+  <menuitem id="context_cancelUpload"
+            label="&cancelUpload.label;"
+            accesskey="&cancelUpload.accesskey;"
+            command="cmd_cancelUpload"/>
   <menuseparator/>
   <menuitem label="&selectAll.label;"
             accesskey="&selectAll.accesskey;"
@@ -331,7 +325,7 @@
 </menupopup>
 
 <menupopup id="msgComposeAttachmentListContext"
-           onpopupshowing="updateEditItems();">
+           onpopupshowing="updateAttachmentItems();">
   <menuitem label="&selectAll.label;"
             accesskey="&selectAll.accesskey;"
             command="cmd_selectAll"/>
@@ -339,6 +333,11 @@
   <menuitem label="&attachFile.label;"
             accesskey="&attachFile.accesskey;"
             command="cmd_attachFile"/>
+  <menu label="&attachCloud.label;"
+        accesskey="&attachCloud.accesskey;"
+        command="cmd_attachCloud">
+    <menupopup onpopupshowing="addAttachCloudMenuItems(this);"/>
+  </menu>
   <menuitem label="&attachPage.label;"
             accesskey="&attachPage.accesskey;"
             command="cmd_attachPage"/>
@@ -372,6 +371,10 @@
 #else
           defaultset="menubar-items,spring"
 #endif
+#ifdef XP_WIN
+          toolbarname="&menubarCmd.label;"
+          accesskey="&menubarCmd.accesskey;"
+#endif
            context="toolbar-context-menu" mode="full">
 
      <toolbaritem id="menubar-items" align="center">
@@ -390,8 +393,13 @@
             </menupopup>
           </menu>
           <menu id="menu_Attach" label="&attachMenu.label;" accesskey="&attachMenu.accesskey;">
-            <menupopup id="menu_AttachPopup">
-              <menuitem label="&attachFileCmd.label;" accesskey="&attachFileCmd.accesskey;" command="cmd_attachFile"/>
+            <menupopup id="menu_AttachPopup" onpopupshowing="updateAttachmentItems();">
+              <menuitem label="&attachFileCmd.label;" accesskey="&attachFileCmd.accesskey;"
+                        key="key_attachFile" command="cmd_attachFile"/>
+              <menu label="&attachCloudCmd.label;" accesskey="&attachCloudCmd.accesskey;"
+                    command="cmd_attachCloud">
+                <menupopup onpopupshowing="addAttachCloudMenuItems(this);"/>
+              </menu>
               <menuitem label="&attachPageCmd.label;" accesskey="&attachPageCmd.accesskey;" command="cmd_attachPage"/>
               <menuseparator/>
               <menuitem type="checkbox" label="&attachVCardCmd.label;" accesskey="&attachVCardCmd.accesskey;" command="cmd_attachVCard"/>
@@ -436,8 +444,13 @@
           <menuitem id="menu_pasteNoFormatting" command="cmd_pasteNoFormatting"
                     key="pastenoformattingkb"/>
           <menuitem id="menu_pasteQuote"/>
-          <menuitem id="menu_rewrap" label="&editRewrapCmd.label;" key="key_rewrap" accesskey="&editRewrapCmd.accesskey;" command="cmd_rewrap"/>
           <menuitem id="menu_delete" label="&deleteCmd.label;" key="key_delete" accesskey="&deleteCmd.accesskey;" command="cmd_delete"/>
+          <menuseparator/>
+          <menuitem id="menu_rewrap" label="&editRewrapCmd.label;" key="key_rewrap" accesskey="&editRewrapCmd.accesskey;" command="cmd_rewrap"/>
+          <menuitem id="menu_RenameAttachment"
+                    label="&renameAttachmentCmd.label;"
+                    accesskey="&renameAttachmentCmd.accesskey;"
+                    key="key_renameAttachment" command="cmd_renameAttachment"/>
           <menuseparator/>
           <menuitem id="menu_selectAll" label="&selectAllCmd.label;" key="key_selectAll" accesskey="&selectAllCmd.accesskey;" command="cmd_selectAll"/>
           <menuseparator/>
@@ -462,6 +475,18 @@
                 accesskey="&viewToolbarsMenuNew.accesskey;"
                 onpopupshowing="onViewToolbarsPopupShowing(event, 'compose-toolbox');">
             <menupopup id="view_toolbars_popup">
+              <menuitem id="menu_showFormatToolbar"
+                        type="checkbox"
+                        label="&showFormattingBarCmd.label;"
+                        accesskey="&showFormattingBarCmd.accesskey;"
+                        command="cmd_showFormatToolbar"
+                        checked="true"/>
+              <menuitem id="menu_showTaskbar"
+                        type="checkbox"
+                        label="&showTaskbarCmd.label;"
+                        accesskey="&showTaskbarCmd.accesskey;"
+                        oncommand="goToggleToolbar('status-bar', 'menu_showTaskbar')"
+                        checked="true"/>
               <menuseparator id="viewMenuBeforeCustomizeComposeToolbarsSeparator"/>
               <menuitem id="customizeComposeToolbars"
                         label="&customizeToolbar.label;"
@@ -469,18 +494,6 @@
                         command="cmd_CustomizeComposeToolbar"/>
             </menupopup>
           </menu>
-          <menuitem id="menu_showFormatToolbar"
-                    type="checkbox"
-                    label="&showFormattingBarCmd.label;"
-                    accesskey="&showFormattingBarCmd.accesskey;"
-                    command="cmd_showFormatToolbar"
-                    checked="true"/>
-          <menuitem id="menu_showTaskbar"
-                    type="checkbox"
-                    label="&showTaskbarCmd.label;"
-                    accesskey="&showTaskbarCmd.accesskey;"
-                    oncommand="goToggleToolbar('status-bar', 'menu_showTaskbar')"
-                    checked="true"/>
           <menuitem id="menu_AddressSidebar"
                     label="&addressSidebar.label;" accesskey="&addressSidebar.accesskey;"
                     key="key_addressSidebar" observes="viewAddressPicker"/>
@@ -614,17 +627,28 @@
                ondragover="nsDragAndDrop.dragOver(event, envelopeDragObserver);"
                ondragdrop="nsDragAndDrop.drop(event, envelopeDragObserver);"
                ondragexit="nsDragAndDrop.dragExit(event, envelopeDragObserver);">
-         <menupopup id="button-attachPopup">
-            <menuitem label="&attachFileCmd.label;" accesskey="&attachFileCmd.accesskey;" command="cmd_attachFile"/>
-            <menuitem label="&attachPageCmd.label;" accesskey="&attachPageCmd.accesskey;" command="cmd_attachPage"/>
-           <menuseparator/>
-           <menuitem type="checkbox" label="&attachVCardCmd.label;" accesskey="&attachVCardCmd.accesskey;" command="cmd_attachVCard"/>
-         </menupopup>
+      <menupopup id="button-attachPopup" onpopupshowing="updateAttachmentItems();">
+        <menuitem label="&attachFileCmd.label;"
+                  accesskey="&attachFileCmd.accesskey;"
+                  command="cmd_attachFile"/>
+        <menu label="&attachCloudCmd.label;"
+              accesskey="&attachCloudCmd.accesskey;"
+              command="cmd_attachCloud">
+          <menupopup onpopupshowing="addAttachCloudMenuItems(this);"/>
+        </menu>
+        <menuitem label="&attachPageCmd.label;"
+                  accesskey="&attachPageCmd.accesskey;"
+                  command="cmd_attachPage"/>
+        <menuseparator/>
+        <menuitem type="checkbox" label="&attachVCardCmd.label;"
+                  accesskey="&attachVCardCmd.accesskey;"
+                  command="cmd_attachVCard"/>
+      </menupopup>
     </toolbarbutton>
 
     <toolbarbutton class="toolbarbutton-1" type="menu-button"
                id="spellingButton" label="&spellingButton.label;" 
-               tooltiptext="&spellingButton.tooltip;" disabled="true"
+               tooltiptext="&spellingButton.tooltip;"
                command="cmd_spelling">
       <!-- this popup gets dynamically generated -->
       <menupopup id="languageMenuList" oncommand="ChangeLanguage(event);"
@@ -747,7 +771,7 @@
                 <textbox id="addressCol2#1" class="plain textbox-addressingWidget uri-element"
                          aria-labelledby="addressCol1#1"
                          type="autocomplete" flex="1" 
-                         autocompletesearch="mydomain addrbook"
+                         autocompletesearch="mydomain addrbook ldap"
                          timeout="300" maxrows="4"
                          completedefaultindex="true" forcecomplete="true"
                          minresultsforpopup="3" ignoreblurwhilesearching="true"
@@ -771,18 +795,18 @@
           </hbox>
         </vbox>
         <splitter id="attachmentbucket-sizer" collapsed="true" collapse="after"/>
-        <vbox id="attachments-box" collapsed="true">
+        <vbox id="attachments-box" collapsed="true" persist="width">
           <hbox>
             <label id="attachmentBucketCount" control="attachmentBucket"
-                   crop="right" accesskey="&attachments.accesskey;"/>
+                   crop="right" accesskey="&attachments.accesskey;" flex="1"/>
             <label id="attachmentBucketSize"/>
           </hbox>
           <attachmentlist orient="vertical" id="attachmentBucket"
-                          seltype="multiple" flex="1" height="0" tabindex="0"
+                          seltype="multiple" flex="1" height="0"
                           context="msgComposeAttachmentListContext"
                           itemcontext="msgComposeAttachmentItemContext"
-                          onkeypress="if (event.keyCode == 8 || event.keyCode == 46) RemoveSelectedAttachment();"
                           onclick="AttachmentBucketClicked(event);"
+                          onselect="updateAttachmentItems();"
                           ondraggesture="nsDragAndDrop.startDrag(event, attachmentBucketDNDObserver);"/>
         </vbox>
       </hbox>
@@ -868,7 +892,7 @@
   </hbox>
   <panel id="customizeToolbarSheetPopup" noautohide="true">
     <iframe id="customizeToolbarSheetIFrame"
-            style="&dialog.style;"
+            style="&dialog.dimensions;"
             hidden="true"/>
   </panel>
 

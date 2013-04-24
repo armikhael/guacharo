@@ -1,41 +1,7 @@
 /* -*- Mode: C++; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is thebes gfx
- *
- * The Initial Developer of the Original Code is
- * mozilla.org.
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Vladimir Vukicevic <vladimir@pobox.com>
- *   Stuart Parmenter <pavlov@pavlov.net>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef _NS_DEVICECONTEXT_H_
 #define _NS_DEVICECONTEXT_H_
@@ -50,29 +16,6 @@
 class nsIAtom;
 class nsFontCache;
 class gfxUserFontSet;
-
-typedef enum {
-    eSystemFont_Caption,         // css2
-    eSystemFont_Icon,
-    eSystemFont_Menu,
-    eSystemFont_MessageBox,
-    eSystemFont_SmallCaption,
-    eSystemFont_StatusBar,
-
-    eSystemFont_Window,          // css3
-    eSystemFont_Document,
-    eSystemFont_Workspace,
-    eSystemFont_Desktop,
-    eSystemFont_Info,
-    eSystemFont_Dialog,
-    eSystemFont_Button,
-    eSystemFont_PullDownMenu,
-    eSystemFont_List,
-    eSystemFont_Field,
-
-    eSystemFont_Tooltips,        // moz
-    eSystemFont_Widget
-} nsSystemFontID;
 
 class nsDeviceContext
 {
@@ -108,14 +51,14 @@ public:
      * Gets the number of app units in one CSS pixel; this number is global,
      * not unique to each device context.
      */
-    static PRInt32 AppUnitsPerCSSPixel() { return 60; }
+    static int32_t AppUnitsPerCSSPixel() { return 60; }
 
     /**
      * Gets the number of app units in one device pixel; this number
      * is usually a factor of AppUnitsPerCSSPixel(), although that is
      * not guaranteed.
      */
-    PRUint32 AppUnitsPerDevPixel() const { return mAppUnitsPerDevPixel; }
+    uint32_t AppUnitsPerDevPixel() const { return mAppUnitsPerDevPixel; }
 
     /**
      * Convert device pixels which is used for gfx/thebes to nearest
@@ -134,37 +77,21 @@ public:
      * Gets the number of app units in one physical inch; this is the
      * device's DPI times AppUnitsPerDevPixel().
      */
-    PRInt32 AppUnitsPerPhysicalInch() const
+    int32_t AppUnitsPerPhysicalInch() const
     { return mAppUnitsPerPhysicalInch; }
 
     /**
      * Gets the number of app units in one CSS inch; this is
      * 96 times AppUnitsPerCSSPixel.
      */
-    static PRInt32 AppUnitsPerCSSInch() { return 96 * AppUnitsPerCSSPixel(); }
+    static int32_t AppUnitsPerCSSInch() { return 96 * AppUnitsPerCSSPixel(); }
 
     /**
      * Get the unscaled ratio of app units to dev pixels; useful if something
      * needs to be converted from to unscaled pixels
      */
-    PRInt32 UnscaledAppUnitsPerDevPixel() const
+    int32_t UnscaledAppUnitsPerDevPixel() const
     { return mAppUnitsPerDevNotScaledPixel; }
-
-    /**
-     * Fill in an nsFont based on the ID of a system font.  This function
-     * may or may not fill in the size, so the size should be set to a
-     * reasonable default before calling.
-     *
-     * @param aID    The system font ID.
-     * @param aInfo  The font structure to be filled in.
-     * @return error status
-     */
-    nsresult GetSystemFont(nsSystemFontID aID, nsFont *aFont) const;
-
-    /**
-     * Clear cached system fonts (refresh from theme when requested).
-     */
-    static void ClearCachedSystemFonts();
 
     /**
      * Get the nsFontMetrics that describe the properties of
@@ -195,7 +122,7 @@ public:
     /**
      * Return the bit depth of the device.
      */
-    nsresult GetDepth(PRUint32& aDepth);
+    nsresult GetDepth(uint32_t& aDepth);
 
     /**
      * Get the size of the displayable area of the output device
@@ -246,8 +173,8 @@ public:
      */
     nsresult BeginDocument(PRUnichar  *aTitle,
                            PRUnichar  *aPrintToFileName,
-                           PRInt32     aStartPage,
-                           PRInt32     aEndPage);
+                           int32_t     aStartPage,
+                           int32_t     aEndPage);
 
     /**
      * Inform the output device that output of a document is ending.
@@ -286,19 +213,19 @@ public:
      *         AppUnitsPerDevPixel() or AppUnitsPerPhysicalInch()
      *         changed)
      */
-    PRBool CheckDPIChange();
+    bool CheckDPIChange();
 
     /**
      * Set the pixel scaling factor: all lengths are multiplied by this factor
      * when we convert them to device pixels. Returns whether the ratio of
      * app units to dev pixels changed because of the scale factor.
      */
-    PRBool SetPixelScale(float aScale);
+    bool SetPixelScale(float aScale);
 
     /**
      * True if this device context was created for printing.
      */
-    PRBool IsPrinterSurface();
+    bool IsPrinterSurface();
 
 protected:
     void SetDPI();
@@ -310,10 +237,10 @@ protected:
 
     nscoord  mWidth;
     nscoord  mHeight;
-    PRUint32 mDepth;
-    PRUint32  mAppUnitsPerDevPixel;
-    PRInt32  mAppUnitsPerDevNotScaledPixel;
-    PRInt32  mAppUnitsPerPhysicalInch;
+    uint32_t mDepth;
+    uint32_t  mAppUnitsPerDevPixel;
+    int32_t  mAppUnitsPerDevNotScaledPixel;
+    int32_t  mAppUnitsPerPhysicalInch;
     float    mPixelScale;
     float    mPrintingScale;
 

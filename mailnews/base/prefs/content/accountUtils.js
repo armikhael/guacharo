@@ -1,40 +1,9 @@
 /* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Alec Flett <alecf@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+Components.utils.import("resource://gre/modules/Services.jsm");
 
 var accountManagerContractID   = "@mozilla.org/messenger/account-manager;1";
 var gAnyValidIdentity = false; //If there are no valid identities for any account
@@ -132,7 +101,6 @@ function verifyAccounts(wizardCallback, needsIdentity, wizardOpen)
         var invalidAccounts = getInvalidAccounts(accounts);
         if (invalidAccounts.length > 0 && invalidAccounts.length == accountCount) {
             prefillAccount = invalidAccounts[0];
-        } else {
         }
 
         // if there are no accounts, or all accounts are "invalid"
@@ -236,9 +204,9 @@ function msgOpenAccountWizard(wizardCallback)
     selectServer(null, null);
 }
 
-// selectPage: the xul file name for the viewing page, 
+// selectPage: the xul file name for the viewing page,
 // null for the account main page, other pages are
-// 'am-server.xul', 'am-copies.xul', 'am-offline.xul', 
+// 'am-server.xul', 'am-copies.xul', 'am-offline.xul',
 // 'am-addressing.xul', 'am-smtp.xul'
 function MsgAccountManager(selectPage)
 {
@@ -251,9 +219,10 @@ function MsgAccountManager(selectPage)
         existingAccountManager.focus();
     else {
         try {
-            var server = GetSelectedMsgFolders()[0].server;
+            var server = GetSelectedMsgFolders()[0] || GetDefaultAccountRootFolder();
+            server = server.server;
         } catch (ex) { /* functions might not be defined */}
-        
+
         window.openDialog("chrome://messenger/content/AccountManager.xul",
                           "AccountManager",
                           "chrome,centerscreen,modal,titlebar,resizable",
@@ -325,7 +294,104 @@ function NewMailAccount(msgWindow, okCallback, extraData)
 {
   if (!msgWindow)
     throw new Error("NewMailAccount must be given a msgWindow.");
-  setTimeout(msgNewMailAccount, 0, msgWindow, okCallback, extraData);
+
+  // Populate the extra data.
+  if (!extraData)
+    extraData = {};
+  extraData.msgWindow = msgWindow;
+
+  let mail3Pane = Services.wm.getMostRecentWindow("mail:3pane");
+
+  if (!extraData.NewMailAccount)
+    extraData.NewMailAccount = NewMailAccount;
+
+  if (!extraData.msgNewMailAccount)
+    extraData.msgNewMailAccount = msgNewMailAccount;
+
+  if (!extraData.NewComposeMessage)
+    extraData.NewComposeMessage = mail3Pane.ComposeMessage;
+
+  if (!extraData.openAddonsMgr)
+    extraData.openAddonsMgr = mail3Pane.openAddonsMgr;
+
+  if (!extraData.okCallback)
+    extraData.okCallback = null;
+
+  if (!extraData.success)
+    extraData.success = false;
+
+  setTimeout(extraData.msgNewMailAccount, 0, msgWindow, okCallback, extraData);
+}
+
+function NewMailAccountProvisioner(aMsgWindow, args) {
+  if (!args)
+    args = {};
+  if (!aMsgWindow)
+    aMsgWindow = Components.classes["@mozilla.org/messenger/services/session;1"]
+                   .getService(Components.interfaces.nsIMsgMailSession)
+                   .topmostMsgWindow;
+  args.msgWindow = aMsgWindow;
+
+  let mail3Pane = Services.wm.getMostRecentWindow("mail:3pane");
+
+  // If we couldn't find a 3pane, bail out.
+  if (!mail3Pane) {
+    Components.utils.reportError("Could not find a 3pane to connect to.");
+    return;
+  }
+
+  let tabmail = mail3Pane.document.getElementById("tabmail");
+
+  if (!tabmail) {
+    Components.utils.reportError("Could not find a tabmail in the 3pane!");
+    return;
+  }
+
+  // If there's already an accountProvisionerTab open, just focus it instead
+  // of opening a new dialog.
+  let apTab = tabmail.getTabInfoForCurrentOrFirstModeInstance(
+    tabmail.tabModes["accountProvisionerTab"]);
+
+  if (apTab) {
+    tabmail.switchToTab(apTab);
+    return;
+  }
+
+  // XXX make sure these are all defined in all contexts... to be on the safe
+  // side, just get a mail:3pane and borrow the functions from it?
+  if (!args.NewMailAccount)
+    args.NewMailAccount = NewMailAccount;
+
+  if (!args.msgNewMailAccount)
+    args.msgNewMailAccount = msgNewMailAccount;
+
+  if (!args.NewComposeMessage)
+    args.NewComposeMessage = mail3Pane.ComposeMessage;
+
+  if (!args.openAddonsMgr)
+    args.openAddonsMgr = mail3Pane.openAddonsMgr;
+
+  if (!args.okCallback)
+    args.okCallback = null;
+
+  let windowParams = "chrome,titlebar,centerscreen,width=640,height=480";
+
+  if (!args.success) {
+    args.success = false;
+    // If we're not opening up the success dialog, then our window should be
+    // modal.
+    windowParams = "modal," + windowParams;
+  }
+
+  // NOTE: If you're a developer, and you notice that the jQuery code in
+  // accountProvisioner.xhtml isn't throwing errors or warnings, that's due
+  // to bug 688273.  Just make the window non-modal to get those errors and
+  // warnings back, and then clear this comment when bug 688273 is closed.
+  window.openDialog(
+    "chrome://messenger/content/newmailaccount/accountProvisioner.xhtml",
+    "AccountCreation",
+    windowParams,
+    args);
 }
 
 /**
@@ -349,8 +415,9 @@ function msgNewMailAccount(msgWindow, okCallback, extraData)
   if (existingWindow)
     existingWindow.focus();
   else
+    // disabling modal for the time being, see 688273 REMOVEME
     window.openDialog("chrome://messenger/content/accountcreation/emailWizard.xul",
-                      "AccountSetup", "chrome,titlebar,modal,centerscreen",
+                      "AccountSetup", "chrome,titlebar,centerscreen",
                       {msgWindow:msgWindow,
                        okCallback:okCallback,
                        extraData:extraData});

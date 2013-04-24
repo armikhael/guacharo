@@ -1,51 +1,21 @@
 /** ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   William A. ("PowerGUI") Law <law@netscape.com>
- *   Blake Ross <blakeross@telocity.com>
- *   Gervase Markham <gerv@gerv.net>
- *   Phil Ringnalda <philringnalda@gmail.com>
- *   Thomas Düllmann <bugzilla2010@duellmann24.net>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://gre/modules/InlineSpellChecker.jsm");
 Components.utils.import("resource:///modules/MailUtils.js");
 
-var gSpellChecker = new InlineSpellChecker();
+XPCOMUtils.defineLazyGetter(this, "PageMenu", function() {
+  let tmp = {};
+  Cu.import("resource://gre/modules/PageMenu.jsm", tmp);
+  return new tmp.PageMenu();
+});
 
-function nsContextMenu(aXulMenu) {
+var gSpellChecker = new InlineSpellChecker();
+var gGlodaBundle = null;
+
+function nsContextMenu(aXulMenu, aIsShift) {
   this.target         = null;
   this.menu           = null;
   this.onTextInput    = false;
@@ -71,11 +41,12 @@ function nsContextMenu(aXulMenu) {
   // Message Related Items
   this.inMessageArea = false;
   this.inThreadPane = false;
+  this.messagepaneIsBlank = false;
   this.numSelectedMessages = 0;
   this.isNewsgroup = false;
   this.hideMailItems = false;
 
-  this.initMenu(aXulMenu);
+  this.initMenu(aXulMenu, aIsShift);
 }
 
 nsContextMenu.prototype = {
@@ -84,17 +55,30 @@ nsContextMenu.prototype = {
    * the world, then determine which context menu items to show based on
    * those properties.
    */
-  initMenu : function CM_initMenu(aPopup) {
+  initMenu : function CM_initMenu(aPopup, aIsShift) {
     this.menu = aPopup;
 
     // Get contextual info.
     this.setTarget(document.popupNode);
     this.setMessageTargets(document.popupNode);
+
+    if (!this.inThreadPane && this.messagepaneIsBlank) {
+      this.shouldDisplay = false;
+      return;
+    }
+
     this.isContentSelected = this.isContentSelection();
+
+    this.hasPageMenu = false;
+    if (!aIsShift) {
+      this.hasPageMenu = PageMenu.maybeBuildAndAttachMenu(this.target,
+                                                          aPopup);
+    }
 
     this.initItems();
   },
   initItems : function CM_initItems() {
+    this.initPageMenuSeparator();
     this.initSaveItems();
     this.initClipboardItems();
     this.initMediaPlayerItems();
@@ -105,6 +89,9 @@ nsContextMenu.prototype = {
   },
   addDictionaries: function CM_addDictionaries() {
     openDictionaryList();
+  },
+  initPageMenuSeparator: function CM_initPageMenuSeparator() {
+    this.showItem("page-menu-separator", this.hasPageMenu);
   },
   initSpellingItems: function CM_initSpellingItems() {
     let canSpell = gSpellChecker.canSpellCheck;
@@ -174,6 +161,29 @@ nsContextMenu.prototype = {
     this.showItem("mailContext-composeemailto", this.onMailtoLink && !this.inThreadPane);
     this.showItem("mailContext-addemail", this.onMailtoLink && !this.inThreadPane);
 
+
+    let searchTheWeb = document.getElementById("mailContext-searchTheWeb");
+    this.showItem(searchTheWeb, !this.inThreadPane && !this.onPlayableMedia &&
+                  this.isContentSelected);
+
+    if (!searchTheWeb.hidden) {
+      let selection = document.commandDispatcher.focusedWindow.getSelection();
+      if (gGlodaBundle === null)
+        gGlodaBundle = Services.strings.createBundle(
+          "chrome://messenger/locale/glodaComplete.properties");
+
+      let key = "glodaComplete.webSearch1.label";
+      let selString = selection.toString();
+      if (selString.length > 15) {
+        key += ".truncated";
+        selString = selString.slice(0, 15);
+      }
+
+      searchTheWeb.label = gGlodaBundle.GetStringFromName(key)
+                                      .replace("#1", Services.search.currentEngine.name)
+                                      .replace("#2", selString);
+      searchTheWeb.value = selection.toString();
+    }
   },
   initMediaPlayerItems: function CM_initMediaPlayerItems() {
     let onMedia = this.onVideo || this.onAudio;
@@ -292,7 +302,9 @@ nsContextMenu.prototype = {
     this.enableItem("mailContext-moveMenu", canMove && !this.onPlayableMedia);
 
     // Copy is available as long as something is selected.
-    this.showItem("mailContext-copyMenu", msgModifyItems);
+    let canCopy = msgModifyItems || (gMessageDisplay.isDummy &&
+                                     window.arguments[0].scheme == "file");
+    this.showItem("mailContext-copyMenu", canCopy);
 
     this.showItem("mailContext-moveToFolderAgain", msgModifyItems);
     if (msgModifyItems) {
@@ -332,8 +344,7 @@ nsContextMenu.prototype = {
                   this.numSelectedMessages > 1 && !this.hideMailItems);
 
     this.showItem("mailContext-reportPhishingURL",
-                  this.numSelectedMessages > 0 && !this.inThreadPane &&
-                  this.onLink && !this.onMailtoLink);
+                  !this.inThreadPane && this.onLink && !this.onMailtoLink);
   },
   initSeparators: function CM_initSeparators() {
     const mailContextSeparators = [
@@ -512,13 +523,16 @@ nsContextMenu.prototype = {
 
     if (!this.inMessageArea) {
       this.inThreadPane = false;
-      this.numSelectedMessages = 0;
+      this.numSelectedMessages = 1;
       this.isNewsgroup = false;
       this.hideMailItems = true;
       return;
     }
 
     this.inThreadPane = this.popupNodeIsInThreadPane(aNode);
+    this.messagepaneIsBlank = (document.getElementById("messagepane")
+      .contentWindow.location.href == "about:blank");
+
     this.numSelectedMessages = GetNumSelectedMessages();
     this.isNewsgroup = gFolderDisplay.selectedMessageIsNews;
     // Don't show mail items for links/images, just show related items.

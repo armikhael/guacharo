@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nspr.h"
 #include "prlog.h"
@@ -80,7 +48,7 @@ static NS_DEFINE_CID(kThisImplCID, NS_THIS_DOCLOADER_IMPL_CID);
 // this enables PR_LOG_DEBUG level information and places all output in
 // the file nspr.log
 //
-PRLogModuleInfo* gDocLoaderLog = nsnull;
+PRLogModuleInfo* gDocLoaderLog = nullptr;
 #endif /* PR_LOGGING */
 
 
@@ -94,12 +62,38 @@ void GetURIStringFromRequest(nsIRequest* request, nsACString &name)
 }
 #endif /* DEBUG */
 
+struct nsStatusInfo : public PRCList
+{
+  nsString mStatusMessage;
+  nsresult mStatusCode;
+  // Weak mRequest is ok; we'll be told if it decides to go away.
+  nsIRequest * const mRequest;
+
+  nsStatusInfo(nsIRequest *aRequest) :
+    mRequest(aRequest)
+  {
+    MOZ_COUNT_CTOR(nsStatusInfo);
+    PR_INIT_CLIST(this);
+  }
+  ~nsStatusInfo()
+  {
+    MOZ_COUNT_DTOR(nsStatusInfo);
+    PR_REMOVE_LINK(this);
+  }
+};
+
 struct nsRequestInfo : public PLDHashEntryHdr
 {
   nsRequestInfo(const void *key)
-    : mKey(key), mCurrentProgress(0), mMaxProgress(0), mUploading(PR_FALSE)
-   , mIsDone(PR_FALSE)
+    : mKey(key), mCurrentProgress(0), mMaxProgress(0), mUploading(false)
+    , mLastStatus(nullptr)
   {
+    MOZ_COUNT_CTOR(nsRequestInfo);
+  }
+
+  ~nsRequestInfo()
+  {
+    MOZ_COUNT_DTOR(nsRequestInfo);
   }
 
   nsIRequest* Request() {
@@ -107,23 +101,21 @@ struct nsRequestInfo : public PLDHashEntryHdr
   }
 
   const void* mKey; // Must be first for the pldhash stubs to work
-  PRInt64 mCurrentProgress;
-  PRInt64 mMaxProgress;
-  PRBool mUploading;
+  int64_t mCurrentProgress;
+  int64_t mMaxProgress;
+  bool mUploading;
 
-  PRBool mIsDone;
-  nsString mLastStatus;
-  nsresult mLastStatusCode;
+  nsAutoPtr<nsStatusInfo> mLastStatus;
 };
 
 
-static PRBool
+static bool
 RequestInfoHashInitEntry(PLDHashTable *table, PLDHashEntryHdr *entry,
                          const void *key)
 {
   // Initialize the entry with placement new
   new (entry) nsRequestInfo(key);
-  return PR_TRUE;
+  return true;
 }
 
 static void
@@ -149,20 +141,20 @@ struct nsListenerInfo {
 
 
 nsDocLoader::nsDocLoader()
-  : mParent(nsnull),
+  : mParent(nullptr),
     mListenerInfoList(8),
     mCurrentSelfProgress(0),
     mMaxSelfProgress(0),
     mCurrentTotalProgress(0),
     mMaxTotalProgress(0),
     mCompletedTotalProgress(0),
-    mIsLoadingDocument(PR_FALSE),
-    mIsRestoringDocument(PR_FALSE),
-    mDontFlushLayout(PR_FALSE),
-    mIsFlushingLayout(PR_FALSE)
+    mIsLoadingDocument(false),
+    mIsRestoringDocument(false),
+    mDontFlushLayout(false),
+    mIsFlushingLayout(false)
 {
 #if defined(PR_LOGGING)
-  if (nsnull == gDocLoaderLog) {
+  if (nullptr == gDocLoaderLog) {
       gDocLoaderLog = PR_NewLogModule("DocLoader");
   }
 #endif /* PR_LOGGING */
@@ -179,12 +171,14 @@ nsDocLoader::nsDocLoader()
     RequestInfoHashInitEntry
   };
 
-  if (!PL_DHashTableInit(&mRequestInfoHash, &hash_table_ops, nsnull,
+  if (!PL_DHashTableInit(&mRequestInfoHash, &hash_table_ops, nullptr,
                          sizeof(nsRequestInfo), 16)) {
-    mRequestInfoHash.ops = nsnull;
+    mRequestInfoHash.ops = nullptr;
   }
 
   ClearInternalProgress();
+
+  PR_INIT_CLIST(&mStatusInfoList);
 
   PR_LOG(gDocLoaderLog, PR_LOG_DEBUG, 
          ("DocLoader:%p: created.\n", this));
@@ -287,7 +281,7 @@ already_AddRefed<nsDocLoader>
 nsDocLoader::GetAsDocLoader(nsISupports* aSupports)
 {
   if (!aSupports) {
-    return nsnull;
+    return nullptr;
   }
   
   nsDocLoader* ptr;
@@ -314,7 +308,7 @@ NS_IMETHODIMP
 nsDocLoader::Stop(void)
 {
   nsresult rv = NS_OK;
-  PRInt32 count, i;
+  int32_t count, i;
 
   PR_LOG(gDocLoaderLog, PR_LOG_DEBUG, 
          ("DocLoader:%p: Stop() called\n", this));
@@ -335,7 +329,7 @@ nsDocLoader::Stop(void)
 
   // Don't report that we're flushing layout so IsBusy returns false after a
   // Stop call.
-  mIsFlushingLayout = PR_FALSE;
+  mIsFlushingLayout = false;
 
   // Clear out mChildrenInOnload.  We want to make sure to fire our
   // onload at this point, and there's no issue with mChildrenInOnload
@@ -354,13 +348,13 @@ nsDocLoader::Stop(void)
   // we wouldn't need the call here....
 
   NS_ASSERTION(!IsBusy(), "Shouldn't be busy here");
-  DocLoaderIsEmpty(PR_FALSE);
+  DocLoaderIsEmpty(false);
   
   return rv;
 }       
 
 
-PRBool
+bool
 nsDocLoader::IsBusy()
 {
   nsresult rv;
@@ -376,25 +370,25 @@ nsDocLoader::IsBusy()
   //
 
   if (mChildrenInOnload.Count() || mIsFlushingLayout) {
-    return PR_TRUE;
+    return true;
   }
 
   /* Is this document loader busy? */
   if (!mIsLoadingDocument) {
-    return PR_FALSE;
+    return false;
   }
   
-  PRBool busy;
+  bool busy;
   rv = mLoadGroup->IsPending(&busy);
   if (NS_FAILED(rv)) {
-    return PR_FALSE;
+    return false;
   }
   if (busy) {
-    return PR_TRUE;
+    return true;
   }
 
   /* check its child document loaders... */
-  PRInt32 count, i;
+  int32_t count, i;
 
   count = mChildList.Count();
 
@@ -404,10 +398,10 @@ nsDocLoader::IsBusy()
     // This is a safe cast, because we only put nsDocLoader objects into the
     // array
     if (loader && static_cast<nsDocLoader*>(loader)->IsBusy())
-      return PR_TRUE;
+      return true;
   }
 
-  return PR_FALSE;
+  return false;
 }
 
 NS_IMETHODIMP
@@ -423,7 +417,7 @@ nsDocLoader::GetLoadGroup(nsILoadGroup** aResult)
 {
   nsresult rv = NS_OK;
 
-  if (nsnull == aResult) {
+  if (nullptr == aResult) {
     rv = NS_ERROR_NULL_POINTER;
   } else {
     *aResult = mLoadGroup;
@@ -447,8 +441,8 @@ nsDocLoader::Destroy()
   ClearRequestInfoHash();
 
   // Release all the information about registered listeners...
-  PRInt32 count = mListenerInfoList.Count();
-  for(PRInt32 i = 0; i < count; i++) {
+  int32_t count = mListenerInfoList.Count();
+  for(int32_t i = 0; i < count; i++) {
     nsListenerInfo *info =
       static_cast<nsListenerInfo*>(mListenerInfoList.ElementAt(i));
 
@@ -461,7 +455,7 @@ nsDocLoader::Destroy()
   mDocumentRequest = 0;
 
   if (mLoadGroup)
-    mLoadGroup->SetGroupObserver(nsnull);
+    mLoadGroup->SetGroupObserver(nullptr);
 
   DestroyChildren();
 }
@@ -469,7 +463,7 @@ nsDocLoader::Destroy()
 void
 nsDocLoader::DestroyChildren()
 {
-  PRInt32 i, count;
+  int32_t i, count;
   
   count = mChildList.Count();
   // if the doc loader still has children...we need to enumerate the
@@ -482,7 +476,7 @@ nsDocLoader::DestroyChildren()
     if (loader) {
       // This is a safe cast, as we only put nsDocLoader objects into the
       // array
-      static_cast<nsDocLoader*>(loader)->SetDocLoaderParent(nsnull);
+      static_cast<nsDocLoader*>(loader)->SetDocLoaderParent(nullptr);
     }
   }
   mChildList.Clear();
@@ -498,7 +492,7 @@ nsDocLoader::OnStartRequest(nsIRequest *request, nsISupports *aCtxt)
     nsCAutoString name;
     request->GetName(name);
 
-    PRUint32 count = 0;
+    uint32_t count = 0;
     if (mLoadGroup)
       mLoadGroup->GetActiveCount(&count);
 
@@ -509,14 +503,14 @@ nsDocLoader::OnStartRequest(nsIRequest *request, nsISupports *aCtxt)
             count));
   }
 #endif /* PR_LOGGING */
-  PRBool bJustStartedLoading = PR_FALSE;
+  bool bJustStartedLoading = false;
 
   nsLoadFlags loadFlags = 0;
   request->GetLoadFlags(&loadFlags);
 
   if (!mIsLoadingDocument && (loadFlags & nsIChannel::LOAD_DOCUMENT_URI)) {
-      bJustStartedLoading = PR_TRUE;
-      mIsLoadingDocument = PR_TRUE;
+      bJustStartedLoading = true;
+      mIsLoadingDocument = true;
       ClearInternalProgress(); // only clear our progress if we are starting a new load....
   }
 
@@ -579,7 +573,7 @@ nsDocLoader::OnStopRequest(nsIRequest *aRequest,
     nsCAutoString name;
     aRequest->GetName(name);
 
-    PRUint32 count = 0;
+    uint32_t count = 0;
     if (mLoadGroup)
       mLoadGroup->GetActiveCount(&count);
 
@@ -591,7 +585,7 @@ nsDocLoader::OnStopRequest(nsIRequest *aRequest,
   }
 #endif
 
-  PRBool bFireTransferring = PR_FALSE;
+  bool bFireTransferring = false;
 
   //
   // Set the Maximum progress to the same value as the current progress.
@@ -601,9 +595,12 @@ nsDocLoader::OnStopRequest(nsIRequest *aRequest,
   //
   nsRequestInfo *info = GetRequestInfo(aRequest);
   if (info) {
-    info->mIsDone = PR_TRUE;
+    // Null out mLastStatus now so we don't find it when looking for
+    // status from now on.  This destroys the nsStatusInfo and hence
+    // removes it from our list.
+    info->mLastStatus = nullptr;
 
-    PRInt64 oldMax = info->mMaxProgress;
+    int64_t oldMax = info->mMaxProgress;
 
     info->mMaxProgress = info->mCurrentProgress;
     
@@ -612,7 +609,7 @@ nsDocLoader::OnStopRequest(nsIRequest *aRequest,
     // finished loading, then use this new data to try to calculate a
     // mMaxSelfProgress...
     //
-    if ((oldMax < PRInt64(0)) && (mMaxSelfProgress < PRInt64(0))) {
+    if ((oldMax < int64_t(0)) && (mMaxSelfProgress < int64_t(0))) {
       mMaxSelfProgress = CalculateMaxProgress();
     }
 
@@ -637,7 +634,7 @@ nsDocLoader::OnStopRequest(nsIRequest *aRequest,
       //
       if (channel) {
         if (NS_SUCCEEDED(aStatus)) {
-          bFireTransferring = PR_TRUE;
+          bFireTransferring = true;
         }
         //
         // If the request failed (for any reason other than being
@@ -649,12 +646,12 @@ nsDocLoader::OnStopRequest(nsIRequest *aRequest,
           //
           // Only if the load has been targeted (see bug 268483)...
           //
-          PRUint32 lf;
+          uint32_t lf;
           channel->GetLoadFlags(&lf);
           if (lf & nsIChannel::LOAD_TARGETED) {
             nsCOMPtr<nsIHttpChannel> httpChannel(do_QueryInterface(aRequest));
             if (httpChannel) {
-              PRUint32 responseCode;
+              uint32_t responseCode;
               rv = httpChannel->GetResponseStatus(&responseCode);
               if (NS_SUCCEEDED(rv)) {
                 //
@@ -662,7 +659,7 @@ nsDocLoader::OnStopRequest(nsIRequest *aRequest,
                 // established to the server... So, fire the notification
                 // even though a failure occurred later...
                 //
-                bFireTransferring = PR_TRUE;
+                bFireTransferring = true;
               }
             }
           }
@@ -673,7 +670,7 @@ nsDocLoader::OnStopRequest(nsIRequest *aRequest,
 
   if (bFireTransferring) {
     // Send a STATE_TRANSFERRING notification for the request.
-    PRInt32 flags;
+    int32_t flags;
     
     flags = nsIWebProgressListener::STATE_TRANSFERRING |
             nsIWebProgressListener::STATE_IS_REQUEST;
@@ -704,7 +701,7 @@ nsDocLoader::OnStopRequest(nsIRequest *aRequest,
   // load.  This will handle removing the request from our hashtable as needed.
   //
   if (mIsLoadingDocument) {
-    DocLoaderIsEmpty(PR_TRUE);
+    DocLoaderIsEmpty(true);
   }
   
   return NS_OK;
@@ -715,7 +712,7 @@ nsresult nsDocLoader::RemoveChildLoader(nsDocLoader* aChild)
 {
   nsresult rv = mChildList.RemoveElement(aChild) ? NS_OK : NS_ERROR_FAILURE;
   if (NS_SUCCEEDED(rv)) {
-    aChild->SetDocLoaderParent(nsnull);
+    aChild->SetDocLoaderParent(nullptr);
   }
   return rv;
 }
@@ -732,7 +729,7 @@ nsresult nsDocLoader::AddChildLoader(nsDocLoader* aChild)
 NS_IMETHODIMP nsDocLoader::GetDocumentChannel(nsIChannel ** aChannel)
 {
   if (!mDocumentRequest) {
-    *aChannel = nsnull;
+    *aChannel = nullptr;
     return NS_OK;
   }
   
@@ -740,7 +737,7 @@ NS_IMETHODIMP nsDocLoader::GetDocumentChannel(nsIChannel ** aChannel)
 }
 
 
-void nsDocLoader::DocLoaderIsEmpty(PRBool aFlushLayout)
+void nsDocLoader::DocLoaderIsEmpty(bool aFlushLayout)
 {
   if (mIsLoadingDocument) {
     /* In the unimagineably rude circumstance that onload event handlers
@@ -773,9 +770,9 @@ void nsDocLoader::DocLoaderIsEmpty(PRBool aFlushLayout)
             flushType = Flush_Layout;
           }
         }
-        mDontFlushLayout = mIsFlushingLayout = PR_TRUE;
+        mDontFlushLayout = mIsFlushingLayout = true;
         doc->FlushPendingNotifications(flushType);
-        mDontFlushLayout = mIsFlushingLayout = PR_FALSE;
+        mDontFlushLayout = mIsFlushingLayout = false;
       }
     }
 
@@ -793,7 +790,7 @@ void nsDocLoader::DocLoaderIsEmpty(PRBool aFlushLayout)
 
       NS_ASSERTION(mDocumentRequest, "No Document Request!");
       mDocumentRequest = 0;
-      mIsLoadingDocument = PR_FALSE;
+      mIsLoadingDocument = false;
 
       // Update the progress status state - the document is done
       mProgressStateFlags = nsIWebProgressListener::STATE_STOP;
@@ -806,7 +803,7 @@ void nsDocLoader::DocLoaderIsEmpty(PRBool aFlushLayout)
       // New code to break the circular reference between 
       // the load group and the docloader... 
       // 
-      mLoadGroup->SetDefaultLoadRequest(nsnull); 
+      mLoadGroup->SetDefaultLoadRequest(nullptr); 
 
       // Take a ref to our parent now so that we can call DocLoaderIsEmpty() on
       // it even if our onload handler removes us from the docloader tree.
@@ -875,24 +872,6 @@ void nsDocLoader::doStartURLLoad(nsIRequest *request)
                     NS_OK);
 }
 
-// PLDHashTable enumeration callback that finds a RequestInfo that's not done
-// yet.
-static PLDHashOperator
-FindUnfinishedRequestCallback(PLDHashTable *table, PLDHashEntryHdr *hdr,
-                              PRUint32 number, void *arg)
-{
-  nsRequestInfo* info = static_cast<nsRequestInfo *>(hdr);
-  nsRequestInfo** retval = static_cast<nsRequestInfo**>(arg);
-
-  if (!info->mIsDone && !info->mLastStatus.IsEmpty()) {
-    *retval = info;
-    return PL_DHASH_STOP;
-  }
-
-  return PL_DHASH_NEXT;
-}
-
-
 void nsDocLoader::doStopURLLoad(nsIRequest *request, nsresult aStatus)
 {
 #if defined(DEBUG)
@@ -911,15 +890,14 @@ void nsDocLoader::doStopURLLoad(nsIRequest *request, nsresult aStatus)
                     nsIWebProgressListener::STATE_IS_REQUEST,
                     aStatus);
 
-  // Fire a status change message for a random unfinished request to make sure
-  // that the displayed status is not outdated.
-  nsRequestInfo* unfinishedRequest = nsnull;
-  PL_DHashTableEnumerate(&mRequestInfoHash, FindUnfinishedRequestCallback,
-                         &unfinishedRequest);
-  if (unfinishedRequest) {
-    FireOnStatusChange(this, unfinishedRequest->Request(),
-                       unfinishedRequest->mLastStatusCode,
-                       unfinishedRequest->mLastStatus.get());
+  // Fire a status change message for the most recent unfinished
+  // request to make sure that the displayed status is not outdated.
+  if (!PR_CLIST_IS_EMPTY(&mStatusInfoList)) {
+    nsStatusInfo* statusInfo =
+      static_cast<nsStatusInfo*>(PR_LIST_HEAD(&mStatusInfoList));
+    FireOnStatusChange(this, statusInfo->mRequest,
+                       statusInfo->mStatusCode,
+                       statusInfo->mStatusMessage.get());
   }
 }
 
@@ -936,26 +914,33 @@ void nsDocLoader::doStopDocumentLoad(nsIRequest *request,
           this, buffer.get(), aStatus));
 #endif /* DEBUG */
 
+  // Firing STATE_STOP|STATE_IS_DOCUMENT will fire onload handlers.
+  // Grab our parent chain before doing that so we can still dispatch
+  // STATE_STOP|STATE_IS_WINDW_STATE_IS_NETWORK to them all, even if
+  // the onload handlers rearrange the docshell tree.
+  WebProgressList list;
+  GatherAncestorWebProgresses(list);
+  
   //
   // Fire an OnStateChange(...) notification indicating the the
   // current document has finished loading...
   //
-  FireOnStateChange(this,
-                    request,
-                    nsIWebProgressListener::STATE_STOP |
-                    nsIWebProgressListener::STATE_IS_DOCUMENT,
-                    aStatus);
+  int32_t flags = nsIWebProgressListener::STATE_STOP |
+                  nsIWebProgressListener::STATE_IS_DOCUMENT;
+  for (uint32_t i = 0; i < list.Length(); ++i) {
+    list[i]->DoFireOnStateChange(this, request, flags, aStatus);
+  }
 
   //
   // Fire a final OnStateChange(...) notification indicating the the
   // current document has finished loading...
   //
-  FireOnStateChange(this,
-                    request,
-                    nsIWebProgressListener::STATE_STOP |
-                    nsIWebProgressListener::STATE_IS_WINDOW |
-                    nsIWebProgressListener::STATE_IS_NETWORK,
-                    aStatus);
+  flags = nsIWebProgressListener::STATE_STOP |
+          nsIWebProgressListener::STATE_IS_WINDOW |
+          nsIWebProgressListener::STATE_IS_NETWORK;
+  for (uint32_t i = 0; i < list.Length(); ++i) {
+    list[i]->DoFireOnStateChange(this, request, flags, aStatus);
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -964,7 +949,7 @@ void nsDocLoader::doStopDocumentLoad(nsIRequest *request,
 
 NS_IMETHODIMP
 nsDocLoader::AddProgressListener(nsIWebProgressListener *aListener,
-                                     PRUint32 aNotifyMask)
+                                     uint32_t aNotifyMask)
 {
   nsresult rv;
 
@@ -1011,40 +996,40 @@ nsDocLoader::GetDOMWindow(nsIDOMWindow **aResult)
 }
 
 NS_IMETHODIMP
-nsDocLoader::GetIsLoadingDocument(PRBool *aIsLoadingDocument)
+nsDocLoader::GetIsLoadingDocument(bool *aIsLoadingDocument)
 {
   *aIsLoadingDocument = mIsLoadingDocument;
 
   return NS_OK;
 }
 
-PRInt64 nsDocLoader::GetMaxTotalProgress()
+int64_t nsDocLoader::GetMaxTotalProgress()
 {
-  PRInt64 newMaxTotal = 0;
+  int64_t newMaxTotal = 0;
 
-  PRInt32 count = mChildList.Count();
+  int32_t count = mChildList.Count();
   nsCOMPtr<nsIWebProgress> webProgress;
-  for (PRInt32 i=0; i < count; i++) 
+  for (int32_t i=0; i < count; i++) 
   {
-    PRInt64 individualProgress = 0;
+    int64_t individualProgress = 0;
     nsIDocumentLoader* docloader = ChildAt(i);
     if (docloader)
     {
       // Cast is safe since all children are nsDocLoader too
       individualProgress = ((nsDocLoader *) docloader)->GetMaxTotalProgress();
     }
-    if (individualProgress < PRInt64(0)) // if one of the elements doesn't know it's size
+    if (individualProgress < int64_t(0)) // if one of the elements doesn't know it's size
                                          // then none of them do
     {
-       newMaxTotal = PRInt64(-1);
+       newMaxTotal = int64_t(-1);
        break;
     }
     else
      newMaxTotal += individualProgress;
   }
 
-  PRInt64 progress = -1;
-  if (mMaxSelfProgress >= PRInt64(0) && newMaxTotal >= PRInt64(0))
+  int64_t progress = -1;
+  if (mMaxSelfProgress >= int64_t(0) && newMaxTotal >= int64_t(0))
     progress = newMaxTotal + mMaxSelfProgress;
   
   return progress;
@@ -1057,10 +1042,10 @@ PRInt64 nsDocLoader::GetMaxTotalProgress()
 ////////////////////////////////////////////////////////////////////////////////////
 
 NS_IMETHODIMP nsDocLoader::OnProgress(nsIRequest *aRequest, nsISupports* ctxt, 
-                                      PRUint64 aProgress, PRUint64 aProgressMax)
+                                      uint64_t aProgress, uint64_t aProgressMax)
 {
   nsRequestInfo *info;
-  PRInt64 progressDelta = 0;
+  int64_t progressDelta = 0;
 
   //
   // Update the RequestInfo entry with the new progress data
@@ -1068,7 +1053,7 @@ NS_IMETHODIMP nsDocLoader::OnProgress(nsIRequest *aRequest, nsISupports* ctxt,
   info = GetRequestInfo(aRequest);
   if (info) {
     // suppress sending STATE_TRANSFERRING if this is upload progress (see bug 240053)
-    if (!info->mUploading && (PRInt64(0) == info->mCurrentProgress) && (PRInt64(0) == info->mMaxProgress)) {
+    if (!info->mUploading && (int64_t(0) == info->mCurrentProgress) && (int64_t(0) == info->mMaxProgress)) {
       //
       // If we receive an OnProgress event from a toplevel channel that the URI Loader
       // has not yet targeted, then we must suppress the event.  This is necessary to
@@ -1089,16 +1074,16 @@ NS_IMETHODIMP nsDocLoader::OnProgress(nsIRequest *aRequest, nsISupports* ctxt,
       // so update mMaxSelfProgress...  Otherwise, set it to -1 to indicate
       // that the content-length is no longer known.
       //
-      if (PRUint64(aProgressMax) != LL_MAXUINT) {
-        mMaxSelfProgress  += PRInt64(aProgressMax);
-        info->mMaxProgress = PRInt64(aProgressMax);
+      if (uint64_t(aProgressMax) != LL_MAXUINT) {
+        mMaxSelfProgress  += int64_t(aProgressMax);
+        info->mMaxProgress = int64_t(aProgressMax);
       } else {
-        mMaxSelfProgress   =  PRInt64(-1);
-        info->mMaxProgress =  PRInt64(-1);
+        mMaxSelfProgress   =  int64_t(-1);
+        info->mMaxProgress =  int64_t(-1);
       }
 
       // Send a STATE_TRANSFERRING notification for the request.
-      PRInt32 flags;
+      int32_t flags;
     
       flags = nsIWebProgressListener::STATE_TRANSFERRING | 
               nsIWebProgressListener::STATE_IS_REQUEST;
@@ -1116,10 +1101,10 @@ NS_IMETHODIMP nsDocLoader::OnProgress(nsIRequest *aRequest, nsISupports* ctxt,
     }
 
     // Update the current progress count...
-    progressDelta = PRInt64(aProgress) - info->mCurrentProgress;
+    progressDelta = int64_t(aProgress) - info->mCurrentProgress;
     mCurrentSelfProgress += progressDelta;
 
-    info->mCurrentProgress = PRInt64(aProgress);
+    info->mCurrentProgress = int64_t(aProgress);
   }
   //
   // The request is not part of the load group, so ignore its progress
@@ -1158,8 +1143,8 @@ NS_IMETHODIMP nsDocLoader::OnStatus(nsIRequest* aRequest, nsISupports* ctxt,
     nsRequestInfo *info;
     info = GetRequestInfo(aRequest);
     if (info) {
-      PRBool uploading = (aStatus == nsITransport::STATUS_WRITING ||
-                          aStatus == nsISocketTransport::STATUS_SENDING_TO);
+      bool uploading = (aStatus == NS_NET_STATUS_WRITING ||
+                        aStatus == NS_NET_STATUS_SENDING_TO);
       // If switching from uploading to downloading (or vice versa), then we
       // need to reset our progress counts.  This is designed with HTTP form
       // submission in mind, where an upload is performed followed by download
@@ -1189,8 +1174,17 @@ NS_IMETHODIMP nsDocLoader::OnStatus(nsIRequest* aRequest, nsISupports* ctxt,
     // don't display, for example, "Transferring" messages for requests that are
     // already done.
     if (info) {
-      info->mLastStatus = msg;
-      info->mLastStatusCode = aStatus;
+      if (!info->mLastStatus) {
+        info->mLastStatus = new nsStatusInfo(aRequest);
+      } else {
+        // We're going to move it to the front of the list, so remove
+        // it from wherever it is now.
+        PR_REMOVE_LINK(info->mLastStatus);
+      }
+      info->mLastStatus->mStatusMessage = msg;
+      info->mLastStatus->mStatusCode = aStatus;
+      // Put the info at the front of the list
+      PR_INSERT_LINK(info->mLastStatus, &mStatusInfoList);
     }
     FireOnStatusChange(this, aRequest, aStatus, msg);
   }
@@ -1211,11 +1205,11 @@ void nsDocLoader::ClearInternalProgress()
 
 void nsDocLoader::FireOnProgressChange(nsDocLoader *aLoadInitiator,
                                        nsIRequest *request,
-                                       PRInt64 aProgress,
-                                       PRInt64 aProgressMax,
-                                       PRInt64 aProgressDelta,
-                                       PRInt64 aTotalProgress,
-                                       PRInt64 aMaxTotalProgress)
+                                       int64_t aProgress,
+                                       int64_t aProgressMax,
+                                       int64_t aProgressDelta,
+                                       int64_t aTotalProgress,
+                                       int64_t aMaxTotalProgress)
 {
   if (mIsLoadingDocument) {
     mCurrentTotalProgress += aProgressDelta;
@@ -1241,7 +1235,7 @@ void nsDocLoader::FireOnProgressChange(nsDocLoader *aLoadInitiator,
    * get removed from the list it won't affect our iteration
    */
   nsCOMPtr<nsIWebProgressListener> listener;
-  PRInt32 count = mListenerInfoList.Count();
+  int32_t count = mListenerInfoList.Count();
 
   while (--count >= 0) {
     nsListenerInfo *info;
@@ -1261,8 +1255,8 @@ void nsDocLoader::FireOnProgressChange(nsDocLoader *aLoadInitiator,
 
     // XXX truncates 64-bit to 32-bit
     listener->OnProgressChange(aLoadInitiator,request,
-                               PRInt32(aProgress), PRInt32(aProgressMax),
-                               PRInt32(aTotalProgress), PRInt32(aMaxTotalProgress));
+                               int32_t(aProgress), int32_t(aProgressMax),
+                               int32_t(aTotalProgress), int32_t(aMaxTotalProgress));
   }
 
   mListenerInfoList.Compact();
@@ -1276,11 +1270,29 @@ void nsDocLoader::FireOnProgressChange(nsDocLoader *aLoadInitiator,
   }
 }
 
+void nsDocLoader::GatherAncestorWebProgresses(WebProgressList& aList)
+{
+  for (nsDocLoader* loader = this; loader; loader = loader->mParent) {
+    aList.AppendElement(loader);
+  }
+}
 
 void nsDocLoader::FireOnStateChange(nsIWebProgress *aProgress,
                                     nsIRequest *aRequest,
-                                    PRInt32 aStateFlags,
+                                    int32_t aStateFlags,
                                     nsresult aStatus)
+{
+  WebProgressList list;
+  GatherAncestorWebProgresses(list);
+  for (uint32_t i = 0; i < list.Length(); ++i) {
+    list[i]->DoFireOnStateChange(aProgress, aRequest, aStateFlags, aStatus);
+  }
+}
+
+void nsDocLoader::DoFireOnStateChange(nsIWebProgress * const aProgress,
+                                      nsIRequest * const aRequest,
+                                      int32_t &aStateFlags,
+                                      const nsresult aStatus)
 {
   //
   // Remove the STATE_IS_NETWORK bit if necessary.
@@ -1317,8 +1329,8 @@ void nsDocLoader::FireOnStateChange(nsIWebProgress *aProgress,
    * get removed from the list it won't affect our iteration
    */
   nsCOMPtr<nsIWebProgressListener> listener;
-  PRInt32 count = mListenerInfoList.Count();
-  PRInt32 notifyMask = (aStateFlags >> 16) & nsIWebProgress::NOTIFY_STATE_ALL;
+  int32_t count = mListenerInfoList.Count();
+  int32_t notifyMask = (aStateFlags >> 16) & nsIWebProgress::NOTIFY_STATE_ALL;
 
   while (--count >= 0) {
     nsListenerInfo *info;
@@ -1340,11 +1352,6 @@ void nsDocLoader::FireOnStateChange(nsIWebProgress *aProgress,
   }
 
   mListenerInfoList.Compact();
-
-  // Pass the notification up to the parent...
-  if (mParent) {
-    mParent->FireOnStateChange(aProgress, aRequest, aStateFlags, aStatus);
-  }
 }
 
 
@@ -1352,7 +1359,8 @@ void nsDocLoader::FireOnStateChange(nsIWebProgress *aProgress,
 void
 nsDocLoader::FireOnLocationChange(nsIWebProgress* aWebProgress,
                                   nsIRequest* aRequest,
-                                  nsIURI *aUri)
+                                  nsIURI *aUri,
+                                  uint32_t aFlags)
 {
   /*                                                                           
    * First notify any listeners of the new state info...
@@ -1361,7 +1369,7 @@ nsDocLoader::FireOnLocationChange(nsIWebProgress* aWebProgress,
    * get removed from the list it won't affect our iteration
    */
   nsCOMPtr<nsIWebProgressListener> listener;
-  PRInt32 count = mListenerInfoList.Count();
+  int32_t count = mListenerInfoList.Count();
 
   while (--count >= 0) {
     nsListenerInfo *info;
@@ -1379,14 +1387,15 @@ nsDocLoader::FireOnLocationChange(nsIWebProgress* aWebProgress,
       continue;
     }
 
-    listener->OnLocationChange(aWebProgress, aRequest, aUri);
+    PR_LOG(gDocLoaderLog, PR_LOG_DEBUG, ("DocLoader [%p] calling %p->OnLocationChange", this, listener.get()));
+    listener->OnLocationChange(aWebProgress, aRequest, aUri, aFlags);
   }
 
   mListenerInfoList.Compact();
 
   // Pass the notification up to the parent...
   if (mParent) {
-    mParent->FireOnLocationChange(aWebProgress, aRequest, aUri);
+    mParent->FireOnLocationChange(aWebProgress, aRequest, aUri, aFlags);
   }
 }
 
@@ -1403,7 +1412,7 @@ nsDocLoader::FireOnStatusChange(nsIWebProgress* aWebProgress,
    * get removed from the list it won't affect our iteration
    */
   nsCOMPtr<nsIWebProgressListener> listener;
-  PRInt32 count = mListenerInfoList.Count();
+  int32_t count = mListenerInfoList.Count();
 
   while (--count >= 0) {
     nsListenerInfo *info;
@@ -1431,11 +1440,11 @@ nsDocLoader::FireOnStatusChange(nsIWebProgress* aWebProgress,
   }
 }
 
-PRBool
+bool
 nsDocLoader::RefreshAttempted(nsIWebProgress* aWebProgress,
                               nsIURI *aURI,
-                              PRInt32 aDelay,
-                              PRBool aSameURI)
+                              int32_t aDelay,
+                              bool aSameURI)
 {
   /*
    * Returns true if the refresh may proceed,
@@ -1446,8 +1455,8 @@ nsDocLoader::RefreshAttempted(nsIWebProgress* aWebProgress,
    * Iterate the elements from back to front so that if items
    * get removed from the list it won't affect our iteration
    */
-  PRBool allowRefresh = PR_TRUE;
-  PRInt32 count = mListenerInfoList.Count();
+  bool allowRefresh = true;
+  int32_t count = mListenerInfoList.Count();
 
   while (--count >= 0) {
     nsListenerInfo *info;
@@ -1471,7 +1480,7 @@ nsDocLoader::RefreshAttempted(nsIWebProgress* aWebProgress,
     if (!listener2)
       continue;
 
-    PRBool listenerAllowedRefresh;
+    bool listenerAllowedRefresh;
     nsresult listenerRV = listener2->OnRefreshAttempted(
         aWebProgress, aURI, aDelay, aSameURI, &listenerAllowedRefresh);
     if (NS_FAILED(listenerRV))
@@ -1494,7 +1503,7 @@ nsDocLoader::RefreshAttempted(nsIWebProgress* aWebProgress,
 nsListenerInfo * 
 nsDocLoader::GetListenerInfo(nsIWebProgressListener *aListener)
 {
-  PRInt32 i, count;
+  int32_t i, count;
   nsListenerInfo *info;
 
   nsCOMPtr<nsISupports> listener1 = do_QueryInterface(aListener);
@@ -1509,7 +1518,7 @@ nsDocLoader::GetListenerInfo(nsIWebProgressListener *aListener)
         return info;
     }
   }
-  return nsnull;
+  return nullptr;
 }
 
 nsresult nsDocLoader::AddRequestInfo(nsIRequest *aRequest)
@@ -1536,7 +1545,7 @@ nsRequestInfo * nsDocLoader::GetRequestInfo(nsIRequest *aRequest)
   if (PL_DHASH_ENTRY_IS_FREE(info)) {
     // Nothing found in the hash, return null.
 
-    return nsnull;
+    return nullptr;
   }
 
   // Return what we found in the hash...
@@ -1547,7 +1556,7 @@ nsRequestInfo * nsDocLoader::GetRequestInfo(nsIRequest *aRequest)
 // PLDHashTable enumeration callback that just removes every entry
 // from the hash.
 static PLDHashOperator
-RemoveInfoCallback(PLDHashTable *table, PLDHashEntryHdr *hdr, PRUint32 number,
+RemoveInfoCallback(PLDHashTable *table, PLDHashEntryHdr *hdr, uint32_t number,
                    void *arg)
 {
   return PL_DHASH_REMOVE;
@@ -1561,19 +1570,19 @@ void nsDocLoader::ClearRequestInfoHash(void)
     return;
   }
 
-  PL_DHashTableEnumerate(&mRequestInfoHash, RemoveInfoCallback, nsnull);
+  PL_DHashTableEnumerate(&mRequestInfoHash, RemoveInfoCallback, nullptr);
 }
 
 // PLDHashTable enumeration callback that calculates the max progress.
 static PLDHashOperator
 CalcMaxProgressCallback(PLDHashTable *table, PLDHashEntryHdr *hdr,
-                        PRUint32 number, void *arg)
+                        uint32_t number, void *arg)
 {
   const nsRequestInfo *info = static_cast<const nsRequestInfo *>(hdr);
-  PRInt64 *max = static_cast<PRInt64 *>(arg);
+  int64_t *max = static_cast<int64_t *>(arg);
 
   if (info->mMaxProgress < info->mCurrentProgress) {
-    *max = PRInt64(-1);
+    *max = int64_t(-1);
 
     return PL_DHASH_STOP;
   }
@@ -1583,22 +1592,22 @@ CalcMaxProgressCallback(PLDHashTable *table, PLDHashEntryHdr *hdr,
   return PL_DHASH_NEXT;
 }
 
-PRInt64 nsDocLoader::CalculateMaxProgress()
+int64_t nsDocLoader::CalculateMaxProgress()
 {
-  PRInt64 max = mCompletedTotalProgress;
+  int64_t max = mCompletedTotalProgress;
   PL_DHashTableEnumerate(&mRequestInfoHash, CalcMaxProgressCallback, &max);
   return max;
 }
 
 NS_IMETHODIMP nsDocLoader::AsyncOnChannelRedirect(nsIChannel *aOldChannel,
                                                   nsIChannel *aNewChannel,
-                                                  PRUint32 aFlags,
+                                                  uint32_t aFlags,
                                                   nsIAsyncVerifyRedirectCallback *cb)
 {
   if (aOldChannel)
   {
     nsLoadFlags loadFlags = 0;
-    PRInt32 stateFlags = nsIWebProgressListener::STATE_REDIRECTING |
+    int32_t stateFlags = nsIWebProgressListener::STATE_REDIRECTING |
                          nsIWebProgressListener::STATE_IS_REQUEST;
 
     aOldChannel->GetLoadFlags(&loadFlags);
@@ -1627,7 +1636,7 @@ NS_IMETHODIMP nsDocLoader::AsyncOnChannelRedirect(nsIChannel *aOldChannel,
  */
 
 NS_IMETHODIMP nsDocLoader::OnSecurityChange(nsISupports * aContext,
-                                            PRUint32 aState)
+                                            uint32_t aState)
 {
   //
   // Fire progress notifications out to any registered nsIWebProgressListeners.  
@@ -1643,7 +1652,7 @@ NS_IMETHODIMP nsDocLoader::OnSecurityChange(nsISupports * aContext,
    * get removed from the list it won't affect our iteration
    */
   nsCOMPtr<nsIWebProgressListener> listener;
-  PRInt32 count = mListenerInfoList.Count();
+  int32_t count = mListenerInfoList.Count();
 
   while (--count >= 0) {
     nsListenerInfo *info;
@@ -1682,7 +1691,7 @@ NS_IMETHODIMP nsDocLoader::OnSecurityChange(nsISupports * aContext,
  * go away. 
  */
 
-NS_IMETHODIMP nsDocLoader::GetPriority(PRInt32 *aPriority)
+NS_IMETHODIMP nsDocLoader::GetPriority(int32_t *aPriority)
 {
   nsCOMPtr<nsISupportsPriority> p = do_QueryInterface(mLoadGroup);
   if (p)
@@ -1692,7 +1701,7 @@ NS_IMETHODIMP nsDocLoader::GetPriority(PRInt32 *aPriority)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsDocLoader::SetPriority(PRInt32 aPriority)
+NS_IMETHODIMP nsDocLoader::SetPriority(int32_t aPriority)
 {
   PR_LOG(gDocLoaderLog, PR_LOG_DEBUG, 
          ("DocLoader:%p: SetPriority(%d) called\n", this, aPriority));
@@ -1701,10 +1710,10 @@ NS_IMETHODIMP nsDocLoader::SetPriority(PRInt32 aPriority)
   if (p)
     p->SetPriority(aPriority);
 
-  PRInt32 count = mChildList.Count();
+  int32_t count = mChildList.Count();
 
   nsDocLoader *loader;
-  for (PRInt32 i=0; i < count; i++) {
+  for (int32_t i=0; i < count; i++) {
     loader = static_cast<nsDocLoader*>(ChildAt(i));
     if (loader) {
       loader->SetPriority(aPriority);
@@ -1714,7 +1723,7 @@ NS_IMETHODIMP nsDocLoader::SetPriority(PRInt32 aPriority)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsDocLoader::AdjustPriority(PRInt32 aDelta)
+NS_IMETHODIMP nsDocLoader::AdjustPriority(int32_t aDelta)
 {
   PR_LOG(gDocLoaderLog, PR_LOG_DEBUG, 
          ("DocLoader:%p: AdjustPriority(%d) called\n", this, aDelta));
@@ -1723,10 +1732,10 @@ NS_IMETHODIMP nsDocLoader::AdjustPriority(PRInt32 aDelta)
   if (p)
     p->AdjustPriority(aDelta);
 
-  PRInt32 count = mChildList.Count();
+  int32_t count = mChildList.Count();
 
   nsDocLoader *loader;
-  for (PRInt32 i=0; i < count; i++) {
+  for (int32_t i=0; i < count; i++) {
     loader = static_cast<nsDocLoader*>(ChildAt(i));
     if (loader) {
       loader->AdjustPriority(aDelta);
@@ -1743,8 +1752,8 @@ NS_IMETHODIMP nsDocLoader::AdjustPriority(PRInt32 aDelta)
 void nsDocLoader::DumpChannelInfo()
 {
   nsChannelInfo *info;
-  PRInt32 i, count;
-  PRInt32 current=0, max=0;
+  int32_t i, count;
+  int32_t current=0, max=0;
 
   
   printf("==== DocLoader=%x\n", this);

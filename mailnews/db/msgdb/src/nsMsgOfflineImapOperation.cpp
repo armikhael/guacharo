@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifdef MOZ_LOGGING
 // This has to be before the pre-compiled header
@@ -77,17 +45,17 @@ nsMsgOfflineImapOperation::nsMsgOfflineImapOperation(nsMsgDatabase *db, nsIMdbRo
   NS_ADDREF(m_mdb);
   m_mdbRow = row;
   m_newFlags = 0;
-  m_mdb->GetUint32Property(m_mdbRow, PROP_OPERATION, (PRUint32 *) &m_operation, 0);
+  m_mdb->GetUint32Property(m_mdbRow, PROP_OPERATION, (uint32_t *) &m_operation, 0);
   m_mdb->GetUint32Property(m_mdbRow, PROP_MESSAGE_KEY, &m_messageKey, 0);
   m_mdb->GetUint32Property(m_mdbRow, PROP_OPERATION_FLAGS, &m_operationFlags, 0);
-  m_mdb->GetUint32Property(m_mdbRow, PROP_NEW_FLAGS, (PRUint32 *) &m_newFlags, 0);
+  m_mdb->GetUint32Property(m_mdbRow, PROP_NEW_FLAGS, (uint32_t *) &m_newFlags, 0);
 }
 
 nsMsgOfflineImapOperation::~nsMsgOfflineImapOperation()
 {
   // clear the row first, in case we're holding the last reference
   // to the db.
-  m_mdbRow = nsnull;
+  m_mdbRow = nullptr;
   NS_IF_RELEASE(m_mdb);
 }
 
@@ -122,7 +90,7 @@ NS_IMETHODIMP nsMsgOfflineImapOperation::ClearOperation(nsOfflineImapOperationTy
     m_moveDestination.Truncate();
     break;
   case kMsgCopy:
-    m_copyDestinations.RemoveCStringAt(0);
+    m_copyDestinations.RemoveElementAt(0);
     break;
   }
   return m_mdb->SetUint32Property(m_mdbRow, PROP_OPERATION, m_operation);
@@ -178,7 +146,7 @@ NS_IMETHODIMP nsMsgOfflineImapOperation::SetFlagOperation(imapMessageFlagsType a
 NS_IMETHODIMP nsMsgOfflineImapOperation::GetNewFlags(imapMessageFlagsType *aNewFlags)
 {
   NS_ENSURE_ARG(aNewFlags);
-  PRUint32 flags;
+  uint32_t flags;
   nsresult rv = m_mdb->GetUint32Property(m_mdbRow, PROP_NEW_FLAGS, &flags, 0);
   *aNewFlags = m_newFlags = (imapMessageFlagsType) flags;
   return rv;
@@ -253,7 +221,7 @@ NS_IMETHODIMP nsMsgOfflineImapOperation::GetKeywordsToRemove(char * *aKeywords)
 nsresult nsMsgOfflineImapOperation::AddKeyword(const char *aKeyword, nsCString &addList, const char *addProp,
                                                nsCString &removeList, const char *removeProp)
 {
-  PRInt32 startOffset, keywordLength;
+  int32_t startOffset, keywordLength;
   if (!MsgFindKeyword(nsDependentCString(aKeyword), addList, &startOffset, &keywordLength))
   {
     if (!addList.IsEmpty())
@@ -283,7 +251,7 @@ NS_IMETHODIMP nsMsgOfflineImapOperation::AddMessageCopyOperation(const char *des
   nsCAutoString newDest(destinationBox);
   nsresult rv = GetCopiesFromDB();
   NS_ENSURE_SUCCESS(rv, rv);
-  m_copyDestinations.AppendCString(newDest);
+  m_copyDestinations.AppendElement(newDest);
   return SetCopiesToDB();
 }
 
@@ -298,8 +266,8 @@ nsresult nsMsgOfflineImapOperation::GetCopiesFromDB()
   // use 0x1 as the delimiter between folder names since it's not a legal character
   if (NS_SUCCEEDED(rv) && !copyDests.IsEmpty())
   {
-    PRInt32 curCopyDestStart = 0;
-    PRInt32 nextCopyDestPos = 0;
+    int32_t curCopyDestStart = 0;
+    int32_t nextCopyDestPos = 0;
 
     while (nextCopyDestPos != -1)
     {
@@ -310,7 +278,7 @@ nsresult nsMsgOfflineImapOperation::GetCopiesFromDB()
       else
         curDest = Substring(copyDests, curCopyDestStart, copyDests.Length() - curCopyDestStart);
       curCopyDestStart = nextCopyDestPos + 1;
-      m_copyDestinations.AppendCString(curDest);
+      m_copyDestinations.AppendElement(curDest);
     }
   }
   return rv;
@@ -321,60 +289,55 @@ nsresult nsMsgOfflineImapOperation::SetCopiesToDB()
   nsCAutoString copyDests;
 
   // use 0x1 as the delimiter between folders
-  for (PRInt32 i = 0; i < m_copyDestinations.Count(); i++)
+  for (uint32_t i = 0; i < m_copyDestinations.Length(); i++)
   {
     if (i > 0)
       copyDests.Append(FOLDER_SEP_CHAR);
-    nsCString *curDest = m_copyDestinations.CStringAt(i);
-    copyDests.Append(curDest->get());
+    copyDests.Append(m_copyDestinations.ElementAt(i));
   }
   return m_mdb->SetProperty(m_mdbRow, PROP_COPY_DESTS, copyDests.get());
 }
 
 /* attribute long numberOfCopies; */
-NS_IMETHODIMP nsMsgOfflineImapOperation::GetNumberOfCopies(PRInt32 *aNumberOfCopies)
+NS_IMETHODIMP nsMsgOfflineImapOperation::GetNumberOfCopies(int32_t *aNumberOfCopies)
 {
   NS_ENSURE_ARG(aNumberOfCopies);
   nsresult rv = GetCopiesFromDB();
   NS_ENSURE_SUCCESS(rv, rv);
-  *aNumberOfCopies = m_copyDestinations.Count();
+  *aNumberOfCopies = m_copyDestinations.Length();
   return NS_OK;
 }
 
 /* string getCopyDestination (in long copyIndex); */
-NS_IMETHODIMP nsMsgOfflineImapOperation::GetCopyDestination(PRInt32 copyIndex, char **retval)
+NS_IMETHODIMP nsMsgOfflineImapOperation::GetCopyDestination(int32_t copyIndex, char **retval)
 {
   NS_ENSURE_ARG(retval);
   nsresult rv = GetCopiesFromDB();
   NS_ENSURE_SUCCESS(rv, rv);
-  nsCString *copyDest = m_copyDestinations.CStringAt(copyIndex);
-  if (copyDest)
-  {
-    *retval = ToNewCString(*copyDest);
-    return (*retval) ? NS_OK : NS_ERROR_OUT_OF_MEMORY;
-  }
-  else
-    return NS_ERROR_NULL_POINTER;
+  if (copyIndex >= (int32_t)m_copyDestinations.Length())
+    return NS_ERROR_ILLEGAL_VALUE;
+  *retval = ToNewCString(m_copyDestinations.ElementAt(copyIndex));
+  return (*retval) ? NS_OK : NS_ERROR_OUT_OF_MEMORY;
 }
 
 /* attribute unsigned log msgSize; */
-NS_IMETHODIMP nsMsgOfflineImapOperation::GetMsgSize(PRUint32 *aMsgSize)
+NS_IMETHODIMP nsMsgOfflineImapOperation::GetMsgSize(uint32_t *aMsgSize)
 {
   NS_ENSURE_ARG(aMsgSize);
   return m_mdb->GetUint32Property(m_mdbRow, PROP_MSG_SIZE, aMsgSize, 0);
 }
 
-NS_IMETHODIMP nsMsgOfflineImapOperation::SetMsgSize(PRUint32 aMsgSize)
+NS_IMETHODIMP nsMsgOfflineImapOperation::SetMsgSize(uint32_t aMsgSize)
 {
   return m_mdb->SetUint32Property(m_mdbRow, PROP_MSG_SIZE, aMsgSize);
 }
 
-NS_IMETHODIMP nsMsgOfflineImapOperation::SetPlayingBack(PRBool aPlayingBack)
+NS_IMETHODIMP nsMsgOfflineImapOperation::SetPlayingBack(bool aPlayingBack)
 {
   return m_mdb->SetBooleanProperty(m_mdbRow, PROP_PLAYINGBACK, aPlayingBack);
 }
 
-NS_IMETHODIMP nsMsgOfflineImapOperation::GetPlayingBack(PRBool *aPlayingBack)
+NS_IMETHODIMP nsMsgOfflineImapOperation::GetPlayingBack(bool *aPlayingBack)
 {
   NS_ENSURE_ARG(aPlayingBack);
   return m_mdb->GetBooleanProperty(m_mdbRow, PROP_PLAYINGBACK, aPlayingBack);

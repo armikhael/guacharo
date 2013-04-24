@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Adam D. Moss <adam@gimp.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsMsgLocalCID.h"
 #include "nsMsgFolderFlags.h"
@@ -58,19 +25,11 @@ NS_IMPL_ISUPPORTS_INHERITED2(nsMovemailIncomingServer,
 
 nsMovemailIncomingServer::nsMovemailIncomingServer()
 {    
-    m_canHaveFilters = PR_TRUE;
+    m_canHaveFilters = true;
 }
 
 nsMovemailIncomingServer::~nsMovemailIncomingServer()
 {
-}
-
-NS_IMETHODIMP
-nsMovemailIncomingServer::GetIsSecureServer(PRBool *aIsSecureServer)
-{
-    NS_ENSURE_ARG_POINTER(aIsSecureServer);
-    *aIsSecureServer = PR_FALSE;
-    return NS_OK;
 }
 
 NS_IMETHODIMP 
@@ -91,10 +50,10 @@ nsMovemailIncomingServer::PerformBiff(nsIMsgWindow *aMsgWindow)
          if (!inbox) return NS_ERROR_FAILURE;
     }
 
-    SetPerformingBiff(PR_TRUE);
+    SetPerformingBiff(true);
     urlListener = do_QueryInterface(inbox);
 
-    PRBool downloadOnBiff = PR_FALSE;
+    bool downloadOnBiff = false;
     rv = GetDownloadOnBiff(&downloadOnBiff);
     if (downloadOnBiff)
     {
@@ -102,7 +61,7 @@ nsMovemailIncomingServer::PerformBiff(nsIMsgWindow *aMsgWindow)
                                                                        &rv);
        if (localInbox && NS_SUCCEEDED(rv))
        {
-           PRBool valid = PR_FALSE;
+           bool valid = false;
            nsCOMPtr <nsIMsgDatabase> db;
            rv = inbox->GetMsgDatabase(getter_AddRefs(db));
            if (NS_SUCCEEDED(rv) && db)
@@ -112,11 +71,11 @@ nsMovemailIncomingServer::PerformBiff(nsIMsgWindow *aMsgWindow)
            if (NS_SUCCEEDED(rv) && valid)
            {
                rv = movemailService->GetNewMail(aMsgWindow, urlListener, inbox,
-                                                this, nsnull);
+                                                this, nullptr);
            }
            else
            {
-              PRBool isLocked;
+              bool isLocked;
               inbox->GetLocked(&isLocked);
               if (!isLocked)
               {
@@ -124,14 +83,14 @@ nsMovemailIncomingServer::PerformBiff(nsIMsgWindow *aMsgWindow)
               }
               if (NS_SUCCEEDED(rv))
               {
-                 rv = localInbox->SetCheckForNewMessagesAfterParsing(PR_TRUE);
+                 rv = localInbox->SetCheckForNewMessagesAfterParsing(true);
               }
            }
        }
     }
     else
     {
-        movemailService->CheckForNewMail(urlListener, inbox, this, nsnull); 
+        movemailService->CheckForNewMail(urlListener, inbox, this, nullptr); 
     }
 
     return NS_OK;
@@ -169,7 +128,7 @@ NS_IMETHODIMP nsMovemailIncomingServer::CreateDefaultMailboxes(nsIFile *aPath)
 
     rv = path->AppendNative(NS_LITERAL_CSTRING("Inbox"));
     if (NS_FAILED(rv)) return rv;
-    PRBool exists;
+    bool exists;
     rv = path->Exists(&exists);
     if (NS_FAILED(rv)) return rv;
     if (!exists) 
@@ -246,34 +205,34 @@ nsMovemailIncomingServer::GetNewMail(nsIMsgWindow *aMsgWindow,
 }        
 
 NS_IMETHODIMP
-nsMovemailIncomingServer::GetDownloadMessagesAtStartup(PRBool *getMessagesAtStartup)
+nsMovemailIncomingServer::GetDownloadMessagesAtStartup(bool *getMessagesAtStartup)
 {
     NS_ENSURE_ARG_POINTER(getMessagesAtStartup);
-    *getMessagesAtStartup = PR_TRUE;
+    *getMessagesAtStartup = true;
     return NS_OK;
 }
 
 NS_IMETHODIMP
-nsMovemailIncomingServer::GetCanBeDefaultServer(PRBool *aCanBeDefaultServer)
+nsMovemailIncomingServer::GetCanBeDefaultServer(bool *aCanBeDefaultServer)
 {
   NS_ENSURE_ARG_POINTER(aCanBeDefaultServer);
-  *aCanBeDefaultServer = PR_TRUE;
+  *aCanBeDefaultServer = true;
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsMovemailIncomingServer::GetCanSearchMessages(PRBool *canSearchMessages)
+nsMovemailIncomingServer::GetCanSearchMessages(bool *canSearchMessages)
 {
     NS_ENSURE_ARG_POINTER(canSearchMessages);
-    *canSearchMessages = PR_TRUE;
+    *canSearchMessages = true;
     return NS_OK;
 }
 
 NS_IMETHODIMP 
-nsMovemailIncomingServer::GetServerRequiresPasswordForBiff(PRBool *aServerRequiresPasswordForBiff)
+nsMovemailIncomingServer::GetServerRequiresPasswordForBiff(bool *aServerRequiresPasswordForBiff)
 {
     NS_ENSURE_ARG_POINTER(aServerRequiresPasswordForBiff);
-    *aServerRequiresPasswordForBiff = PR_FALSE;
+    *aServerRequiresPasswordForBiff = false;
     return NS_OK;
 }
 

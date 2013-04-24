@@ -32,19 +32,19 @@ load 234851-2.html
 load 241300-1.html
 load 243159-1.html
 load 243159-2.xhtml
-asserts(1) load 243519-1.html # bug 536692
+load 243519-1.html
 load 244490-1.html
 load 254367-1.html
 load 263359-1.html
 load 265027-1.html
 load 265736-1.html
 load 265736-2.html
-asserts(2) load 265899-1.html # bug 575011
+load 265899-1.html
 load 265973-1.html
-asserts(8-12) load 265986-1.html # Bug 512405
-asserts(4) load 265999-1.html # bug 575011
+asserts(6-12) load 265986-1.html # Bug 512405
+load 265999-1.html
 load 266222-1.html
-asserts(5-7) load 266360-1.html # bug 575011 / bug 576358
+asserts(3-7) load 266360-1.html # bug 575011 / bug 576358
 asserts(4) load 266445-1.html # Bug 575011
 load 268157-1.html
 load 269566-1.html
@@ -240,6 +240,7 @@ load 455063-3.html
 load 455171-4.html
 load 455623-1.html
 load 457362-1.xhtml
+asserts(0-1) load 460389-1.html # Bug 780985
 load 466763-1.html
 load 467881-1.html
 load 468491-1.html
@@ -257,12 +258,10 @@ load 469861-2.xhtml
 load 471594-1.xhtml
 load 479114-1.html
 load 477333-1.xhtml
-load 477731-1.html
-# 479360-1.xhtml will assert 6 times due to bug 439258 and then make the test
-# after the test after it also assert 6 times.
-asserts(6) load 479360-1.xhtml # Bug 439258
-load 480686-1.html
-asserts(6) load 481806-1.html  # Bug 439258
+asserts-if(Android,6) load 477731-1.html
+load 479360-1.xhtml
+asserts-if(Android,6) load 480686-1.html
+load 481806-1.html
 load 483604-1.xhtml
 load 485501-1.html
 load 487544-1.html
@@ -301,6 +300,7 @@ load 536720.xul
 load 537059-1.xhtml
 load 537141-1.xhtml
 load 537562-1.xhtml
+load 537624-1.html
 load 537631-1.html
 load 538082-1.xul
 load 538207-1.xhtml
@@ -323,6 +323,7 @@ load 579655.html
 load 580494-1.html
 load 580834-1.xhtml
 load 595039-1.html
+load 597924-1.html
 load 606432-1.html
 load 609821-1.xhtml
 load 615146-1.html
@@ -331,6 +332,7 @@ load 616495-single-side-composite-color-border.html
 load 629035-1.html
 load 629908-1.html
 load 635329.html
+load 645572-1.html
 == 640272.html 640272-ref.html
 load 645193.html
 load 650475.xhtml
@@ -343,3 +345,27 @@ load 665837.html
 load 668941.xhtml
 load 670226.html
 asserts(2) load 675246-1.xhtml # Bug 675713
+load 691118-1.html
+load 695861.html
+load 698335.html
+needs-focus pref(accessibility.browsewithcaret,true) load 699353-1.html
+load 707098.html
+load 722137.html
+load 725535.html
+load 727601.html
+# Bug 778067: This test fails when we try to create a popup window in
+# <browser remote>, because TabParent::AnswerOpenWindow() can't deal
+# with creating a popup window this early during page load.  However,
+# <iframe mobrowser> is set up to handle this, and <browser remote>
+# isn't shipping again in the foreseeable future, so disable for now.
+# (The parent process in this case is behaving "well" by crashing the
+# content process when it gets into an unexpected state, it's just
+# that the reftest harness can't handle restarting crashed content
+# processes so we time out.)
+skip-if(Android||browserIsRemote) asserts(0-2) pref(dom.disable_open_during_load,false) load 735943.html # the assertion is bug 735966, for android bug 760271
+asserts(0-2) load 736389-1.xhtml # sometimes the above assertions are delayed and is reported on this test instead
+asserts-if(winWidget,0-2) load 736924-1.html # bug 738803
+load 749816-1.html
+load 763223-1.html
+test-pref(font.size.inflation.emPerLine,15) test-pref(font.size.inflation.lineThreshold,100) load 763702.xhtml
+load 770381-1.html

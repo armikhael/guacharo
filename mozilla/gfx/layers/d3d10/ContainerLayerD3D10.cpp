@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 20; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Corporation code.
- *
- * The Initial Developer of the Original Code is Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Bas Schouten <bschouten@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "ContainerLayerD3D10.h"
 #include "nsAlgorithm.h"
@@ -60,82 +28,139 @@ ContainerLayerD3D10::~ContainerLayerD3D10()
     RemoveChild(mFirstChild);
   }
 }
+template<class Container>
+static void
+ContainerInsertAfter(Container* aContainer, Layer* aChild, Layer* aAfter)
+{
+  NS_ASSERTION(aChild->Manager() == aContainer->Manager(),
+               "Child has wrong manager");
+  NS_ASSERTION(!aChild->GetParent(),
+               "aChild already in the tree");
+  NS_ASSERTION(!aChild->GetNextSibling() && !aChild->GetPrevSibling(),
+               "aChild already has siblings?");
+  NS_ASSERTION(!aAfter ||
+               (aAfter->Manager() == aContainer->Manager() &&
+                aAfter->GetParent() == aContainer),
+               "aAfter is not our child");
+
+  aChild->SetParent(aContainer);
+  if (aAfter == aContainer->mLastChild) {
+    aContainer->mLastChild = aChild;
+  }
+  if (!aAfter) {
+    aChild->SetNextSibling(aContainer->mFirstChild);
+    if (aContainer->mFirstChild) {
+      aContainer->mFirstChild->SetPrevSibling(aChild);
+    }
+    aContainer->mFirstChild = aChild;
+    NS_ADDREF(aChild);
+    aContainer->DidInsertChild(aChild);
+    return;
+  }
+
+  Layer* next = aAfter->GetNextSibling();
+  aChild->SetNextSibling(next);
+  aChild->SetPrevSibling(aAfter);
+  if (next) {
+    next->SetPrevSibling(aChild);
+  }
+  aAfter->SetNextSibling(aChild);
+  NS_ADDREF(aChild);
+  aContainer->DidInsertChild(aChild);
+}
+
+template<class Container>
+static void
+ContainerRemoveChild(Container* aContainer, Layer* aChild)
+{
+  NS_ASSERTION(aChild->Manager() == aContainer->Manager(),
+               "Child has wrong manager");
+  NS_ASSERTION(aChild->GetParent() == aContainer,
+               "aChild not our child");
+
+  Layer* prev = aChild->GetPrevSibling();
+  Layer* next = aChild->GetNextSibling();
+  if (prev) {
+    prev->SetNextSibling(next);
+  } else {
+    aContainer->mFirstChild = next;
+  }
+  if (next) {
+    next->SetPrevSibling(prev);
+  } else {
+    aContainer->mLastChild = prev;
+  }
+
+  aChild->SetNextSibling(nullptr);
+  aChild->SetPrevSibling(nullptr);
+  aChild->SetParent(nullptr);
+
+  aContainer->DidRemoveChild(aChild);
+  NS_RELEASE(aChild);
+}
+
+template<class Container>
+static void
+ContainerRepositionChild(Container* aContainer, Layer* aChild, Layer* aAfter)
+{
+  NS_ASSERTION(aChild->Manager() == aContainer->Manager(),
+               "Child has wrong manager");
+  NS_ASSERTION(aChild->GetParent() == aContainer,
+               "aChild not our child");
+  NS_ASSERTION(!aAfter ||
+               (aAfter->Manager() == aContainer->Manager() &&
+                aAfter->GetParent() == aContainer),
+               "aAfter is not our child");
+
+  Layer* prev = aChild->GetPrevSibling();
+  Layer* next = aChild->GetNextSibling();
+  if (prev == aAfter) {
+    // aChild is already in the correct position, nothing to do.
+    return;
+  }
+  if (prev) {
+    prev->SetNextSibling(next);
+  }
+  if (next) {
+    next->SetPrevSibling(prev);
+  }
+  if (!aAfter) {
+    aChild->SetPrevSibling(nullptr);
+    aChild->SetNextSibling(aContainer->mFirstChild);
+    if (aContainer->mFirstChild) {
+      aContainer->mFirstChild->SetPrevSibling(aChild);
+    }
+    aContainer->mFirstChild = aChild;
+    return;
+  }
+
+  Layer* afterNext = aAfter->GetNextSibling();
+  if (afterNext) {
+    afterNext->SetPrevSibling(aChild);
+  } else {
+    aContainer->mLastChild = aChild;
+  }
+  aAfter->SetNextSibling(aChild);
+  aChild->SetPrevSibling(aAfter);
+  aChild->SetNextSibling(afterNext);
+}
 
 void
 ContainerLayerD3D10::InsertAfter(Layer* aChild, Layer* aAfter)
 {
-  aChild->SetParent(this);
-  if (!aAfter) {
-    Layer *oldFirstChild = GetFirstChild();
-    mFirstChild = aChild;
-    aChild->SetNextSibling(oldFirstChild);
-    aChild->SetPrevSibling(nsnull);
-    if (oldFirstChild) {
-      oldFirstChild->SetPrevSibling(aChild);
-    } else {
-      mLastChild = aChild;
-    }
-    NS_ADDREF(aChild);
-    DidInsertChild(aChild);
-    return;
-  }
-  for (Layer *child = GetFirstChild();
-       child; child = child->GetNextSibling()) {
-    if (aAfter == child) {
-      Layer *oldNextSibling = child->GetNextSibling();
-      child->SetNextSibling(aChild);
-      aChild->SetNextSibling(oldNextSibling);
-      if (oldNextSibling) {
-        oldNextSibling->SetPrevSibling(aChild);
-      } else {
-        mLastChild = aChild;
-      }
-      aChild->SetPrevSibling(child);
-      NS_ADDREF(aChild);
-      DidInsertChild(aChild);
-      return;
-    }
-  }
-  NS_WARNING("Failed to find aAfter layer!");
+  ContainerInsertAfter(this, aChild, aAfter);
 }
 
 void
 ContainerLayerD3D10::RemoveChild(Layer *aChild)
 {
-  if (GetFirstChild() == aChild) {
-    mFirstChild = GetFirstChild()->GetNextSibling();
-    if (mFirstChild) {
-      mFirstChild->SetPrevSibling(nsnull);
-    } else {
-      mLastChild = nsnull;
-    }
-    aChild->SetNextSibling(nsnull);
-    aChild->SetPrevSibling(nsnull);
-    aChild->SetParent(nsnull);
-    DidRemoveChild(aChild);
-    NS_RELEASE(aChild);
-    return;
-  }
-  Layer *lastChild = nsnull;
-  for (Layer *child = GetFirstChild(); child;
-       child = child->GetNextSibling()) {
-    if (child == aChild) {
-      // We're sure this is not our first child. So lastChild != NULL.
-      lastChild->SetNextSibling(child->GetNextSibling());
-      if (child->GetNextSibling()) {
-        child->GetNextSibling()->SetPrevSibling(lastChild);
-      } else {
-        mLastChild = lastChild;
-      }
-      child->SetNextSibling(nsnull);
-      child->SetPrevSibling(nsnull);
-      child->SetParent(nsnull);
-      DidRemoveChild(aChild);
-      NS_RELEASE(aChild);
-      return;
-    }
-    lastChild = child;
-  }
+  ContainerRemoveChild(this, aChild);
+}
+
+void
+ContainerLayerD3D10::RepositionChild(Layer* aChild, Layer* aAfter)
+{
+  ContainerRepositionChild(this, aChild, aAfter);
 }
 
 Layer*
@@ -148,7 +173,7 @@ LayerD3D10*
 ContainerLayerD3D10::GetFirstChildD3D10()
 {
   if (!mFirstChild) {
-    return nsnull;
+    return nullptr;
   }
   return static_cast<LayerD3D10*>(mFirstChild->ImplData());
 }
@@ -159,17 +184,17 @@ GetNextSiblingD3D10(LayerD3D10* aLayer)
    Layer* layer = aLayer->GetLayer()->GetNextSibling();
    return layer ? static_cast<LayerD3D10*>(layer->
                                            ImplData())
-                : nsnull;
+                : nullptr;
 }
 
-static PRBool
+static bool
 HasOpaqueAncestorLayer(Layer* aLayer)
 {
   for (Layer* l = aLayer->GetParent(); l; l = l->GetParent()) {
     if (l->GetContentFlags() & Layer::CONTENT_OPAQUE)
-      return PR_TRUE;
+      return true;
   }
-  return PR_FALSE;
+  return false;
 }
 
 void
@@ -179,7 +204,7 @@ ContainerLayerD3D10::RenderLayer()
 
   nsIntRect visibleRect = mVisibleRegion.GetBounds();
   float opacity = GetEffectiveOpacity();
-  PRBool useIntermediate = UseIntermediateSurface();
+  bool useIntermediate = UseIntermediateSurface();
 
   nsRefPtr<ID3D10RenderTargetView> previousRTView;
   nsRefPtr<ID3D10Texture2D> renderTexture;
@@ -201,9 +226,17 @@ ContainerLayerD3D10::RenderLayer()
     desc.BindFlags = D3D10_BIND_RENDER_TARGET | D3D10_BIND_SHADER_RESOURCE;
     desc.SampleDesc.Count = 1;
     desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    device()->CreateTexture2D(&desc, NULL, getter_AddRefs(renderTexture));
-    
-    device()->CreateRenderTargetView(renderTexture, NULL, getter_AddRefs(rtView));
+    HRESULT hr;
+    hr = device()->CreateTexture2D(&desc, NULL, getter_AddRefs(renderTexture));
+
+    if (FAILED(hr)) {
+      LayerManagerD3D10::ReportFailure(NS_LITERAL_CSTRING("Failed to create new texture for ContainerLayerD3D10!"), 
+                                       hr);
+      return;
+    }
+
+    hr = device()->CreateRenderTargetView(renderTexture, NULL, getter_AddRefs(rtView));
+    NS_ASSERTION(SUCCEEDED(hr), "Failed to create render target view for ContainerLayerD3D10!");
 
     effect()->GetVariableByName("vRenderTargetOffset")->
       GetRawValue(previousRenderTargetOffset, 0, 8);
@@ -216,15 +249,15 @@ ContainerLayerD3D10::RenderLayer()
       // covered by something opaque. Otherwise copying up the background is
       // not safe.
       if (mSupportsComponentAlphaChildren) {
-        PRBool is2d = transform3D.Is2D(&transform);
+        bool is2d = transform3D.Is2D(&transform);
         NS_ASSERTION(is2d, "Transform should be 2d when mSupportsComponentAlphaChildren.");
 
         // Copy background up from below. This applies any 2D transform that is
         // applied to use relative to our parent, and compensates for the offset
         // that was applied on our parent's rendering.
         D3D10_BOX srcBox;
-        srcBox.left = visibleRect.x + PRInt32(transform.x0) - PRInt32(previousRenderTargetOffset[0]);
-        srcBox.top = visibleRect.y + PRInt32(transform.y0) - PRInt32(previousRenderTargetOffset[1]);
+        srcBox.left = visibleRect.x + int32_t(transform.x0) - int32_t(previousRenderTargetOffset[0]);
+        srcBox.top = visibleRect.y + int32_t(transform.y0) - int32_t(previousRenderTargetOffset[1]);
         srcBox.right = srcBox.left + visibleRect.width;
         srcBox.bottom = srcBox.top + visibleRect.height;
         srcBox.back = 1;
@@ -265,19 +298,21 @@ ContainerLayerD3D10::RenderLayer()
                        oldD3D10Scissor.right - oldD3D10Scissor.left,
                        oldD3D10Scissor.bottom - oldD3D10Scissor.top);
 
+  nsAutoTArray<Layer*, 12> children;
+  SortChildrenBy3DZOrder(children);
+
   /*
    * Render this container's contents.
    */
-  for (LayerD3D10* layerToRender = GetFirstChildD3D10();
-       layerToRender != nsnull;
-       layerToRender = GetNextSiblingD3D10(layerToRender)) {
+  for (uint32_t i = 0; i < children.Length(); i++) {
+    LayerD3D10* layerToRender = static_cast<LayerD3D10*>(children.ElementAt(i)->ImplData());
 
     if (layerToRender->GetLayer()->GetEffectiveVisibleRegion().IsEmpty()) {
       continue;
     }
     
     nsIntRect scissorRect =
-        layerToRender->GetLayer()->CalculateScissorRect(oldScissor, nsnull);
+        layerToRender->GetLayer()->CalculateScissorRect(oldScissor, nullptr);
     if (scissorRect.IsEmpty()) {
       continue;
     }
@@ -304,7 +339,15 @@ ContainerLayerD3D10::RenderLayer()
     SetEffectTransformAndOpacity();
 
     ID3D10EffectTechnique *technique;
-    technique = effect()->GetTechniqueByName("RenderRGBALayerPremul");
+    if (LoadMaskTexture()) {
+      if (GetTransform().CanDraw2D()) {
+        technique = SelectShader(SHADER_RGBA | SHADER_PREMUL | SHADER_MASK);
+      } else {
+        technique = SelectShader(SHADER_RGBA | SHADER_PREMUL | SHADER_MASK_3D);
+      }
+    } else {
+        technique = SelectShader(SHADER_RGBA | SHADER_PREMUL | SHADER_NO_MASK);
+    }
 
     effect()->GetVariableByName("vLayerQuad")->AsVector()->SetFloatVector(
       ShaderConstantRectD3D10(
@@ -338,7 +381,7 @@ ContainerLayerD3D10::Validate()
 {
   nsIntRect visibleRect = mVisibleRegion.GetBounds();
 
-  mSupportsComponentAlphaChildren = PR_FALSE;
+  mSupportsComponentAlphaChildren = false;
 
   if (UseIntermediateSurface()) {
     const gfx3DMatrix& transform3D = GetEffectiveTransform();
@@ -346,14 +389,14 @@ ContainerLayerD3D10::Validate()
 
     if (mVisibleRegion.GetNumRects() == 1 && (GetContentFlags() & CONTENT_OPAQUE)) {
       // don't need a background, we're going to paint all opaque stuff
-      mSupportsComponentAlphaChildren = PR_TRUE;
+      mSupportsComponentAlphaChildren = true;
     } else {
       if (HasOpaqueAncestorLayer(this) &&
           transform3D.Is2D(&transform) && !transform.HasNonIntegerTranslation() &&
           GetParent()->GetEffectiveVisibleRegion().GetBounds().Contains(visibleRect))
       {
         // In this case we can copy up the background. See RenderLayer.
-        mSupportsComponentAlphaChildren = PR_TRUE;
+        mSupportsComponentAlphaChildren = true;
       }
     }
   } else {
@@ -382,18 +425,29 @@ ShadowContainerLayerD3D10::ShadowContainerLayerD3D10(LayerManagerD3D10 *aManager
   mImplData = static_cast<LayerD3D10*>(this);
 }
 
-ShadowContainerLayerD3D10::~ShadowContainerLayerD3D10() {}
+ShadowContainerLayerD3D10::~ShadowContainerLayerD3D10() 
+{
+  while (mFirstChild) {
+    RemoveChild(mFirstChild);
+  }  
+}
 
 void
 ShadowContainerLayerD3D10::InsertAfter(Layer* aChild, Layer* aAfter)
 {
-  mFirstChild = aChild;
+  ContainerInsertAfter(this, aChild, aAfter);
 }
 
 void
 ShadowContainerLayerD3D10::RemoveChild(Layer* aChild)
 {
+  ContainerRemoveChild(this, aChild);
+}
 
+void
+ShadowContainerLayerD3D10::RepositionChild(Layer* aChild, Layer* aAfter)
+{
+  ContainerRepositionChild(this, aChild, aAfter);
 }
 
 void
@@ -423,6 +477,10 @@ ShadowContainerLayerD3D10::Validate()
 void
 ShadowContainerLayerD3D10::LayerManagerDestroyed()
 {
+  while (mFirstChild) {
+    GetFirstChildD3D10()->LayerManagerDestroyed();
+    RemoveChild(mFirstChild);
+  }
 }
 
 } /* layers */

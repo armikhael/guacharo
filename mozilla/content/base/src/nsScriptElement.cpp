@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Code.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jonas Sicking <jonas@sicking.cc> (original developer)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsScriptElement.h"
 #include "mozilla/dom/Element.h"
@@ -53,32 +20,19 @@ using namespace mozilla::dom;
 NS_IMETHODIMP
 nsScriptElement::ScriptAvailable(nsresult aResult,
                                  nsIScriptElement *aElement,
-                                 PRBool aIsInline,
+                                 bool aIsInline,
                                  nsIURI *aURI,
-                                 PRInt32 aLineNo)
+                                 int32_t aLineNo)
 {
   if (!aIsInline && NS_FAILED(aResult)) {
     nsCOMPtr<nsIContent> cont =
       do_QueryInterface((nsIScriptElement*) this);
 
-    nsRefPtr<nsPresContext> presContext =
-      nsContentUtils::GetContextForContent(cont);
-
-    nsEventStatus status = nsEventStatus_eIgnore;
-    nsScriptErrorEvent event(PR_TRUE, NS_LOAD_ERROR);
-
-    event.lineNr = aLineNo;
-
-    NS_NAMED_LITERAL_STRING(errorString, "Error loading script");
-    event.errorMsg = errorString.get();
-
-    nsCAutoString spec;
-    aURI->GetSpec(spec);
-
-    NS_ConvertUTF8toUTF16 fileName(spec);
-    event.fileName = fileName.get();
-
-    nsEventDispatcher::Dispatch(cont, presContext, &event, nsnull, &status);
+    return nsContentUtils::DispatchTrustedEvent(cont->OwnerDoc(),
+                                                cont,
+                                                NS_LITERAL_STRING("error"),
+                                                false /* bubbles */,
+                                                false /* cancelable */);
   }
 
   return NS_OK;
@@ -87,7 +41,7 @@ nsScriptElement::ScriptAvailable(nsresult aResult,
 NS_IMETHODIMP
 nsScriptElement::ScriptEvaluated(nsresult aResult,
                                  nsIScriptElement *aElement,
-                                 PRBool aIsInline)
+                                 bool aIsInline)
 {
   nsresult rv = NS_OK;
   if (!aIsInline) {
@@ -98,14 +52,14 @@ nsScriptElement::ScriptEvaluated(nsresult aResult,
       nsContentUtils::GetContextForContent(cont);
 
     nsEventStatus status = nsEventStatus_eIgnore;
-    PRUint32 type = NS_SUCCEEDED(aResult) ? NS_LOAD : NS_LOAD_ERROR;
-    nsEvent event(PR_TRUE, type);
+    uint32_t type = NS_SUCCEEDED(aResult) ? NS_LOAD : NS_LOAD_ERROR;
+    nsEvent event(true, type);
     if (type == NS_LOAD) {
       // Load event doesn't bubble.
       event.flags |= NS_EVENT_FLAG_CANT_BUBBLE;
     }
 
-    nsEventDispatcher::Dispatch(cont, presContext, &event, nsnull, &status);
+    nsEventDispatcher::Dispatch(cont, presContext, &event, nullptr, &status);
   }
 
   return rv;
@@ -122,9 +76,9 @@ nsScriptElement::CharacterDataChanged(nsIDocument *aDocument,
 void
 nsScriptElement::AttributeChanged(nsIDocument* aDocument,
                                   Element* aElement,
-                                  PRInt32 aNameSpaceID,
+                                  int32_t aNameSpaceID,
                                   nsIAtom* aAttribute,
-                                  PRInt32 aModType)
+                                  int32_t aModType)
 {
   MaybeProcessScript();
 }
@@ -133,7 +87,7 @@ void
 nsScriptElement::ContentAppended(nsIDocument* aDocument,
                                  nsIContent* aContainer,
                                  nsIContent* aFirstNewContent,
-                                 PRInt32 aNewIndexInContainer)
+                                 int32_t aNewIndexInContainer)
 {
   MaybeProcessScript();
 }
@@ -142,12 +96,12 @@ void
 nsScriptElement::ContentInserted(nsIDocument *aDocument,
                                  nsIContent* aContainer,
                                  nsIContent* aChild,
-                                 PRInt32 aIndexInContainer)
+                                 int32_t aIndexInContainer)
 {
   MaybeProcessScript();
 }
 
-nsresult
+bool
 nsScriptElement::MaybeProcessScript()
 {
   nsCOMPtr<nsIContent> cont =
@@ -158,14 +112,14 @@ nsScriptElement::MaybeProcessScript()
 
   if (mAlreadyStarted || !mDoneAddingChildren || !cont->IsInDoc() ||
       mMalformed || !HasScriptContent()) {
-    return NS_OK;
+    return false;
   }
 
   FreezeUriAsyncDefer();
 
-  mAlreadyStarted = PR_TRUE;
+  mAlreadyStarted = true;
 
-  nsIDocument* ownerDoc = cont->GetOwnerDoc();
+  nsIDocument* ownerDoc = cont->OwnerDoc();
   nsCOMPtr<nsIParser> parser = ((nsIScriptElement*) this)->GetCreatorParser();
   if (parser) {
     nsCOMPtr<nsIContentSink> sink = parser->GetContentSink();
@@ -173,21 +127,11 @@ nsScriptElement::MaybeProcessScript()
       nsCOMPtr<nsIDocument> parserDoc = do_QueryInterface(sink->GetTarget());
       if (ownerDoc != parserDoc) {
         // Willful violation of HTML5 as of 2010-12-01
-        return NS_OK;
+        return false;
       }
     }
   }
 
   nsRefPtr<nsScriptLoader> loader = ownerDoc->ScriptLoader();
-  nsresult scriptresult = loader->ProcessScriptElement(this);
-
-  // The only error we don't ignore is NS_ERROR_HTMLPARSER_BLOCK
-  // However we don't want to override other success values
-  // (such as NS_CONTENT_SCRIPT_IS_EVENTHANDLER)
-  if (NS_FAILED(scriptresult) &&
-      scriptresult != NS_ERROR_HTMLPARSER_BLOCK) {
-    scriptresult = NS_OK;
-  }
-
-  return scriptresult;
+  return loader->ProcessScriptElement(this);
 }

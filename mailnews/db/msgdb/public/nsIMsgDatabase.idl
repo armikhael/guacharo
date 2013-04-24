@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Joshua Cranmer <Pidgeot18@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
  * @defgroup msgdb Mailnews message database
@@ -72,13 +39,13 @@ interface nsIMsgFolder;
 interface nsIMsgKeyArray;
 interface nsIOutputStream;
 interface nsIUrlListener;
-interface nsILocalFile;
+interface nsIFile;
 interface nsIArray;
 
 typedef unsigned long nsMsgRetainByPreference;
 
 
-[scriptable, uuid(b01d6b3b-78c2-4958-b836-2259c76dbc24)]
+[scriptable, uuid(0bbe00df-17f8-4e36-8917-40172c3a95fc)]
 
 interface nsIMsgRetentionSettings : nsISupports
 {
@@ -117,11 +84,10 @@ interface nsIMsgDownloadSettings : nsISupports
 
 typedef long nsMsgDBCommit;
 
-[scriptable, uuid(aa4d45d0-3956-11d3-8d76-00805f8a6617)]
+[scriptable, uuid(15431853-e448-45dc-8978-9958bf74d9b7)]
 
 interface nsMsgDBCommitType 
 {
-  const long kSmallCommit = 0;
   const long kLargeCommit = 1;
   const long kSessionCommit = 2;
   const long kCompressCommit = 3;
@@ -136,7 +102,7 @@ interface nsMsgDBCommitType
  * The contract ID for this component is
  * <tt>\@mozilla.org/msgDatabase/msgDBService;1</tt>.
  */
-[scriptable, uuid(6ddaeb28-0499-4be1-85f7-7a5d20f80256)]
+[scriptable, uuid(e4743a99-ca44-4647-87b4-d73a444226b3)]
 interface nsIMsgDBService : nsISupports
 {
   /**
@@ -192,7 +158,7 @@ interface nsIMsgDBService : nsISupports
    *         be called again.
    * @see nsIMsgDBService::openFolderDB
    */
-  boolean openMore(in nsIMsgDatabase aDB, in long aTimeHint);
+  boolean openMore(in nsIMsgDatabase aDB, in unsigned long aTimeHint);
 
   /**
    * Creates a new database for the given folder.
@@ -221,6 +187,7 @@ interface nsIMsgDBService : nsISupports
    * method is needed.
    *
    * @param aFile           The file for which the database should be returned.
+   * @param aFolder         Folder the db corresponds to (may be null)
    * @param aCreate         Whether or not the file should be created.
    * @param aLeaveInvalidDB Whether or not the database should be deleted if it
    *                        is invalid.
@@ -231,7 +198,8 @@ interface nsIMsgDBService : nsISupports
    * @see nsIMsgDBService::openFolderDB
    * @see nsIMsgDatabase::Open
    */
-  nsIMsgDatabase openMailDBFromFile(in nsILocalFile aFile,
+  nsIMsgDatabase openMailDBFromFile(in nsIFile aFile,
+                                    in nsIMsgFolder aFolder,
                                     in boolean aCreate,
                                     in boolean aLeaveInvalidDB);
   /**
@@ -264,28 +232,13 @@ interface nsIMsgDBService : nsISupports
    * @returns         null if the db isn't open, otherwise the db.
    */
   nsIMsgDatabase cachedDBForFolder(in nsIMsgFolder aFolder);
+
+  /// an enumerator to iterate over the open dbs.
+  readonly attribute nsIArray openDBs;
 };
 
-[scriptable, uuid(19719187-6a85-4807-aeb6-421115240ba1)]
+[scriptable, uuid(21122b78-12ed-4657-aa07-29e109667825)]
 interface nsIMsgDatabase : nsIDBChangeAnnouncer {
-  /**
-   * Opens a database folder.
-   *
-   * @param aFolderName     The name of the folder to create.
-   * @param aCreate         Whether or not the file should be created.
-   * @param aLeaveInvalidDB Set to true if you do not want the database to be
-   *                        deleted if it is invalid.
-   * @exception NS_ERROR_FILE_TARGET_DOES_NOT_EXIST
-   *                        The file could not be created.
-   * @exception NS_MSG_ERROR_FOLDER_SUMMARY_OUT_OF_DATE
-   *                        The database is present (and was opened), but the
-   *                        summary file is out of date.
-   * @exception NS_MSG_ERROR_FOLDER_SUMMARY_MISSING
-   *                        The database is present (and was opened), but the
-   *                        summary file is missing.
-   */
-  void Open(in nsILocalFile aFolderName, in boolean aCreate,
-            in boolean aLeaveInvalidDB);
   void forceFolderDBClosed(in nsIMsgFolder aFolder);
   void Close(in boolean aForceCommit);
 
@@ -298,17 +251,41 @@ interface nsIMsgDatabase : nsIDBChangeAnnouncer {
 
   readonly attribute nsIDBFolderInfo  dBFolderInfo;
 
+  /// Folder this db was opened on.
+  readonly attribute nsIMsgFolder folder;
+  /**
+   * This is used when deciding which db's to close to free up memory
+   * and other resources in an LRU manner. It doesn't track every operation
+   * on every object from the db, but high level things like open, commit,
+   * and perhaps some of the list methods. Commit should be a proxy for all
+   * the mutation methods.
+   *
+   * I'm allowing clients to set the last use time as well, so that
+   * nsIMsgFolder.msgDatabase can set the last use time.
+   */
+  attribute PRTime lastUseTime;
+
   // get a message header for the given key. Caller must release()!
 
   nsIMsgDBHdr GetMsgHdrForKey(in nsMsgKey key);
   nsIMsgDBHdr getMsgHdrForMessageID(in string messageID);
+
+  /**
+   * get a message header for a Gmail message with the given X-GM-MSGID.
+   */
+  nsIMsgDBHdr GetMsgHdrForGMMsgID(in string aGmailMessageID);
   //Returns whether or not this database contains the given key
   boolean ContainsKey(in nsMsgKey key);
 
-   // Must call AddNewHdrToDB after creating. The idea is that you create
-  // a new header, fill in its properties, and then call AddNewHdrToDB.
-  // AddNewHdrToDB will send notifications to any listeners.
-  nsIMsgDBHdr CreateNewHdr(in nsMsgKey key);
+/**
+ * Must call AddNewHdrToDB after creating. The idea is that you create
+ * a new header, fill in its properties, and then call AddNewHdrToDB.
+ * AddNewHdrToDB will send notifications to any listeners.
+ *
+ * @param aKey msgKey for the new header. If aKey is nsMsgKey_None,
+ *             we will auto-assign a new key.
+ */
+  nsIMsgDBHdr CreateNewHdr(in nsMsgKey aKey);
 
   void AddNewHdrToDB(in nsIMsgDBHdr newHdr, in boolean notify);
 
@@ -474,7 +451,7 @@ interface nsIMsgDatabase : nsIDBChangeAnnouncer {
 
   attribute nsIMsgDownloadSettings msgDownloadSettings;
 
-  boolean HasNew();  
+  boolean HasNew();
   void ClearNewList(in boolean notify);
   void AddToNewList(in nsMsgKey key);
 
@@ -550,10 +527,6 @@ interface nsIMsgDatabase : nsIDBChangeAnnouncer {
 
   // for msg hdr hash table allocation. controllable by caller to improve folder loading preformance.
   attribute unsigned long msgHdrCacheSize;
-
-  // this is used to cache the folder stream the db reads and write. It's also an
-  // nsIInputStream, and nsISeekable.
-  attribute nsIOutputStream folderStream;
 
   /**
    * The list of messages currently in the NEW state.

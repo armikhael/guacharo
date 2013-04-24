@@ -1,40 +1,7 @@
 /* -*- mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Corporation
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Honza Bambas <honzab@firemni.cz>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "OfflineCacheUpdateGlue.h"
 #include "nsOfflineCacheUpdate.h"
@@ -108,7 +75,7 @@ OfflineCacheUpdateGlue::Schedule()
         LOG(("Calling offline-cache-update-added"));
         observerService->NotifyObservers(static_cast<nsIOfflineCacheUpdate*>(this),
                                          "offline-cache-update-added",
-                                         nsnull);
+                                         nullptr);
         LOG(("Done offline-cache-update-added"));
     }
 
@@ -116,7 +83,7 @@ OfflineCacheUpdateGlue::Schedule()
         return NS_ERROR_NULL_POINTER;
 
     // Do not use weak reference, we must survive!
-    mUpdate->AddObserver(this, PR_FALSE);
+    mUpdate->AddObserver(this, false);
 
     return mUpdate->Schedule();
 }
@@ -124,7 +91,8 @@ OfflineCacheUpdateGlue::Schedule()
 NS_IMETHODIMP
 OfflineCacheUpdateGlue::Init(nsIURI *aManifestURI, 
                              nsIURI *aDocumentURI,
-                             nsIDOMDocument *aDocument)
+                             nsIDOMDocument *aDocument,
+                             nsIFile *aCustomProfileDir)
 {
     if (!EnsureUpdate())
         return NS_ERROR_NULL_POINTER;
@@ -134,7 +102,7 @@ OfflineCacheUpdateGlue::Init(nsIURI *aManifestURI,
     if (aDocument)
         SetDocument(aDocument);
 
-    return mUpdate->Init(aManifestURI, aDocumentURI, nsnull);
+    return mUpdate->Init(aManifestURI, aDocumentURI, nullptr, aCustomProfileDir);
 }
 
 void
@@ -160,7 +128,7 @@ OfflineCacheUpdateGlue::SetDocument(nsIDOMDocument *aDocument)
     if (!appCacheChannel)
         return;
 
-    PRBool loadedFromAppCache;
+    bool loadedFromAppCache;
     appCacheChannel->GetLoadedFromApplicationCache(&loadedFromAppCache);
     if (loadedFromAppCache)
         return;
@@ -173,7 +141,7 @@ OfflineCacheUpdateGlue::SetDocument(nsIDOMDocument *aDocument)
 }
 
 NS_IMETHODIMP
-OfflineCacheUpdateGlue::UpdateStateChanged(nsIOfflineCacheUpdate *aUpdate, PRUint32 state)
+OfflineCacheUpdateGlue::UpdateStateChanged(nsIOfflineCacheUpdate *aUpdate, uint32_t state)
 {
     if (state == nsIOfflineCacheUpdateObserver::STATE_FINISHED) {
         LOG(("OfflineCacheUpdateGlue got STATE_FINISHED [%p]", this));
@@ -184,7 +152,7 @@ OfflineCacheUpdateGlue::UpdateStateChanged(nsIOfflineCacheUpdate *aUpdate, PRUin
             LOG(("Calling offline-cache-update-completed"));
             observerService->NotifyObservers(static_cast<nsIOfflineCacheUpdate*>(this),
                                              "offline-cache-update-completed",
-                                             nsnull);
+                                             nullptr);
             LOG(("Done offline-cache-update-completed"));
         }
 

@@ -1,45 +1,13 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is Robert Sayre.
- *
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Brett Wilson <brettw@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsIInputStream.h"
 #include "nsNetCID.h"
 #include "nsNetUtil.h"
-#include "nsICharsetAlias.h"
+#include "nsCharsetAlias.h"
+#include "nsIParser.h"
 #include "nsParserCIID.h"
 #include "nsStreamUtils.h"
 #include "nsStringStream.h"
@@ -47,6 +15,7 @@
 #include "nsSAXAttributes.h"
 #include "nsSAXLocator.h"
 #include "nsSAXXMLReader.h"
+#include "nsCharsetSource.h"
 
 #define XMLNS_URI "http://www.w3.org/2000/xmlns/"
 
@@ -83,7 +52,7 @@ NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(nsSAXXMLReader)
   NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports, nsISAXXMLReader)
 NS_INTERFACE_MAP_END
 
-nsSAXXMLReader::nsSAXXMLReader() : mIsAsyncParse(PR_FALSE)
+nsSAXXMLReader::nsSAXXMLReader() : mIsAsyncParse(false)
 {
 }
 
@@ -98,7 +67,7 @@ nsSAXXMLReader::WillBuildModel(nsDTDMode)
 }
 
 NS_IMETHODIMP
-nsSAXXMLReader::DidBuildModel(PRBool aTerminated)
+nsSAXXMLReader::DidBuildModel(bool aTerminated)
 {
   if (mContentHandler)
     return mContentHandler->EndDocument();
@@ -107,7 +76,7 @@ nsSAXXMLReader::DidBuildModel(PRBool aTerminated)
 }
 
 NS_IMETHODIMP
-nsSAXXMLReader::SetParser(nsIParser *aParser)
+nsSAXXMLReader::SetParser(nsParserBase *aParser)
 {
   return NS_OK;
 }
@@ -116,9 +85,9 @@ nsSAXXMLReader::SetParser(nsIParser *aParser)
 NS_IMETHODIMP
 nsSAXXMLReader::HandleStartElement(const PRUnichar *aName,
                                    const PRUnichar **aAtts,
-                                   PRUint32 aAttsCount,
-                                   PRInt32 aIndex,
-                                   PRUint32 aLineNumber)
+                                   uint32_t aAttsCount,
+                                   int32_t aIndex,
+                                   uint32_t aLineNumber)
 {
   if (!mContentHandler)
     return NS_OK;
@@ -167,7 +136,7 @@ nsSAXXMLReader::HandleComment(const PRUnichar *aName)
 
 NS_IMETHODIMP
 nsSAXXMLReader::HandleCDataSection(const PRUnichar *aData,
-                                   PRUint32 aLength)
+                                   uint32_t aLength)
 {
   nsresult rv;
   if (mLexicalHandler) {
@@ -227,7 +196,7 @@ nsSAXXMLReader::HandleDoctypeDecl(const nsAString & aSubset,
 
 NS_IMETHODIMP
 nsSAXXMLReader::HandleCharacterData(const PRUnichar *aData,
-                                    PRUint32 aLength)
+                                    uint32_t aLength)
 {
   if (mContentHandler)
     return mContentHandler->Characters(Substring(aData, aData+aLength));
@@ -324,7 +293,7 @@ nsSAXXMLReader::HandleUnparsedEntityDecl(const PRUnichar *aEntityName,
 NS_IMETHODIMP
 nsSAXXMLReader::HandleXMLDeclaration(const PRUnichar *aVersion,
                                      const PRUnichar *aEncoding,
-                                     PRInt32 aStandalone)
+                                     int32_t aStandalone)
 {
   // XXX need to decide what to do with this. It's a separate
   // optional interface in SAX.
@@ -335,18 +304,18 @@ NS_IMETHODIMP
 nsSAXXMLReader::ReportError(const PRUnichar* aErrorText,
                             const PRUnichar* aSourceText,
                             nsIScriptError *aError,
-                            PRBool *_retval)
+                            bool *_retval)
 {
   NS_PRECONDITION(aError && aSourceText && aErrorText, "Check arguments!!!");
   // Normally, the expat driver should report the error.
-  *_retval = PR_TRUE;
+  *_retval = true;
 
   if (mErrorHandler) {
-    PRUint32 lineNumber;
+    uint32_t lineNumber;
     nsresult rv = aError->GetLineNumber(&lineNumber);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    PRUint32 columnNumber;
+    uint32_t columnNumber;
     rv = aError->GetColumnNumber(&columnNumber);
     NS_ENSURE_SUCCESS(rv, rv);
 
@@ -360,7 +329,7 @@ nsSAXXMLReader::ReportError(const PRUnichar* aErrorText,
     rv = mErrorHandler->FatalError(locator, nsDependentString(aErrorText));
     if (NS_SUCCEEDED(rv)) {
       // The error handler has handled the script error.  Don't log to console.
-      *_retval = PR_FALSE;
+      *_retval = false;
     }
   }
 
@@ -426,13 +395,13 @@ nsSAXXMLReader::SetErrorHandler(nsISAXErrorHandler *aErrorHandler)
 }
 
 NS_IMETHODIMP
-nsSAXXMLReader::SetFeature(const nsAString &aName, PRBool aValue)
+nsSAXXMLReader::SetFeature(const nsAString &aName, bool aValue)
 {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP
-nsSAXXMLReader::GetFeature(const nsAString &aName, PRBool *aResult)
+nsSAXXMLReader::GetFeature(const nsAString &aName, bool *aResult)
 {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
@@ -458,7 +427,7 @@ nsSAXXMLReader::SetProperty(const nsAString &aName, nsISupports* aValue)
 }
 
 NS_IMETHODIMP
-nsSAXXMLReader::GetProperty(const nsAString &aName, PRBool *aResult)
+nsSAXXMLReader::GetProperty(const nsAString &aName, bool *aResult)
 {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
@@ -514,10 +483,10 @@ nsSAXXMLReader::ParseFromStream(nsIInputStream *aStream,
   if (aCharset)
     parserChannel->SetContentCharset(nsDependentCString(aCharset));
 
-  rv = InitParser(nsnull, parserChannel);
+  rv = InitParser(nullptr, parserChannel);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = mListener->OnStartRequest(parserChannel, nsnull);
+  rv = mListener->OnStartRequest(parserChannel, nullptr);
   if (NS_FAILED(rv))
     parserChannel->Cancel(rv);
 
@@ -532,9 +501,9 @@ nsSAXXMLReader::ParseFromStream(nsIInputStream *aStream,
   nsresult status;
   parserChannel->GetStatus(&status);
   
-  PRUint32 offset = 0;
+  uint64_t offset = 0;
   while (NS_SUCCEEDED(rv) && NS_SUCCEEDED(status)) {
-    PRUint32 available;
+    uint64_t available;
     rv = aStream->Available(&available);
     if (rv == NS_BASE_STREAM_CLOSED) {
       rv = NS_OK;
@@ -547,16 +516,21 @@ nsSAXXMLReader::ParseFromStream(nsIInputStream *aStream,
     if (! available)
       break; // blocking input stream has none available when done
 
-    rv = mListener->OnDataAvailable(parserChannel, nsnull,
-                                    aStream, offset, available);
+    if (available > PR_UINT32_MAX)
+      available = PR_UINT32_MAX;
+
+    rv = mListener->OnDataAvailable(parserChannel, nullptr,
+                                    aStream,
+                                    (uint32_t)NS_MIN(offset, (uint64_t)PR_UINT32_MAX),
+                                    (uint32_t)available);
     if (NS_SUCCEEDED(rv))
       offset += available;
     else
       parserChannel->Cancel(rv);
     parserChannel->GetStatus(&status);
   }
-  rv = mListener->OnStopRequest(parserChannel, nsnull, status);
-  mListener = nsnull;
+  rv = mListener->OnStopRequest(parserChannel, nullptr, status);
+  mListener = nullptr;
 
   return rv;
 }
@@ -565,7 +539,7 @@ NS_IMETHODIMP
 nsSAXXMLReader::ParseAsync(nsIRequestObserver *aObserver)
 {
   mParserObserver = aObserver;
-  mIsAsyncParse = PR_TRUE;
+  mIsAsyncParse = true;
   return NS_OK;
 }
 
@@ -582,7 +556,7 @@ nsSAXXMLReader::OnStartRequest(nsIRequest *aRequest, nsISupports *aContext)
   rv = InitParser(mParserObserver, channel);
   NS_ENSURE_SUCCESS(rv, rv);
   // we don't need or want this anymore
-  mParserObserver = nsnull;
+  mParserObserver = nullptr;
   return mListener->OnStartRequest(aRequest, aContext);
 }
 
@@ -593,8 +567,8 @@ nsSAXXMLReader::OnStopRequest(nsIRequest *aRequest, nsISupports *aContext,
   NS_ENSURE_TRUE(mIsAsyncParse, NS_ERROR_FAILURE);
   NS_ENSURE_STATE(mListener);
   nsresult rv = mListener->OnStopRequest(aRequest, aContext, status);
-  mListener = nsnull;
-  mIsAsyncParse = PR_FALSE;
+  mListener = nullptr;
+  mIsAsyncParse = false;
   return rv;
 }
 
@@ -602,8 +576,8 @@ nsSAXXMLReader::OnStopRequest(nsIRequest *aRequest, nsISupports *aContext,
 
 NS_IMETHODIMP
 nsSAXXMLReader::OnDataAvailable(nsIRequest *aRequest, nsISupports *aContext,
-                                nsIInputStream *aInputStream, PRUint32 offset,
-                                PRUint32 count)
+                                nsIInputStream *aInputStream, uint32_t offset,
+                                uint32_t count)
 {
   NS_ENSURE_TRUE(mIsAsyncParse, NS_ERROR_FAILURE);
   NS_ENSURE_STATE(mListener);
@@ -622,7 +596,7 @@ nsSAXXMLReader::InitParser(nsIRequestObserver *aObserver, nsIChannel *aChannel)
 
   parser->SetContentSink(this);
 
-  PRInt32 charsetSource = kCharsetFromDocTypeDefault;
+  int32_t charsetSource = kCharsetFromDocTypeDefault;
   nsCAutoString charset(NS_LITERAL_CSTRING("UTF-8"));
   TryChannelCharset(aChannel, charsetSource, charset);
   parser->SetDocumentCharset(charset, charsetSource);
@@ -636,33 +610,29 @@ nsSAXXMLReader::InitParser(nsIRequestObserver *aObserver, nsIChannel *aChannel)
 }
 
 // from nsDocument.cpp
-PRBool
+bool
 nsSAXXMLReader::TryChannelCharset(nsIChannel *aChannel,
-                                  PRInt32& aCharsetSource,
+                                  int32_t& aCharsetSource,
                                   nsACString& aCharset)
 {
   if (aCharsetSource >= kCharsetFromChannel)
-    return PR_TRUE;
+    return true;
   
   if (aChannel) {
     nsCAutoString charsetVal;
     nsresult rv = aChannel->GetContentCharset(charsetVal);
     if (NS_SUCCEEDED(rv)) {
-      nsCOMPtr<nsICharsetAlias>
-        calias(do_GetService(NS_CHARSETALIAS_CONTRACTID));
-      if (calias) {
-        nsCAutoString preferred;
-        rv = calias->GetPreferred(charsetVal, preferred);
-        if (NS_SUCCEEDED(rv)) {
-          aCharset = preferred;
-          aCharsetSource = kCharsetFromChannel;
-          return PR_TRUE;
-        }
-      }
+      nsCAutoString preferred;
+      if (NS_FAILED(nsCharsetAlias::GetPreferred(charsetVal, preferred)))
+        return false;
+
+      aCharset = preferred;
+      aCharsetSource = kCharsetFromChannel;
+      return true;
     }
   }
 
-  return PR_FALSE;
+  return false;
 }
 
 nsresult
@@ -694,7 +664,7 @@ nsSAXXMLReader::SplitExpatName(const PRUnichar *aExpatName,
 
   NS_ASSERTION(aExpatName, "null passed to handler");
   nsDependentString expatStr(aExpatName);
-  PRInt32 break1, break2 = kNotFound;
+  int32_t break1, break2 = kNotFound;
   break1 = expatStr.FindChar(PRUnichar(0xFFFF));
 
   if (break1 == kNotFound) {

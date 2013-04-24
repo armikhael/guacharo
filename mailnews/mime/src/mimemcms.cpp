@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corp..
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Kai Engert <kengert@redhat.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsICMSMessage.h"
 #include "nsICMSMessageErrors.h"
@@ -64,10 +31,10 @@ MimeDefClass(MimeMultipartSignedCMS, MimeMultipartSignedCMSClass,
 static int MimeMultipartSignedCMS_initialize (MimeObject *);
 
 static void *MimeMultCMS_init (MimeObject *);
-static int MimeMultCMS_data_hash (const char *, PRInt32, void *);
-static int MimeMultCMS_sig_hash  (const char *, PRInt32, void *);
-static int MimeMultCMS_data_eof (void *, PRBool);
-static int MimeMultCMS_sig_eof  (void *, PRBool);
+static int MimeMultCMS_data_hash (const char *, int32_t, void *);
+static int MimeMultCMS_sig_hash  (const char *, int32_t, void *);
+static int MimeMultCMS_data_eof (void *, bool);
+static int MimeMultCMS_sig_eof  (void *, bool);
 static int MimeMultCMS_sig_init (void *, MimeObject *, MimeHeaders *);
 static char * MimeMultCMS_generate (void *);
 static void MimeMultCMS_free (void *);
@@ -104,27 +71,27 @@ MimeMultipartSignedCMS_initialize (MimeObject *object)
 
 typedef struct MimeMultCMSdata
 {
-  PRInt16 hash_type;
+  int16_t hash_type;
   nsCOMPtr<nsICryptoHash> data_hash_context;
   nsCOMPtr<nsICMSDecoder> sig_decoder_context;
   nsCOMPtr<nsICMSMessage> content_info;
   char *sender_addr;
-  PRBool decoding_failed;
+  bool decoding_failed;
   unsigned char* item_data;
-  PRUint32 item_len;
+  uint32_t item_len;
   MimeObject *self;
-  PRBool parent_is_encrypted_p;
-  PRBool parent_holds_stamp_p;
+  bool parent_is_encrypted_p;
+  bool parent_holds_stamp_p;
   nsCOMPtr<nsIMsgSMIMEHeaderSink> smimeHeaderSink;
 
   MimeMultCMSdata()
   :hash_type(0),
-  sender_addr(nsnull),
-  decoding_failed(PR_FALSE),
-  item_data(nsnull),
-  self(nsnull),
-  parent_is_encrypted_p(PR_FALSE),
-  parent_holds_stamp_p(PR_FALSE)
+  sender_addr(nullptr),
+  decoding_failed(false),
+  item_data(nullptr),
+  self(nullptr),
+  parent_is_encrypted_p(false),
+  parent_holds_stamp_p(false)
   {
   }
 
@@ -145,20 +112,20 @@ typedef struct MimeMultCMSdata
 
 /* #### MimeEncryptedCMS and MimeMultipartSignedCMS have a sleazy,
         incestuous, dysfunctional relationship. */
-extern PRBool MimeEncryptedCMS_encrypted_p (MimeObject *obj);
+extern bool MimeEncryptedCMS_encrypted_p (MimeObject *obj);
 extern void MimeCMSGetFromSender(MimeObject *obj,
                                  nsCString &from_addr,
                                  nsCString &from_name,
                                  nsCString &sender_addr,
                                  nsCString &sender_name);
-extern PRBool MimeCMSHeadersAndCertsMatch(MimeObject *obj,
+extern bool MimeCMSHeadersAndCertsMatch(MimeObject *obj,
                                           nsICMSMessage *,
-                                          PRBool *signing_cert_without_email_address);
+                                          bool *signing_cert_without_email_address);
 extern void MimeCMSRequestAsyncSignatureVerification(nsICMSMessage *aCMSMsg,
                                                      const char *aFromAddr, const char *aFromName,
                                                      const char *aSenderAddr, const char *aSenderName,
-                                                     nsIMsgSMIMEHeaderSink *aHeaderSink, PRInt32 aMimeNestingLevel,
-                                                     unsigned char* item_data, PRUint32 item_len);
+                                                     nsIMsgSMIMEHeaderSink *aHeaderSink, int32_t aMimeNestingLevel,
+                                                     unsigned char* item_data, uint32_t item_len);
 extern char *MimeCMS_MakeSAURL(MimeObject *obj);
 extern char *IMAP_CreateReloadAllPartsUrl(const char *url);
 extern int MIMEGetRelativeCryptoNestLevel(MimeObject *obj);
@@ -169,10 +136,10 @@ MimeMultCMS_init (MimeObject *obj)
   MimeHeaders *hdrs = obj->headers;
   MimeMultCMSdata *data = 0;
   char *ct, *micalg;
-  PRInt16 hash_type;
+  int16_t hash_type;
   nsresult rv;
 
-  ct = MimeHeaders_get (hdrs, HEADER_CONTENT_TYPE, PR_FALSE, PR_FALSE);
+  ct = MimeHeaders_get (hdrs, HEADER_CONTENT_TYPE, false, false);
   if (!ct) return 0; /* #### bogus message?  out of memory? */
   micalg = MimeHeaders_get_parameter (ct, PARAM_MICALG, NULL, NULL);
   PR_Free(ct);
@@ -301,7 +268,7 @@ MimeMultCMS_init (MimeObject *obj)
 }
 
 static int
-MimeMultCMS_data_hash (const char *buf, PRInt32 size, void *crypto_closure)
+MimeMultCMS_data_hash (const char *buf, int32_t size, void *crypto_closure)
 {
   MimeMultCMSdata *data = (MimeMultCMSdata *) crypto_closure;
   if (!data || !data->data_hash_context) {
@@ -316,7 +283,7 @@ MimeMultCMS_data_hash (const char *buf, PRInt32 size, void *crypto_closure)
 }
 
 static int
-MimeMultCMS_data_eof (void *crypto_closure, PRBool abort_p)
+MimeMultCMS_data_eof (void *crypto_closure, bool abort_p)
 {
   MimeMultCMSdata *data = (MimeMultCMSdata *) crypto_closure;
   if (!data || !data->data_hash_context) {
@@ -324,7 +291,7 @@ MimeMultCMS_data_eof (void *crypto_closure, PRBool abort_p)
   }
 
   nsCAutoString hashString;
-  data->data_hash_context->Finish(PR_FALSE, hashString);
+  data->data_hash_context->Finish(false, hashString);
   PR_SetError(0, 0);
 
   data->item_len  = hashString.Length();
@@ -358,7 +325,7 @@ MimeMultCMS_sig_init (void *crypto_closure,
     return -1;
   }
 
-  ct = MimeHeaders_get (signature_hdrs, HEADER_CONTENT_TYPE, PR_TRUE, PR_FALSE);
+  ct = MimeHeaders_get (signature_hdrs, HEADER_CONTENT_TYPE, true, false);
 
   /* Verify that the signature object is of the right type. */
   if (!ct || /* is not a signature type */
@@ -372,7 +339,7 @@ MimeMultCMS_sig_init (void *crypto_closure,
   data->sig_decoder_context = do_CreateInstance(NS_CMSDECODER_CONTRACTID, &rv);
   if (NS_FAILED(rv)) return 0;
 
-  rv = data->sig_decoder_context->Start(nsnull, nsnull);
+  rv = data->sig_decoder_context->Start(nullptr, nullptr);
   if (NS_FAILED(rv)) {
     status = PR_GetError();
     if (status >= 0) status = -1;
@@ -382,7 +349,7 @@ MimeMultCMS_sig_init (void *crypto_closure,
 
 
 static int
-MimeMultCMS_sig_hash (const char *buf, PRInt32 size, void *crypto_closure)
+MimeMultCMS_sig_hash (const char *buf, int32_t size, void *crypto_closure)
 {
   MimeMultCMSdata *data = (MimeMultCMSdata *) crypto_closure;
   nsresult rv;
@@ -398,7 +365,7 @@ MimeMultCMS_sig_hash (const char *buf, PRInt32 size, void *crypto_closure)
 }
 
 static int
-MimeMultCMS_sig_eof (void *crypto_closure, PRBool abort_p)
+MimeMultCMS_sig_eof (void *crypto_closure, bool abort_p)
 {
   MimeMultCMSdata *data = (MimeMultCMSdata *) crypto_closure;
 
@@ -435,7 +402,7 @@ static char *
 MimeMultCMS_generate (void *crypto_closure)
 {
   MimeMultCMSdata *data = (MimeMultCMSdata *) crypto_closure;
-  PRBool encrypted_p;
+  bool encrypted_p;
   if (!data) return 0;
   encrypted_p = data->parent_is_encrypted_p;
   nsCOMPtr<nsIX509Cert> signerCert;
@@ -443,15 +410,15 @@ MimeMultCMS_generate (void *crypto_closure)
   int aRelativeNestLevel = MIMEGetRelativeCryptoNestLevel(data->self);
 
   if (aRelativeNestLevel < 0)
-    return nsnull;
+    return nullptr;
 
-  PRInt32 maxNestLevel = 0;
+  int32_t maxNestLevel = 0;
   if (data->smimeHeaderSink && aRelativeNestLevel >= 0)
   {
     data->smimeHeaderSink->MaxWantedNesting(&maxNestLevel);
 
     if (aRelativeNestLevel > maxNestLevel)
-      return nsnull;
+      return nullptr;
   }
 
   if (data->self->options->missing_parts)
@@ -462,8 +429,8 @@ MimeMultCMS_generate (void *crypto_closure)
     if (data->smimeHeaderSink)
       data->smimeHeaderSink->SignedStatus(aRelativeNestLevel,
                                           nsICMSMessageErrors::VERIFY_NOT_YET_ATTEMPTED,
-                                          nsnull);
-    return nsnull;
+                                          nullptr);
+    return nullptr;
   }
 
   if (!data->content_info)
@@ -473,7 +440,7 @@ MimeMultCMS_generate (void *crypto_closure)
      before the signature part, or we ran out of memory, or something
      awful has happened.
      */
-     return nsnull;
+     return nullptr;
   }
 
   nsCString from_addr;
@@ -501,5 +468,5 @@ MimeMultCMS_generate (void *crypto_closure)
 #endif
   }
 
-  return nsnull;
+  return nullptr;
 }

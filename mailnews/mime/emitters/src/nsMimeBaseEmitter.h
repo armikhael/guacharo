@@ -1,39 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #ifndef _nsMimeBaseEmitter_h_
 #define _nsMimeBaseEmitter_h_
 
@@ -72,7 +40,7 @@ typedef struct {
   char      *displayName;
   char      *urlSpec;
   char      *contentType;
-  PRBool    isExternalAttachment;
+  bool      isExternalAttachment;
 } attachmentInfoType;
 
 //
@@ -102,7 +70,7 @@ public:
 
   // For string bundle usage...
   char                *MimeGetStringByName(const char *aHeaderName);
-  char                *MimeGetStringByID(PRInt32 aID);
+  char                *MimeGetStringByID(int32_t aID);
   char                *LocalizeHeaderName(const char *aHeaderName, const char *aDefaultName);
 
   // For header processing...
@@ -123,7 +91,7 @@ protected:
   nsresult            DumpRestOfHeaders();
   nsresult            OutputGenericHeader(const char *aHeaderVal);
 
-  nsresult            WriteHelper(const char *buf, PRUint32 count, PRUint32 *countWritten);
+  nsresult            WriteHelper(const char *buf, uint32_t count, uint32_t *countWritten);
 
   // For string bundle usage...
   nsCOMPtr<nsIStringBundle>  m_stringBundle;        // for translated strings
@@ -139,20 +107,20 @@ protected:
   nsIOutputStream     *mOutStream;
   nsIInputStream      *mInputStream;
   nsIStreamListener   *mOutListener;
-  nsIChannel          *mChannel;
+  nsCOMPtr<nsIChannel> mChannel;
 
   // For gathering statistics on processing...
-  PRUint32            mTotalWritten;
-  PRUint32            mTotalRead;
+  uint32_t            mTotalWritten;
+  uint32_t            mTotalRead;
 
   // Output control and info...
-  PRBool              mDocHeader;         // For header determination...
+  bool                mDocHeader;         // For header determination...
   nsIURI              *mURL;              // the url for the data being processed...
-  PRInt32             mHeaderDisplayType; // The setting for header output...
+  int32_t             mHeaderDisplayType; // The setting for header output...
   nsCString           mHTMLHeaders;       // HTML Header Data...
 
   // For attachment processing...
-  PRInt32             mAttachCount;
+  int32_t             mAttachCount;
   nsVoidArray         *mAttachArray;
   attachmentInfoType  *mCurrentAttachment;
 
@@ -162,19 +130,19 @@ protected:
   nsCOMPtr<nsIMsgHeaderParser>  mHeaderParser;
 
   // For body caching...
-  PRBool              mBodyStarted;
+  bool                mBodyStarted;
   nsCString           mBody;
-  PRBool              mFirstHeaders;
+  bool                mFirstHeaders;
 
   // For the format being used...
-  PRInt32             mFormat;
+  int32_t             mFormat;
 
   // For I18N Conversion...
   nsCOMPtr<nsIMimeConverter> mUnicodeConverter;
   nsString            mCharset;
   nsCOMPtr<nsIDateTimeFormat> mDateFormatter;
   nsresult GenerateDateString(const char * dateString, nsACString& formattedDate,
-                              PRBool showDateForToday);
+                              bool showDateForToday);
   // The caller is expected to free the result of GetLocalizedDateString
   char* GetLocalizedDateString(const char * dateString);
 };

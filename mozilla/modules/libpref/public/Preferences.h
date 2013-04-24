@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Brian Nesse <bnesse@netscape.com>
- *   Mats Palmgren <matspal@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef mozilla_Preferences_h
 #define mozilla_Preferences_h
@@ -49,6 +15,7 @@
 #include "nsIPrefBranchInternal.h"
 #include "nsIObserver.h"
 #include "nsCOMPtr.h"
+#include "nsTArray.h"
 #include "nsWeakReference.h"
 
 class nsIFile;
@@ -64,24 +31,32 @@ typedef int (*PR_CALLBACK PrefChangedFunc)(const char *, void *);
 
 namespace mozilla {
 
+namespace dom {
+class PrefSetting;
+}
+
 class Preferences : public nsIPrefService,
-                    public nsIPrefServiceInternal,
                     public nsIObserver,
                     public nsIPrefBranchInternal,
                     public nsSupportsWeakReference
 {
 public:
+  typedef mozilla::dom::PrefSetting PrefSetting;
+
   NS_DECL_ISUPPORTS
   NS_DECL_NSIPREFSERVICE
-  NS_DECL_NSIPREFSERVICEINTERNAL
   NS_FORWARD_NSIPREFBRANCH(sRootBranch->)
-  NS_FORWARD_NSIPREFBRANCH2(sRootBranch->)
   NS_DECL_NSIOBSERVER
 
   Preferences();
   virtual ~Preferences();
 
   nsresult Init();
+
+  /**
+   * Reset loaded user prefs then read them
+   */
+  static nsresult ResetAndReadUserPrefs();
 
   /**
    * Returns the singleton instance which is addreffed.
@@ -99,7 +74,7 @@ public:
    */
   static nsIPrefService* GetService()
   {
-    NS_ENSURE_TRUE(InitStaticMembers(), nsnull);
+    NS_ENSURE_TRUE(InitStaticMembers(), nullptr);
     return sPreferences;
   }
 
@@ -107,9 +82,9 @@ public:
    * Returns shared pref branch instance.
    * NOTE: not addreffed.
    */
-  static nsIPrefBranch2* GetRootBranch()
+  static nsIPrefBranch* GetRootBranch()
   {
-    NS_ENSURE_TRUE(InitStaticMembers(), nsnull);
+    NS_ENSURE_TRUE(InitStaticMembers(), nullptr);
     return sRootBranch;
   }
 
@@ -119,7 +94,7 @@ public:
    */
   static nsIPrefBranch* GetDefaultRootBranch()
   {
-    NS_ENSURE_TRUE(InitStaticMembers(), nsnull);
+    NS_ENSURE_TRUE(InitStaticMembers(), nullptr);
     return sDefaultRootBranch;
   }
 
@@ -127,23 +102,23 @@ public:
    * Gets int or bool type pref value with default value if failed to get
    * the pref.
    */
-  static PRBool GetBool(const char* aPref, PRBool aDefault = PR_FALSE)
+  static bool GetBool(const char* aPref, bool aDefault = false)
   {
-    PRBool result = aDefault;
+    bool result = aDefault;
     GetBool(aPref, &result);
     return result;
   }
 
-  static PRInt32 GetInt(const char* aPref, PRInt32 aDefault = 0)
+  static int32_t GetInt(const char* aPref, int32_t aDefault = 0)
   {
-    PRInt32 result = aDefault;
+    int32_t result = aDefault;
     GetInt(aPref, &result);
     return result;
   }
 
-  static PRUint32 GetUint(const char* aPref, PRUint32 aDefault = 0)
+  static uint32_t GetUint(const char* aPref, uint32_t aDefault = 0)
   {
-    PRUint32 result = aDefault;
+    uint32_t result = aDefault;
     GetUint(aPref, &result);
     return result;
   }
@@ -181,14 +156,14 @@ public:
    * @param aResult     Must not be NULL.  The value is never modified when
    *                    these methods fail.
    */
-  static nsresult GetBool(const char* aPref, PRBool* aResult);
-  static nsresult GetInt(const char* aPref, PRInt32* aResult);
-  static nsresult GetUint(const char* aPref, PRUint32* aResult)
+  static nsresult GetBool(const char* aPref, bool* aResult);
+  static nsresult GetInt(const char* aPref, int32_t* aResult);
+  static nsresult GetUint(const char* aPref, uint32_t* aResult)
   {
-    PRInt32 result;
+    int32_t result;
     nsresult rv = GetInt(aPref, &result);
     if (NS_SUCCEEDED(rv)) {
-      *aResult = static_cast<PRUint32>(result);
+      *aResult = static_cast<uint32_t>(result);
     }
     return rv;
   }
@@ -211,11 +186,11 @@ public:
   /**
    * Sets various type pref values.
    */
-  static nsresult SetBool(const char* aPref, PRBool aValue);
-  static nsresult SetInt(const char* aPref, PRInt32 aValue);
-  static nsresult SetUint(const char* aPref, PRUint32 aValue)
+  static nsresult SetBool(const char* aPref, bool aValue);
+  static nsresult SetInt(const char* aPref, int32_t aValue);
+  static nsresult SetUint(const char* aPref, uint32_t aValue)
   {
-    return SetInt(aPref, static_cast<PRInt32>(aValue));
+    return SetInt(aPref, static_cast<int32_t>(aValue));
   }
   static nsresult SetCString(const char* aPref, const char* aValue);
   static nsresult SetCString(const char* aPref, const nsACString &aValue);
@@ -233,7 +208,12 @@ public:
   /**
    * Whether the pref has a user value or not.
    */
-  static PRBool HasUserValue(const char* aPref);
+  static bool HasUserValue(const char* aPref);
+
+  /**
+   * Gets the type of the pref.
+   */
+  static int32_t GetType(const char* aPref);
 
   /**
    * Adds/Removes the observer for the root pref branch.
@@ -261,10 +241,10 @@ public:
    */
   static nsresult RegisterCallback(PrefChangedFunc aCallback,
                                    const char* aPref,
-                                   void* aClosure = nsnull);
+                                   void* aClosure = nullptr);
   static nsresult UnregisterCallback(PrefChangedFunc aCallback,
                                      const char* aPref,
-                                     void* aClosure = nsnull);
+                                     void* aClosure = nullptr);
 
   /**
    * Adds the aVariable to cache table.  aVariable must be a pointer for a
@@ -272,15 +252,15 @@ public:
    * changed but note that even if you modified it, the value isn't assigned to
    * the pref.
    */
-  static nsresult AddBoolVarCache(PRBool* aVariable,
+  static nsresult AddBoolVarCache(bool* aVariable,
                                   const char* aPref,
-                                  PRBool aDefault = PR_FALSE);
-  static nsresult AddIntVarCache(PRInt32* aVariable,
+                                  bool aDefault = false);
+  static nsresult AddIntVarCache(int32_t* aVariable,
                                  const char* aPref,
-                                 PRInt32 aDefault = 0);
-  static nsresult AddUintVarCache(PRUint32* aVariable,
+                                 int32_t aDefault = 0);
+  static nsresult AddUintVarCache(uint32_t* aVariable,
                                   const char* aPref,
-                                  PRUint32 aDefault = 0);
+                                  uint32_t aDefault = 0);
 
   /**
    * Gets the default bool, int or uint value of the pref.
@@ -288,11 +268,11 @@ public:
    * If the pref could have any value, you needed to use these methods.
    * If not so, you could use below methods.
    */
-  static nsresult GetDefaultBool(const char* aPref, PRBool* aResult);
-  static nsresult GetDefaultInt(const char* aPref, PRInt32* aResult);
-  static nsresult GetDefaultUint(const char* aPref, PRUint32* aResult)
+  static nsresult GetDefaultBool(const char* aPref, bool* aResult);
+  static nsresult GetDefaultInt(const char* aPref, int32_t* aResult);
+  static nsresult GetDefaultUint(const char* aPref, uint32_t* aResult)
   {
-    return GetDefaultInt(aPref, reinterpret_cast<PRInt32*>(aResult));
+    return GetDefaultInt(aPref, reinterpret_cast<int32_t*>(aResult));
   }
 
   /**
@@ -301,21 +281,21 @@ public:
    * methods failed to get the default value, they would return the
    * aFailedResult value.
    */
-  static PRBool GetDefaultBool(const char* aPref, PRBool aFailedResult)
+  static bool GetDefaultBool(const char* aPref, bool aFailedResult)
   {
-    PRBool result;
+    bool result;
     return NS_SUCCEEDED(GetDefaultBool(aPref, &result)) ? result :
                                                           aFailedResult;
   }
-  static PRInt32 GetDefaultInt(const char* aPref, PRInt32 aFailedResult)
+  static int32_t GetDefaultInt(const char* aPref, int32_t aFailedResult)
   {
-    PRInt32 result;
+    int32_t result;
     return NS_SUCCEEDED(GetDefaultInt(aPref, &result)) ? result : aFailedResult;
   }
-  static PRUint32 GetDefaultUint(const char* aPref, PRUint32 aFailedResult)
+  static uint32_t GetDefaultUint(const char* aPref, uint32_t aFailedResult)
   {
-   return static_cast<PRUint32>(
-     GetDefaultInt(aPref, static_cast<PRInt32>(aFailedResult)));
+   return static_cast<uint32_t>(
+     GetDefaultInt(aPref, static_cast<int32_t>(aFailedResult)));
   }
 
   /**
@@ -341,8 +321,24 @@ public:
   static nsresult GetDefaultComplex(const char* aPref, const nsIID &aType,
                                     void** aResult);
 
+  /**
+   * Gets the type of the pref.
+   */
+  static int32_t GetDefaultType(const char* aPref);
+
+  // Used to synchronise preferences between chrome and content processes.
+  static void GetPreferences(InfallibleTArray<PrefSetting>* aPrefs);
+  static void GetPreference(PrefSetting* aPref);
+  static void SetPreference(const PrefSetting& aPref);
+
 protected:
   nsresult NotifyServiceObservers(const char *aSubject);
+  /**
+   * Reads the default pref file or, if that failed, try to save a new one.
+   *
+   * @return NS_OK if either action succeeded,
+   *         or the error code related to the read attempt.
+   */
   nsresult UseDefaultPrefFile();
   nsresult UseUserPrefFile();
   nsresult ReadAndOwnUserPrefFile(nsIFile *aFile);
@@ -355,15 +351,14 @@ private:
   nsCOMPtr<nsIFile>        mCurrentFile;
 
   static Preferences*      sPreferences;
-  static nsIPrefBranch2*   sRootBranch;
-  // NOTE: default branch doesn't return nsIPrefBranch2 interface at query.
+  static nsIPrefBranch*    sRootBranch;
   static nsIPrefBranch*    sDefaultRootBranch;
-  static PRBool            sShutdown;
+  static bool              sShutdown;
 
   /**
    * Init static members.  TRUE if it succeeded.  Otherwise, FALSE.
    */
-  static PRBool InitStaticMembers(PRBool aForService = PR_FALSE);
+  static bool InitStaticMembers();
 };
 
 } // namespace mozilla

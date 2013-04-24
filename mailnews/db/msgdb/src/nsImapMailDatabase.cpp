@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999-2003
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <sys/stat.h>
 
@@ -47,29 +15,29 @@ struct mdbOid gAllPendingHdrsTableOID;
 
 nsImapMailDatabase::nsImapMailDatabase()
 {
-  m_mdbAllPendingHdrsTable = nsnull;
+  m_mdbAllPendingHdrsTable = nullptr;
 }
 
 nsImapMailDatabase::~nsImapMailDatabase()
 {
 }
 
-NS_IMETHODIMP	nsImapMailDatabase::GetSummaryValid(PRBool *aResult)
+NS_IMETHODIMP	nsImapMailDatabase::GetSummaryValid(bool *aResult)
 {
   NS_ENSURE_ARG_POINTER(aResult);
   if (m_dbFolderInfo)
   {
-    PRUint32 version;
+    uint32_t version;
     m_dbFolderInfo->GetVersion(&version);
     *aResult = (GetCurVersion() == version);
   }
   else
-      *aResult = PR_FALSE;
+      *aResult = false;
 
   return NS_OK;
 }
 
-NS_IMETHODIMP	nsImapMailDatabase::SetSummaryValid(PRBool valid)
+NS_IMETHODIMP	nsImapMailDatabase::SetSummaryValid(bool valid)
 {
   if (m_dbFolderInfo)
   {
@@ -80,23 +48,16 @@ NS_IMETHODIMP	nsImapMailDatabase::SetSummaryValid(PRBool valid)
 }
 
 // IMAP does not set local file flags, override does nothing
-void nsImapMailDatabase::UpdateFolderFlag(nsIMsgDBHdr * /* msgHdr */, PRBool /* bSet */,
+void nsImapMailDatabase::UpdateFolderFlag(nsIMsgDBHdr * /* msgHdr */, bool /* bSet */,
                                           nsMsgMessageFlagType /* flag */, nsIOutputStream ** /* ppFileStream */)
 {
 }
 
 // We override this to avoid our parent class (nsMailDatabase)'s 
 // grabbing of the folder semaphore, and bailing on failure.
-NS_IMETHODIMP nsImapMailDatabase::DeleteMessages(PRUint32 aNumKeys, nsMsgKey* nsMsgKeys, nsIDBChangeListener *instigator)
+NS_IMETHODIMP nsImapMailDatabase::DeleteMessages(uint32_t aNumKeys, nsMsgKey* nsMsgKeys, nsIDBChangeListener *instigator)
 {
   return nsMsgDatabase::DeleteMessages(aNumKeys, nsMsgKeys, instigator);
-}
-
-// We override this so we won't try to change the x-mozilla-status flags
-// in the offline store.
-PRBool nsImapMailDatabase::SetHdrFlag(nsIMsgDBHdr *msgHdr, PRBool bSet, nsMsgMessageFlagType flag)
-{
-  return nsMsgDatabase::SetHdrFlag(msgHdr, bSet, flag);
 }
 
 // override so nsMailDatabase methods that deal with m_folderStream are *not* called
@@ -112,11 +73,11 @@ NS_IMETHODIMP nsImapMailDatabase::EndBatch()
 
 nsresult nsImapMailDatabase::AdjustExpungedBytesOnDelete(nsIMsgDBHdr *msgHdr)
 {
-  PRUint32 msgFlags;
+  uint32_t msgFlags;
   msgHdr->GetFlags(&msgFlags);
   if (msgFlags & nsMsgMessageFlags::Offline && m_dbFolderInfo)
   {
-    PRUint32 size = 0;
+    uint32_t size = 0;
     (void)msgHdr->GetOfflineMessageSize(&size);
     return m_dbFolderInfo->ChangeExpungedBytes (size);
   }
@@ -125,19 +86,8 @@ nsresult nsImapMailDatabase::AdjustExpungedBytesOnDelete(nsIMsgDBHdr *msgHdr)
 
 NS_IMETHODIMP nsImapMailDatabase::ForceClosed()
 {
-  m_mdbAllPendingHdrsTable = nsnull;
+  m_mdbAllPendingHdrsTable = nullptr;
   return nsMailDatabase::ForceClosed();
-}
-
-NS_IMETHODIMP nsImapMailDatabase::GetFolderStream(nsIOutputStream **aFileStream)
-{
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP nsImapMailDatabase::SetFolderStream(nsIOutputStream *aFileStream)
-{
-  NS_ERROR("Trying to set folderStream, not implemented");
-  return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 nsresult nsImapMailDatabase::GetAllPendingHdrsTable()
@@ -149,7 +99,7 @@ nsresult nsImapMailDatabase::GetAllPendingHdrsTable()
   return rv;
 }
 
-NS_IMETHODIMP nsImapMailDatabase::AddNewHdrToDB(nsIMsgDBHdr *newHdr, PRBool notify)
+NS_IMETHODIMP nsImapMailDatabase::AddNewHdrToDB(nsIMsgDBHdr *newHdr, bool notify)
 {
   nsresult rv = nsMsgDatabase::AddNewHdrToDB(newHdr, notify);
   if (NS_SUCCEEDED(rv))
@@ -183,7 +133,7 @@ NS_IMETHODIMP nsImapMailDatabase::UpdatePendingAttributes(nsIMsgDBHdr* aNewHdr)
       mdb_count numCells;
       mdbYarn cellYarn;
       mdb_column cellColumn;
-      PRUint32 existingFlags;
+      uint32_t existingFlags;
 
       pendingRow->GetCount(GetEnv(), &numCells);
       aNewHdr->GetFlags(&existingFlags);
@@ -193,7 +143,7 @@ NS_IMETHODIMP nsImapMailDatabase::UpdatePendingAttributes(nsIMsgDBHdr* aNewHdr)
       nsIMdbRow *row = msgHdr->GetMDBRow();
       for (mdb_count cellIndex = 1; cellIndex < numCells; cellIndex++)
       {
-        mdb_err err = pendingRow->SeekCellYarn(GetEnv(), cellIndex, &cellColumn, nsnull);
+        mdb_err err = pendingRow->SeekCellYarn(GetEnv(), cellIndex, &cellColumn, nullptr);
         if (err == 0)
         {
           err = pendingRow->AliasCellYarn(GetEnv(), cellColumn, &cellYarn);
@@ -206,7 +156,7 @@ NS_IMETHODIMP nsImapMailDatabase::UpdatePendingAttributes(nsIMsgDBHdr* aNewHdr)
       }
       // We might have changed some cached values, so force a refresh.
       msgHdr->ClearCachedValues();
-      PRUint32 resultFlags;
+      uint32_t resultFlags;
       msgHdr->OrFlags(existingFlags, &resultFlags);
       m_mdbAllPendingHdrsTable->CutRow(GetEnv(), pendingRow);
       pendingRow->CutAllColumns(GetEnv());
@@ -277,7 +227,7 @@ NS_IMETHODIMP nsImapMailDatabase::SetAttributeOnPendingHdr(nsIMsgDBHdr *pendingH
 NS_IMETHODIMP
 nsImapMailDatabase::SetUint32AttributeOnPendingHdr(nsIMsgDBHdr *pendingHdr,
                                                    const char *property,
-                                                   PRUint32 propertyVal)
+                                                   uint32_t propertyVal)
 {
   NS_ENSURE_ARG_POINTER(pendingHdr);
   nsCOMPtr<nsIMdbRow> pendingRow;
@@ -289,7 +239,7 @@ nsImapMailDatabase::SetUint32AttributeOnPendingHdr(nsIMsgDBHdr *pendingHdr,
 NS_IMETHODIMP
 nsImapMailDatabase::SetUint64AttributeOnPendingHdr(nsIMsgDBHdr *aPendingHdr,
                                                    const char *aProperty,
-                                                   PRUint64 aPropertyVal)
+                                                   uint64_t aPropertyVal)
 {
   NS_ENSURE_ARG_POINTER(aPendingHdr);
   nsCOMPtr<nsIMdbRow> pendingRow;

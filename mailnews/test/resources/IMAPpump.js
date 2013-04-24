@@ -1,38 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- *   Kent James <kent@caspia.com>
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * This file provides a simple interface to the imap fake server. Demonstration
@@ -83,16 +51,18 @@ function setupIMAPPump(extensions)
     if (infoString in configurations)
       return makeServer(daemon, configurations[infoString].join(","));
 
-    var handler = new IMAP_RFC3501_handler(daemon);
-    if (!infoString)
-      infoString = "RFC2195";
+    function createHandler(d) {
+      var handler = new IMAP_RFC3501_handler(d);
+      if (!infoString)
+        infoString = "RFC2195";
 
-    var parts = infoString.split(/ *, */);
-    for each (var part in parts) {
-      if (part.substring(0, 3) == "RFC")
+      var parts = infoString.split(/ *, */);
+      for each (var part in parts) {
         mixinExtension(handler, eval("IMAP_" + part + "_extension"));
+      }
+      return handler;
     }
-    var server = new nsMailServer(handler);
+    var server = new nsMailServer(createHandler, daemon);
     server.start(IMAP_PORT);
     return server;
   }
@@ -130,16 +100,16 @@ function setupIMAPPump(extensions)
   imapAccount.incomingServer = gIMAPIncomingServer;
 
   // The server doesn't support more than one connection
-  let prefBranch = Cc["@mozilla.org/preferences-service;1"]
-                     .getService(Ci.nsIPrefBranch);
-  prefBranch.setIntPref("mail.server.default.max_cached_connections", 1);
+  Services.prefs.setIntPref("mail.server.default.max_cached_connections",
+                            1);
   // We aren't interested in downloading messages automatically
-  prefBranch.setBoolPref("mail.server.default.download_on_biff", false);
-  prefBranch.setBoolPref("mail.biff.play_sound", false);
-  prefBranch.setBoolPref("mail.biff.show_alert", false);
-  prefBranch.setBoolPref("mail.biff.show_tray_icon", false);
-  prefBranch.setBoolPref("mail.biff.animate_dock_icon", false);
-  prefBranch.setBoolPref("mail.biff.alert.show_preview", false);
+  Services.prefs.setBoolPref("mail.server.default.download_on_biff",
+                             false);
+  Services.prefs.setBoolPref("mail.biff.play_sound", false);
+  Services.prefs.setBoolPref("mail.biff.show_alert", false);
+  Services.prefs.setBoolPref("mail.biff.show_tray_icon", false);
+  Services.prefs.setBoolPref("mail.biff.animate_dock_icon", false);
+  Services.prefs.setBoolPref("mail.biff.alert.show_preview", false);
 
   gIMAPIncomingServer.performExpand(null);
 
@@ -152,7 +122,11 @@ function teardownIMAPPump()
 {
   gIMAPInbox = null;
   gIMAPServer.resetTest();
-  gIMAPIncomingServer.closeCachedConnections();
+  try {
+    gIMAPIncomingServer.closeCachedConnections();
+    let serverSink = gIMAPIncomingServer.QueryInterface(Ci.nsIImapServerSink);
+    serverSink.abortQueuedUrls();
+  } catch (ex) {dump(ex);}
   gIMAPServer.performTest();
   gIMAPServer.stop();
   let thread = gThreadManager.currentThread;

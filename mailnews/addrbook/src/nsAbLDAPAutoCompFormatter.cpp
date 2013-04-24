@@ -1,41 +1,8 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * 
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Dan Mosedale <dmose@netscape.com> (Original Author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsAbLDAPAutoCompFormatter.h"
 #include "nsIAutoCompleteResults.h"
@@ -46,10 +13,11 @@
 #include "nsIStringBundle.h"
 #include "nsXPCOM.h"
 #include "nsISupportsPrimitives.h"
-#include "nsNetError.h"
+#include "nsError.h"
 #include "nsMemory.h"
 #include "nsILDAPErrors.h"
 #include "nsMsgUtils.h"
+#include "mozilla/Services.h"
 
 #define LDAP_ERROR_BUNDLE "chrome://mozldap/locale/ldap.properties"
 #define LDAP_AUTOCOMPLETE_ERROR_BUNDLE "chrome://messenger/locale/addressbook/ldapAutoCompErrs.properties"
@@ -158,11 +126,11 @@ nsAbLDAPAutoCompFormatter::Format(nsILDAPMessage *aMsg,
 }
 
 NS_IMETHODIMP
-nsAbLDAPAutoCompFormatter::FormatException(PRInt32 aState, 
+nsAbLDAPAutoCompFormatter::FormatException(int32_t aState, 
                                            nsresult aErrorCode, 
                                            nsIAutoCompleteItem **aItem) 
 {
-    PRInt32 errorKey;
+    int32_t errorKey;
     nsresult rv;
 
     // create an nsIAutoCompleteItem to hold the returned value
@@ -181,12 +149,12 @@ nsAbLDAPAutoCompFormatter::FormatException(PRInt32 aState,
     nsString errMsg, ldapErrMsg, alertMsg, ldapHint;
     nsString errCodeNum;
 
-    nsCOMPtr<nsIStringBundleService> stringBundleSvc(do_GetService(
-                                            NS_STRINGBUNDLE_CONTRACTID, &rv)); 
-    if (NS_FAILED(rv)) {
+    nsCOMPtr<nsIStringBundleService> stringBundleSvc =
+        mozilla::services::GetStringBundleService();
+    if (stringBundleSvc) {
         NS_ERROR("nsAbLDAPAutoCompleteFormatter::FormatException():"
                  " error getting string bundle service");
-        return rv;
+        return NS_ERROR_UNEXPECTED;
     }
 
     // get the string bundles relevant here: the main LDAP bundle,
@@ -255,8 +223,8 @@ nsAbLDAPAutoCompFormatter::FormatException(PRInt32 aState,
 
         // figure out the key to index into the string bundle
         //
-        const PRInt32 HOST_NOT_FOUND_ERROR=5000;
-        const PRInt32 GENERIC_ERROR=9999;
+        const int32_t HOST_NOT_FOUND_ERROR=5000;
+        const int32_t GENERIC_ERROR=9999;
         errorKey = ( (aErrorCode == NS_ERROR_UNKNOWN_HOST) ? 
                      HOST_NOT_FOUND_ERROR : GENERIC_ERROR );
 
@@ -274,8 +242,8 @@ nsAbLDAPAutoCompFormatter::FormatException(PRInt32 aState,
 
     // and try to find a hint about what the user should do next
     //
-    const PRInt32 HINT_BASE=10000;
-    const PRInt32 GENERIC_HINT_CODE = 9999;
+    const int32_t HINT_BASE=10000;
+    const int32_t GENERIC_HINT_CODE = 9999;
     rv = ldapACBundle->GetStringFromID(HINT_BASE + errorKey, 
                                        getter_Copies(ldapHint));
     if (NS_FAILED(rv)) {
@@ -359,50 +327,32 @@ nsAbLDAPAutoCompFormatter::FormatException(PRInt32 aState,
 NS_IMETHODIMP
 nsAbLDAPAutoCompFormatter::GetAttributes(nsACString &aResult)
 {
-    nsCStringArray mSearchAttrs;
-    nsresult rv = ProcessFormat(mNameFormat, 0, 0, &mSearchAttrs);
+    nsCAutoString searchAttrs;
+    nsresult rv = ProcessFormat(mNameFormat, 0, 0, &searchAttrs);
     if (NS_FAILED(rv)) {
         NS_WARNING("nsAbLDAPAutoCompFormatter::SetNameFormat(): "
                    "ProcessFormat() failed");
         return rv;
     }
-    rv = ProcessFormat(mAddressFormat, 0, 0, &mSearchAttrs);
+    rv = ProcessFormat(mAddressFormat, 0, 0, &searchAttrs);
     if (NS_FAILED(rv)) {
         NS_WARNING("nsAbLDAPAutoCompFormatter::SetNameFormat(): "
                    "ProcessFormat() failed");
         return rv;
     }
-    rv = ProcessFormat(mCommentFormat, 0, 0, &mSearchAttrs);
+    rv = ProcessFormat(mCommentFormat, 0, 0, &searchAttrs);
     if (NS_FAILED(rv)) {
         NS_WARNING("nsAbLDAPAutoCompFormatter::SetNameFormat(): "
                    "ProcessFormat() failed");
         return rv;
     }
 
-    // none of the formatting templates require any LDAP attributes
-    //
-    PRUint32 count = mSearchAttrs.Count();   // size of XPCOM array we'll need
-    if (!count) {
-        NS_ERROR("nsAbLDAPAutoCompFormatter::GetAttributes(): "
-                 "current output format (if set) requires no search "
-                 "attributes");
-        return NS_ERROR_NOT_INITIALIZED;
-    }
-
-    aResult = *mSearchAttrs.CStringAt(0);
-
-    for (PRUint32 i = 1; i < count; i++)
-    {
-      aResult.Append(',');
-      aResult.Append(*mSearchAttrs.CStringAt(i));
-    }
-
+    aResult = searchAttrs;
     return NS_OK;
 }
 
-// parse and process a formatting attribute.  If aStringArray is
-// non-NULL, return a list of the attributes from mNameFormat in
-// aStringArray.  Otherwise, generate an autocomplete value from the
+// parse and process a formatting attribute.
+// Generate an autocomplete value from the
 // information in aMessage and append it to aValue.  Any errors
 // (including failure to find a required attribute while building up aValue) 
 // return an NS_ERROR_* up the stack so that the caller doesn't try and
@@ -412,7 +362,7 @@ nsresult
 nsAbLDAPAutoCompFormatter::ProcessFormat(const nsAString & aFormat,
                                          nsILDAPMessage *aMessage, 
                                          nsACString *aValue,
-                                         nsCStringArray *aAttrs)
+                                         nsCString *aAttrs)
 {
     nsresult rv;    // temp for return values
 
@@ -430,7 +380,7 @@ nsAbLDAPAutoCompFormatter::ProcessFormat(const nsAString & aFormat,
                    "couldn't get console service");
     }
 
-    PRBool attrRequired = PR_FALSE;     // is this attr required or optional?
+    bool attrRequired = false;     // is this attr required or optional?
     nsCAutoString attrName;             // current attr to get
 
     // parse until we hit the end of the string
@@ -441,7 +391,7 @@ nsAbLDAPAutoCompFormatter::ProcessFormat(const nsAString & aFormat,
 
         case PRUnichar('{'):
 
-            attrRequired = PR_TRUE;  // this attribute is required
+            attrRequired = true;  // this attribute is required
 
             /*FALLTHROUGH*/
 
@@ -458,34 +408,15 @@ nsAbLDAPAutoCompFormatter::ProcessFormat(const nsAString & aFormat,
                 return rv;
             }
 
-            // if we're building an array
-            if ( aAttrs ) { 
-
-                // see if the string is already present in the array
-                int i = 0, found = -1;
-                while ( i < aAttrs->Count() ) {
-                    if (aAttrs->CStringAt(i)->Equals(attrName, nsCaseInsensitiveCStringComparator())) {
-                        found = i;
-                        break;
-                    }
-                    ++i;
-                }
-
-                // and it doesn't already contain this string
-                if (found == -1) { 
-
+            // If we're building a string of attributes...
+            if (aAttrs) { 
+                // ...and it doesn't already contain this string
+                if (aAttrs->Find(attrName, CaseInsensitiveCompare) == kNotFound)
+                {
                     // add it
-                    if (!aAttrs->AppendCString(attrName)) {
-                        
-                        // current AppendCString always returns PR_TRUE;
-                        // if we hit this error, something has changed in
-                        // that code
-                        //
-                        NS_ERROR(
-                            "nsAbLDAPAutoCompFormatter::ProcessFormat():"
-                            " aAttrs->AppendCString(attrName) failed");
-                        return NS_ERROR_UNEXPECTED;
-                    }
+                    if (!aAttrs->IsEmpty())
+                        aAttrs->Append(',');
+                    aAttrs->Append(attrName);
                 }
             } else {
 
@@ -504,7 +435,7 @@ nsAbLDAPAutoCompFormatter::ProcessFormat(const nsAString & aFormat,
             }
 
             attrName.Truncate();     // clear out for next pass
-            attrRequired = PR_FALSE; // reset to the default for the next pass
+            attrRequired = false; // reset to the default for the next pass
 
             break;
 
@@ -555,7 +486,7 @@ nsresult
 nsAbLDAPAutoCompFormatter::ParseAttrName(
     const PRUnichar **aIter,                     // iterators for mOutputString
     const PRUnichar *aIterEnd, 
-    PRBool aAttrRequired,                       // required?  or just optional?
+    bool aAttrRequired,                       // required?  or just optional?
     nsCOMPtr<nsIConsoleService> &aConsoleSvc,   // no need to reacquire this
     nsACString &aAttrName)                      // attribute token
 {
@@ -609,13 +540,13 @@ nsresult
 nsAbLDAPAutoCompFormatter::AppendFirstAttrValue(
     const nsACString &aAttrName, // attr to get
     nsILDAPMessage *aMessage, // msg to get values from
-    PRBool aAttrRequired, // is this a required value?
+    bool aAttrRequired, // is this a required value?
     nsACString &aValue)
 {
     // get the attribute values for the field which will be used 
     // to fill in nsIAutoCompleteItem::value
     //
-    PRUint32 numVals;
+    uint32_t numVals;
     PRUnichar **values;
 
     nsresult rv;

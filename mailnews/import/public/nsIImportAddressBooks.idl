@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
 
@@ -83,7 +51,7 @@ interface nsIImportAddressBooks : nsISupports
     are imported from a directory, then return true.  For a 1 to 1 relationship
     between location and address books return false.
   */
-  PRBool  GetSupportsMultiple();
+  boolean GetSupportsMultiple();
 
   /*
     If the address book is not found via a file location.then return true
@@ -94,27 +62,27 @@ interface nsIImportAddressBooks : nsISupports
     If false, GetDefaultLocation will be called.
   */
 
-  PRBool GetAutoFind( out wstring description);
+  boolean GetAutoFind( out wstring description);
 
   /*
     Returns true if the address book needs the user to specify a field map
     for address books imported from this format.
   */
-  PRBool GetNeedsFieldMap( in nsIFile location);
+  boolean GetNeedsFieldMap( in nsIFile location);
 
   /*
     If found and userVerify BOTH return false, then it is assumed that this
-    means an error - mail cannot be found on this machine.
+    means an error - address book cannot be found on this machine.
     If userVerify is true, the user will have an opportunity to specify
-    a different location to import mail from.
+    a different location to import address book from.
   */
   void   GetDefaultLocation( out nsIFile location,
                 out boolean  found,
                 out boolean  userVerify);
   /*
     Returns an nsISupportsArray which contains an nsIImportABDescriptor for each
-    mailbox.  The array is not sorted before display to the user.  location is
-    null if GetAutoFind returned true.
+    address book.  The array is not sorted before display to the user.
+    location is null if GetAutoFind returned true.
   */
   nsISupportsArray FindAddressBooks( in nsIFile location);
 
@@ -125,17 +93,17 @@ interface nsIImportAddressBooks : nsISupports
   void InitFieldMap(in nsIImportFieldMap fieldMap);
 
   /**
-   * Import a specific mailbox into the destination file supplied.  If an error
-   * occurs that is non-fatal, the destination will be deleted and other
-   * mailbox's will be imported.  If a fatal error occurs, the destination will
-   * be deleted and the import operation will abort.
+   * Import a specific address book into the destination file supplied.
+   * If an error occurs that is non-fatal, the destination will be deleted and
+   * other adress book will be imported.  If a fatal error occurs, the
+   * destination will be deleted and the import operation will abort.
    *
    * @param aSource         The source data for the import.
    * @param aDestination    The proxy database for the destination of the
    *                        import.
    * @param aFieldMap       The field map containing the mapping of fields to be
    *                        used in cvs and tab type imports.
-   * @param aSupportService An optional proxy support service (nsnull is
+   * @param aSupportService An optional proxy support service (nullptr is
    *                        acceptable if it is not required), may be required
    *                        for certain import types (e.g. nsIAbLDIFService for
    *                        LDIF import).
@@ -166,13 +134,18 @@ interface nsIImportAddressBooks : nsISupports
   void  SetSampleLocation( in nsIFile location);
 
   /*
-    Return a string of sample data for a record, each field
-    is separated by a newline (which means no newlines in the fields!)
-    This is only supported by address books which use field maps and
-    is used by the field map UI to allow the user to properly
-    align fields to be imported.
-  */
-  wstring GetSampleData( in long recordNumber, out boolean recordExists);
+   * Return a string of sample data for a record, each field
+   * is separated by a newline (which means no newlines in the fields!)
+   * This is only supported by address books which use field maps and
+   * is used by the field map UI to allow the user to properly
+   * align fields to be imported.
+   *
+   * @param recordNumber index of the recrds, starting from 0.
+   * @param recordExists true if the record exists.
+   *
+   * @returns a string of sample data for the desired record
+   */
+  wstring GetSampleData(in long recordNumber, out boolean recordExists);
 
 };
 

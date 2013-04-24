@@ -1,43 +1,8 @@
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
-# The Original Code is the Mozilla Browser code.
-#
-# The Initial Developer of the Original Code is
-# IBM Corporation.
-# Portions created by the Initial Developer are Copyright (C) 2004
-# the Initial Developer. All Rights Reserved.
-#
-# Contributor(s):
-#  Brian Ryner <bryner@brianryner.com>
-#  Benjamin Smedberg <bsmedberg@covad.net>
-#  Darin Fisher <darin@meer.net>
-#
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-DEPTH		= ../..
+DEPTH		= @DEPTH@
 topsrcdir	= @top_srcdir@
 srcdir		= @srcdir@
 VPATH		= @srcdir@
@@ -50,23 +15,31 @@ NO_PKG_FILES = \
 	regxpcom* \
 	$(NULL)
 
-# If we're on mac, we want to make the .pkg first, in the mac/
-# directory. Then packager.mk can put it into a DMG
+# We want xpcshell and run-mozilla in the SDK but not in the binary package.
+ifndef STAGE_SDK
+NO_PKG_FILES += \
+	xpcshell* \
+	run-mozilla* \
+	$(NULL)
+endif
+
+# If we're on mac, we don't want an end-user-facing DMG, we want a .tar.bz2
+# which developers then use to package their application.
 
 ifeq (cocoa,$(MOZ_WIDGET_TOOLKIT))
-DIRS += mac
-_APPNAME = $(PKG_BASENAME).pkg
-_BINPATH = /XUL.framework/Versions/Current
-PKG_SKIP_STRIP = 1
-MOZ_PKG_SPECIAL = pkg
-PKG_DMG_SOURCE = $(STAGEPATH)xulrunner-pkg
+MOZ_PKG_FORMAT = BZ2
+_APPNAME = XUL.framework
+_BINPATH = /$(_APPNAME)/Versions/Current
 endif
 
 include $(topsrcdir)/config/rules.mk
 
 INSTALL_SDK = 1
+ifndef MOZ_PLATFORM_MAEMO
 GENERATE_CACHE = 1
+endif
 
+include $(topsrcdir)/toolkit/mozapps/installer/signing.mk
 include $(topsrcdir)/toolkit/mozapps/installer/packager.mk
 
 # Add pkg-config files to the install:: target
@@ -76,8 +49,6 @@ pkg_config_files = \
 	libxul-embedding.pc \
 	mozilla-js.pc \
 	mozilla-plugin.pc \
-	mozilla-gtkmozembed.pc \
-	mozilla-gtkmozembed-embedding.pc \
 	$(NULL)
 
 ifdef MOZ_NATIVE_NSPR
@@ -157,6 +128,14 @@ debian/xulrunner.service: $(srcdir)/debian/xulrunner.service.in
 	$(PYTHON) $(topsrcdir)/config/Preprocessor.py \
         $(AUTOMATION_PPARGS) $(DEFINES) $(ACDEFINES) $^ > $@
 
+debian/prerm: $(srcdir)/debian/prerm.in
+	$(PYTHON) $(topsrcdir)/config/Preprocessor.py \
+        $(AUTOMATION_PPARGS) $(DEFINES) $(ACDEFINES) $^ > $@
+
+debian/postinst: $(srcdir)/debian/postinst.in
+	$(PYTHON) $(topsrcdir)/config/Preprocessor.py \
+        $(AUTOMATION_PPARGS) $(DEFINES) $(ACDEFINES) $^ > $@
+
 package:
 	$(MAKE) package -C $(DEPTH)
 
@@ -167,8 +146,7 @@ deb: package debian/changelog debian/xulrunner.service debian/xulrunner.links
 	cp -pRL $(DEPTH)/dist/$(MOZ_BUILD_APP)/* $(DEBDESTDIR)/$(installdir)
 	$(NSINSTALL) -D $(DEBDESTDIR)/usr/share/dbus-1/services/
 	cp debian/$(MOZ_BUILD_APP).service $(DEBDESTDIR)/usr/share/dbus-1/services/org.mozilla.$(MOZ_BUILD_APP).service
-	rm $(DEBDESTDIR)/$(installdir)/xpidl
-	dh_shlibdeps; fakeroot dh_fixperms; fakeroot dh_installdeb; fakeroot dh_gencontrol; fakeroot dh_md5sums; dh_builddeb
+	dh_link; fakeroot dh_fixperms; fakeroot dh_installdeb; fakeroot dh_shlibdeps; fakeroot dh_gencontrol; fakeroot dh_md5sums; fakeroot dh_builddeb;
 endif
 
 DEB_BUILD_ARCH = $(shell dpkg-architecture -qDEB_BUILD_ARCH)

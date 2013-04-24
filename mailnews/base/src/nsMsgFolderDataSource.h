@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsIRDFDataSource.h"
 #include "nsIRDFService.h"
@@ -65,28 +33,28 @@ public:
 
   NS_IMETHOD GetSource(nsIRDFResource* property,
                        nsIRDFNode* target,
-                       PRBool tv,
+                       bool tv,
                        nsIRDFResource** source /* out */);
 
   NS_IMETHOD GetTarget(nsIRDFResource* source,
                        nsIRDFResource* property,
-                       PRBool tv,
+                       bool tv,
                        nsIRDFNode** target);
 
   NS_IMETHOD GetSources(nsIRDFResource* property,
                         nsIRDFNode* target,
-                        PRBool tv,
+                        bool tv,
                         nsISimpleEnumerator** sources);
 
   NS_IMETHOD GetTargets(nsIRDFResource* source,
                         nsIRDFResource* property,    
-                        PRBool tv,
+                        bool tv,
                         nsISimpleEnumerator** targets);
 
   NS_IMETHOD Assert(nsIRDFResource* source,
                     nsIRDFResource* property, 
                     nsIRDFNode* target,
-                    PRBool tv);
+                    bool tv);
 
   NS_IMETHOD Unassert(nsIRDFResource* source,
                       nsIRDFResource* property,
@@ -95,10 +63,10 @@ public:
   NS_IMETHOD HasAssertion(nsIRDFResource* source,
                           nsIRDFResource* property,
                           nsIRDFNode* target,
-                          PRBool tv,
-                          PRBool* hasAssertion);
+                          bool tv,
+                          bool* hasAssertion);
 
-  NS_IMETHOD HasArcOut(nsIRDFResource *aSource, nsIRDFResource *aArc, PRBool *result);
+  NS_IMETHOD HasArcOut(nsIRDFResource *aSource, nsIRDFResource *aArc, bool *result);
 
   NS_IMETHOD ArcLabelsIn(nsIRDFNode* node,
                          nsISimpleEnumerator** labels);
@@ -114,7 +82,7 @@ public:
   NS_IMETHOD IsCommandEnabled(nsISupportsArray/*<nsIRDFResource>*/* aSources,
                               nsIRDFResource*   aCommand,
                               nsISupportsArray/*<nsIRDFResource>*/* aArguments,
-                              PRBool* aResult);
+                              bool* aResult);
 
   NS_IMETHOD DoCommand(nsISupportsArray/*<nsIRDFResource>*/* aSources,
                        nsIRDFResource*   aCommand,
@@ -125,7 +93,7 @@ protected:
 
   nsresult createFolderNode(nsIMsgFolder *folder, nsIRDFResource* property,
                             nsIRDFNode **target);
-  nsresult createFolderNameNode(nsIMsgFolder *folder, nsIRDFNode **target, PRBool sort);
+  nsresult createFolderNameNode(nsIMsgFolder *folder, nsIRDFNode **target, bool sort);
   nsresult createFolderOpenNode(nsIMsgFolder *folder,nsIRDFNode **target);
   nsresult createFolderTreeNameNode(nsIMsgFolder *folder, nsIRDFNode **target);
   nsresult createFolderTreeSimpleNameNode(nsIMsgFolder *folder, nsIRDFNode **target);
@@ -159,8 +127,8 @@ protected:
   nsresult createFolderSizeNode(nsIMsgFolder *folder, nsIRDFNode **target);
   nsresult createCharsetNode(nsIMsgFolder *folder, nsIRDFNode **target);
   nsresult createBiffStateNodeFromFolder(nsIMsgFolder *folder, nsIRDFNode **target);
-  nsresult createBiffStateNodeFromFlag(PRUint32 flag, nsIRDFNode **target);
-  nsresult createHasUnreadMessagesNode(nsIMsgFolder *folder, PRBool aIncludeSubfolders, nsIRDFNode **target);
+  nsresult createBiffStateNodeFromFlag(uint32_t flag, nsIRDFNode **target);
+  nsresult createHasUnreadMessagesNode(nsIMsgFolder *folder, bool aIncludeSubfolders, nsIRDFNode **target);
   nsresult createNewMessagesNode(nsIMsgFolder *folder, nsIRDFNode **target);
   nsresult createFolderNoSelectNode(nsIMsgFolder *folder,
                                     nsIRDFNode **target);
@@ -179,13 +147,13 @@ protected:
   nsresult getFolderArcLabelsOut(nsCOMArray<nsIRDFResource> &aArcs);
   
   nsresult DoDeleteFromFolder(nsIMsgFolder *folder,
-                nsISupportsArray *arguments, nsIMsgWindow *msgWindow, PRBool reallyDelete);
+                nsISupportsArray *arguments, nsIMsgWindow *msgWindow, bool reallyDelete);
 
   nsresult DoCopyToFolder(nsIMsgFolder *dstFolder, nsISupportsArray *arguments,
-              nsIMsgWindow *msgWindow, PRBool isMove);
+              nsIMsgWindow *msgWindow, bool isMove);
 
   nsresult DoFolderCopyToFolder(nsIMsgFolder *dstFolder, nsISupportsArray *arguments,
-              nsIMsgWindow *msgWindow, PRBool isMoveFolder);
+              nsIMsgWindow *msgWindow, bool isMoveFolder);
 
   nsresult DoNewFolder(nsIMsgFolder *folder, nsISupportsArray *arguments, 
                         nsIMsgWindow *window);
@@ -194,25 +162,25 @@ protected:
   nsresult DoFolderUnassert(nsIMsgFolder *folder, nsIRDFResource *property, nsIRDFNode *target);
 
   nsresult DoFolderHasAssertion(nsIMsgFolder *folder, nsIRDFResource *property, nsIRDFNode *target,
-                                PRBool tv, PRBool *hasAssertion);
+                                bool tv, bool *hasAssertion);
 
-  nsresult GetBiffStateString(PRUint32 biffState, nsCAutoString & biffStateStr);
+  nsresult GetBiffStateString(uint32_t biffState, nsCAutoString & biffStateStr);
 
-  nsresult CreateUnreadMessagesNameString(PRInt32 unreadMessages, nsAutoString &nameString);
+  nsresult CreateUnreadMessagesNameString(int32_t unreadMessages, nsAutoString &nameString);
   nsresult CreateArcsOutEnumerator();
 
-  virtual nsresult OnItemAddedOrRemoved(nsIMsgFolder *parentItem, nsISupports *item, PRBool added);
+  virtual nsresult OnItemAddedOrRemoved(nsIMsgFolder *parentItem, nsISupports *item, bool added);
 
-  nsresult OnUnreadMessagePropertyChanged(nsIRDFResource *folderResource, PRInt32 oldValue, PRInt32 newValue);
-  nsresult OnTotalMessagePropertyChanged(nsIRDFResource *folderResource, PRInt32 oldValue, PRInt32 newValue);
-  nsresult OnFolderSizePropertyChanged(nsIRDFResource *folderResource, PRInt32 oldValue, PRInt32 newValue);
-  nsresult OnFolderSortOrderPropertyChanged(nsIRDFResource *folderResource, PRInt32 oldValue, PRInt32 newValue);
-  nsresult NotifyFolderTreeNameChanged(nsIMsgFolder *folder, nsIRDFResource *folderResource, PRInt32 aUnreadMessages);
+  nsresult OnUnreadMessagePropertyChanged(nsIRDFResource *folderResource, int32_t oldValue, int32_t newValue);
+  nsresult OnTotalMessagePropertyChanged(nsIRDFResource *folderResource, int32_t oldValue, int32_t newValue);
+  nsresult OnFolderSizePropertyChanged(nsIRDFResource *folderResource, int32_t oldValue, int32_t newValue);
+  nsresult OnFolderSortOrderPropertyChanged(nsIRDFResource *folderResource, int32_t oldValue, int32_t newValue);
+  nsresult NotifyFolderTreeNameChanged(nsIMsgFolder *folder, nsIRDFResource *folderResource, int32_t aUnreadMessages);
   nsresult NotifyFolderTreeSimpleNameChanged(nsIMsgFolder *folder, nsIRDFResource *folderResource);
   nsresult NotifyFolderNameChanged(nsIMsgFolder *folder, nsIRDFResource *folderResource);
   nsresult NotifyAncestors(nsIMsgFolder *aFolder, nsIRDFResource *aPropertyResource, nsIRDFNode *aNode);
-  nsresult GetNumMessagesNode(PRInt32 numMessages, nsIRDFNode **node);
-  nsresult GetFolderSizeNode(PRInt32 folderSize, nsIRDFNode **node);
+  nsresult GetNumMessagesNode(int32_t numMessages, nsIRDFNode **node);
+  nsresult GetFolderSizeNode(int32_t folderSize, nsIRDFNode **node);
   nsresult CreateLiterals(nsIRDFService *rdf);
 
   virtual nsresult GetFolderDisplayName(nsIMsgFolder *folder, nsString& folderName);
@@ -310,29 +278,29 @@ public:
   NS_IMETHOD GetURI(char* *uri);
   NS_IMETHOD GetTargets(nsIRDFResource* source,
                         nsIRDFResource* property,    
-                        PRBool tv,
+                        bool tv,
                         nsISimpleEnumerator** targets);
   NS_IMETHOD GetTarget(nsIRDFResource* source,
                        nsIRDFResource* property,
-                       PRBool tv,
+                       bool tv,
                        nsIRDFNode** target);
 
   NS_IMETHOD HasAssertion(nsIRDFResource* source,
                             nsIRDFResource* property,
                             nsIRDFNode* target,
-                            PRBool tv,
-                            PRBool* hasAssertion);
+                            bool tv,
+                            bool* hasAssertion);
 protected:
   virtual nsresult GetFolderDisplayName(nsIMsgFolder *folder, nsString& folderName);
   virtual void EnsureFolders();
-  virtual PRBool WantsThisFolder(nsIMsgFolder *folder);
-          PRBool ResourceIsOurRoot(nsIRDFResource *resource);
-  virtual nsresult OnItemAddedOrRemoved(nsIMsgFolder *parentItem, nsISupports *item, PRBool added);
+  virtual bool WantsThisFolder(nsIMsgFolder *folder);
+          bool ResourceIsOurRoot(nsIRDFResource *resource);
+  virtual nsresult OnItemAddedOrRemoved(nsIMsgFolder *parentItem, nsISupports *item, bool added);
 
   nsCOMArray <nsIMsgFolder> m_folders;
   nsCOMPtr<nsIRDFResource>  m_rootResource; // the resource for our root
   nsCString m_dsName;
-  PRBool m_builtFolders;
+  bool m_builtFolders;
 };
 
 
@@ -343,9 +311,9 @@ public:
   virtual ~nsMsgUnreadFoldersDataSource() {}
   virtual nsresult NotifyPropertyChanged(nsIRDFResource *resource, 
                     nsIRDFResource *propertyResource, nsIRDFNode *newNode, 
-                    nsIRDFNode *oldNode = nsnull);
+                    nsIRDFNode *oldNode = nullptr);
 protected:
-  virtual PRBool WantsThisFolder(nsIMsgFolder *folder);
+  virtual bool WantsThisFolder(nsIMsgFolder *folder);
 };
 
 class nsMsgFavoriteFoldersDataSource : public nsMsgFlatFolderDataSource
@@ -354,7 +322,7 @@ public:
   nsMsgFavoriteFoldersDataSource() {m_dsName = "mailnewsfavefolders";}
   virtual ~nsMsgFavoriteFoldersDataSource() {}
 protected:
-  virtual PRBool WantsThisFolder(nsIMsgFolder *folder);
+  virtual bool WantsThisFolder(nsIMsgFolder *folder);
 };
 
 class nsMsgRecentFoldersDataSource : public nsMsgFlatFolderDataSource
@@ -370,6 +338,6 @@ public:
   virtual void Cleanup();
 protected:
   virtual void EnsureFolders();
-  PRUint32 m_cutOffDate;
-  PRUint32 m_maxNumFolders;
+  uint32_t m_cutOffDate;
+  uint32_t m_maxNumFolders;
 };

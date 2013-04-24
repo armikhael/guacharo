@@ -1,40 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /* vim: set ts=4 sw=4 et cindent: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* 
     The TestProtocols tests the basic protocols architecture and can 
@@ -81,6 +49,7 @@
 #include "nsIWritablePropertyBag2.h"
 #include "nsITimedChannel.h"
 #include "nsChannelProperties.h"
+#include "mozilla/Attributes.h"
 
 #include "nsISimpleEnumerator.h"
 #include "nsStringAPI.h"
@@ -94,7 +63,7 @@ namespace TestProtocols {
 //
 // set NSPR_LOG_MODULES=Test:5
 //
-static PRLogModuleInfo *gTestLog = nsnull;
+static PRLogModuleInfo *gTestLog = nullptr;
 #endif
 #define LOG(args) PR_LOG(gTestLog, PR_LOG_DEBUG, args)
 
@@ -102,10 +71,10 @@ static NS_DEFINE_CID(kIOServiceCID,              NS_IOSERVICE_CID);
 
 //static PRTime gElapsedTime; // enable when we time it...
 static int gKeepRunning = 0;
-static PRBool gVerbose = PR_FALSE;
-static PRBool gAskUserForInput = PR_FALSE;
-static PRBool gResume = PR_FALSE;
-static PRUint64 gStartAt = 0;
+static bool gVerbose = false;
+static bool gAskUserForInput = false;
+static bool gResume = false;
+static uint64_t gStartAt = 0;
 
 static const char* gEntityID;
 
@@ -227,7 +196,7 @@ public:
   NS_DECL_ISUPPORTS
 
   const char* Name() { return mURLString.get(); }
-  PRInt64   mBytesRead;
+  int64_t   mBytesRead;
   PRTime    mTotalTime;
   PRTime    mConnectTime;
   nsCString mURLString;
@@ -274,7 +243,7 @@ NS_IMPL_ISUPPORTS1(TestChannelEventSink, nsIChannelEventSink)
 NS_IMETHODIMP
 TestChannelEventSink::AsyncOnChannelRedirect(nsIChannel *channel,
                                              nsIChannel *newChannel,
-                                             PRUint32 flags,
+                                             uint32_t flags,
                                              nsIAsyncVerifyRedirectCallback *callback)
 {
     LOG(("\n+++ TestChannelEventSink::OnChannelRedirect (with flags %x) +++\n",
@@ -311,12 +280,12 @@ NS_IMETHODIMP
 TestAuthPrompt::Prompt(const PRUnichar *dialogTitle,
                        const PRUnichar *text,
                        const PRUnichar *passwordRealm,
-                       PRUint32 savePassword,
+                       uint32_t savePassword,
                        const PRUnichar *defaultText,
                        PRUnichar **result,
-                       PRBool *_retval)
+                       bool *_retval)
 {
-    *_retval = PR_FALSE;
+    *_retval = false;
     return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -324,10 +293,10 @@ NS_IMETHODIMP
 TestAuthPrompt::PromptUsernameAndPassword(const PRUnichar *dialogTitle,
                                           const PRUnichar *dialogText,
                                           const PRUnichar *passwordRealm,
-                                          PRUint32 savePassword,
+                                          uint32_t savePassword,
                                           PRUnichar **user,
                                           PRUnichar **pwd,
-                                          PRBool *_retval)
+                                          bool *_retval)
 {
     NS_ConvertUTF16toUTF8 text(passwordRealm);
     printf("* --------------------------------------------------------------------------- *\n");
@@ -358,7 +327,7 @@ TestAuthPrompt::PromptUsernameAndPassword(const PRUnichar *dialogTitle,
     // zap buf 
     memset(buf, 0, sizeof(buf));
 
-    *_retval = PR_TRUE;
+    *_retval = true;
     return NS_OK;
 }
 
@@ -366,11 +335,11 @@ NS_IMETHODIMP
 TestAuthPrompt::PromptPassword(const PRUnichar *dialogTitle,
                                const PRUnichar *text,
                                const PRUnichar *passwordRealm,
-                               PRUint32 savePassword,
+                               uint32_t savePassword,
                                PRUnichar **pwd,
-                               PRBool *_retval)
+                               bool *_retval)
 {
-    *_retval = PR_FALSE;
+    *_retval = false;
     return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -431,7 +400,7 @@ InputTestConsumer::OnStartRequest(nsIRequest *request, nsISupports* context)
       channel->GetContentCharset(value);
       LOG(("\tContent-Charset: %s\n", value.get()));
 
-      PRInt32 length = -1;
+      int32_t length = -1;
       if (NS_SUCCEEDED(channel->GetContentLength(&length)))
         LOG(("\tContent-Length: %d\n", length));
       else
@@ -458,7 +427,7 @@ InputTestConsumer::OnStartRequest(nsIRequest *request, nsISupports* context)
 
   nsCOMPtr<nsIPropertyBag2> propbag = do_QueryInterface(request);
   if (propbag) {
-      PRInt64 len;
+      int64_t len;
       nsresult rv = propbag->GetPropertyAsInt64(NS_CHANNEL_PROP_CONTENT_LENGTH,
                                                 &len);
       if (NS_SUCCEEDED(rv))
@@ -467,7 +436,7 @@ InputTestConsumer::OnStartRequest(nsIRequest *request, nsISupports* context)
 
   nsCOMPtr<nsIHttpChannelInternal> httpChannelInt(do_QueryInterface(request));
   if (httpChannelInt) {
-      PRUint32 majorVer, minorVer;
+      uint32_t majorVer, minorVer;
       nsresult rv = httpChannelInt->GetResponseVersion(&majorVer, &minorVer);
       if (NS_SUCCEEDED(rv))
           LOG(("HTTP Response version: %u.%u\n", majorVer, minorVer));
@@ -508,16 +477,16 @@ NS_IMETHODIMP
 InputTestConsumer::OnDataAvailable(nsIRequest *request, 
                                    nsISupports* context,
                                    nsIInputStream *aIStream, 
-                                   PRUint32 aSourceOffset,
-                                   PRUint32 aLength)
+                                   uint32_t aSourceOffset,
+                                   uint32_t aLength)
 {
   char buf[1025];
-  PRUint32 amt, size;
+  uint32_t amt, size;
   nsresult rv;
   URLLoadInfo* info = (URLLoadInfo*)context;
 
   while (aLength) {
-    size = NS_MIN<PRUint32>(aLength, sizeof(buf));
+    size = NS_MIN<uint32_t>(aLength, sizeof(buf));
 
     rv = aIStream->Read(buf, size, &amt);
     if (NS_FAILED(rv)) {
@@ -549,8 +518,8 @@ InputTestConsumer::OnStopRequest(nsIRequest *request, nsISupports* context,
   if (info) {
     double connectTime;
     double readTime;
-    PRUint32 httpStatus;
-    PRBool bHTTPURL = PR_FALSE;
+    uint32_t httpStatus;
+    bool bHTTPURL = false;
 
     info->mTotalTime = PR_Now() - info->mTotalTime;
 
@@ -560,7 +529,7 @@ InputTestConsumer::OnStopRequest(nsIRequest *request, nsISupports* context,
     nsCOMPtr<nsIHttpChannel> pHTTPCon(do_QueryInterface(request));
     if (pHTTPCon) {
         pHTTPCon->GetResponseStatus(&httpStatus);
-        bHTTPURL = PR_TRUE;
+        bHTTPURL = true;
     }
 
     LOG(("\nFinished loading: %s  Status Code: %x\n", info->Name(), aStatus));
@@ -573,9 +542,9 @@ InputTestConsumer::OnStopRequest(nsIRequest *request, nsISupports* context,
     LOG(("\tTime to connect: %.3f seconds\n", connectTime));
     LOG(("\tTime to read: %.3f seconds.\n", readTime));
     LOG(("\tRead: %lld bytes.\n", info->mBytesRead));
-    if (info->mBytesRead == PRInt64(0)) {
+    if (info->mBytesRead == int64_t(0)) {
     } else if (readTime > 0.0) {
-      LOG(("\tThroughput: %.0f bps.\n", (PRFloat64)(info->mBytesRead*PRInt64(8))/readTime));
+      LOG(("\tThroughput: %.0f bps.\n", (double)(info->mBytesRead*int64_t(8))/readTime));
     } else {
       LOG(("\tThroughput: REAL FAST!!\n"));
     }
@@ -596,7 +565,7 @@ InputTestConsumer::OnStopRequest(nsIRequest *request, nsISupports* context,
 // NotificationCallbacks
 //-----------------------------------------------------------------------------
 
-class NotificationCallbacks : public nsIInterfaceRequestor {
+class NotificationCallbacks MOZ_FINAL : public nsIInterfaceRequestor {
 public:
     NS_DECL_ISUPPORTS
 
@@ -610,7 +579,7 @@ public:
           TestChannelEventSink *sink;
 
           sink = new TestChannelEventSink();
-          if (sink == nsnull)
+          if (sink == nullptr)
             return NS_ERROR_OUT_OF_MEMORY;
           NS_ADDREF(sink);
           rv = sink->QueryInterface(iid, result);
@@ -621,7 +590,7 @@ public:
           TestAuthPrompt *prompt;
 
           prompt = new TestAuthPrompt();
-          if (prompt == nsnull)
+          if (prompt == nullptr)
             return NS_ERROR_OUT_OF_MEMORY;
           NS_ADDREF(prompt);
           rv = prompt->QueryInterface(iid, result);
@@ -645,7 +614,7 @@ nsresult StartLoadingURL(const char* aUrlString)
     if (pService) {
         nsCOMPtr<nsIURI> pURL;
 
-        rv = pService->NewURI(nsDependentCString(aUrlString), nsnull, nsnull, getter_AddRefs(pURL));
+        rv = pService->NewURI(nsDependentCString(aUrlString), nullptr, nullptr, getter_AddRefs(pURL));
         if (NS_FAILED(rv)) {
             LOG(("ERROR: NewURI failed for %s [rv=%x]\n", aUrlString));
             return rv;
@@ -661,7 +630,7 @@ nsresult StartLoadingURL(const char* aUrlString)
 
         // Async reading thru the calls of the event sink interface
         rv = NS_NewChannel(getter_AddRefs(pChannel), pURL, pService,
-                           nsnull,     // loadGroup
+                           nullptr,     // loadGroup
                            callbacks); // notificationCallbacks
         NS_RELEASE(callbacks);
         if (NS_FAILED(rv)) {
@@ -671,7 +640,7 @@ nsresult StartLoadingURL(const char* aUrlString)
 
         nsCOMPtr<nsITimedChannel> timed(do_QueryInterface(pChannel));
         if (timed)
-            timed->SetTimingEnabled(PR_TRUE);
+            timed->SetTimingEnabled(true);
 
         nsCOMPtr<nsIWritablePropertyBag2> props = do_QueryInterface(pChannel);
         if (props) {
@@ -692,7 +661,7 @@ nsresult StartLoadingURL(const char* aUrlString)
             // Setting a sample header.
             rv = pHTTPCon->SetRequestHeader(NS_LITERAL_CSTRING("sample-header"),
                                             NS_LITERAL_CSTRING("Sample-Value"),
-                                            PR_FALSE);
+                                            false);
             if (NS_FAILED(rv)) return rv;
         }            
         InputTestConsumer* listener;
@@ -740,13 +709,13 @@ nsresult StartLoadingURL(const char* aUrlString)
     return rv;
 }
 
-static PRInt32
+static int32_t
 FindChar(nsCString& buffer, char c)
 {
     const char *b;
-    PRInt32 len = NS_CStringGetData(buffer, &b);
+    int32_t len = NS_CStringGetData(buffer, &b);
 
-    for (PRInt32 offset = 0; offset < len; ++offset) {
+    for (int32_t offset = 0; offset < len; ++offset) {
         if (b[offset] == c)
             return offset;
     }
@@ -759,7 +728,7 @@ static void
 StripChar(nsCString& buffer, char c)
 {
     const char *b;
-    PRUint32 len = NS_CStringGetData(buffer, &b) - 1;
+    uint32_t len = NS_CStringGetData(buffer, &b) - 1;
 
     for (; len > 0; --len) {
         if (b[len] == c) {
@@ -772,7 +741,7 @@ StripChar(nsCString& buffer, char c)
 nsresult LoadURLsFromFile(char *aFileName)
 {
     nsresult rv = NS_OK;
-    PRInt32 len, offset;
+    int32_t len, offset;
     PRFileDesc* fd;
     char buffer[1024];
     nsCString fileBuffer;
@@ -797,6 +766,12 @@ nsresult LoadURLsFromFile(char *aFileName)
                 if (urlString.Length()) {
                     LOG(("\t%s\n", urlString.get()));
                     rv = StartLoadingURL(urlString.get());
+                    if (NS_FAILED(rv)) {
+                        // No need to log an error -- StartLoadingURL already
+                        // did that for us, probably.
+                        PR_Close(fd);
+                        return rv;
+                    }
                 }
             }
         }
@@ -820,7 +795,7 @@ nsresult LoadURLFromConsole()
     printf("Enter URL (\"q\" to start): ");
     scanf("%s", buffer);
     if (buffer[0]=='q') 
-        gAskUserForInput = PR_FALSE;
+        gAskUserForInput = false;
     else
         StartLoadingURL(buffer);
     return NS_OK;
@@ -853,7 +828,7 @@ main(int argc, char* argv[])
       up the event queues. Copied from TestSocketIO.cpp
     */
 
-    rv = NS_InitXPCOM2(nsnull, nsnull, nsnull);
+    rv = NS_InitXPCOM2(nullptr, nullptr, nullptr);
     if (NS_FAILED(rv)) return rv;
 
     {
@@ -862,7 +837,7 @@ main(int argc, char* argv[])
         for (i=1; i<argc; i++) {
             // Turn on verbose printing...
             if (PL_strcasecmp(argv[i], "-verbose") == 0) {
-                gVerbose = PR_TRUE;
+                gVerbose = true;
                 continue;
             }
 
@@ -873,12 +848,12 @@ main(int argc, char* argv[])
             }
 
             if (PL_strcasecmp(argv[i], "-console") == 0) {
-                gAskUserForInput = PR_TRUE;
+                gAskUserForInput = true;
                 continue;
             }
 
             if (PL_strcasecmp(argv[i], "-resume") == 0) {
-                gResume = PR_TRUE;
+                gResume = true;
                 PR_sscanf(argv[++i], "%llu", &gStartAt);
                 continue;
             }
@@ -905,6 +880,6 @@ main(int argc, char* argv[])
         PumpEvents();
     } // this scopes the nsCOMPtrs
     // no nsCOMPtrs are allowed to be alive when you call NS_ShutdownXPCOM
-    NS_ShutdownXPCOM(nsnull);
+    NS_ShutdownXPCOM(nullptr);
     return rv;
 }

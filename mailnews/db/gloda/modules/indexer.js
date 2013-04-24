@@ -1,41 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Global Database.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Andrew Sutherland <asutherland@asutherland.org>
- *   Kent James <kent@caspia.com>
- *   Siddharth Agarwal <sid.bugzilla@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * This file currently contains a fairly general implementation of asynchronous
@@ -53,6 +18,7 @@ const Cr = Components.results;
 const Cu = Components.utils;
 
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
+Cu.import("resource://gre/modules/Services.jsm");
 Cu.import("resource:///modules/iteratorUtils.jsm");
 
 Cu.import("resource:///modules/gloda/log4moz.js");
@@ -95,6 +61,10 @@ function IndexingJob(aJobType, aID, aItems) {
   this.callbackThis = null;
 }
 IndexingJob.prototype = {
+  /**
+   * Invoke the callback associated with this job, passing through all arguments
+   *  received by this function to the callback function.
+   */
   safelyInvokeCallback: function() {
     if (!this.callback)
       return;
@@ -102,8 +72,7 @@ IndexingJob.prototype = {
       this.callback.apply(this.callbackThis, arguments);
     }
     catch(ex) {
-      GlodaIndexer._log.warning("job callback invocation problem: " +
-                                ex.fileName + ":" + ex.lineNumber + ": " + ex);
+      GlodaIndexer._log.warn("job callback invocation problem:", ex);
     }
   },
   toString: function IndexingJob_toString() {
@@ -490,6 +459,7 @@ var GlodaIndexer = {
       for each (let [iWorker, workerInfo] in Iterator(aIndexer.workers)) {
         let workerCode = workerInfo[0];
         let workerDef = workerInfo[1];
+        workerDef.name = workerCode;
         workerDef.indexer = aIndexer;
         this._indexerWorkerDefs[workerCode] = workerDef;
         if (!("recover" in workerDef))
@@ -548,9 +518,10 @@ var GlodaIndexer = {
       }
 
       // if we have not done an initial sweep, schedule scheduling one.
-      if (!this._initialSweepPerformed)
+      if (!this._initialSweepPerformed) {
         this._longTimer.initWithCallback(this._scheduleInitialSweep,
           this._INITIAL_SWEEP_DELAY, Ci.nsITimer.TYPE_ONE_SHOT);
+      }
     }
     else if (this._enabled && !aEnable) {
       for each (let [iIndexer, indexer] in Iterator(this._indexers)) {
@@ -1045,6 +1016,10 @@ var GlodaIndexer = {
       //     make ourselves less responsive by drawing out the period of time we
       //     are dominating the main thread.
       this._perfIndexStopwatch.start();
+      // For telemetry purposes, we want to know how many messages we've been
+      //  processing during that batch, and how long it took, pauses included.
+      let t0 = Date.now();
+      this._indexedMessageCount = 0;
       batchCount = 0;
       while (batchCount < this._indexTokens) {
 
@@ -1080,12 +1055,21 @@ var GlodaIndexer = {
           }
         }
         catch (ex) {
+          this._log.debug("Exception in batch processing:", ex);
           let workerDef = this._curIndexingJob._workerDef;
           if (workerDef.recover) {
-            let recoverToDepth =
+            let recoverToDepth;
+            try {
+              recoverToDepth =
               workerDef.recover.call(workerDef.indexer,
                                      this._curIndexingJob,
-                                     this._callbackHandle.contextStack);
+                                       this._callbackHandle.contextStack,
+                                       ex);
+            }
+            catch (ex2) {
+              this._log.error("Worker '" + workerDef.name +
+                              "' recovery function itself failed:", ex2);
+            }
             if (this._unitTestHookRecover)
               this._unitTestHookRecover(recoverToDepth, ex,
                                         this._curIndexingJob,
@@ -1099,7 +1083,13 @@ var GlodaIndexer = {
           // (we either did not have a recover handler or it couldn't recover)
           // call the cleanup helper if there is one
           if (workerDef.cleanup) {
+            try {
             workerDef.cleanup.call(workerDef.indexer, this._curIndexingJob);
+            }
+            catch (ex2) {
+              this._log.error("Worker '" + workerDef.name +
+                              "' cleanup function itself failed:", ex2);
+            }
             if (this._unitTestHookCleanup)
               this._unitTestHookCleanup(true, ex, this._curIndexingJob,
                                         this._callbackHandle);
@@ -1117,10 +1107,7 @@ var GlodaIndexer = {
           //  indicate that the failure is acceptable.
           this._callbackHandle.cleanup();
           this._log.warn("Problem during " + this._curIndexingJob +
-            ", bailing.  Problem was at " + ex.fileName + ":" +
-            ex.lineNumber + ": " + ex +
-            (ex.stack ? (". Stack:\n  " + ex.stack.replace("\n", "\n  ", "g"))
-                      : ""));
+            ", bailing:", ex);
           this._curIndexingJob = null;
           // the data must now be invalid
           this._workBatchData = undefined;
@@ -1173,6 +1160,22 @@ var GlodaIndexer = {
             break;
         }
       }
+
+      // All pauses have been taken, how effective were we? Report!
+      // XXX: there's possibly a lot of fluctuation since we go through here
+      // every 5 messages or even less
+      if (this._indexedMessageCount > 0) {
+        let delta = (Date.now() - t0)/1000; // in seconds
+        let v = Math.round(this._indexedMessageCount/delta);
+        try {
+          let h = Services.telemetry
+            .getHistogramById("THUNDERBIRD_INDEXING_RATE_MSG_PER_S");
+          h.add(v);
+        } catch (e) {
+          this._log.warn("Couldn't report telemetry", e, v);
+        }
+      }
+
       if (batchCount > 0) {
         let totalTime = this._perfIndexStopwatch.realTimeSeconds * 1000;
         let timePerToken = totalTime / batchCount;
@@ -1416,4 +1419,6 @@ var GlodaIndexer = {
 
 
 };
-GlodaIndexer._init();
+// we used to initialize here; now we have public.js do it for us after the
+//  indexers register themselves so we know about all our built-in indexers
+//  at init-time.

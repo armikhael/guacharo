@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"
 #include "nsMsgMailNewsUrl.h"
@@ -56,16 +24,17 @@
 #include "prmem.h"
 #include <time.h>
 #include "nsMsgUtils.h"
+#include "mozilla/Services.h"
 
 nsMsgMailNewsUrl::nsMsgMailNewsUrl()
 {
   // nsIURI specific state
-  m_errorMessage = nsnull;
-  m_runningUrl = PR_FALSE;
-  m_updatingFolder = PR_FALSE;
-  m_addContentToCache = PR_FALSE;
-  m_msgIsInLocalCache = PR_FALSE;
-  m_suppressErrorMsgs = PR_FALSE;
+  m_errorMessage = nullptr;
+  m_runningUrl = false;
+  m_updatingFolder = false;
+  m_addContentToCache = false;
+  m_msgIsInLocalCache = false;
+  m_suppressErrorMsgs = false;
   mMaxProgress = -1;
   m_baseURL = do_CreateInstance(NS_STANDARDURL_CONTRACTID);
 }
@@ -98,7 +67,7 @@ NS_INTERFACE_MAP_END_THREADSAFE
 // Begin nsIMsgMailNewsUrl specific support
 ////////////////////////////////////////////////////////////////////////////////////
 
-nsresult nsMsgMailNewsUrl::GetUrlState(PRBool * aRunningUrl)
+nsresult nsMsgMailNewsUrl::GetUrlState(bool * aRunningUrl)
 {
   if (aRunningUrl)
     *aRunningUrl = m_runningUrl;
@@ -106,7 +75,7 @@ nsresult nsMsgMailNewsUrl::GetUrlState(PRBool * aRunningUrl)
   return NS_OK;
 }
 
-nsresult nsMsgMailNewsUrl::SetUrlState(PRBool aRunningUrl, nsresult aExitCode)
+nsresult nsMsgMailNewsUrl::SetUrlState(bool aRunningUrl, nsresult aExitCode)
 {
   // if we already knew this running state, return, unless the url was aborted
   if (m_runningUrl == aRunningUrl && aExitCode != NS_MSG_ERROR_URL_ABORTED)
@@ -150,7 +119,7 @@ nsresult nsMsgMailNewsUrl::UnRegisterListener(nsIUrlListener *aUrlListener)
 {
   NS_ENSURE_ARG_POINTER(aUrlListener);
 
-  PRInt32 index = mUrlListeners.IndexOf(aUrlListener);
+  int32_t index = mUrlListeners.IndexOf(aUrlListener);
   // Due to the way mailnews is structured, some listeners attempt to remove
   // themselves twice. This may in fact be an error in the coding, however
   // if they didn't do it as they do currently, then they could fail to remove
@@ -192,7 +161,7 @@ NS_IMETHODIMP nsMsgMailNewsUrl::GetServer(nsIMsgIncomingServer ** aIncomingServe
         if (NS_FAILED(rv)) return rv;
         
         nsCOMPtr<nsIMsgIncomingServer> server;
-        rv = accountManager->FindServerByURI(url, PR_FALSE,
+        rv = accountManager->FindServerByURI(url, false,
                                         aIncomingServer);
         if (!*aIncomingServer && scheme.EqualsLiteral("imap"))
         {
@@ -201,7 +170,7 @@ NS_IMETHODIMP nsMsgMailNewsUrl::GetServer(nsIMsgIncomingServer ** aIncomingServe
           // for imap urls, or we could make caching of servers work and
           // just set the server in the imap code for this case.
           url->SetUserPass(EmptyCString());
-          rv = accountManager->FindServerByURI(url, PR_FALSE,
+          rv = accountManager->FindServerByURI(url, false,
                                           aIncomingServer);
         }
     }
@@ -212,7 +181,7 @@ NS_IMETHODIMP nsMsgMailNewsUrl::GetServer(nsIMsgIncomingServer ** aIncomingServe
 NS_IMETHODIMP nsMsgMailNewsUrl::GetMsgWindow(nsIMsgWindow **aMsgWindow)
 {
   NS_ENSURE_ARG_POINTER(aMsgWindow);
-  *aMsgWindow = nsnull;
+  *aMsgWindow = nullptr;
   
   nsCOMPtr<nsIMsgWindow> msgWindow(do_QueryReferent(m_msgWindowWeak));
   msgWindow.swap(*aMsgWindow);
@@ -232,7 +201,7 @@ NS_IMETHODIMP nsMsgMailNewsUrl::GetStatusFeedback(nsIMsgStatusFeedback **aMsgFee
 {
   // note: it is okay to return a null status feedback and not return an error
   // it's possible the url really doesn't have status feedback
-  *aMsgFeedback = nsnull;
+  *aMsgFeedback = nullptr;
   if (!m_statusFeedbackWeak)
   {
     nsCOMPtr<nsIMsgWindow> msgWindow(do_QueryReferent(m_msgWindowWeak));
@@ -254,13 +223,13 @@ NS_IMETHODIMP nsMsgMailNewsUrl::SetStatusFeedback(nsIMsgStatusFeedback *aMsgFeed
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgMailNewsUrl::GetMaxProgress(PRInt64 *aMaxProgress)
+NS_IMETHODIMP nsMsgMailNewsUrl::GetMaxProgress(int64_t *aMaxProgress)
 {
   *aMaxProgress = mMaxProgress;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgMailNewsUrl::SetMaxProgress(PRInt64 aMaxProgress)
+NS_IMETHODIMP nsMsgMailNewsUrl::SetMaxProgress(int64_t aMaxProgress)
 {
   mMaxProgress = aMaxProgress;
   return NS_OK;
@@ -268,7 +237,7 @@ NS_IMETHODIMP nsMsgMailNewsUrl::SetMaxProgress(PRInt64 aMaxProgress)
 
 NS_IMETHODIMP nsMsgMailNewsUrl::GetLoadGroup(nsILoadGroup **aLoadGroup)
 {
-  *aLoadGroup = nsnull;
+  *aLoadGroup = nullptr;
   // note: it is okay to return a null load group and not return an error
   // it's possible the url really doesn't have load group
   nsCOMPtr<nsILoadGroup> loadGroup (do_QueryReferent(m_loadGroupWeak));
@@ -289,63 +258,63 @@ NS_IMETHODIMP nsMsgMailNewsUrl::GetLoadGroup(nsILoadGroup **aLoadGroup)
   return *aLoadGroup ? NS_OK : NS_ERROR_NULL_POINTER;
 }
 
-NS_IMETHODIMP nsMsgMailNewsUrl::GetUpdatingFolder(PRBool *aResult)
+NS_IMETHODIMP nsMsgMailNewsUrl::GetUpdatingFolder(bool *aResult)
 {
   NS_ENSURE_ARG(aResult);
   *aResult = m_updatingFolder;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgMailNewsUrl::SetUpdatingFolder(PRBool updatingFolder)
+NS_IMETHODIMP nsMsgMailNewsUrl::SetUpdatingFolder(bool updatingFolder)
 {
   m_updatingFolder = updatingFolder;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgMailNewsUrl::GetAddToMemoryCache(PRBool *aAddToCache)
+NS_IMETHODIMP nsMsgMailNewsUrl::GetAddToMemoryCache(bool *aAddToCache)
 {
   NS_ENSURE_ARG(aAddToCache); 
   *aAddToCache = m_addContentToCache;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgMailNewsUrl::SetAddToMemoryCache(PRBool aAddToCache)
+NS_IMETHODIMP nsMsgMailNewsUrl::SetAddToMemoryCache(bool aAddToCache)
 {
   m_addContentToCache = aAddToCache;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgMailNewsUrl::GetMsgIsInLocalCache(PRBool *aMsgIsInLocalCache)
+NS_IMETHODIMP nsMsgMailNewsUrl::GetMsgIsInLocalCache(bool *aMsgIsInLocalCache)
 {
   NS_ENSURE_ARG(aMsgIsInLocalCache); 
   *aMsgIsInLocalCache = m_msgIsInLocalCache;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgMailNewsUrl::SetMsgIsInLocalCache(PRBool aMsgIsInLocalCache)
+NS_IMETHODIMP nsMsgMailNewsUrl::SetMsgIsInLocalCache(bool aMsgIsInLocalCache)
 {
   m_msgIsInLocalCache = aMsgIsInLocalCache;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgMailNewsUrl::GetSuppressErrorMsgs(PRBool *aSuppressErrorMsgs)
+NS_IMETHODIMP nsMsgMailNewsUrl::GetSuppressErrorMsgs(bool *aSuppressErrorMsgs)
 {
   NS_ENSURE_ARG(aSuppressErrorMsgs); 
   *aSuppressErrorMsgs = m_suppressErrorMsgs;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgMailNewsUrl::SetSuppressErrorMsgs(PRBool aSuppressErrorMsgs)
+NS_IMETHODIMP nsMsgMailNewsUrl::SetSuppressErrorMsgs(bool aSuppressErrorMsgs)
 {
   m_suppressErrorMsgs = aSuppressErrorMsgs;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgMailNewsUrl::IsUrlType(PRUint32 type, PRBool *isType)
+NS_IMETHODIMP nsMsgMailNewsUrl::IsUrlType(uint32_t type, bool *isType)
 {
   //base class doesn't know about any specific types
   NS_ENSURE_ARG(isType);
-  *isType = PR_FALSE;
+  *isType = false;
   return NS_OK;
 
 }
@@ -472,12 +441,12 @@ NS_IMETHODIMP nsMsgMailNewsUrl::SetHost(const nsACString &aHost)
   return m_baseURL->SetHost(aHost);
 }
 
-NS_IMETHODIMP nsMsgMailNewsUrl::GetPort(PRInt32 *aPort)
+NS_IMETHODIMP nsMsgMailNewsUrl::GetPort(int32_t *aPort)
 {
   return m_baseURL->GetPort(aPort);
 }
 
-NS_IMETHODIMP nsMsgMailNewsUrl::SetPort(PRInt32 aPort)
+NS_IMETHODIMP nsMsgMailNewsUrl::SetPort(int32_t aPort)
 {
   return m_baseURL->SetPort(aPort);
 }
@@ -513,7 +482,7 @@ NS_IMETHODIMP nsMsgMailNewsUrl::GetBaseURI(nsIURI **aBaseURI)
   return m_baseURL->QueryInterface(NS_GET_IID(nsIURI), (void**) aBaseURI);
 }
 
-NS_IMETHODIMP nsMsgMailNewsUrl::Equals(nsIURI *other, PRBool *_retval)
+NS_IMETHODIMP nsMsgMailNewsUrl::Equals(nsIURI *other, bool *_retval)
 {
   // The passed-in URI might be a mail news url. Pass our inner URL to its
   // Equals method. The other mail news url will then pass its inner URL to
@@ -524,7 +493,7 @@ NS_IMETHODIMP nsMsgMailNewsUrl::Equals(nsIURI *other, PRBool *_retval)
   return m_baseURL->Equals(other, _retval);
 }
 
-NS_IMETHODIMP nsMsgMailNewsUrl::EqualsExceptRef(nsIURI *other, PRBool *result)
+NS_IMETHODIMP nsMsgMailNewsUrl::EqualsExceptRef(nsIURI *other, bool *result)
 {
   // The passed-in URI might be a mail news url. Pass our inner URL to its
   // Equals method. The other mail news url will then pass its inner URL to
@@ -556,12 +525,12 @@ nsMsgMailNewsUrl::GetSpecIgnoringRef(nsACString &result)
 }
 
 NS_IMETHODIMP
-nsMsgMailNewsUrl::GetHasRef(PRBool *result)
+nsMsgMailNewsUrl::GetHasRef(bool *result)
 {
   return m_baseURL->GetHasRef(result);
 }
 
-NS_IMETHODIMP nsMsgMailNewsUrl::SchemeIs(const char *aScheme, PRBool *_retval)
+NS_IMETHODIMP nsMsgMailNewsUrl::SchemeIs(const char *aScheme, bool *_retval)
 {
   return m_baseURL->SchemeIs(aScheme, _retval);
 }
@@ -570,11 +539,12 @@ NS_IMETHODIMP nsMsgMailNewsUrl::Clone(nsIURI **_retval)
 {
   nsresult rv;
   nsCAutoString urlSpec;
-  nsCOMPtr<nsIIOService> ioService = do_GetService(NS_IOSERVICE_CONTRACTID, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
+  nsCOMPtr<nsIIOService> ioService =
+    mozilla::services::GetIOService();
+  NS_ENSURE_TRUE(ioService, NS_ERROR_UNEXPECTED);
   rv = GetSpec(urlSpec);
   NS_ENSURE_SUCCESS(rv, rv);
-  rv = ioService->NewURI(urlSpec, nsnull, nsnull, _retval);
+  rv = ioService->NewURI(urlSpec, nullptr, nullptr, _retval);
   NS_ENSURE_SUCCESS(rv, rv);
 
   // add the msg window to the cloned url
@@ -600,8 +570,9 @@ NS_IMETHODIMP nsMsgMailNewsUrl::Resolve(const nsACString &relativePath, nsACStri
   else
   {
     // if relativePath is a complete url with it's own scheme then allow it...
-    nsCOMPtr<nsIIOService> ioService = do_GetService(NS_IOSERVICE_CONTRACTID, &rv);
-    NS_ENSURE_SUCCESS(rv, rv);
+    nsCOMPtr<nsIIOService> ioService =
+      mozilla::services::GetIOService();
+    NS_ENSURE_TRUE(ioService, NS_ERROR_UNEXPECTED);
     nsCAutoString scheme;
 
     rv = ioService->ExtractScheme(relativePath, scheme);
@@ -656,7 +627,7 @@ NS_IMETHODIMP nsMsgMailNewsUrl::GetFileExtension(nsACString &aFileExtension)
 {
   if (!mAttachmentFileName.IsEmpty())
   {
-    PRInt32 pos = mAttachmentFileName.RFindChar(PRUnichar('.'));
+    int32_t pos = mAttachmentFileName.RFindChar(PRUnichar('.'));
     if (pos > 0)
       aFileExtension = Substring(mAttachmentFileName, pos + 1 /* skip the '.' */);
     return NS_OK;
@@ -673,16 +644,6 @@ NS_IMETHODIMP nsMsgMailNewsUrl::SetFileName(const nsACString &aFileName)
 {
   mAttachmentFileName = aFileName;
   return NS_OK;
-}
-
-NS_IMETHODIMP nsMsgMailNewsUrl::GetParam(nsACString &aParam)
-{
-  return m_baseURL->GetParam(aParam);
-}
-
-NS_IMETHODIMP nsMsgMailNewsUrl::SetParam(const nsACString &aParam)
-{
-  return m_baseURL->SetParam(aParam);
 }
 
 NS_IMETHODIMP nsMsgMailNewsUrl::GetQuery(nsACString &aQuery)
@@ -743,7 +704,7 @@ NS_IMETHODIMP nsMsgMailNewsUrl:: GetMemCacheEntry(nsICacheEntryDescriptor **memC
   }
   else
   {
-    *memCacheEntry = nsnull;
+    *memCacheEntry = nullptr;
     return NS_ERROR_NULL_POINTER;
   }
 
@@ -811,15 +772,15 @@ public:
   NS_DECL_NSIREQUESTOBSERVER
   NS_DECL_NSISTREAMLISTENER
 
-  nsMsgSaveAsListener(nsIFile *aFile, PRBool addDummyEnvelope);
+  nsMsgSaveAsListener(nsIFile *aFile, bool addDummyEnvelope);
   virtual ~nsMsgSaveAsListener();
-  nsresult SetupMsgWriteStream(nsIFile *aFile, PRBool addDummyEnvelope);
+  nsresult SetupMsgWriteStream(nsIFile *aFile, bool addDummyEnvelope);
 protected:
   nsCOMPtr<nsIOutputStream> m_outputStream;
   nsCOMPtr<nsIFile> m_outputFile;
-  PRBool m_addDummyEnvelope;
-  PRBool m_writtenData;
-  PRUint32 m_leftOver;
+  bool m_addDummyEnvelope;
+  bool m_writtenData;
+  uint32_t m_leftOver;
   char m_dataBuffer[SAVE_BUF_SIZE+1]; // temporary buffer for this save operation
 
 };
@@ -828,10 +789,10 @@ NS_IMPL_ISUPPORTS2(nsMsgSaveAsListener,
                    nsIStreamListener,
                    nsIRequestObserver)
 
-nsMsgSaveAsListener::nsMsgSaveAsListener(nsIFile *aFile, PRBool addDummyEnvelope)
+nsMsgSaveAsListener::nsMsgSaveAsListener(nsIFile *aFile, bool addDummyEnvelope)
 {
   m_outputFile = aFile;
-  m_writtenData = PR_FALSE;
+  m_writtenData = false;
   m_addDummyEnvelope = addDummyEnvelope;
   m_leftOver = 0;
 }
@@ -859,31 +820,31 @@ nsMsgSaveAsListener::OnStopRequest(nsIRequest *request, nsISupports * aCtxt, nsr
 NS_IMETHODIMP nsMsgSaveAsListener::OnDataAvailable(nsIRequest* request, 
                                   nsISupports* aSupport,
                                   nsIInputStream* inStream, 
-                                  PRUint32 srcOffset,
-                                  PRUint32 count)
+                                  uint32_t srcOffset,
+                                  uint32_t count)
 {
   nsresult rv;
-  PRUint32 available;
+  uint64_t available;
   rv = inStream->Available(&available);
   if (!m_writtenData)
   {
-    m_writtenData = PR_TRUE;
+    m_writtenData = true;
     rv = SetupMsgWriteStream(m_outputFile, m_addDummyEnvelope);
     NS_ENSURE_SUCCESS(rv, rv);
   }
 
-  PRBool useCanonicalEnding = PR_FALSE;
+  bool useCanonicalEnding = false;
   nsCOMPtr <nsIMsgMessageUrl> msgUrl = do_QueryInterface(aSupport);
   if (msgUrl)
     msgUrl->GetCanonicalLineEnding(&useCanonicalEnding);
   
   const char *lineEnding = (useCanonicalEnding) ? CRLF : MSG_LINEBREAK;
-  PRUint32 lineEndingLength = (useCanonicalEnding) ? 2 : MSG_LINEBREAK_LEN;
+  uint32_t lineEndingLength = (useCanonicalEnding) ? 2 : MSG_LINEBREAK_LEN;
   
-  PRUint32 readCount, maxReadCount = SAVE_BUF_SIZE - m_leftOver;
-  PRUint32 writeCount;
+  uint32_t readCount, maxReadCount = SAVE_BUF_SIZE - m_leftOver;
+  uint32_t writeCount;
   char *start, *end, lastCharInPrevBuf = '\0';
-  PRUint32 linebreak_len = 0;
+  uint32_t linebreak_len = 0;
 
   while (count > 0)
   {
@@ -927,7 +888,10 @@ NS_IMETHODIMP nsMsgSaveAsListener::OnDataAvailable(nsIRequest* request,
               PL_strncmp(start, "From - ", 7))
           {
               rv = m_outputStream->Write(start, end-start, &writeCount);
-              rv |= m_outputStream->Write(lineEnding, lineEndingLength, &writeCount);
+              nsresult tmp = m_outputStream->Write(lineEnding, lineEndingLength, &writeCount);
+              if (NS_FAILED(tmp)) {
+                rv = tmp;
+              }
           }
           start = end+linebreak_len;
           if (start >= m_dataBuffer + m_leftOver)
@@ -956,7 +920,7 @@ NS_IMETHODIMP nsMsgSaveAsListener::OnDataAvailable(nsIRequest* request,
   //  rv = m_outputStream->WriteFrom(inStream, NS_MIN(available, count), &bytesWritten);
 }
 
-nsresult nsMsgSaveAsListener::SetupMsgWriteStream(nsIFile *aFile, PRBool addDummyEnvelope)
+nsresult nsMsgSaveAsListener::SetupMsgWriteStream(nsIFile *aFile, bool addDummyEnvelope)
 {
   // If the file already exists, delete it, but do this before
   // getting the outputstream.
@@ -967,17 +931,16 @@ nsresult nsMsgSaveAsListener::SetupMsgWriteStream(nsIFile *aFile, PRBool addDumm
   // have to close the stream before deleting the file, else data
   // would still be written happily into a now non-existing file.
   // (Windows doesn't care, btw, just unixoids do...)
-  aFile->Remove(PR_FALSE);
+  aFile->Remove(false);
 
-  nsCOMPtr <nsILocalFile> localFile = do_QueryInterface(aFile);
   nsresult rv = MsgNewBufferedFileOutputStream(getter_AddRefs(m_outputStream),
-                                               localFile, -1, 00600);
+                                               aFile, -1, 00600);
   NS_ENSURE_SUCCESS(rv, rv);
 
   if (m_outputStream && addDummyEnvelope)
   {
     nsCAutoString result;
-    PRUint32 writeCount;
+    uint32_t writeCount;
 
     time_t now = time((time_t*) 0);
     char *ct = ctime(&now);
@@ -999,7 +962,7 @@ nsresult nsMsgSaveAsListener::SetupMsgWriteStream(nsIFile *aFile, PRBool addDumm
 }
 
 
-NS_IMETHODIMP nsMsgMailNewsUrl::GetSaveAsListener(PRBool addDummyEnvelope, 
+NS_IMETHODIMP nsMsgMailNewsUrl::GetSaveAsListener(bool addDummyEnvelope, 
                                                   nsIFile *aFile, nsIStreamListener **aSaveListener)
 {
   NS_ENSURE_ARG_POINTER(aSaveListener);
@@ -1031,7 +994,7 @@ NS_IMETHODIMP nsMsgMailNewsUrl::SetMsgHeaderSink(nsIMsgHeaderSink * aMsgHdrSink)
     return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgMailNewsUrl::GetIsMessageUri(PRBool *aIsMessageUri)
+NS_IMETHODIMP nsMsgMailNewsUrl::GetIsMessageUri(bool *aIsMessageUri)
 {
   NS_ENSURE_ARG(aIsMessageUri);
   nsCAutoString scheme;

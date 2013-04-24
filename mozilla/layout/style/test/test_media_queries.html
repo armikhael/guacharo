@@ -79,7 +79,7 @@ function run() {
     var sheet = parse_test_style_element.sheet; // XXX yikes, not live!
     if (sheet.cssRules.length == 1 &&
         sheet.cssRules[0].type == CSSRule.MEDIA_RULE)
-      return sheet.cssRules[0].media.mediaText != "screen";
+      return sheet.cssRules[0].media.mediaText != "screen, not all";
     ok(false, "unexpected result testing whether query " + q +
               " is parseable");
     return true; // doesn't matter, we already failed
@@ -464,8 +464,12 @@ function run() {
     expression_should_be_parseable(feature + ": 3.0dpi");
     expression_should_be_parseable(feature + ": 3.4dpi");
     expression_should_be_parseable(feature + "\t: 120dpcm");
+    expression_should_be_parseable(feature + ": 1dppx");
+    expression_should_be_parseable(feature + ": 1.5dppx");
+    expression_should_be_parseable(feature + ": 2.0dppx");
     expression_should_not_be_parseable(feature + ": 0dpi");
     expression_should_not_be_parseable(feature + ": -3dpi");
+    expression_should_not_be_parseable(feature + ": 0dppx");
   }
 
   // Find the resolution using max-resolution
@@ -484,6 +488,7 @@ function run() {
   if (query_applies("(min-resolution: " + resolution + "dpi)")) {
     // It's exact!
     should_apply("(resolution: " + resolution + "dpi)");
+    should_apply("(resolution: " + Math.floor(resolution/96) + "dppx)");
     should_not_apply("(resolution: " + (resolution + 1) + "dpi)");
     should_not_apply("(resolution: " + (resolution - 1) + "dpi)");
     dpi_high = resolution + 1;
@@ -550,6 +555,7 @@ function run() {
   expression_should_be_parseable("-moz-images-in-buttons");
   expression_should_be_parseable("-moz-windows-default-theme");
   expression_should_be_parseable("-moz-mac-graphite-theme");
+  expression_should_be_parseable("-moz-mac-lion-theme");
   expression_should_be_parseable("-moz-windows-compositor");
   expression_should_be_parseable("-moz-windows-classic");
   expression_should_be_parseable("-moz-touch-enabled");
@@ -564,6 +570,7 @@ function run() {
   expression_should_be_parseable("-moz-images-in-buttons: 0");
   expression_should_be_parseable("-moz-windows-default-theme: 0");
   expression_should_be_parseable("-moz-mac-graphite-theme: 0");
+  expression_should_be_parseable("-moz-mac-lion-theme: 0");
   expression_should_be_parseable("-moz-windows-compositor: 0");
   expression_should_be_parseable("-moz-windows-classic: 0");
   expression_should_be_parseable("-moz-touch-enabled: 0");
@@ -578,6 +585,7 @@ function run() {
   expression_should_be_parseable("-moz-images-in-buttons: 1");
   expression_should_be_parseable("-moz-windows-default-theme: 1");
   expression_should_be_parseable("-moz-mac-graphite-theme: 1");
+  expression_should_be_parseable("-moz-mac-lion-theme: 1");
   expression_should_be_parseable("-moz-windows-compositor: 1");
   expression_should_be_parseable("-moz-windows-classic: 1");
   expression_should_be_parseable("-moz-touch-enabled: 1");
@@ -592,6 +600,7 @@ function run() {
   expression_should_not_be_parseable("-moz-images-in-buttons: -1");
   expression_should_not_be_parseable("-moz-windows-default-theme: -1");
   expression_should_not_be_parseable("-moz-mac-graphite-theme: -1");
+  expression_should_not_be_parseable("-moz-mac-lion-theme: -1");
   expression_should_not_be_parseable("-moz-windows-compositor: -1");
   expression_should_not_be_parseable("-moz-windows-classic: -1");
   expression_should_not_be_parseable("-moz-touch-enabled: -1");
@@ -606,6 +615,7 @@ function run() {
   expression_should_not_be_parseable("-moz-images-in-buttons: true");
   expression_should_not_be_parseable("-moz-windows-default-theme: true");
   expression_should_not_be_parseable("-moz-mac-graphite-theme: true");
+  expression_should_not_be_parseable("-moz-mac-lion-theme: true");
   expression_should_not_be_parseable("-moz-windows-compositor: true");
   expression_should_not_be_parseable("-moz-windows-classic: true");
   expression_should_not_be_parseable("-moz-touch-enabled: true");

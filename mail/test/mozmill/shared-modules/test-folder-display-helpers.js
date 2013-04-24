@@ -1,38 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Mail Client.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Andrew Sutherland <asutherland@asutherland.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var Ci = Components.interfaces;
 var Cc = Components.classes;
@@ -50,6 +18,8 @@ var frame = {};
 Cu.import('resource://mozmill/modules/frame.js', frame);
 var os = {};
 Cu.import('resource://mozmill/stdlib/os.js', os);
+var utils = {};
+Cu.import('resource://mozmill/modules/utils.js', utils);
 
 Cu.import("resource:///modules/gloda/log4moz.js");
 
@@ -197,11 +167,27 @@ function setupModule() {
   //  can mutate it.  (The jsbridge is a global listener and so is guaranteed
   //  to be invoked after our specific named listener.)
   frame.events.addListener("fail", function(obj) {
+      // normalize nsIExceptions so they look like JS exceptions...
+      rawex = obj.exception;
+      if (obj.exception != null &&
+          (obj.exception instanceof Ci.nsIException)) {
+        obj.exception = {
+          message: "nsIException: " + rawex.message + " (" + rawex.result + ")",
+          fileName: rawex.filename,
+          lineNumber: rawex.lineNumber,
+          name: rawex.name,
+          result: rawex.result,
+          stack: "",
+        };
+      }
+
       // generate the failure notification now so it shows up in the event log
       //  bucket for presentation purposes.
       testHelperModule._xpcshellLogger.info(
         testHelperModule._testLoggerActiveContext,
-        new testHelperModule._Failure(obj.exception.message, obj.exception));
+        new testHelperModule._Failure(
+          obj.exception ? obj.exception.message : "No Exception!",
+          rawex));
 
       try {
         obj.failureContext = {
@@ -240,6 +226,9 @@ function setupModule() {
   add_sets_to_folders = testHelperModule.add_sets_to_folders;
   make_folder_with_sets = testHelperModule.make_folder_with_sets;
   make_virtual_folder = testHelperModule.make_virtual_folder;
+  SyntheticPartLeaf = testHelperModule.SyntheticPartLeaf;
+  SyntheticPartMultiMixed = testHelperModule.SyntheticPartMultiMixed;
+  SyntheticPartMultiRelated = testHelperModule.SyntheticPartMultiRelated;
 
   delete_message_set = testHelperModule.async_delete_messages;
 
@@ -398,9 +387,6 @@ function teardownImporter(customTeardown) {
  * All of our operations are synchronous and just spin until they are happy.
  */
 
-const NORMAL_TIMEOUT = 6000;
-const FAST_INTERVAL = 100;
-
 /**
  * Create a folder and rebuild the folder tree view.
  */
@@ -482,9 +468,8 @@ function enter_folder(aFolder) {
   function isDisplayedFolder() {
     return mc.folderDisplay.displayedFolder == aFolder;
   }
-  if (!controller.waitForEval('subject()', NORMAL_TIMEOUT, FAST_INTERVAL,
-                              isDisplayedFolder))
-    mark_failure(["Timeout trying to enter folder", aFolder.URI]);
+  utils.waitFor(isDisplayedFolder,
+                "Timeout trying to enter folder" + aFolder.URI);
 
   wait_for_all_messages_to_load();
 
@@ -525,6 +510,19 @@ function open_folder_in_new_tab(aFolder) {
                "tab info", _jsonize_tabmail_tab(mc.tabmail.currentTabInfo)]);
   wait_for_all_messages_to_load();
   return mc.tabmail.currentTabInfo;
+}
+
+/**
+ * Open a new mail:3pane window displaying a folder.
+ *
+ * @param aFolder the folder to be displayed in the new window
+ * @return the augmented controller for the new window
+ */
+function open_folder_in_new_window(aFolder) {
+  windowHelper.plan_for_new_window("mail:3pane");
+  mc.window.MsgOpenNewWindowForFolder(aFolder.URI);
+  let mail3pane = windowHelper.wait_for_new_window("mail:3pane");
+  return mail3pane;
 }
 
 /**
@@ -871,8 +869,13 @@ function select_none(aController) {
   function noMessageChecker() {
     return aController.messageDisplay.displayedMessage == null;
   }
-  controller.sleep('subject()',
-                   NORMAL_TIMEOUT, FAST_INTERVAL, noMessageChecker);
+  try {
+    utils.waitFor(noMessageChecker);
+  } catch (e if e instanceof utils.TimeoutError) {
+    mark_failure(["Timeout waiting for displayedMessage to become null.",
+                  "Current value: ",
+                  aController.messageDisplay.displayedMessage]);
+  }
   wait_for_blank_content_pane(aController);
 }
 
@@ -1025,6 +1028,8 @@ function select_shift_click_row(aViewIndex, aController, aDoNotRequireLoad) {
  * Helper function to click on a row with a given button.
  */
 function _row_click_helper(aController, aTree, aViewIndex, aButton, aExtra) {
+  // Force-focus the tree
+  aTree.focus();
   let treeBox = aTree.treeBoxObject;
   // very important, gotta be able to see the row
   treeBox.ensureRowIsVisible(aViewIndex);
@@ -1356,7 +1361,8 @@ function delete_via_popup() {
 
 function wait_for_popup_to_open(popupElem) {
   mark_action("fdh", "wait_for_popup_to_open", [popupElem]);
-  mc.waitForEval("subject.state == 'open'", 1000, 50, popupElem);
+  utils.waitFor(function () popupElem.state == "open",
+                "Timeout waiting for popup to open", 1000, 50);
 }
 
 /**
@@ -1379,9 +1385,8 @@ function close_popup(aController, eid) {
                 ["popup suspiciously already closing..."]);
   else // actually push escape because it's not closing/closed
     aController.keypress(eid, "VK_ESCAPE", {});
-   if (!controller.waitForEval("subject.state == 'closed'", 1000, 50,
-                               elem))
-     throw new Error("Popup did not close!");
+  utils.waitFor(function () elem.state == "closed", "Popup did not close!",
+                1000, 50);
 }
 
 /**
@@ -1436,9 +1441,8 @@ function archive_selected_messages(aController) {
   let messagesDeletedFromView = function() {
     return aController.dbView.rowCount == expectedCount;
   };
-  controller.waitForEval('subject()',
-                         NORMAL_TIMEOUT,
-                         FAST_INTERVAL, messagesDeletedFromView);
+  utils.waitFor(messagesDeletedFromView,
+                "Timeout waiting for messages to be archived");
   wait_for_message_display_completion(
     aController, expectedCount && aController.messageDisplay.visible);
   // The above may return immediately, meaning the event queue might not get a
@@ -1480,9 +1484,8 @@ function press_enter(aController) {
 function wait_for_all_messages_to_load(aController) {
   if (aController == null)
     aController = mc;
-  if (!controller.waitForEval('subject.allMessagesLoaded', NORMAL_TIMEOUT,
-                              FAST_INTERVAL, aController.folderDisplay))
-    mark_failure(["Messages never finished loading.  Timed Out."]);
+  utils.waitFor(function () aController.folderDisplay.allMessagesLoaded,
+                "Messages never finished loading.  Timed Out.");
   // the above may return immediately, meaning the event queue might not get a
   //  chance.  give it a chance now.
   aController.sleep(0);
@@ -1589,9 +1592,8 @@ function wait_for_message_display_completion(aController, aLoadDemanded) {
     // not a mailnews URL, just check the busy flags...
     return !docShell.busyFlags;
   };
-  if (!controller.waitForEval('subject()', NORMAL_TIMEOUT, FAST_INTERVAL,
-                              isLoadedChecker))
-    mark_failure(["Timed out waiting for message display completion."]);
+  utils.waitFor(isLoadedChecker,
+                "Timed out waiting for message display completion.");
   // the above may return immediately, meaning the event queue might not get a
   //  chance.  give it a chance now.
   aController.sleep(0);
@@ -1614,10 +1616,13 @@ function wait_for_blank_content_pane(aController) {
   let isBlankChecker = function() {
     return aController.window.content.location.href == "about:blank";
   };
-  if (!controller.waitForEval('subject()', NORMAL_TIMEOUT, FAST_INTERVAL,
-                              isBlankChecker))
+  try {
+    utils.waitFor(isBlankChecker);
+  } catch (e if e instanceof utils.TimeoutError) {
     mark_failure(["Timeout waiting for blank content pane.  Current location:",
                   aController.window.content.location.href]);
+  }
+
   // the above may return immediately, meaning the event queue might not get a
   //  chance.  give it a chance now.
   aController.sleep(0);
@@ -1651,9 +1656,12 @@ var FolderListener = {
   waitForEvents: function FolderListener_waitForEvents() {
     if (this.sawEvents)
       return;
-    if (!controller.waitForEval('subject.sawEvents', NORMAL_TIMEOUT,
-                                FAST_INTERVAL, this))
+    let self = this;
+    try {
+      utils.waitFor(function () self.sawEvents);
+    } catch (e if e instanceof utils.TimeoutError) {
       mark_failure(["Timeout waiting for events:", this.watchingFor]);
+    }
   },
 
   OnItemEvent: function FolderNotificationHelper_OnItemEvent(
@@ -1731,8 +1739,8 @@ function assert_message_pane_visible(aThreadPaneIllegal) {
                     "it should!");
 
   // - message pane should be visible
-  if (mc.e("messagepanebox").getAttribute("collapsed"))
-    throw new Error("messagepanebox should not be collapsed!");
+  if (mc.e("messagepaneboxwrapper").getAttribute("collapsed"))
+    throw new Error("messagepaneboxwrapper should not be collapsed!");
 
   // if the thread pane is illegal, then the splitter should not be visible
   if (aThreadPaneIllegal) {
@@ -1767,8 +1775,8 @@ function assert_message_pane_hidden(aMessagePaneIllegal) {
     throw new Error("The message display thinks it is visible, but it should " +
                     "not!");
 
-  if (mc.e("messagepanebox").getAttribute("collapsed") != "true")
-    throw new Error("messagepanebox should be collapsed!");
+  if (mc.e("messagepaneboxwrapper").getAttribute("collapsed") != "true")
+    throw new Error("messagepaneboxwrapper should be collapsed!");
 
   // force the view menu to update.
   mc.window.view_init();
@@ -2720,6 +2728,37 @@ function throw_and_dump_view_state(aMessage, aController) {
   throw new Error(aMessage);
 }
 
+/**
+ * Copy constants from mailWindowOverlay.js
+ */
+
+const kClassicMailLayout = 0;
+const kWideMailLayout = 1;
+const kVerticalMailLayout = 2;
+
+/**
+ * Assert that the current mail pane layout is shown
+ */
+
+function assert_pane_layout(aLayout) {
+  let prefBranch = Cc["@mozilla.org/preferences-service;1"]
+                      .getService(Ci.nsIPrefService).getBranch(null);
+  let actualPaneLayout = prefBranch.getIntPref("mail.pane_config.dynamic");
+  if (actualPaneLayout != aLayout)
+    throw new Error("The mail pane layout should be " + aLayout +
+                    ", but is actually " + actualPaneLayout);
+}
+
+/**
+ * Change that the current mail pane layout
+ */
+
+function set_pane_layout(aLayout) {
+  let prefBranch = Cc["@mozilla.org/preferences-service;1"]
+                      .getService(Ci.nsIPrefService).getBranch(null);
+  prefBranch.setIntPref("mail.pane_config.dynamic", aLayout);
+}
+
 /** exported from messageInjection */
 var make_new_sets_in_folders;
 var make_new_sets_in_folder;
@@ -2727,6 +2766,9 @@ var add_sets_to_folders;
 var delete_message_set;
 var make_folder_with_sets;
 var make_virtual_folder;
+var SyntheticPartLeaf;
+var SyntheticPartMultiMixed;
+var SyntheticPartMultiRelated;
 
 /**
  * Load a file in its own 'module'.

@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *   Prasad Sunkari <prasad@medhas.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"
 #include "nsIMsgHdr.h"
@@ -72,6 +38,7 @@
 #include "nsICryptoHash.h"
 #include "nsNativeCharsetUtils.h"
 #include "nsDirectoryServiceUtils.h"
+#include "nsDirectoryServiceDefs.h"
 #include "nsIRssIncomingServer.h"
 #include "nsIMsgFolder.h"
 #include "nsIMsgMessageService.h"
@@ -92,6 +59,18 @@
 #include "nsIMsgSearchTerm.h"
 #include "nsTextFormatter.h"
 #include "nsIAtomService.h"
+#include "nsIStreamListener.h"
+#include "nsReadLine.h"
+#include "nsICharsetDetectionObserver.h"
+#include "nsICharsetDetector.h"
+#include "nsILineInputStream.h"
+#include "nsIPlatformCharset.h"
+#include "nsIParserUtils.h"
+#include "nsICharsetConverterManager.h"
+#include "nsIDocumentEncoder.h"
+#include "mozilla/Services.h"
+#include "mozilla/Util.h"
+using namespace mozilla;
 
 static NS_DEFINE_CID(kImapUrlCID, NS_IMAPURL_CID);
 static NS_DEFINE_CID(kCMailboxUrl, NS_MAILBOXURL_CID);
@@ -108,7 +87,7 @@ nsresult GetMessageServiceContractIDForURI(const char *uri, nsCString &contractI
   nsresult rv = NS_OK;
   //Find protocol
   nsCAutoString uriStr(uri);
-  PRInt32 pos = uriStr.FindChar(':');
+  int32_t pos = uriStr.FindChar(':');
   if (pos == -1)
     return NS_ERROR_FAILURE;
 
@@ -152,7 +131,7 @@ nsresult CreateStartupUrl(const char *uri, nsIURI** aUrl)
 {
   nsresult rv = NS_ERROR_NULL_POINTER;
   if (!uri || !*uri || !aUrl) return rv;
-  *aUrl = nsnull;
+  *aUrl = nullptr;
 
   // XXX fix this, so that base doesn't depend on imap, local or news.
   // we can't do NS_NewURI(uri, aUrl), because these are imap-message://, mailbox-message://, news-message:// uris.
@@ -181,8 +160,8 @@ nsresult CreateStartupUrl(const char *uri, nsIURI** aUrl)
       rv = nntpUrl->QueryInterface(NS_GET_IID(nsIURI),
       (void**) aUrl);
   }
-  if (*aUrl)
-    (*aUrl)->SetSpec(nsDependentCString(uri));
+  if (*aUrl) // SetSpec can fail, for mailbox urls, but we still have a url.
+    (void) (*aUrl)->SetSpec(nsDependentCString(uri));
   return rv;
 }
 
@@ -260,7 +239,7 @@ nsresult NS_MsgGetPriorityValueString(
       outValueString.AssignLiteral("0");
       break;
     default:
-      NS_ASSERTION(PR_FALSE, "invalid priority value");
+      NS_ASSERTION(false, "invalid priority value");
   }
 
   return NS_OK;
@@ -293,7 +272,7 @@ nsresult NS_MsgGetUntranslatedPriorityName(
       outName.AssignLiteral("None");
       break;
     default:
-      NS_ASSERTION(PR_FALSE, "invalid priority value");
+      NS_ASSERTION(false, "invalid priority value");
   }
 
   return NS_OK;
@@ -302,10 +281,10 @@ nsresult NS_MsgGetUntranslatedPriorityName(
 
 /* this used to be XP_StringHash2 from xp_hash.c */
 /* phong's linear congruential hash  */
-static PRUint32 StringHash(const char *ubuf, PRInt32 len = -1)
+static uint32_t StringHash(const char *ubuf, int32_t len = -1)
 {
   unsigned char * buf = (unsigned char*) ubuf;
-  PRUint32 h=1;
+  uint32_t h=1;
   unsigned char *end = buf + (len == -1 ? strlen(ubuf) : len);
   while(buf < end) {
     h = 0x63c63cd9*h + 0x9c39c33d + (int32)*buf;
@@ -314,7 +293,7 @@ static PRUint32 StringHash(const char *ubuf, PRInt32 len = -1)
   return h;
 }
 
-inline PRUint32 StringHash(const nsAutoString& str)
+inline uint32_t StringHash(const nsAutoString& str)
 {
     return StringHash(reinterpret_cast<const char*>(str.get()),
                       str.Length() * 2);
@@ -323,7 +302,7 @@ inline PRUint32 StringHash(const nsAutoString& str)
 #ifndef MOZILLA_INTERNAL_API
 static int GetFindInSetFilter(const char* aChars)
 {
-  PRUint8 filter = 0;
+  uint8_t filter = 0;
   while (*aChars)
     filter |= *aChars++;
   return ~filter;
@@ -331,17 +310,17 @@ static int GetFindInSetFilter(const char* aChars)
 #endif
 
 /* Utility functions used in a few places in mailnews */
-PRInt32
+int32_t
 MsgFindCharInSet(const nsCString &aString,
-                 const char* aChars, PRUint32 aOffset)
+                 const char* aChars, uint32_t aOffset)
 {
 #ifdef MOZILLA_INTERNAL_API
   return aString.FindCharInSet(aChars, aOffset);
 #else
   const char *str;
-  PRUint32 len = aString.BeginReading(&str);
+  uint32_t len = aString.BeginReading(&str);
   int filter = GetFindInSetFilter(aChars);
-  for (PRUint32 index = aOffset; index < len; index++) {
+  for (uint32_t index = aOffset; index < len; index++) {
     if (!(str[index] & filter) && strchr(aChars, str[index]))
       return index;
   }
@@ -349,17 +328,17 @@ MsgFindCharInSet(const nsCString &aString,
 #endif
 }
 
-PRInt32
+int32_t
 MsgFindCharInSet(const nsString &aString,
-                 const char* aChars, PRUint32 aOffset)
+                 const char* aChars, uint32_t aOffset)
 {
 #ifdef MOZILLA_INTERNAL_API
   return aString.FindCharInSet(aChars, aOffset);
 #else
   const PRUnichar *str;
-  PRUint32 len = aString.BeginReading(&str);
+  uint32_t len = aString.BeginReading(&str);
   int filter = GetFindInSetFilter(aChars);
-  for (PRUint32 index = aOffset; index < len; index++) {
+  for (uint32_t index = aOffset; index < len; index++) {
     if (!(str[index] & filter) && strchr(aChars, str[index]))
       return index;
   }
@@ -367,7 +346,7 @@ MsgFindCharInSet(const nsString &aString,
 #endif
 }
 
-static PRBool ConvertibleToNative(const nsAutoString& str)
+static bool ConvertibleToNative(const nsAutoString& str)
 {
     nsCAutoString native;
     nsAutoString roundTripped;
@@ -382,11 +361,11 @@ static PRBool ConvertibleToNative(const nsAutoString& str)
 }
 
 #if defined(XP_UNIX) || defined(XP_BEOS)
-  const static PRUint32 MAX_LEN = 55;
+  const static uint32_t MAX_LEN = 55;
 #elif defined(XP_WIN32)
-  const static PRUint32 MAX_LEN = 55;
+  const static uint32_t MAX_LEN = 55;
 #elif defined(XP_OS2)
-  const static PRUint32 MAX_LEN = 55;
+  const static uint32_t MAX_LEN = 55;
 #else
   #error need_to_define_your_max_filename_length
 #endif
@@ -398,7 +377,7 @@ nsresult NS_MsgHashIfNecessary(nsCAutoString &name)
   // Given a filename, make it safe for filesystem
   // certain filenames require hashing because they
   // are too long or contain illegal characters
-  PRInt32 illegalCharacterIndex = MsgFindCharInSet(str,
+  int32_t illegalCharacterIndex = MsgFindCharInSet(str,
                                                    FILE_PATH_SEPARATOR
                                                    FILE_ILLEGAL_CHARACTERS
                                                    ILLEGAL_FOLDER_CHARS, 0);
@@ -406,7 +385,7 @@ nsresult NS_MsgHashIfNecessary(nsCAutoString &name)
   // Need to check the first ('.') and last ('.', '~' and ' ') char
   if (illegalCharacterIndex == -1)
   {
-    PRInt32 lastIndex = str.Length() - 1;
+    int32_t lastIndex = str.Length() - 1;
     if (NS_LITERAL_CSTRING(ILLEGAL_FOLDER_CHARS_AS_FIRST_LETTER).FindChar(str[0]) != -1)
       illegalCharacterIndex = 0;
     else if (NS_LITERAL_CSTRING(ILLEGAL_FOLDER_CHARS_AS_LAST_LETTER).FindChar(str[lastIndex]) != -1)
@@ -451,7 +430,7 @@ nsresult NS_MsgHashIfNecessary(nsCAutoString &name)
 // because MAX_LEN is defined rather conservatively in the first place.
 nsresult NS_MsgHashIfNecessary(nsAutoString &name)
 {
-  PRInt32 illegalCharacterIndex = MsgFindCharInSet(name,
+  int32_t illegalCharacterIndex = MsgFindCharInSet(name,
                                                    FILE_PATH_SEPARATOR
                                                    FILE_ILLEGAL_CHARACTERS
                                                    ILLEGAL_FOLDER_CHARS, 0);
@@ -459,7 +438,7 @@ nsresult NS_MsgHashIfNecessary(nsAutoString &name)
   // Need to check the first ('.') and last ('.', '~' and ' ') char
   if (illegalCharacterIndex == -1)
   {
-    PRInt32 lastIndex = name.Length() - 1;
+    int32_t lastIndex = name.Length() - 1;
     if (NS_LITERAL_STRING(ILLEGAL_FOLDER_CHARS_AS_FIRST_LETTER).FindChar(name[0]) != -1)
       illegalCharacterIndex = 0;
     else if (NS_LITERAL_STRING(ILLEGAL_FOLDER_CHARS_AS_LAST_LETTER).FindChar(name[lastIndex]) != -1)
@@ -469,7 +448,7 @@ nsresult NS_MsgHashIfNecessary(nsAutoString &name)
   }
 
   char hashedname[9];
-  PRInt32 keptLength = -1;
+  int32_t keptLength = -1;
   if (illegalCharacterIndex != -1)
     keptLength = illegalCharacterIndex;
   else if (!ConvertibleToNative(name))
@@ -490,7 +469,7 @@ nsresult NS_MsgHashIfNecessary(nsAutoString &name)
   return NS_OK;
 }
 
-nsresult FormatFileSize(PRUint64 size, PRBool useKB, nsAString &formattedSize)
+nsresult FormatFileSize(uint64_t size, bool useKB, nsAString &formattedSize)
 {
   NS_NAMED_LITERAL_STRING(byteAbbr, "byteAbbreviation2");
   NS_NAMED_LITERAL_STRING(kbAbbr,   "kiloByteAbbreviation2");
@@ -504,8 +483,8 @@ nsresult FormatFileSize(PRUint64 size, PRBool useKB, nsAString &formattedSize)
   nsresult rv;
 
   nsCOMPtr<nsIStringBundleService> bundleSvc =
-    do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
+    mozilla::services::GetStringBundleService();
+  NS_ENSURE_TRUE(bundleSvc, NS_ERROR_UNEXPECTED);
 
   nsCOMPtr<nsIStringBundle> bundle;
   rv = bundleSvc->CreateBundle("chrome://messenger/locale/messenger.properties",
@@ -513,19 +492,19 @@ nsresult FormatFileSize(PRUint64 size, PRBool useKB, nsAString &formattedSize)
   NS_ENSURE_SUCCESS(rv, rv);
 
   float unitSize = size;
-  PRUint32 unitIndex = 0;
+  uint32_t unitIndex = 0;
 
   if (useKB) {
     // Start by formatting in kilobytes
     unitSize /= 1024;
-    if (unitSize < 0.1)
+    if (unitSize < 0.1 && unitSize != 0)
       unitSize = 0.1;
     unitIndex++;
   }
 
   // Convert to next unit if it needs 4 digits (after rounding), but only if
   // we know the name of the next unit
-  while ((unitSize >= 999.5) && (unitIndex < NS_ARRAY_LENGTH(sizeAbbrNames)))
+  while ((unitSize >= 999.5) && (unitIndex < ArrayLength(sizeAbbrNames) - 1))
   {
       unitSize /= 1024;
       unitIndex++;
@@ -539,10 +518,9 @@ nsresult FormatFileSize(PRUint64 size, PRBool useKB, nsAString &formattedSize)
 
   // Get rid of insignificant bits by truncating to 1 or 0 decimal points
   // 0.1 -> 0.1; 1.2 -> 1.2; 12.3 -> 12.3; 123.4 -> 123; 234.5 -> 235
-  nsTextFormatter::ssprintf(formattedSize,
-                            sizeAbbr.get(),
-                            (unitIndex != 0) && (unitSize < 99.95) ? 1 : 0,
-                            unitSize);
+  nsTextFormatter::ssprintf(
+    formattedSize, sizeAbbr.get(),
+    (unitIndex != 0) && (unitSize < 99.95 && unitSize != 0) ? 1 : 0, unitSize);
   return NS_OK;
 }
 
@@ -550,7 +528,7 @@ nsresult FormatFileSize(PRUint64 size, PRBool useKB, nsAString &formattedSize)
 nsresult NS_MsgCreatePathStringFromFolderURI(const char *aFolderURI,
                                              nsCString& aPathCString,
                                              const nsCString &aScheme,
-                                             PRBool aIsNewsFolder)
+                                             bool aIsNewsFolder)
 {
   // A file name has to be in native charset. Here we convert
   // to UTF-16 and check for 'unsafe' characters before converting
@@ -560,17 +538,17 @@ nsresult NS_MsgCreatePathStringFromFolderURI(const char *aFolderURI,
 
   nsAutoString pathPiece, path;
 
-  PRInt32 startSlashPos = oldPath.FindChar('/');
-  PRInt32 endSlashPos = (startSlashPos >= 0)
+  int32_t startSlashPos = oldPath.FindChar('/');
+  int32_t endSlashPos = (startSlashPos >= 0)
     ? oldPath.FindChar('/', startSlashPos + 1) - 1 : oldPath.Length() - 1;
   if (endSlashPos < 0)
     endSlashPos = oldPath.Length();
 #ifdef XP_MACOSX
-  PRBool isMailboxUri = aScheme.EqualsLiteral("none") ||
+  bool isMailboxUri = aScheme.EqualsLiteral("none") ||
                         aScheme.EqualsLiteral("pop3");
 #endif
   // trick to make sure we only add the path to the first n-1 folders
-  PRBool haveFirst=PR_FALSE;
+  bool haveFirst=false;
   while (startSlashPos != -1) {
     pathPiece.Assign(Substring(oldPath, startSlashPos + 1, endSlashPos - startSlashPos));
     // skip leading '/' (and other // style things)
@@ -597,7 +575,7 @@ nsresult NS_MsgCreatePathStringFromFolderURI(const char *aFolderURI,
 #endif
       NS_MsgHashIfNecessary(pathPiece);
       path += pathPiece;
-      haveFirst=PR_TRUE;
+      haveFirst=true;
     }
     // look for the next slash
     startSlashPos = endSlashPos + 1;
@@ -617,19 +595,19 @@ nsresult NS_MsgCreatePathStringFromFolderURI(const char *aFolderURI,
 #endif
 }
 
-PRBool NS_MsgStripRE(const char **stringP, PRUint32 *lengthP, char **modifiedSubject)
+bool NS_MsgStripRE(const char **stringP, uint32_t *lengthP, char **modifiedSubject)
 {
   const char *s, *s_end;
   const char *last;
-  PRUint32 L;
-  PRBool result = PR_FALSE;
+  uint32_t L;
+  bool result = false;
   NS_ASSERTION(stringP, "bad null param");
-  if (!stringP) return PR_FALSE;
+  if (!stringP) return false;
 
   // get localizedRe pref
   nsresult rv;
   nsString utf16LocalizedRe;
-  NS_GetLocalizedUnicharPreferenceWithDefault(nsnull,
+  NS_GetLocalizedUnicharPreferenceWithDefault(nullptr,
                                               "mailnews.localizedRe",
                                               EmptyString(),
                                               utf16LocalizedRe);
@@ -651,7 +629,7 @@ PRBool NS_MsgStripRE(const char **stringP, PRUint32 *lengthP, char **modifiedSub
     mimeConverter = do_GetService(NS_MIME_CONVERTER_CONTRACTID, &rv);
     if (NS_SUCCEEDED(rv))
       rv = mimeConverter->DecodeMimeHeaderToCharPtr(
-        *stringP, nsnull, PR_FALSE, PR_TRUE, getter_Copies(decodedString));
+        *stringP, nullptr, false, true, getter_Copies(decodedString));
   }
 
   s = !decodedString.IsEmpty() ? decodedString.get() : *stringP;
@@ -669,7 +647,7 @@ PRBool NS_MsgStripRE(const char **stringP, PRUint32 *lengthP, char **modifiedSub
   while (*tokPtr)
   {
     //tokenize the comma separated list
-    PRSize tokenLength = 0;
+    size_t tokenLength = 0;
     while (*tokPtr && *tokPtr != ',') {
       tokenLength++;
       tokPtr++;
@@ -680,7 +658,7 @@ PRBool NS_MsgStripRE(const char **stringP, PRUint32 *lengthP, char **modifiedSub
       if (s[tokenLength] == ':')
       {
         s = s + tokenLength + 1; /* Skip over "Re:" */
-        result = PR_TRUE;        /* Yes, we stripped it. */
+        result = true;        /* Yes, we stripped it. */
         goto AGAIN;              /* Skip whitespace and try again. */
       }
       else if (s[tokenLength] == '[' || s[tokenLength] == '(')
@@ -696,7 +674,7 @@ PRBool NS_MsgStripRE(const char **stringP, PRUint32 *lengthP, char **modifiedSub
         if ((s2[0] == ']' || s2[0] == ')') && s2[1] == ':')
         {
           s = s2 + 2;       /* Skip over "]:" */
-          result = PR_TRUE; /* Yes, we stripped it. */
+          result = true; /* Yes, we stripped it. */
           goto AGAIN;       /* Skip whitespace and try again. */
         }
       }
@@ -722,7 +700,7 @@ PRBool NS_MsgStripRE(const char **stringP, PRUint32 *lengthP, char **modifiedSub
           char charset[nsIMimeConverter::MAX_CHARSET_NAME_LENGTH] = "";
           if (nsIMimeConverter::MAX_CHARSET_NAME_LENGTH >= (p2 - p1))
             strncpy(charset, p1, p2 - p1);
-          rv = mimeConverter->EncodeMimePartIIStr_UTF8(nsDependentCString(s), PR_FALSE, charset,
+          rv = mimeConverter->EncodeMimePartIIStr_UTF8(nsDependentCString(s), false, charset,
             sizeof("Subject:"), nsIMimeConverter::MIME_ENCODED_WORD_SIZE,
             modifiedSubject);
           if (NS_SUCCEEDED(rv))
@@ -754,12 +732,12 @@ char * NS_MsgSACopy (char **destination, const char *source)
     *destination = 0;
   }
   if (! source)
-    *destination = nsnull;
+    *destination = nullptr;
   else
   {
     *destination = (char *) PR_Malloc (PL_strlen(source) + 1);
-    if (*destination == nsnull)
-      return(nsnull);
+    if (*destination == nullptr)
+      return(nullptr);
 
     PL_strcpy (*destination, source);
   }
@@ -775,16 +753,16 @@ char * NS_MsgSACat (char **destination, const char *source)
     {
       int length = PL_strlen (*destination);
       *destination = (char *) PR_Realloc (*destination, length + PL_strlen(source) + 1);
-      if (*destination == nsnull)
-        return(nsnull);
+      if (*destination == nullptr)
+        return(nullptr);
 
       PL_strcpy (*destination + length, source);
     }
     else
     {
       *destination = (char *) PR_Malloc (PL_strlen(source) + 1);
-      if (*destination == nsnull)
-        return(nsnull);
+      if (*destination == nullptr)
+        return(nullptr);
 
       PL_strcpy (*destination, source);
     }
@@ -806,13 +784,13 @@ nsresult NS_MsgDecodeUnescapeURLPath(const nsACString& aPath,
   return NS_OK;
 }
 
-PRBool WeAreOffline()
+bool WeAreOffline()
 {
-  nsresult rv = NS_OK;
-  PRBool offline = PR_FALSE;
+  bool offline = false;
 
-  nsCOMPtr <nsIIOService> ioService = do_GetService(NS_IOSERVICE_CONTRACTID, &rv);
-  if (NS_SUCCEEDED(rv) && ioService)
+  nsCOMPtr <nsIIOService> ioService =
+    mozilla::services::GetIOService();
+  if (ioService)
     ioService->GetOffline(&offline);
 
   return offline;
@@ -822,7 +800,7 @@ nsresult GetExistingFolder(const nsCString& aFolderURI, nsIMsgFolder **aFolder)
 {
   NS_ENSURE_ARG_POINTER(aFolder);
 
-  *aFolder = nsnull;
+  *aFolder = nullptr;
 
   nsresult rv;
   nsCOMPtr<nsIRDFService> rdf(do_GetService("@mozilla.org/rdf/rdf-service;1", &rv));
@@ -848,14 +826,14 @@ nsresult GetExistingFolder(const nsCString& aFolderURI, nsIMsgFolder **aFolder)
   return rv;
 }
 
-PRBool IsAFromSpaceLine(char *start, const char *end)
+bool IsAFromSpaceLine(char *start, const char *end)
 {
-  PRBool rv = PR_FALSE;
+  bool rv = false;
   while ((start < end) && (*start == '>'))
     start++;
   // If the leading '>'s are followed by an 'F' then we have a possible case here.
   if ( (*start == 'F') && (end-start > 4) && !strncmp(start, "From ", 5) )
-    rv = PR_TRUE;
+    rv = true;
   return rv;
 }
 
@@ -868,7 +846,7 @@ nsresult EscapeFromSpaceLine(nsIOutputStream *outputStream, char *start, const c
 {
   nsresult rv;
   char *pChar;
-  PRUint32 written;
+  uint32_t written;
 
   pChar = start;
   while (start < end)
@@ -884,7 +862,7 @@ nsresult EscapeFromSpaceLine(nsIOutputStream *outputStream, char *start, const c
       // Found a line so check if it's a qualified "From " line.
       if (IsAFromSpaceLine(start, pChar))
         rv = outputStream->Write(">", 1, &written);
-      PRInt32 lineTerminatorCount = (*(pChar + 1) == '\n') ? 2 : 1;
+      int32_t lineTerminatorCount = (*(pChar + 1) == '\n') ? 2 : 1;
       rv = outputStream->Write(start, pChar - start + lineTerminatorCount, &written);
       NS_ENSURE_SUCCESS(rv,rv);
       pChar += lineTerminatorCount;
@@ -903,21 +881,21 @@ nsresult EscapeFromSpaceLine(nsIOutputStream *outputStream, char *start, const c
   return NS_OK;
 }
 
-nsresult IsRFC822HeaderFieldName(const char *aHdr, PRBool *aResult)
+nsresult IsRFC822HeaderFieldName(const char *aHdr, bool *aResult)
 {
   NS_ENSURE_ARG_POINTER(aHdr);
   NS_ENSURE_ARG_POINTER(aResult);
-  PRUint32 length = strlen(aHdr);
-  for(PRUint32 i=0; i<length; i++)
+  uint32_t length = strlen(aHdr);
+  for(uint32_t i=0; i<length; i++)
   {
     char c = aHdr[i];
     if ( c < '!' || c == ':' || c > '~')
     {
-      *aResult = PR_FALSE;
+      *aResult = false;
       return NS_OK;
     }
   }
-  *aResult = PR_TRUE;
+  *aResult = true;
   return NS_OK;
 }
 
@@ -955,7 +933,7 @@ GetOrCreateFolder(const nsACString &aURI, nsIUrlListener *aListener)
   rv = msgFolder->GetParent(getter_AddRefs(parent));
   if (NS_FAILED(rv) || !parent)
   {
-    nsCOMPtr <nsILocalFile> folderPath;
+    nsCOMPtr <nsIFile> folderPath;
     // for local folders, path is to the berkeley mailbox.
     // for imap folders, path needs to have .msf appended to the name
     msgFolder->GetFilePath(getter_AddRefs(folderPath));
@@ -964,11 +942,11 @@ GetOrCreateFolder(const nsACString &aURI, nsIUrlListener *aListener)
     rv = server->GetType(type);
     NS_ENSURE_SUCCESS(rv,rv);
 
-    PRBool isImapFolder = type.Equals("imap");
+    bool isImapFolder = type.Equals("imap");
     // if we can't get the path from the folder, then try to create the storage.
     // for imap, it doesn't matter if the .msf file exists - it still might not
     // exist on the server, so we should try to create it
-    PRBool exists = PR_FALSE;
+    bool exists = false;
     if (!isImapFolder && folderPath)
       folderPath->Exists(&exists);
     if (!exists)
@@ -998,10 +976,10 @@ GetOrCreateFolder(const nsACString &aURI, nsIUrlListener *aListener)
       // we always call the listener
       // this code should move into local folder's version of CreateStorageIfMissing()
       if (!isImapFolder && aListener) {
-        rv = aListener->OnStartRunningUrl(nsnull);
+        rv = aListener->OnStartRunningUrl(nullptr);
         NS_ENSURE_SUCCESS(rv,rv);
 
-        rv = aListener->OnStopRunningUrl(nsnull, NS_OK);
+        rv = aListener->OnStopRunningUrl(nullptr, NS_OK);
         NS_ENSURE_SUCCESS(rv,rv);
       }
     }
@@ -1010,10 +988,10 @@ GetOrCreateFolder(const nsACString &aURI, nsIUrlListener *aListener)
     // if the folder exists, we should set the junk flag on it
     // which is what the listener will do
     if (aListener) {
-      rv = aListener->OnStartRunningUrl(nsnull);
+      rv = aListener->OnStartRunningUrl(nullptr);
       NS_ENSURE_SUCCESS(rv,rv);
 
-      rv = aListener->OnStopRunningUrl(nsnull, NS_OK);
+      rv = aListener->OnStopRunningUrl(nullptr, NS_OK);
       NS_ENSURE_SUCCESS(rv,rv);
     }
   }
@@ -1021,10 +999,10 @@ GetOrCreateFolder(const nsACString &aURI, nsIUrlListener *aListener)
   return NS_OK;
 }
 
-nsresult IsRSSArticle(nsIURI * aMsgURI, PRBool *aIsRSSArticle)
+nsresult IsRSSArticle(nsIURI * aMsgURI, bool *aIsRSSArticle)
 {
   nsresult rv;
-  *aIsRSSArticle = PR_FALSE;
+  *aIsRSSArticle = false;
 
   nsCOMPtr<nsIMsgMessageUrl> msgUrl = do_QueryInterface(aMsgURI, &rv);
   if (NS_FAILED(rv)) return rv;
@@ -1055,7 +1033,7 @@ nsresult IsRSSArticle(nsIURI * aMsgURI, PRBool *aIsRSSArticle)
     rssServer = do_QueryInterface(server);
 
     if (rssServer)
-      *aIsRSSArticle = PR_TRUE;
+      *aIsRSSArticle = true;
   }
 
   return rv;
@@ -1063,7 +1041,7 @@ nsresult IsRSSArticle(nsIURI * aMsgURI, PRBool *aIsRSSArticle)
 
 
 // digest needs to be a pointer to a DIGEST_LENGTH (16) byte buffer
-nsresult MSGCramMD5(const char *text, PRInt32 text_len, const char *key, PRInt32 key_len, unsigned char *digest)
+nsresult MSGCramMD5(const char *text, int32_t text_len, const char *key, int32_t key_len, unsigned char *digest)
 {
   nsresult rv;
 
@@ -1084,10 +1062,10 @@ nsresult MSGCramMD5(const char *text, PRInt32 text_len, const char *key, PRInt32
     rv = hasher->Init(nsICryptoHash::MD5);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    rv = hasher->Update((const PRUint8*) key, key_len);
+    rv = hasher->Update((const uint8_t*) key, key_len);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    rv = hasher->Finish(PR_FALSE, hash);
+    rv = hasher->Finish(false, hash);
     NS_ENSURE_SUCCESS(rv, rv);
 
     key = hash.get();
@@ -1122,17 +1100,17 @@ nsresult MSGCramMD5(const char *text, PRInt32 text_len, const char *key, PRInt32
    */
   nsCAutoString result;
   rv = hasher->Init(nsICryptoHash::MD5); /* init context for 1st pass */
-  rv = hasher->Update((const PRUint8*)innerPad, 64);       /* start with inner pad */
-  rv = hasher->Update((const PRUint8*)text, text_len);     /* then text of datagram */
-  rv = hasher->Finish(PR_FALSE, result);   /* finish up 1st pass */
+  rv = hasher->Update((const uint8_t*)innerPad, 64);       /* start with inner pad */
+  rv = hasher->Update((const uint8_t*)text, text_len);     /* then text of datagram */
+  rv = hasher->Finish(false, result);   /* finish up 1st pass */
 
   /*
    * perform outer MD5
    */
   hasher->Init(nsICryptoHash::MD5);       /* init context for 2nd pass */
-  rv = hasher->Update((const PRUint8*)outerPad, 64);    /* start with outer pad */
-  rv = hasher->Update((const PRUint8*)result.get(), 16);/* then results of 1st hash */
-  rv = hasher->Finish(PR_FALSE, result);    /* finish up 2nd pass */
+  rv = hasher->Update((const uint8_t*)outerPad, 64);    /* start with outer pad */
+  rv = hasher->Update((const uint8_t*)result.get(), 16);/* then results of 1st hash */
+  rv = hasher->Finish(false, result);    /* finish up 2nd pass */
 
   if (result.Length() != DIGEST_LENGTH)
     return NS_ERROR_UNEXPECTED;
@@ -1145,7 +1123,7 @@ nsresult MSGCramMD5(const char *text, PRInt32 text_len, const char *key, PRInt32
 
 
 // digest needs to be a pointer to a DIGEST_LENGTH (16) byte buffer
-nsresult MSGApopMD5(const char *text, PRInt32 text_len, const char *password, PRInt32 password_len, unsigned char *digest)
+nsresult MSGApopMD5(const char *text, int32_t text_len, const char *password, int32_t password_len, unsigned char *digest)
 {
   nsresult rv;
   nsCAutoString result;
@@ -1156,13 +1134,13 @@ nsresult MSGApopMD5(const char *text, PRInt32 text_len, const char *password, PR
   rv = hasher->Init(nsICryptoHash::MD5);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = hasher->Update((const PRUint8*) text, text_len);
+  rv = hasher->Update((const uint8_t*) text, text_len);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = hasher->Update((const PRUint8*) password, password_len);
+  rv = hasher->Update((const uint8_t*) password, password_len);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = hasher->Finish(PR_FALSE, result);
+  rv = hasher->Finish(false, result);
   NS_ENSURE_SUCCESS(rv, rv);
 
   if (result.Length() != DIGEST_LENGTH)
@@ -1175,26 +1153,26 @@ nsresult MSGApopMD5(const char *text, PRInt32 text_len, const char *password, PR
 NS_MSG_BASE nsresult NS_GetPersistentFile(const char *relPrefName,
                                           const char *absPrefName,
                                           const char *dirServiceProp,
-                                          PRBool& gotRelPref,
-                                          nsILocalFile **aFile,
+                                          bool& gotRelPref,
+                                          nsIFile **aFile,
                                           nsIPrefBranch *prefBranch)
 {
     NS_ENSURE_ARG_POINTER(aFile);
-    *aFile = nsnull;
+    *aFile = nullptr;
     NS_ENSURE_ARG(relPrefName);
     NS_ENSURE_ARG(absPrefName);
-    gotRelPref = PR_FALSE;
+    gotRelPref = false;
 
     nsCOMPtr<nsIPrefBranch> mainBranch;
     if (!prefBranch) {
         nsCOMPtr<nsIPrefService> prefService(do_GetService(NS_PREFSERVICE_CONTRACTID));
         if (!prefService) return NS_ERROR_FAILURE;
-        prefService->GetBranch(nsnull, getter_AddRefs(mainBranch));
+        prefService->GetBranch(nullptr, getter_AddRefs(mainBranch));
         if (!mainBranch) return NS_ERROR_FAILURE;
         prefBranch = mainBranch;
     }
 
-    nsCOMPtr<nsILocalFile> localFile;
+    nsCOMPtr<nsIFile> localFile;
 
     // Get the relative first
     nsCOMPtr<nsIRelativeFilePref> relFilePref;
@@ -1204,19 +1182,19 @@ NS_MSG_BASE nsresult NS_GetPersistentFile(const char *relPrefName,
         relFilePref->GetFile(getter_AddRefs(localFile));
         NS_ASSERTION(localFile, "An nsIRelativeFilePref has no file.");
         if (localFile)
-          gotRelPref = PR_TRUE;
+          gotRelPref = true;
     }
 
     // If not, get the old absolute
     if (!localFile) {
         prefBranch->GetComplexValue(absPrefName,
-                                    NS_GET_IID(nsILocalFile), getter_AddRefs(localFile));
+                                    NS_GET_IID(nsIFile), getter_AddRefs(localFile));
 
         // If not, and given a dirServiceProp, use directory service.
         if (!localFile && dirServiceProp) {
             nsCOMPtr<nsIProperties> dirService(do_GetService("@mozilla.org/file/directory_service;1"));
             if (!dirService) return NS_ERROR_FAILURE;
-            dirService->Get(dirServiceProp, NS_GET_IID(nsILocalFile), getter_AddRefs(localFile));
+            dirService->Get(dirServiceProp, NS_GET_IID(nsIFile), getter_AddRefs(localFile));
             if (!localFile) return NS_ERROR_FAILURE;
         }
     }
@@ -1233,7 +1211,7 @@ NS_MSG_BASE nsresult NS_GetPersistentFile(const char *relPrefName,
 
 NS_MSG_BASE nsresult NS_SetPersistentFile(const char *relPrefName,
                                           const char *absPrefName,
-                                          nsILocalFile *aFile,
+                                          nsIFile *aFile,
                                           nsIPrefBranch *prefBranch)
 {
     NS_ENSURE_ARG(relPrefName);
@@ -1244,14 +1222,14 @@ NS_MSG_BASE nsresult NS_SetPersistentFile(const char *relPrefName,
     if (!prefBranch) {
         nsCOMPtr<nsIPrefService> prefService(do_GetService(NS_PREFSERVICE_CONTRACTID));
         if (!prefService) return NS_ERROR_FAILURE;
-        prefService->GetBranch(nsnull, getter_AddRefs(mainBranch));
+        prefService->GetBranch(nullptr, getter_AddRefs(mainBranch));
         if (!mainBranch) return NS_ERROR_FAILURE;
         prefBranch = mainBranch;
     }
 
     // Write the absolute for backwards compatibilty's sake.
     // Or, if aPath is on a different drive than the profile dir.
-    nsresult rv = prefBranch->SetComplexValue(absPrefName, NS_GET_IID(nsILocalFile), aFile);
+    nsresult rv = prefBranch->SetComplexValue(absPrefName, NS_GET_IID(nsIFile), aFile);
 
     // Write the relative path.
     nsCOMPtr<nsIRelativeFilePref> relFilePref;
@@ -1313,37 +1291,25 @@ NS_MSG_BASE nsresult NS_GetLocalizedUnicharPreferenceWithDefault(nsIPrefBranch *
     return NS_OK;
 }
 
-void PRTime2Seconds(PRTime prTime, PRUint32 *seconds)
+void PRTime2Seconds(PRTime prTime, uint32_t *seconds)
 {
-  PRInt64 microSecondsPerSecond, intermediateResult;
-
-  LL_I2L(microSecondsPerSecond, PR_USEC_PER_SEC);
-  LL_DIV(intermediateResult, prTime, microSecondsPerSecond);
-  LL_L2UI((*seconds), intermediateResult);
+  *seconds = (uint32_t)(prTime / PR_USEC_PER_SEC);
 }
 
-void PRTime2Seconds(PRTime prTime, PRInt32 *seconds)
+void PRTime2Seconds(PRTime prTime, int32_t *seconds)
 {
-  PRInt64 microSecondsPerSecond, intermediateResult;
-
-  LL_I2L(microSecondsPerSecond, PR_USEC_PER_SEC);
-  LL_DIV(intermediateResult, prTime, microSecondsPerSecond);
-  LL_L2I((*seconds), intermediateResult);
+  *seconds = (int32_t)(prTime / PR_USEC_PER_SEC);
 }
 
-void Seconds2PRTime(PRUint32 seconds, PRTime *prTime)
+void Seconds2PRTime(uint32_t seconds, PRTime *prTime)
 {
-  PRInt64 microSecondsPerSecond, intermediateResult;
-
-  LL_I2L(microSecondsPerSecond, PR_USEC_PER_SEC);
-  LL_UI2L(intermediateResult, seconds);
-  LL_MUL((*prTime), intermediateResult, microSecondsPerSecond);
+  *prTime = (PRTime)seconds * PR_USEC_PER_SEC;
 }
 
-nsresult GetSummaryFileLocation(nsILocalFile* fileLocation, nsILocalFile** summaryLocation)
+nsresult GetSummaryFileLocation(nsIFile* fileLocation, nsIFile** summaryLocation)
 {
   nsresult rv;
-  nsCOMPtr <nsILocalFile> newSummaryLocation = do_CreateInstance(NS_LOCAL_FILE_CONTRACTID, &rv);
+  nsCOMPtr <nsIFile> newSummaryLocation = do_CreateInstance(NS_LOCAL_FILE_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
 
   newSummaryLocation->InitWithFile(fileLocation);
@@ -1383,8 +1349,40 @@ nsresult GetSpecialDirectoryWithFileName(const char* specialDirName,
   return (*result)->AppendNative(nsDependentCString(fileName));
 }
 
+// Cleans up temp files with matching names
+nsresult MsgCleanupTempFiles(const char *fileName, const char *extension)
+{
+  nsCOMPtr<nsIFile> tmpFile;
+  nsCString rootName(fileName);
+  rootName.Append(".");
+  rootName.Append(extension);
+  nsresult rv = GetSpecialDirectoryWithFileName(NS_OS_TEMP_DIR,
+                                                rootName.get(),
+                                                getter_AddRefs(tmpFile));
 
-nsresult MsgGetFileStream(nsILocalFile *file, nsIOutputStream **fileStream)
+  NS_ENSURE_SUCCESS(rv, rv);
+  int index = 1;
+  bool exists;
+  do
+  {
+    tmpFile->Exists(&exists);
+    if (exists)
+    {
+      tmpFile->Remove(false);
+      nsCString leafName(fileName);
+      leafName.Append("-");
+      leafName.AppendInt(index);
+      leafName.Append(".");
+      leafName.Append(extension);
+        // start with "Picture-1.jpg" after "Picture.jpg" exists
+      tmpFile->SetNativeLeafName(leafName);
+    }
+  }
+  while (exists && ++index < 10000);
+  return NS_OK;
+}
+
+nsresult MsgGetFileStream(nsIFile *file, nsIOutputStream **fileStream)
 {
   nsMsgFileStream *newFileStream = new nsMsgFileStream;
   NS_ENSURE_TRUE(newFileStream, NS_ERROR_OUT_OF_MEMORY);
@@ -1394,7 +1392,7 @@ nsresult MsgGetFileStream(nsILocalFile *file, nsIOutputStream **fileStream)
   return rv;
 }
 
-nsresult MsgReopenFileStream(nsILocalFile *file, nsIInputStream *fileStream)
+nsresult MsgReopenFileStream(nsIFile *file, nsIInputStream *fileStream)
 {
   nsMsgFileStream *msgFileStream = static_cast<nsMsgFileStream *>(fileStream);
   if (msgFileStream)
@@ -1405,8 +1403,8 @@ nsresult MsgReopenFileStream(nsILocalFile *file, nsIInputStream *fileStream)
 
 nsresult MsgNewBufferedFileOutputStream(nsIOutputStream **aResult,
                                         nsIFile* aFile,
-                                        PRInt32 aIOFlags,
-                                        PRInt32 aPerm)
+                                        int32_t aIOFlags,
+                                        int32_t aPerm)
 {
   nsCOMPtr<nsIOutputStream> stream;
   nsresult rv = NS_NewLocalFileOutputStream(getter_AddRefs(stream), aFile, aIOFlags, aPerm);
@@ -1415,24 +1413,24 @@ nsresult MsgNewBufferedFileOutputStream(nsIOutputStream **aResult,
   return rv;
 }
 
-PRBool MsgFindKeyword(const nsCString &keyword, nsCString &keywords, PRInt32 *aStartOfKeyword, PRInt32 *aLength)
+bool MsgFindKeyword(const nsCString &keyword, nsCString &keywords, int32_t *aStartOfKeyword, int32_t *aLength)
 {
 #ifdef MOZILLA_INTERNAL_API
 // nsTString_CharT::Find(const nsCString& aString,
-//                       PRBool aIgnoreCase=PR_FALSE,
-//                       PRInt32 aOffset=0,
-//                       PRInt32 aCount=-1 ) const;
-#define FIND_KEYWORD(keywords,keyword,offset) ((keywords).Find((keyword), PR_FALSE, (offset)))
+//                       bool aIgnoreCase=false,
+//                       int32_t aOffset=0,
+//                       int32_t aCount=-1 ) const;
+#define FIND_KEYWORD(keywords,keyword,offset) ((keywords).Find((keyword), false, (offset)))
 #else
 // nsAString::Find(const self_type& aStr,
-//                 PRUint32 aOffset,
+//                 uint32_t aOffset,
 //                 ComparatorFunc c = DefaultComparator) const;
-#define FIND_KEYWORD(keywords,keyword,offset) ((keywords).Find((keyword), static_cast<PRUint32>(offset)))
+#define FIND_KEYWORD(keywords,keyword,offset) ((keywords).Find((keyword), static_cast<uint32_t>(offset)))
 #endif
   // 'keyword' is the single keyword we're looking for
   // 'keywords' is a space delimited list of keywords to be searched,
   // which may be just a single keyword or even be empty
-  const PRInt32 kKeywordLen = keyword.Length();
+  const int32_t kKeywordLen = keyword.Length();
   const char* start = keywords.BeginReading();
   const char* end = keywords.EndReading();
   *aStartOfKeyword = FIND_KEYWORD(keywords, keyword, 0);
@@ -1446,21 +1444,21 @@ PRBool MsgFindKeyword(const nsCString &keyword, nsCString &keywords, PRInt32 *aS
         (matchEnd == end || *matchEnd == ' '))
     {
       *aLength = kKeywordLen;
-      return PR_TRUE;
+      return true;
     }
     *aStartOfKeyword = FIND_KEYWORD(keywords, keyword, *aStartOfKeyword + kKeywordLen);
   }
 
   *aLength = 0;
-  return PR_FALSE;
+  return false;
 #undef FIND_KEYWORD
 }
 
-PRBool MsgHostDomainIsTrusted(nsCString &host, nsCString &trustedMailDomains)
+bool MsgHostDomainIsTrusted(nsCString &host, nsCString &trustedMailDomains)
 {
   const char *end;
-  PRUint32 hostLen, domainLen;
-  PRBool domainIsTrusted = PR_FALSE;
+  uint32_t hostLen, domainLen;
+  bool domainIsTrusted = false;
 
   const char *domain = trustedMailDomains.BeginReading();
   const char *domainEnd = trustedMailDomains.EndReading();
@@ -1488,7 +1486,7 @@ PRBool MsgHostDomainIsTrusted(nsCString &host, nsCString &trustedMailDomains)
         // that the hostname begins with a dot.
         if (hostLen == domainLen || *hostTail == '.' || *(hostTail - 1) == '.')
         {
-          domainIsTrusted = PR_TRUE;
+          domainIsTrusted = true;
           break;
         }
       }
@@ -1499,7 +1497,7 @@ PRBool MsgHostDomainIsTrusted(nsCString &host, nsCString &trustedMailDomains)
   return domainIsTrusted;
 }
 
-nsresult MsgGetLocalFileFromURI(const nsACString &aUTF8Path, nsILocalFile **aFile)
+nsresult MsgGetLocalFileFromURI(const nsACString &aUTF8Path, nsIFile **aFile)
 {
   nsresult rv;
   nsCOMPtr<nsIURI> argURI;
@@ -1519,21 +1517,21 @@ nsresult MsgGetLocalFileFromURI(const nsACString &aUTF8Path, nsILocalFile **aFil
  * Function copied from nsReadableUtils.
  * Migrating to frozen linkage is the only change done
  */
-NS_MSG_BASE PRBool MsgIsUTF8(const nsACString& aString)
+NS_MSG_BASE bool MsgIsUTF8(const nsACString& aString)
 {
   const char *done_reading = aString.EndReading();
 
-  PRInt32 state = 0;
-  PRBool overlong = PR_FALSE;
-  PRBool surrogate = PR_FALSE;
-  PRBool nonchar = PR_FALSE;
-  PRUint16 olupper = 0; // overlong byte upper bound.
-  PRUint16 slower = 0;  // surrogate byte lower bound.
+  int32_t state = 0;
+  bool overlong = false;
+  bool surrogate = false;
+  bool nonchar = false;
+  uint16_t olupper = 0; // overlong byte upper bound.
+  uint16_t slower = 0;  // surrogate byte lower bound.
 
   const char *ptr = aString.BeginReading();
 
   while (ptr < done_reading) {
-    PRUint8 c;
+    uint8_t c;
     
     if (0 == state) {
 
@@ -1543,33 +1541,33 @@ NS_MSG_BASE PRBool MsgIsUTF8(const nsACString& aString)
         continue;
 
       if ( c <= 0xC1 ) // [80-BF] where not expected, [C0-C1] for overlong.
-        return PR_FALSE;
+        return false;
       else if ((c & 0xE0) == 0xC0) 
         state = 1;
       else if ((c & 0xF0) == 0xE0) {
         state = 2;
         if ( c == 0xE0 ) { // to exclude E0[80-9F][80-BF] 
-          overlong = PR_TRUE;
+          overlong = true;
           olupper = 0x9F;
         } else if ( c == 0xED ) { // ED[A0-BF][80-BF] : surrogate codepoint
-          surrogate = PR_TRUE;
+          surrogate = true;
           slower = 0xA0;
         } else if ( c == 0xEF ) // EF BF [BE-BF] : non-character
-          nonchar = PR_TRUE;
+          nonchar = true;
       } else if ( c <= 0xF4 ) { // XXX replace /w UTF8traits::is4byte when it's updated to exclude [F5-F7].(bug 199090)
         state = 3;
-        nonchar = PR_TRUE;
+        nonchar = true;
         if ( c == 0xF0 ) { // to exclude F0[80-8F][80-BF]{2}
-          overlong = PR_TRUE;
+          overlong = true;
           olupper = 0x8F;
         }
         else if ( c == 0xF4 ) { // to exclude F4[90-BF][80-BF] 
           // actually not surrogates but codepoints beyond 0x10FFFF
-          surrogate = PR_TRUE;
+          surrogate = true;
           slower = 0x90;
         }
       } else
-        return PR_FALSE; // Not UTF-8 string
+        return false; // Not UTF-8 string
     }
     
     while (ptr < done_reading && state) {
@@ -1580,12 +1578,12 @@ NS_MSG_BASE PRBool MsgIsUTF8(const nsACString& aString)
       if ( nonchar &&  ( !state &&  c < 0xBE ||
            state == 1 && c != 0xBF  ||
            state == 2 && 0x0F != (0x0F & c) ))
-        nonchar = PR_FALSE;
+        nonchar = false;
 
       if ((c & 0xC0) != 0x80 || overlong && c <= olupper ||
            surrogate && slower <= c || nonchar && !state )
-        return PR_FALSE; // Not UTF-8 string
-      overlong = surrogate = PR_FALSE;
+        return false; // Not UTF-8 string
+      overlong = surrogate = false;
     }
   }
   return !state; // state != 0 at the end indicates an invalid UTF-8 seq. 
@@ -1667,7 +1665,7 @@ NS_MSG_BASE void MsgStripQuotedPrintable (unsigned char *src)
 }
 
 NS_MSG_BASE nsresult MsgEscapeString(const nsACString &aStr,
-                                     PRUint32 aType, nsACString &aResult)
+                                     uint32_t aType, nsACString &aResult)
 {
   nsresult rv;
   nsCOMPtr<nsINetUtil> nu = do_GetService(NS_NETUTIL_CONTRACTID, &rv);
@@ -1676,7 +1674,7 @@ NS_MSG_BASE nsresult MsgEscapeString(const nsACString &aStr,
   return nu->EscapeString(aStr, aType, aResult);
 }
 
-NS_MSG_BASE nsresult MsgUnescapeString(const nsACString &aStr, PRUint32 aFlags, 
+NS_MSG_BASE nsresult MsgUnescapeString(const nsACString &aStr, uint32_t aFlags, 
                                        nsACString &aResult)
 {
   nsresult rv;
@@ -1686,7 +1684,7 @@ NS_MSG_BASE nsresult MsgUnescapeString(const nsACString &aStr, PRUint32 aFlags,
   return nu->UnescapeString(aStr, aFlags, aResult);
 }
 
-NS_MSG_BASE nsresult MsgEscapeURL(const nsACString &aStr, PRUint32 aFlags,
+NS_MSG_BASE nsresult MsgEscapeURL(const nsACString &aStr, uint32_t aFlags,
                                   nsACString &aResult)
 {
   nsresult rv;
@@ -1700,11 +1698,11 @@ NS_MSG_BASE nsresult MsgEscapeURL(const nsACString &aStr, PRUint32 aFlags,
 
 NS_MSG_BASE char *MsgEscapeHTML(const char *string)
 {
-  char *rv = nsnull;
+  char *rv = nullptr;
   /* XXX Hardcoded max entity len. The +1 is for the trailing null. */
-  PRUint32 len = PL_strlen(string);
+  uint32_t len = PL_strlen(string);
   if (len >= (PR_UINT32_MAX / 6))
-    return nsnull;
+    return nullptr;
 
   rv = (char *)NS_Alloc( (6 * len) + 1 );
   char *ptr = rv;
@@ -1763,7 +1761,7 @@ NS_MSG_BASE char *MsgEscapeHTML(const char *string)
 }
 
 NS_MSG_BASE PRUnichar *MsgEscapeHTML2(const PRUnichar *aSourceBuffer,
-                                      PRInt32 aSourceBufferLen)
+                                      int32_t aSourceBufferLen)
 {
   // if the caller didn't calculate the length
   if (aSourceBufferLen == -1) {
@@ -1773,7 +1771,7 @@ NS_MSG_BASE PRUnichar *MsgEscapeHTML2(const PRUnichar *aSourceBuffer,
   /* XXX Hardcoded max entity len. */
   if (aSourceBufferLen >=
     ((PR_UINT32_MAX - sizeof(PRUnichar)) / (6 * sizeof(PRUnichar))) )
-      return nsnull;
+      return nullptr;
 
   PRUnichar *resultBuffer = (PRUnichar *)nsMemory::Alloc(aSourceBufferLen *
                             6 * sizeof(PRUnichar) + sizeof(PRUnichar('\0')));
@@ -1781,7 +1779,7 @@ NS_MSG_BASE PRUnichar *MsgEscapeHTML2(const PRUnichar *aSourceBuffer,
   PRUnichar *ptr = resultBuffer;
 
   if (resultBuffer) {
-    PRInt32 i;
+    int32_t i;
 
     for(i = 0; i < aSourceBufferLen; i++) {
       if(aSourceBuffer[i] == '<') {
@@ -1845,7 +1843,7 @@ NS_MSG_BASE void MsgCompressWhitespace(nsCString& aString)
     while (IS_SPACE(*wend)) 
       ++wend;
 
-    PRUint32 wlen = wend - cur - 1;
+    uint32_t wlen = wend - cur - 1;
 
     // fix "end"
     end -= wlen;
@@ -1864,7 +1862,7 @@ NS_MSG_BASE void MsgReplaceChar(nsString& str, const char *set, const PRUnichar 
 {
   PRUnichar *c_str = str.BeginWriting();
   while (*set) {
-    PRInt32 pos = 0;
+    int32_t pos = 0;
     while ((pos = str.FindChar(*set, pos)) != -1) {
       c_str[pos++] = replacement;
     }
@@ -1884,19 +1882,29 @@ NS_MSG_BASE void MsgReplaceChar(nsCString& str, const char needle, const char re
 NS_MSG_BASE nsIAtom* MsgNewAtom(const char* aString)
 {
   nsCOMPtr<nsIAtomService> atomService(do_GetService("@mozilla.org/atom-service;1"));
-  nsIAtom* atom = nsnull;
+  nsIAtom* atom = nullptr;
 
   if (atomService)
     atomService->GetAtomUTF8(aString, &atom);
   return atom;
 }
 
+NS_MSG_BASE nsIAtom* MsgNewPermanentAtom(const char* aString)
+{
+  nsCOMPtr<nsIAtomService> atomService(do_GetService("@mozilla.org/atom-service;1"));
+  nsIAtom* atom = nullptr;
+
+  if (atomService)
+    atomService->GetPermanentAtomUTF8(aString, &atom);
+  return atom;
+}
+
 NS_MSG_BASE void MsgReplaceSubstring(nsAString &str, const nsAString &what, const nsAString &replacement)
 {
   const PRUnichar* replacement_str;
-  PRUint32 replacementLength = replacement.BeginReading(&replacement_str);
-  PRUint32 whatLength = what.Length();
-  PRInt32 i = 0;
+  uint32_t replacementLength = replacement.BeginReading(&replacement_str);
+  uint32_t whatLength = what.Length();
+  int32_t i = 0;
 
   while ((i = str.Find(what, i)) != kNotFound)
   {
@@ -1907,11 +1915,15 @@ NS_MSG_BASE void MsgReplaceSubstring(nsAString &str, const nsAString &what, cons
 
 NS_MSG_BASE void MsgReplaceSubstring(nsACString &str, const char *what, const char *replacement)
 {
-  PRUint32 replacementLength = strlen(replacement);
-  PRUint32 whatLength = strlen(what);
-  PRInt32 i = 0;
+  uint32_t replacementLength = strlen(replacement);
+  uint32_t whatLength = strlen(what);
+  int32_t i = 0;
 
-  while ((i = str.Find(what, i)) != kNotFound)
+  /* We have to create nsDependentCString from 'what' because there's no
+   * str.Find(char *what, int offset) but there is only
+   * str.Find(char *what, int length) */
+  nsDependentCString what_dependent(what);
+  while ((i = str.Find(what_dependent, i)) != kNotFound)
   {
     str.Replace(i, whatLength, replacement, replacementLength);
     i += replacementLength;
@@ -1978,14 +1990,14 @@ nsresult NS_FASTCALL MsgQueryElementAt::operator()( const nsIID& aIID, void** aR
 NS_MSG_BASE nsresult MsgGetHeadersFromKeys(nsIMsgDatabase *aDB, const nsTArray<nsMsgKey> &aMsgKeys,
                                            nsIMutableArray *aHeaders)
 {
-  PRUint32 count = aMsgKeys.Length();
+  uint32_t count = aMsgKeys.Length();
   nsresult rv = NS_OK;
 
-  for (PRUint32 kindex = 0; kindex < count; kindex++)
+  for (uint32_t kindex = 0; kindex < count; kindex++)
   {
     nsMsgKey key = aMsgKeys.ElementAt(kindex);
     nsCOMPtr<nsIMsgDBHdr> msgHdr;
-    PRBool hasKey;
+    bool hasKey;
     rv = aDB->ContainsKey(key, &hasKey);
     NS_ENSURE_SUCCESS(rv, rv);
 
@@ -1995,16 +2007,16 @@ NS_MSG_BASE nsresult MsgGetHeadersFromKeys(nsIMsgDatabase *aDB, const nsTArray<n
       rv = aDB->GetMsgHdrForKey(key, getter_AddRefs(msgHdr));
       NS_ENSURE_SUCCESS(rv, rv);
 
-      aHeaders->AppendElement(msgHdr, PR_FALSE);
+      aHeaders->AppendElement(msgHdr, false);
     }
   }
 
   return rv;
 }
 
-PRBool MsgAdvanceToNextLine(const char *buffer, PRUint32 &bufferOffset, PRUint32 maxBufferOffset)
+bool MsgAdvanceToNextLine(const char *buffer, uint32_t &bufferOffset, uint32_t maxBufferOffset)
 {
-  PRBool result = PR_FALSE;
+  bool result = false;
   for (; bufferOffset < maxBufferOffset; bufferOffset++)
   {
     if (buffer[bufferOffset] == '\r' || buffer[bufferOffset] == '\n')
@@ -2012,7 +2024,7 @@ PRBool MsgAdvanceToNextLine(const char *buffer, PRUint32 &bufferOffset, PRUint32
       bufferOffset++;
       if (buffer[bufferOffset- 1] == '\r' && buffer[bufferOffset] == '\n')
         bufferOffset++;
-      result = PR_TRUE;
+      result = true;
       break;
     }
   }
@@ -2021,7 +2033,7 @@ PRBool MsgAdvanceToNextLine(const char *buffer, PRUint32 &bufferOffset, PRUint32
 
 NS_MSG_BASE nsresult
 MsgExamineForProxy(const char *scheme, const char *host,
-                   PRInt32 port, nsIProxyInfo **proxyInfo)
+                   int32_t port, nsIProxyInfo **proxyInfo)
 {
   nsresult rv;
   nsCOMPtr<nsIProtocolProxyService> pps =
@@ -2050,7 +2062,7 @@ MsgExamineForProxy(const char *scheme, const char *host,
 
 NS_MSG_BASE nsresult MsgPromptLoginFailed(nsIMsgWindow *aMsgWindow,
                                           const nsCString &aHostname,
-                                          PRInt32 *aResult)
+                                          int32_t *aResult)
 {
 
   nsCOMPtr<nsIPrompt> dialog;
@@ -2071,8 +2083,8 @@ NS_MSG_BASE nsresult MsgPromptLoginFailed(nsIMsgWindow *aMsgWindow,
   }
 
   nsCOMPtr<nsIStringBundleService> bundleSvc =
-    do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
+    mozilla::services::GetStringBundleService();
+  NS_ENSURE_TRUE(bundleSvc, NS_ERROR_UNEXPECTED);
 
   nsCOMPtr<nsIStringBundle> bundle;
   rv = bundleSvc->CreateBundle("chrome://messenger/locale/messenger.properties",
@@ -2105,32 +2117,29 @@ NS_MSG_BASE nsresult MsgPromptLoginFailed(nsIMsgWindow *aMsgWindow,
     getter_Copies(button2));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool dummyValue = PR_FALSE;
+  bool dummyValue = false;
   return dialog->ConfirmEx(
     title.get(), message.get(),
     (nsIPrompt::BUTTON_TITLE_IS_STRING * nsIPrompt::BUTTON_POS_0) +
     (nsIPrompt::BUTTON_TITLE_CANCEL * nsIPrompt::BUTTON_POS_1) +
     (nsIPrompt::BUTTON_TITLE_IS_STRING * nsIPrompt::BUTTON_POS_2),
-    button0.get(), nsnull, button2.get(), nsnull, &dummyValue, aResult);
+    button0.get(), nullptr, button2.get(), nullptr, &dummyValue, aResult);
 }
 
-NS_MSG_BASE PRTime MsgConvertAgeInDaysToCutoffDate(PRInt32 ageInDays)
+NS_MSG_BASE PRTime MsgConvertAgeInDaysToCutoffDate(int32_t ageInDays)
 {
-  PRInt64 secondsInDays, microSecondsInDay;
   PRTime now = PR_Now();
 
-  secondsInDays = 60 * 60 * 24 * ageInDays;
-  microSecondsInDay = secondsInDays * PR_USEC_PER_SEC;
-  return now - microSecondsInDay;
+  return now - PR_USEC_PER_DAY * ageInDays;
 }
 
 NS_MSG_BASE nsresult MsgTermListToString(nsISupportsArray *aTermList, nsCString &aOutString)
 {
-  PRUint32 count;
+  uint32_t count;
   aTermList->Count(&count);
   nsresult rv = NS_OK;
 
-  for (PRUint32 searchIndex = 0; searchIndex < count;
+  for (uint32_t searchIndex = 0; searchIndex < count;
        searchIndex++)
   {
     nsCAutoString stream;
@@ -2144,8 +2153,8 @@ NS_MSG_BASE nsresult MsgTermListToString(nsISupportsArray *aTermList, nsCString 
     if (aOutString.Length() > 1)
       aOutString += ' ';
 
-    PRBool booleanAnd;
-    PRBool matchAll;
+    bool booleanAnd;
+    bool matchAll;
     term->GetBooleanAnd(&booleanAnd);
     term->GetMatchAll(&matchAll);
     if (matchAll)
@@ -2167,7 +2176,7 @@ NS_MSG_BASE nsresult MsgTermListToString(nsISupportsArray *aTermList, nsCString 
   return rv;
 }
 
-NS_MSG_BASE PRUint64 ParseUint64Str(const char *str)
+NS_MSG_BASE uint64_t ParseUint64Str(const char *str)
 {
 #ifdef XP_WIN
   {
@@ -2175,6 +2184,190 @@ NS_MSG_BASE PRUint64 ParseUint64Str(const char *str)
     return _strtoui64(str, &endPtr, 10);
   }
 #else
-  return strtoull(str, nsnull, 10);
+  return strtoull(str, nullptr, 10);
 #endif
+}
+
+NS_MSG_BASE nsresult
+MsgStreamMsgHeaders(nsIInputStream *aInputStream, nsIStreamListener *aConsumer)
+{
+  nsLineBuffer<char> *lineBuffer;
+  nsresult rv = NS_InitLineBuffer(&lineBuffer);
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  nsCAutoString msgHeaders;
+  nsCAutoString curLine;
+
+  bool more = true;
+
+  // We want to NS_ReadLine until we get to a blank line (the end of the headers)
+  while (more)
+  {
+    rv = NS_ReadLine(aInputStream, lineBuffer, curLine, &more);
+    NS_ENSURE_SUCCESS(rv, rv);
+    if (curLine.IsEmpty())
+      break;
+    msgHeaders.Append(curLine);
+    msgHeaders.Append(NS_LITERAL_CSTRING("\r\n"));
+  }
+  PR_Free(lineBuffer);
+  nsCOMPtr<nsIStringInputStream> hdrsStream =
+        do_CreateInstance("@mozilla.org/io/string-input-stream;1", &rv);
+  NS_ENSURE_SUCCESS(rv, rv);
+  hdrsStream->SetData(msgHeaders.get(), msgHeaders.Length());
+  nsCOMPtr<nsIInputStreamPump> pump;
+  rv = NS_NewInputStreamPump(getter_AddRefs(pump), hdrsStream);
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  return pump->AsyncRead(aConsumer, nullptr);
+
+}
+
+class CharsetDetectionObserver : public nsICharsetDetectionObserver
+{
+public:
+  NS_DECL_ISUPPORTS
+  CharsetDetectionObserver() {};
+  virtual ~CharsetDetectionObserver() {};
+  NS_IMETHOD Notify(const char* aCharset, nsDetectionConfident aConf)
+  {
+    mCharset = aCharset;
+    return NS_OK;
+  };
+  const char *GetDetectedCharset() { return mCharset.get(); }
+
+private:
+  nsCString mCharset;
+};
+
+NS_IMPL_ISUPPORTS1(CharsetDetectionObserver, nsICharsetDetectionObserver)
+
+NS_MSG_BASE nsresult
+MsgDetectCharsetFromFile(nsIFile *aFile, nsACString &aCharset)
+{
+  // First try the universal charset detector
+  nsCOMPtr<nsICharsetDetector> detector
+    = do_CreateInstance(NS_CHARSET_DETECTOR_CONTRACTID_BASE
+                        "universal_charset_detector");
+  if (!detector) {
+    // No universal charset detector, try the default charset detector
+    nsString detectorName;
+    NS_GetLocalizedUnicharPreferenceWithDefault(nullptr, "intl.charset.detector",
+                                                EmptyString(), detectorName);
+    if (!detectorName.IsEmpty()) {
+      nsCAutoString detectorContractID;
+      detectorContractID.AssignLiteral(NS_CHARSET_DETECTOR_CONTRACTID_BASE);
+      AppendUTF16toUTF8(detectorName, detectorContractID);
+      detector = do_CreateInstance(detectorContractID.get());
+    }
+  }
+
+  nsresult rv;
+  nsCOMPtr<nsIInputStream> inputStream;
+  rv = NS_NewLocalFileInputStream(getter_AddRefs(inputStream), aFile);
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  if (detector) {
+    nsCAutoString buffer;
+
+    nsCOMPtr<CharsetDetectionObserver> observer = new CharsetDetectionObserver();
+
+    rv = detector->Init(observer);
+    NS_ENSURE_SUCCESS(rv, rv);
+
+    nsCOMPtr<nsILineInputStream> lineInputStream;
+    lineInputStream = do_QueryInterface(inputStream, &rv);
+    NS_ENSURE_SUCCESS(rv, rv);
+
+    bool isMore = true;
+    bool dontFeed = false;
+    while (isMore &&
+           NS_SUCCEEDED(lineInputStream->ReadLine(buffer, &isMore)) &&
+           buffer.Length() > 0) {
+      detector->DoIt(buffer.get(), buffer.Length(), &dontFeed);
+      NS_ENSURE_SUCCESS(rv, rv);
+      if (dontFeed)
+        break;
+    }
+    rv = detector->Done();
+    NS_ENSURE_SUCCESS(rv, rv);
+
+    aCharset = observer->GetDetectedCharset();
+  } else {
+    // no charset detector available, check the BOM
+    char sniffBuf[3];
+    uint32_t numRead;
+    rv = inputStream->Read(sniffBuf, sizeof(sniffBuf), &numRead);
+
+    if (numRead >= 2 &&
+               sniffBuf[0] == (char)0xfe &&
+               sniffBuf[1] == (char)0xff) {
+      aCharset = "UTF-16BE";
+    } else if (numRead >= 2 &&
+               sniffBuf[0] == (char)0xff &&
+               sniffBuf[1] == (char)0xfe) {
+      aCharset = "UTF-16LE";
+    } else if (numRead >= 3 &&
+               sniffBuf[0] == (char)0xef &&
+               sniffBuf[1] == (char)0xbb &&
+               sniffBuf[2] == (char)0xbf) {
+      aCharset = "UTF-8";
+    }
+  }
+
+  if (aCharset.IsEmpty()) {
+    // no charset detected, default to the system charset
+    nsCOMPtr<nsIPlatformCharset> platformCharset =
+      do_GetService(NS_PLATFORMCHARSET_CONTRACTID, &rv);
+    if (NS_SUCCEEDED(rv)) {
+      rv = platformCharset->GetCharset(kPlatformCharsetSel_PlainTextInFile,
+                                       aCharset);
+    }
+  }
+
+  if (aCharset.IsEmpty()) {
+    // no sniffed or default charset, try UTF-8
+    aCharset.AssignLiteral("UTF-8");
+  }
+
+  return NS_OK;
+}
+
+/*
+ * Converts a buffer to plain text. Some conversions may
+ * or may not work with certain end charsets which is why we
+ * need that as an argument to the function. If charset is
+ * unknown or deemed of no importance NULL could be passed.
+ */
+NS_MSG_BASE nsresult
+ConvertBufToPlainText(nsString &aConBuf, bool formatFlowed /* = false */, bool formatOutput)
+{
+  if (aConBuf.IsEmpty())
+    return NS_OK;
+
+  int32_t wrapWidth = 72;
+  nsCOMPtr<nsIPrefBranch> pPrefBranch(do_GetService(NS_PREFSERVICE_CONTRACTID));
+
+  if (pPrefBranch)
+  {
+    pPrefBranch->GetIntPref("mailnews.wraplength", &wrapWidth);
+    // Let sanity reign!
+    if (wrapWidth == 0 || wrapWidth > 990)
+      wrapWidth = 990;
+    else if (wrapWidth < 10)
+      wrapWidth = 10;
+  }
+
+  uint32_t converterFlags = 0;
+  if (formatOutput)
+    converterFlags = nsIDocumentEncoder::OutputFormatted;
+  if (formatFlowed)
+    converterFlags |= nsIDocumentEncoder::OutputFormatFlowed;
+
+  nsCOMPtr<nsIParserUtils> utils =
+    do_GetService(NS_PARSERUTILS_CONTRACTID);
+  return utils->ConvertToPlainText(aConBuf,
+                                   converterFlags,
+                                   wrapWidth,
+                                   aConBuf);
 }

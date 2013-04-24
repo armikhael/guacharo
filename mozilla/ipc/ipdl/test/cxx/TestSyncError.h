@@ -17,20 +17,20 @@ public:
     TestSyncErrorParent();
     virtual ~TestSyncErrorParent();
 
+    static bool RunTestInProcesses() { return true; }
+    static bool RunTestInThreads() { return true; }
+
     void Main();
 
 protected:    
-    NS_OVERRIDE
-    virtual bool RecvError();
+    virtual bool RecvError() MOZ_OVERRIDE;
 
-    NS_OVERRIDE
-    virtual void ProcessingError(Result what)
+    virtual void ProcessingError(Result what) MOZ_OVERRIDE
     {
         // Ignore errors
     }
 
-    NS_OVERRIDE
-    virtual void ActorDestroy(ActorDestroyReason why)
+    virtual void ActorDestroy(ActorDestroyReason why) MOZ_OVERRIDE
     {
         if (NormalShutdown != why)
             fail("unexpected destruction!");  
@@ -48,17 +48,14 @@ public:
     virtual ~TestSyncErrorChild();
 
 protected:
-    NS_OVERRIDE
-    virtual bool RecvStart();
+    virtual bool RecvStart() MOZ_OVERRIDE;
 
-    NS_OVERRIDE
-    virtual void ProcessingError(Result what)
+    virtual void ProcessingError(Result what) MOZ_OVERRIDE
     {
         // Ignore errors
     }
 
-    NS_OVERRIDE
-    virtual void ActorDestroy(ActorDestroyReason why)
+    virtual void ActorDestroy(ActorDestroyReason why) MOZ_OVERRIDE
     {
         if (NormalShutdown != why)
             fail("unexpected destruction!");

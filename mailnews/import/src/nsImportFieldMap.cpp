@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 
 #include "nscore.h"
@@ -54,40 +21,39 @@ NS_METHOD nsImportFieldMap::Create(nsIStringBundle *aBundle, nsISupports *aOuter
     return NS_ERROR_NO_AGGREGATION;
 
   nsImportFieldMap *it = new nsImportFieldMap(aBundle);
-  if (it == nsnull)
+  if (it == nullptr)
     return NS_ERROR_OUT_OF_MEMORY;
 
-  NS_ADDREF( it);
-  nsresult rv = it->QueryInterface( aIID, aResult);
-  NS_RELEASE( it);
+  NS_ADDREF(it);
+  nsresult rv = it->QueryInterface(aIID, aResult);
+  NS_RELEASE(it);
   return rv;
 }
 
 NS_IMPL_THREADSAFE_ISUPPORTS1(nsImportFieldMap, nsIImportFieldMap)
 
-NS_IMPL_GETSET(nsImportFieldMap, SkipFirstRecord, PRBool, m_skipFirstRecord)
+NS_IMPL_GETSET(nsImportFieldMap, SkipFirstRecord, bool, m_skipFirstRecord)
 
 nsImportFieldMap::nsImportFieldMap(nsIStringBundle *aBundle)
 {
   m_numFields = 0;
-  m_pFields = nsnull;
-  m_pActive = nsnull;
+  m_pFields = nullptr;
+  m_pActive = nullptr;
   m_allocated = 0;
   // need to init the description array
   m_mozFieldCount = 0;
     m_skipFirstRecord = false;
-  nsCOMPtr<nsIStringBundle> pBundle;
-  nsImportStringBundle::GetStringBundleProxy(aBundle, getter_AddRefs(pBundle));
+  nsCOMPtr<nsIStringBundle> pBundle = aBundle;
 
   nsString *pStr;
-  for (PRInt32 i = IMPORT_FIELD_DESC_START; i <= IMPORT_FIELD_DESC_END; i++, m_mozFieldCount++) {
+  for (int32_t i = IMPORT_FIELD_DESC_START; i <= IMPORT_FIELD_DESC_END; i++, m_mozFieldCount++) {
     pStr = new nsString();
     if (pBundle) {
       nsImportStringBundle::GetStringByID(i, pBundle, *pStr);
     }
     else
-      pStr->AppendInt( i);
-    m_descriptions.AppendElement( (void *)pStr);
+      pStr->AppendInt(i);
+    m_descriptions.AppendElement((void *)pStr);
   }
 }
 
@@ -99,158 +65,158 @@ nsImportFieldMap::~nsImportFieldMap()
     delete [] m_pActive;
 
   nsString *  pStr;
-  for (PRInt32 i = 0; i < m_mozFieldCount; i++) {
-    pStr = (nsString *) m_descriptions.ElementAt( i);
+  for (int32_t i = 0; i < m_mozFieldCount; i++) {
+    pStr = (nsString *) m_descriptions.ElementAt(i);
     delete pStr;
   }
   m_descriptions.Clear();
 }
 
 
-NS_IMETHODIMP nsImportFieldMap::GetNumMozFields(PRInt32 *aNumFields)
+NS_IMETHODIMP nsImportFieldMap::GetNumMozFields(int32_t *aNumFields)
 {
-    NS_PRECONDITION(aNumFields != nsnull, "null ptr");
+    NS_PRECONDITION(aNumFields != nullptr, "null ptr");
   if (!aNumFields)
     return NS_ERROR_NULL_POINTER;
 
   *aNumFields = m_mozFieldCount;
-  return( NS_OK);
+  return NS_OK;
 }
 
-NS_IMETHODIMP nsImportFieldMap::GetMapSize(PRInt32 *aNumFields)
+NS_IMETHODIMP nsImportFieldMap::GetMapSize(int32_t *aNumFields)
 {
-    NS_PRECONDITION(aNumFields != nsnull, "null ptr");
+    NS_PRECONDITION(aNumFields != nullptr, "null ptr");
   if (!aNumFields)
     return NS_ERROR_NULL_POINTER;
 
   *aNumFields = m_numFields;
-  return( NS_OK);
+  return NS_OK;
 }
 
-NS_IMETHODIMP nsImportFieldMap::GetFieldDescription(PRInt32 index, PRUnichar **_retval)
+NS_IMETHODIMP nsImportFieldMap::GetFieldDescription(int32_t index, PRUnichar **_retval)
 {
-    NS_PRECONDITION(_retval != nsnull, "null ptr");
+    NS_PRECONDITION(_retval != nullptr, "null ptr");
   if (!_retval)
     return NS_ERROR_NULL_POINTER;
 
-  *_retval = nsnull;
+  *_retval = nullptr;
   if ((index < 0) || (index >= m_descriptions.Count()))
-    return( NS_ERROR_FAILURE);
+    return NS_ERROR_FAILURE;
 
   *_retval = ToNewUnicode(*((nsString *)m_descriptions.ElementAt(index)));
-  return( NS_OK);
+  return NS_OK;
 }
 
-NS_IMETHODIMP nsImportFieldMap::SetFieldMapSize(PRInt32 size)
+NS_IMETHODIMP nsImportFieldMap::SetFieldMapSize(int32_t size)
 {
-  nsresult rv = Allocate( size);
-  if (NS_FAILED( rv))
-    return( rv);
+  nsresult rv = Allocate(size);
+  if (NS_FAILED(rv))
+    return rv;
 
   m_numFields = size;
 
-  return( NS_OK);
+  return NS_OK;
 }
 
 
-NS_IMETHODIMP nsImportFieldMap::DefaultFieldMap(PRInt32 size)
+NS_IMETHODIMP nsImportFieldMap::DefaultFieldMap(int32_t size)
 {
-  nsresult rv = SetFieldMapSize( size);
-  if (NS_FAILED( rv))
-    return( rv);
-  for (PRInt32 i = 0; i < size; i++) {
+  nsresult rv = SetFieldMapSize(size);
+  if (NS_FAILED(rv))
+    return rv;
+  for (int32_t i = 0; i < size; i++) {
     m_pFields[i] = i;
-    m_pActive[i] = PR_TRUE;
+    m_pActive[i] = true;
   }
 
-  return( NS_OK);
+  return NS_OK;
 }
 
-NS_IMETHODIMP nsImportFieldMap::GetFieldMap(PRInt32 index, PRInt32 *_retval)
+NS_IMETHODIMP nsImportFieldMap::GetFieldMap(int32_t index, int32_t *_retval)
 {
-    NS_PRECONDITION(_retval != nsnull, "null ptr");
+    NS_PRECONDITION(_retval != nullptr, "null ptr");
   if (!_retval)
     return NS_ERROR_NULL_POINTER;
 
 
   if ((index < 0) || (index >= m_numFields))
-    return( NS_ERROR_FAILURE);
+    return NS_ERROR_FAILURE;
 
   *_retval = m_pFields[index];
-  return( NS_OK);
+  return NS_OK;
 }
 
-NS_IMETHODIMP nsImportFieldMap::SetFieldMap(PRInt32 index, PRInt32 fieldNum)
+NS_IMETHODIMP nsImportFieldMap::SetFieldMap(int32_t index, int32_t fieldNum)
 {
   if (index == -1) {
-    nsresult rv = Allocate( m_numFields + 1);
-    if (NS_FAILED( rv))
-      return( rv);
+    nsresult rv = Allocate(m_numFields + 1);
+    if (NS_FAILED(rv))
+      return rv;
     index = m_numFields;
     m_numFields++;
   }
   else {
     if ((index < 0) || (index >= m_numFields))
-      return( NS_ERROR_FAILURE);
+      return NS_ERROR_FAILURE;
   }
 
   if ((fieldNum != -1) && ((fieldNum < 0) || (fieldNum >= m_mozFieldCount)))
-    return( NS_ERROR_FAILURE);
+    return NS_ERROR_FAILURE;
 
   m_pFields[index] = fieldNum;
-  return( NS_OK);
+  return NS_OK;
 }
 
-NS_IMETHODIMP nsImportFieldMap::SetFieldMapByDescription(PRInt32 index, const PRUnichar *fieldDesc)
+NS_IMETHODIMP nsImportFieldMap::SetFieldMapByDescription(int32_t index, const PRUnichar *fieldDesc)
 {
-    NS_PRECONDITION(fieldDesc != nsnull, "null ptr");
+    NS_PRECONDITION(fieldDesc != nullptr, "null ptr");
   if (!fieldDesc)
     return NS_ERROR_NULL_POINTER;
 
-  PRInt32 i = FindFieldNum( fieldDesc);
+  int32_t i = FindFieldNum(fieldDesc);
   if (i == -1)
-    return( NS_ERROR_FAILURE);
+    return NS_ERROR_FAILURE;
 
-  return( SetFieldMap( index, i));
+  return SetFieldMap(index, i);
 }
 
 
-NS_IMETHODIMP nsImportFieldMap::GetFieldActive(PRInt32 index, PRBool *active)
+NS_IMETHODIMP nsImportFieldMap::GetFieldActive(int32_t index, bool *active)
 {
-    NS_PRECONDITION(active != nsnull, "null ptr");
+    NS_PRECONDITION(active != nullptr, "null ptr");
   if (!active)
     return NS_ERROR_NULL_POINTER;
   if ((index < 0) || (index >= m_numFields))
-    return( NS_ERROR_FAILURE);
+    return NS_ERROR_FAILURE;
 
   *active = m_pActive[index];
-  return( NS_OK);
+  return NS_OK;
 }
 
-NS_IMETHODIMP nsImportFieldMap::SetFieldActive(PRInt32 index, PRBool active)
+NS_IMETHODIMP nsImportFieldMap::SetFieldActive(int32_t index, bool active)
 {
   if ((index < 0) || (index >= m_numFields))
-    return( NS_ERROR_FAILURE);
+    return NS_ERROR_FAILURE;
 
   m_pActive[index] = active;
-  return( NS_OK);
+  return NS_OK;
 }
 
 
-NS_IMETHODIMP nsImportFieldMap::SetFieldValue(nsIAddrDatabase *database, nsIMdbRow *row, PRInt32 fieldNum, const PRUnichar *value)
+NS_IMETHODIMP nsImportFieldMap::SetFieldValue(nsIAddrDatabase *database, nsIMdbRow *row, int32_t fieldNum, const PRUnichar *value)
 {
-  NS_PRECONDITION(database != nsnull, "null ptr");
-  NS_PRECONDITION(row != nsnull, "null ptr");
-  NS_PRECONDITION(value != nsnull, "null ptr");
+  NS_PRECONDITION(database != nullptr, "null ptr");
+  NS_PRECONDITION(row != nullptr, "null ptr");
+  NS_PRECONDITION(value != nullptr, "null ptr");
   if (!database || !row || !value)
     return NS_ERROR_NULL_POINTER;
 
   // Allow the special value for a null field
   if (fieldNum == -1)
-    return( NS_OK);
+    return NS_OK;
 
   if ((fieldNum < 0) || (fieldNum >= m_mozFieldCount))
-    return( NS_ERROR_FAILURE);
+    return NS_ERROR_FAILURE;
 
   // UGGG!!!!! lot's of typing here!
   nsresult rv;
@@ -258,75 +224,75 @@ NS_IMETHODIMP nsImportFieldMap::SetFieldValue(nsIAddrDatabase *database, nsIMdbR
   nsString str(value);
   char *pVal = ToNewUTF8String(str);
 
-  switch( fieldNum) {
+  switch(fieldNum) {
   case 0:
-    rv = database->AddFirstName( row, pVal);
+    rv = database->AddFirstName(row, pVal);
     break;
   case 1:
-    rv = database->AddLastName( row, pVal);
+    rv = database->AddLastName(row, pVal);
     break;
   case 2:
-    rv = database->AddDisplayName( row, pVal);
+    rv = database->AddDisplayName(row, pVal);
     break;
   case 3:
-    rv = database->AddNickName( row, pVal);
+    rv = database->AddNickName(row, pVal);
     break;
   case 4:
-    rv = database->AddPrimaryEmail( row, pVal);
+    rv = database->AddPrimaryEmail(row, pVal);
     break;
   case 5:
-    rv = database->Add2ndEmail( row, pVal);
+    rv = database->Add2ndEmail(row, pVal);
     break;
   case 6:
-    rv = database->AddWorkPhone( row, pVal);
+    rv = database->AddWorkPhone(row, pVal);
     break;
   case 7:
-    rv = database->AddHomePhone( row, pVal);
+    rv = database->AddHomePhone(row, pVal);
     break;
   case 8:
-    rv = database->AddFaxNumber( row, pVal);
+    rv = database->AddFaxNumber(row, pVal);
     break;
   case 9:
-    rv = database->AddPagerNumber( row, pVal);
+    rv = database->AddPagerNumber(row, pVal);
     break;
   case 10:
-    rv = database->AddCellularNumber( row, pVal);
+    rv = database->AddCellularNumber(row, pVal);
     break;
   case 11:
-    rv = database->AddHomeAddress( row, pVal);
+    rv = database->AddHomeAddress(row, pVal);
     break;
   case 12:
-    rv = database->AddHomeAddress2( row, pVal);
+    rv = database->AddHomeAddress2(row, pVal);
     break;
   case 13:
-    rv = database->AddHomeCity( row, pVal);
+    rv = database->AddHomeCity(row, pVal);
     break;
   case 14:
-    rv = database->AddHomeState( row, pVal);
+    rv = database->AddHomeState(row, pVal);
     break;
   case 15:
-    rv = database->AddHomeZipCode( row, pVal);
+    rv = database->AddHomeZipCode(row, pVal);
     break;
   case 16:
-    rv = database->AddHomeCountry( row, pVal);
+    rv = database->AddHomeCountry(row, pVal);
     break;
   case 17:
-    rv = database->AddWorkAddress( row, pVal);
+    rv = database->AddWorkAddress(row, pVal);
     break;
   case 18:
-    rv = database->AddWorkAddress2( row, pVal);
+    rv = database->AddWorkAddress2(row, pVal);
     break;
   case 19:
-    rv = database->AddWorkCity( row, pVal);
+    rv = database->AddWorkCity(row, pVal);
     break;
   case 20:
-    rv = database->AddWorkState( row, pVal);
+    rv = database->AddWorkState(row, pVal);
     break;
   case 21:
-    rv = database->AddWorkZipCode( row, pVal);
+    rv = database->AddWorkZipCode(row, pVal);
     break;
   case 22:
-    rv = database->AddWorkCountry( row, pVal);
+    rv = database->AddWorkCountry(row, pVal);
     break;
   case 23:
     rv = database->AddJobTitle(row, pVal);
@@ -378,25 +344,25 @@ NS_IMETHODIMP nsImportFieldMap::SetFieldValue(nsIAddrDatabase *database, nsIMdbR
     }
   }
 
-  NS_Free( pVal);
+  NS_Free(pVal);
 
-  return( rv);
+  return rv;
 }
 
 
 NS_IMETHODIMP nsImportFieldMap::SetFieldValueByDescription(nsIAddrDatabase *database, nsIMdbRow *row, const PRUnichar *fieldDesc, const PRUnichar *value)
 {
-    NS_PRECONDITION(fieldDesc != nsnull, "null ptr");
+    NS_PRECONDITION(fieldDesc != nullptr, "null ptr");
   if (!fieldDesc)
     return NS_ERROR_NULL_POINTER;
-  PRInt32 i = FindFieldNum( fieldDesc);
+  int32_t i = FindFieldNum(fieldDesc);
   if (i == -1)
-    return( NS_ERROR_FAILURE);
-  return( SetFieldValue( database, row, i, value));
+    return NS_ERROR_FAILURE;
+  return SetFieldValue(database, row, i, value);
 }
 
 
-NS_IMETHODIMP nsImportFieldMap::GetFieldValue(nsIAbCard *card, PRInt32 fieldNum, PRUnichar **_retval)
+NS_IMETHODIMP nsImportFieldMap::GetFieldValue(nsIAbCard *card, int32_t fieldNum, PRUnichar **_retval)
 {
   if (!_retval || !card)
     return NS_ERROR_NULL_POINTER;
@@ -408,7 +374,7 @@ NS_IMETHODIMP nsImportFieldMap::GetFieldValue(nsIAbCard *card, PRInt32 fieldNum,
   }
 
   if ((fieldNum < 0) || (fieldNum >= m_mozFieldCount))
-    return( NS_ERROR_FAILURE);
+    return NS_ERROR_FAILURE;
 
   // ARRGGG!!! Lots of typing again
   // get the field from the card
@@ -544,38 +510,38 @@ NS_IMETHODIMP nsImportFieldMap::GetFieldValue(nsIAbCard *card, PRInt32 fieldNum,
 
 NS_IMETHODIMP nsImportFieldMap::GetFieldValueByDescription(nsIAbCard *card, const PRUnichar *fieldDesc, PRUnichar **_retval)
 {
-    NS_PRECONDITION(fieldDesc != nsnull, "null ptr");
+    NS_PRECONDITION(fieldDesc != nullptr, "null ptr");
   if (!fieldDesc)
     return NS_ERROR_NULL_POINTER;
-  PRInt32 i = FindFieldNum( fieldDesc);
+  int32_t i = FindFieldNum(fieldDesc);
   if (i == -1)
     return NS_ERROR_FAILURE;
-  return GetFieldValue( card, i, _retval);
+  return GetFieldValue(card, i, _retval);
 }
 
 
-nsresult nsImportFieldMap::Allocate( PRInt32 newSize)
+nsresult nsImportFieldMap::Allocate(int32_t newSize)
 {
   if (newSize <= m_allocated)
     return NS_OK;
 
-  PRInt32 sz = m_allocated;
+  int32_t sz = m_allocated;
   while (sz < newSize)
     sz += 30;
 
-  PRInt32  *pData = new PRInt32[ sz];
+  int32_t  *pData = new int32_t[ sz];
   if (!pData)
     return NS_ERROR_OUT_OF_MEMORY;
-  PRBool *pActive = new PRBool[sz];
+  bool *pActive = new bool[sz];
   if (!pActive) {
     delete [] pData;
     return NS_ERROR_OUT_OF_MEMORY;
   }
 
-  PRInt32  i;
+  int32_t  i;
   for (i = 0; i < sz; i++) {
     pData[i] = -1;
-    pActive[i] = PR_TRUE;
+    pActive[i] = true;
   }
   if (m_numFields) {
     for (i = 0; i < m_numFields; i++) {
@@ -591,11 +557,11 @@ nsresult nsImportFieldMap::Allocate( PRInt32 newSize)
   return NS_OK;
 }
 
-PRInt32 nsImportFieldMap::FindFieldNum( const PRUnichar *pDesc)
+int32_t nsImportFieldMap::FindFieldNum(const PRUnichar *pDesc)
 {
   nsString *pStr;
-  for (PRInt32 i = 0; i < m_mozFieldCount; i++) {
-    pStr = (nsString *)m_descriptions.ElementAt( i);
+  for (int32_t i = 0; i < m_mozFieldCount; i++) {
+    pStr = (nsString *)m_descriptions.ElementAt(i);
     if (!pStr->Equals(pDesc))
       return i;
   }

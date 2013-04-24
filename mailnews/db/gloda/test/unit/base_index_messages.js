@@ -1,41 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- *   Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird Global Database.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Andrew Sutherland <asutherland@asutherland.org>
- *   Siddharth Agarwal <sid.bugzilla@gmail.com>
- *   Dan Mosedale <dmose@mozillamessaging.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * This file tests our indexing prowess.  This includes both our ability to
@@ -51,6 +16,9 @@
  */
 
 load("resources/glodaTestHelper.js");
+
+Components.utils.import("resource:///modules/MailUtils.js");
+Components.utils.import("resource://gre/modules/NetUtil.jsm");
 
 // Whether we can expect fulltext results
 var expectFulltextResults = true;
@@ -363,14 +331,14 @@ function test_threading() {
  *  message header".
  */
 function test_attachment_flag() {
-  // create a synthetic message with attachment
+  // create a synthetic message with an attachment that won't normally be listed
+  // in the attachment pane (Content-Disposition: inline, no filename, and
+  // displayable inline)
   let smsg = msgGen.makeMessage({
     name: 'test message with part 1.2 attachment',
-    bodyPart: new SyntheticPartMultiMixed([
-      new SyntheticPartLeaf({body: 'I like cheese!'}),
-      let (m = msgGen.makeMessage({ body: { body: 'I like wine!' }}))
-      (m._contentType = "roquefort", m)
-    ]),
+    attachments: [{ body: 'attachment',
+                    filename: '',
+                    format: '' }],
   });
   // save it off for test_attributes_fundamental_from_disk
   let msgSet = new SyntheticMessageSet([smsg]);
@@ -406,8 +374,14 @@ function verify_attachment_flag(smsg, gmsg) {
 var fundamentalSyntheticMessage;
 var fundamentalFolderHandle;
 /**
+ * We're saving this one so that we can move the message later and verify that
+ * the attributes are consistent.
+ */
+var fundamentalMsgSet;
+var fundamentalGlodaMsgAttachmentUrls;
+/**
  * Save the resulting gloda message id corresponding to the
- *  fundamentalSyntheticMessage.
+ *  fundamentalSyntheticMessage so we can use it to query the message from disk.
  */
 var fundamentalGlodaMessageId;
 
@@ -432,6 +406,7 @@ function test_attributes_fundamental() {
   // save it off for test_attributes_fundamental_from_disk
   fundamentalSyntheticMessage = smsg;
   let msgSet = new SyntheticMessageSet([smsg]);
+  fundamentalMsgSet = msgSet;
   let folder = fundamentalFolderHandle = make_empty_folder();
   yield add_sets_to_folders(folder, [msgSet]);
 
@@ -442,14 +417,14 @@ function test_attributes_fundamental() {
     // now the next indexer wait will wait for the next indexing pass...
   }
 
-  yield wait_for_gloda_indexer(msgSet,
-                               {verifier: verify_attributes_fundamental});
+  yield wait_for_gloda_indexer(msgSet, { verifier: verify_attributes_fundamental });
 
 }
 
 function verify_attributes_fundamental(smsg, gmsg) {
   // save off the message id for test_attributes_fundamental_from_disk
   fundamentalGlodaMessageId = gmsg.id;
+  fundamentalGlodaMsgAttachmentUrls = [att.url for each (att in gmsg.attachmentInfos)];
 
   do_check_eq(gmsg.folderURI,
               get_real_injection_folder(fundamentalFolderHandle).URI);
@@ -495,9 +470,14 @@ function verify_attributes_fundamental(smsg, gmsg) {
         do_check_eq(attInfos[k], expectedInfos[i][k]);
       // because it's unreliable and depends on the platform
       do_check_true(Math.abs(attInfos.size - expectedSize) <= 2);
-      // because the url contains the path to the folder on disk which depends
-      // on the test setup
-      do_check_true(attInfos.url.length > 0);
+      // check that the attachment URLs are correct
+      let channel = NetUtil.newChannel(attInfos.url);
+      try {
+        // will throw if the URL is invalid
+        channel.open();
+      } catch (e) {
+        do_throw(new Error("Invalid attachment URL"));
+      }
     }
   }
   else {
@@ -505,6 +485,46 @@ function verify_attributes_fundamental(smsg, gmsg) {
     do_check_eq(gmsg.attachmentTypes, null);
     do_check_eq(gmsg.attachmentNames, null);
   }
+}
+
+/**
+ * We now move the message into another folder, wait for it to be indexed,
+ * and make sure the magic url getter for GlodaAttachment returns a proper
+ * URL.
+ */
+function test_moved_message_attributes() {
+  if (!expectFulltextResults)
+    return;
+
+  // Don't ask me why, let destFolder = make_empty_folder would result in a
+  // random error when running test_index_messages_imap_offline.js ...
+  let [destFolder, ignoreSet] = make_folder_with_sets([{count: 2}]);
+  fundamentalFolderHandle = destFolder;
+  yield wait_for_message_injection();
+  yield wait_for_gloda_indexer([ignoreSet]);
+
+  // this is a fast move (third parameter set to true)
+  yield async_move_messages(fundamentalMsgSet, destFolder, true);
+
+  yield wait_for_gloda_indexer(fundamentalMsgSet, {
+    verifier: function (newSynMsg, newGlodaMsg) {
+      // verify we still have the same number of attachments
+      do_check_eq(fundamentalGlodaMsgAttachmentUrls.length,
+        newGlodaMsg.attachmentInfos.length);
+      for each (let [i, attInfos] in Iterator(newGlodaMsg.attachmentInfos)) {
+        // verify the url has changed
+        do_check_neq(fundamentalGlodaMsgAttachmentUrls[i], attInfos.url);
+        // and verify that the new url is still valid
+        let channel = NetUtil.newChannel(attInfos.url);
+        try {
+          channel.open();
+        } catch (e) {
+          do_throw(new Error("Invalid attachment URL"));
+        }
+      }
+    },
+    fullyIndexed: 0,
+  });
 }
 
 /**
@@ -601,7 +621,75 @@ function test_attributes_explicit() {
   // -- Forwarded
 }
 
-/* ===== Fulltext Indexing ===== */
+
+/**
+ * Test non-query-able attributes
+ */
+function test_attributes_cant_query() {
+  let [folder, msgSet] = make_folder_with_sets([{count: 1}]);
+  yield wait_for_message_injection();
+  yield wait_for_gloda_indexer(msgSet, {augment: true});
+  let gmsg = msgSet.glodaMessages[0];
+
+  // -- Star
+  mark_sub_test_start("Star");
+  msgSet.setStarred(true);
+  yield wait_for_gloda_indexer(msgSet);
+  do_check_eq(gmsg.starred, true);
+
+  msgSet.setStarred(false);
+  yield wait_for_gloda_indexer(msgSet);
+  do_check_eq(gmsg.starred, false);
+
+  // -- Read / Unread
+  mark_sub_test_start("Read/Unread");
+  msgSet.setRead(true);
+  yield wait_for_gloda_indexer(msgSet);
+  do_check_eq(gmsg.read, true);
+
+  msgSet.setRead(false);
+  yield wait_for_gloda_indexer(msgSet);
+  do_check_eq(gmsg.read, false);
+
+  let readDbAttr = Gloda.getAttrDef(Gloda.BUILT_IN, "read");
+  let readId = readDbAttr.id;
+
+  yield sqlExpectCount(0, "SELECT COUNT(*) FROM messageAttributes WHERE attributeID = ?1",
+                       readId);
+
+  // -- Replied To
+
+  // -- Forwarded
+}
+
+/**
+ * Have the participants be in our addressbook prior to indexing so that we can
+ *  verify that the hand-off to the addressbook indexer does not cause breakage.
+ */
+function test_people_in_addressbook() {
+  var senderPair = msgGen.makeNameAndAddress(),
+      recipPair = msgGen.makeNameAndAddress();
+  
+  // - add both people to the address book
+  makeABCardForAddressPair(senderPair);
+  makeABCardForAddressPair(recipPair);
+
+  let [folder, msgSet] = make_folder_with_sets([
+    { count: 1, to: [recipPair], from: senderPair }]);
+  yield wait_for_message_injection();
+  yield wait_for_gloda_indexer(msgSet, {augment: true});
+  let gmsg = msgSet.glodaMessages[0],
+      senderIdentity = gmsg.from,
+      recipIdentity = gmsg.to[0];
+
+  do_check_neq(senderIdentity.contact, null);
+  do_check_true(senderIdentity.inAddressBook);
+
+  do_check_neq(recipIdentity.contact, null);
+  do_check_true(recipIdentity.inAddressBook);
+}
+
+/* ===== fulltexts Indexing ===== */
 
 /**
  * Make sure that we are using the saneBodySize flag.  This is basically the
@@ -912,12 +1000,75 @@ function test_folder_nuking_message_deletion() {
 
 /* ===== Folder Move/Rename/Copy (Single and Nested) ===== */
 
-function test_folder_deletion_single() {
+function get_nsIMsgFolder(aFolder) {
+  if (!(aFolder instanceof Ci.nsIMsgFolder))
+    return MailUtils.getFolderForURI(aFolder);
+  else
+    return aFolder;
+}
 
+function get_testFolder(aFolder) {
+  if ((typeof aFolder) != "string")
+    return aFolder.URI;
+  else
+    return aFolder;
 }
 
 function test_folder_deletion_nested() {
+  // add a folder with a bunch of messages
+  let [folder1, msgSet1] = make_folder_with_sets([{count: 1}]);
+  yield wait_for_message_injection();
 
+  let [folder2, msgSet2] = make_folder_with_sets([{count: 1}]);
+  yield wait_for_message_injection();
+
+  // index these folders, and augment the msgSet with the glodaMessages array
+  // for later use by sqlExpectCount
+  yield wait_for_gloda_indexer([msgSet1, msgSet2], { augment: true });
+  // the move has to be performed after the indexing, because otherwise, on
+  // IMAP, the moved message header are different entities and it's not msgSet2
+  // that ends up indexed, but the fresh headers
+  yield move_folder(folder2, folder1);
+
+  // add a trash folder, and move folder1 into it
+  let trash = make_empty_folder(null, [Ci.nsMsgFolderFlags.Trash]);
+  yield move_folder(folder1, trash);
+
+  let descendentFolders = Cc["@mozilla.org/supports-array;1"]
+                          .createInstance(Ci.nsISupportsArray);
+  get_nsIMsgFolder(trash).ListDescendents(descendentFolders);
+  let folders = [folder for (folder in fixIterator(descendentFolders, Ci.nsIMsgFolder))];
+  do_check_eq(folders.length, 2);
+  let [newFolder1, newFolder2] = folders;
+
+  let glodaFolder1 = Gloda.getFolderForFolder(newFolder1);
+  let glodaFolder2 = Gloda.getFolderForFolder(newFolder2);
+
+  // verify that Gloda properly marked this folder as not to be indexed anymore 
+  do_check_eq(glodaFolder1.indexingPriority, glodaFolder1.kIndexingNeverPriority);
+
+  // check that existing message is marked as deleted
+  yield wait_for_gloda_indexer([], {deleted: [msgSet1, msgSet2]});
+
+  // make sure the deletion hit the database
+  yield sqlExpectCount(1,
+    "SELECT COUNT(*) from folderLocations WHERE id = ? AND indexingPriority = ?",
+     glodaFolder1.id, glodaFolder1.kIndexingNeverPriority);
+  yield sqlExpectCount(1,
+    "SELECT COUNT(*) from folderLocations WHERE id = ? AND indexingPriority = ?",
+     glodaFolder2.id, glodaFolder2.kIndexingNeverPriority);
+
+  if (_messageInjectionSetup.injectionConfig.mode == "local") {
+    // add another message
+    make_new_sets_in_folder(newFolder1, [{count: 1}]);
+    yield wait_for_message_injection();
+    make_new_sets_in_folder(newFolder2, [{count: 1}]);
+    yield wait_for_message_injection();
+
+    // make sure that indexing returns nothing
+    GlodaMsgIndexer.indexingSweepNeeded = true;
+    yield wait_for_gloda_indexer([]);
+  }
 }
 
 /* ===== IMAP Nuances ===== */
@@ -1067,8 +1218,12 @@ var tests = [
   test_threading,
   test_attachment_flag,
   test_attributes_fundamental,
+  test_moved_message_attributes,
   test_attributes_fundamental_from_disk,
   test_attributes_explicit,
+  test_attributes_cant_query,
+
+  test_people_in_addressbook,
 
   test_streamed_bodies_are_size_capped,
 
@@ -1085,4 +1240,6 @@ var tests = [
 
   test_indexing_never_priority,
   test_setting_indexing_priority_never_while_indexing,
+
+  test_folder_deletion_nested,
 ];

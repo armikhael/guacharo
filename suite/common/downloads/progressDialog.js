@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the SeaMonkey internet suite code.
- *
- * The Initial Developer of the Original Code is
- * the SeaMonkey project at mozilla.org.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Robert Kaiser <kairo@kairo.at>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://gre/modules/XPCOMUtils.jsm");
 Components.utils.import("resource://gre/modules/DownloadUtils.jsm");
@@ -59,7 +26,7 @@ var gDlActive = false;
 var gRetrying = false;
 
 function progressStartup() {
-  gDownload = window.arguments[0].QueryInterface(Components.interfaces.nsIDownload);
+  gDownload = window.arguments[0];
 
   var recentDMWindow = Services.wm.getMostRecentWindow("Download:Manager");
   if (recentDMWindow && recentDMWindow.gDownloadTreeView.rowCount > 0) {
@@ -136,8 +103,18 @@ function progressShutdown() {
 
 function updateDownload() {
   switch (gDownload.state) {
-    case nsIDownloadManager.DOWNLOAD_NOTSTARTED:
     case nsIDownloadManager.DOWNLOAD_DOWNLOADING:
+      // At this point, we know if we are an indeterminate download or not.
+      if (gDownload.percentComplete == -1) {
+        gProgressText.hidden = true;
+        gProgressMeter.mode = "undetermined";
+      }
+      else if (gProgressText.hidden) {
+        // If it was undetermined before, unhide text and switch mode.
+        gProgressText.hidden = false;
+        gProgressMeter.mode = "determined";
+      }
+    case nsIDownloadManager.DOWNLOAD_NOTSTARTED:
     case nsIDownloadManager.DOWNLOAD_PAUSED:
     case nsIDownloadManager.DOWNLOAD_QUEUED:
     case nsIDownloadManager.DOWNLOAD_SCANNING:
@@ -150,18 +127,9 @@ function updateDownload() {
       break;
   }
   if (gDownload.size >= 0) {
-    // if it was undetermined before, unhide text and switch mode
-    if (gProgressText.hidden) {
-      gProgressText.hidden = false;
-      gProgressMeter.mode = "determined";
-    }
     gProgressMeter.value = gDownload.percentComplete;
     gProgressText.value = gDownloadBundle.getFormattedString("percentFormat",
                                                              [gDownload.percentComplete]);
-  }
-  else if (!gProgressText.hidden) {
-    gProgressText.hidden = true;
-    gProgressMeter.mode = "undetermined";
   }
   // Update window title
   var statusString;
@@ -392,7 +360,7 @@ var ProgressDlgController = {
       case "cmd_copyLocation":
         var clipboard = Components.classes["@mozilla.org/widget/clipboardhelper;1"]
                                   .getService(Components.interfaces.nsIClipboardHelper);
-        clipboard.copyString(gDownload.source.spec);
+        clipboard.copyString(gDownload.source.spec, document);
         break;
     }
   },

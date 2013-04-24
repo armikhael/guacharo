@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Boris Zbarsky <bzbarsky@mit.edu>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * This file contains the list of event names that are exposed via IDL
@@ -71,9 +39,16 @@
  * are otherwise equivalent to those enclosed in EVENT.  If
  * TOUCH_EVENT is not defined, it will be defined to the empty string.
  *
+ * Event names that are only exposed as IDL attributes on Documents
+ * should be enclosed in the DOCUMENT_ONLY_EVENT macro.  If this macro is
+ * not defined, it will be defined to the empty string.
+ *
  * Event names that are not exposed as IDL attributes at all should be
  * enclosed in NON_IDL_EVENT.  If NON_IDL_EVENT is not defined, it
  * will be defined to the empty string.
+ *
+ * If you change which macros event names are enclosed in, please
+ * update the tests for bug 689564 and bug 659350 as needed.
  */
 
 #ifdef DEFINED_FORWARDED_EVENT
@@ -111,6 +86,15 @@
 #define TOUCH_EVENT(_name, _id, _type, _struct)
 #define DEFINED_TOUCH_EVENT
 #endif /* TOUCH_EVENT */
+
+#ifdef DEFINED_DOCUMENT_ONLY_EVENT
+#error "Don't define DEFINED_DOCUMENT_ONLY_EVENT"
+#endif /* DEFINED_DOCUMENT_ONLY_EVENT */
+
+#ifndef DOCUMENT_ONLY_EVENT
+#define DOCUMENT_ONLY_EVENT(_name, _id, _type, _struct)
+#define DEFINED_DOCUMENT_ONLY_EVENT
+#endif /* DOCUMENT_ONLY_EVENT */
 
 #ifdef DEFINED_NON_IDL_EVENT
 #error "Don't define DEFINED_NON_IDL_EVENT"
@@ -227,6 +211,14 @@ EVENT(mousedown,
       NS_MOUSE_BUTTON_DOWN,
       EventNameType_All,
       NS_MOUSE_EVENT)
+EVENT(mouseenter,
+      NS_MOUSEENTER,
+      EventNameType_All,
+      NS_MOUSE_EVENT)
+EVENT(mouseleave,
+      NS_MOUSELEAVE,
+      EventNameType_All,
+      NS_MOUSE_EVENT)
 EVENT(mousemove,
       NS_MOUSE_MOVE,
       EventNameType_All,
@@ -243,6 +235,22 @@ EVENT(mouseup,
       NS_MOUSE_BUTTON_UP,
       EventNameType_All,
       NS_MOUSE_EVENT)
+EVENT(mozfullscreenchange,
+      NS_FULLSCREENCHANGE,
+      EventNameType_HTML,
+      NS_EVENT_NULL)
+EVENT(mozfullscreenerror,
+      NS_FULLSCREENERROR,
+      EventNameType_HTML,
+      NS_EVENT_NULL)
+EVENT(mozpointerlockchange,
+      NS_POINTERLOCKCHANGE,
+      EventNameType_HTML,
+      NS_EVENT_NULL)
+EVENT(mozpointerlockerror,
+      NS_POINTERLOCKERROR,
+      EventNameType_HTML,
+      NS_EVENT_NULL)
 // Not supported yet; probably never because "wheel" is a better idea.
 // EVENT(mousewheel)
 EVENT(pause,
@@ -264,10 +272,6 @@ EVENT(progress,
 EVENT(ratechange,
       NS_RATECHANGE,
       EventNameType_HTML,
-      NS_EVENT_NULL)
-EVENT(readystatechange,
-      NS_READYSTATECHANGE,
-      EventNameType_HTMLXUL,
       NS_EVENT_NULL)
 EVENT(reset,
       NS_FORM_RESET,
@@ -313,6 +317,10 @@ EVENT(waiting,
       NS_WAITING,
       EventNameType_HTML,
       NS_EVENT_NULL)
+EVENT(wheel,
+      NS_WHEEL_WHEEL,
+      EventNameType_All,
+      NS_WHEEL_EVENT)
 // Gecko-specific extensions that apply to elements
 EVENT(copy,
       NS_COPY,
@@ -419,31 +427,48 @@ WINDOW_ONLY_EVENT(deviceorientation,
                   NS_DEVICE_ORIENTATION,
                   EventNameType_None,
                   NS_EVENT)
+WINDOW_ONLY_EVENT(deviceproximity,
+                  NS_DEVICE_PROXIMITY,
+                  EventNameType_None,
+                  NS_EVENT)
+WINDOW_ONLY_EVENT(userproximity,
+                  NS_USER_PROXIMITY,
+                  EventNameType_None,
+                  NS_EVENT)
+WINDOW_ONLY_EVENT(devicelight,
+                  NS_DEVICE_LIGHT,
+                  EventNameType_None,
+                  NS_EVENT)
 
 TOUCH_EVENT(touchstart,
-            NS_USER_DEFINED_EVENT,
+            NS_TOUCH_START,
             EventNameType_All,
-            NS_INPUT_EVENT)
+            NS_TOUCH_EVENT)
 TOUCH_EVENT(touchend,
-            NS_USER_DEFINED_EVENT,
+            NS_TOUCH_END,
             EventNameType_All,
-            NS_INPUT_EVENT)
+            NS_TOUCH_EVENT)
 TOUCH_EVENT(touchmove,
-            NS_USER_DEFINED_EVENT,
+            NS_TOUCH_MOVE,
             EventNameType_All,
-            NS_INPUT_EVENT )
+            NS_TOUCH_EVENT )
 TOUCH_EVENT(touchenter,
-            NS_USER_DEFINED_EVENT,
+            NS_TOUCH_ENTER,
             EventNameType_All,
-            NS_INPUT_EVENT )
+            NS_TOUCH_EVENT )
 TOUCH_EVENT(touchleave,
-            NS_USER_DEFINED_EVENT,
+            NS_TOUCH_LEAVE,
             EventNameType_All,
-            NS_INPUT_EVENT)
+            NS_TOUCH_EVENT)
 TOUCH_EVENT(touchcancel,
-            NS_USER_DEFINED_EVENT,
+            NS_TOUCH_CANCEL,
             EventNameType_All,
-            NS_INPUT_EVENT)
+            NS_TOUCH_EVENT)
+
+DOCUMENT_ONLY_EVENT(readystatechange,
+                    NS_READYSTATECHANGE,
+                    EventNameType_HTMLXUL,
+                    NS_EVENT_NULL)
 
 NON_IDL_EVENT(MozMouseHittest,
               NS_MOUSE_MOZHITTEST,
@@ -517,6 +542,10 @@ NON_IDL_EVENT(text,
               NS_EVENT_NULL)
 NON_IDL_EVENT(compositionstart,
               NS_COMPOSITION_START,
+              EventNameType_XUL,
+              NS_COMPOSITION_EVENT)
+NON_IDL_EVENT(compositionupdate,
+              NS_COMPOSITION_UPDATE,
               EventNameType_XUL,
               NS_COMPOSITION_EVENT)
 NON_IDL_EVENT(compositionend,
@@ -611,7 +640,6 @@ NON_IDL_EVENT(zoom,
               NS_SVG_ZOOM,
               EventNameType_SVGSVG,
               NS_EVENT_NULL)
-#ifdef MOZ_SMIL
 NON_IDL_EVENT(begin,
               NS_SMIL_BEGIN,
               EventNameType_SMIL,
@@ -636,7 +664,6 @@ NON_IDL_EVENT(repeatEvent,
               NS_SMIL_REPEAT,
               EventNameType_None,
               NS_SMIL_TIME_EVENT)
-#endif // MOZ_SMIL
 
 NON_IDL_EVENT(MozAudioAvailable,
               NS_MOZAUDIOAVAILABLE,
@@ -646,10 +673,6 @@ NON_IDL_EVENT(MozAfterPaint,
               NS_AFTERPAINT,
               EventNameType_None,
               NS_EVENT)
-NON_IDL_EVENT(MozBeforePaint,
-              NS_BEFOREPAINT,
-              EventNameType_None,
-              NS_EVENT_NULL)
 
 NON_IDL_EVENT(MozScrolledAreaChanged,
               NS_SCROLLEDAREACHANGED,
@@ -691,6 +714,10 @@ NON_IDL_EVENT(MozTapGesture,
               NS_SIMPLE_GESTURE_EVENT)
 NON_IDL_EVENT(MozPressTapGesture,
               NS_SIMPLE_GESTURE_PRESSTAP,
+              EventNameType_None,
+              NS_SIMPLE_GESTURE_EVENT)
+NON_IDL_EVENT(MozEdgeUIGesture,
+              NS_SIMPLE_GESTURE_EDGEUI,
               EventNameType_None,
               NS_SIMPLE_GESTURE_EVENT)
 
@@ -743,6 +770,11 @@ NON_IDL_EVENT(animationiteration,
 #undef DEFINED_TOUCH_EVENT
 #undef TOUCH_EVENT
 #endif /* DEFINED_TOUCH_EVENT */
+
+#ifdef DEFINED_DOCUMENT_ONLY_EVENT
+#undef DEFINED_DOCUMENT_ONLY_EVENT
+#undef DOCUMENT_ONLY_EVENT
+#endif /* DEFINED_DOCUMENT_ONLY_EVENT */
 
 #ifdef DEFINED_NON_IDL_EVENT
 #undef DEFINED_NON_IDL_EVENT

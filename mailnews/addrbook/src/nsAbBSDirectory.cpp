@@ -1,43 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Paul Sandoz   <paul.sandoz@sun.com>
- *   Csaba Borbola <csaba.borbola@sun.com>
- *   Seth Spitzer <sspitzer@netscape.com>
- *   Mark Banner <mark@standard8.demon.co.uk>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsIPrefService.h"
 #include "nsAbBSDirectory.h"
@@ -55,7 +19,7 @@
 #include "nsCRTGlue.h"
 
 nsAbBSDirectory::nsAbBSDirectory()
-: mInitialized(PR_FALSE)
+: mInitialized(false)
 {
   mServers.Init(13);
 }
@@ -74,7 +38,7 @@ NS_IMPL_ISUPPORTS_INHERITED0(nsAbBSDirectory, nsAbDirProperty)
 
 nsresult nsAbBSDirectory::CreateDirectoriesFromFactory(const nsACString &aURI,
                                                        DIR_Server *aServer,
-                                                       PRBool aNotify)
+                                                       bool aNotify)
 {
   nsresult rv;
 
@@ -98,7 +62,7 @@ nsresult nsAbBSDirectory::CreateDirectoriesFromFactory(const nsACString &aURI,
   
   // Enumerate through the directories adding them
   // to the sub directories array
-  PRBool hasMore;
+  bool hasMore;
   nsCOMPtr<nsIAbManager> abManager = do_GetService(NS_ABMANAGER_CONTRACTID, &rv);
 
   while (NS_SUCCEEDED(newDirEnumerator->HasMoreElements(&hasMore)) && hasMore)
@@ -147,8 +111,8 @@ nsresult nsAbBSDirectory::EnsureInitialized()
   if (!directories)
     return NS_ERROR_FAILURE;
     
-  PRInt32 count = directories->Count();
-  for (PRInt32 i = 0; i < count; i++)
+  int32_t count = directories->Count();
+  for (int32_t i = 0; i < count; i++)
   {
     DIR_Server *server = (DIR_Server *)(directories->ElementAt(i));
       
@@ -158,7 +122,7 @@ nsresult nsAbBSDirectory::EnsureInitialized()
     // note, the filename might be na2 for 4.x LDAP directories
     // (we used the .na2 file for replication), and we don't want to skip
     // those.  see bug #127007
-    PRUint32 fileNameLen = strlen(server->fileName);
+    uint32_t fileNameLen = strlen(server->fileName);
     if (((fileNameLen > kABFileName_PreviousSuffixLen) && 
       strcmp(server->fileName + fileNameLen - kABFileName_PreviousSuffixLen,
              kABFileName_PreviousSuffix) == 0) &&
@@ -184,7 +148,7 @@ nsresult nsAbBSDirectory::EnsureInitialized()
       URI.Replace(kMDBDirectoryRootLen, URI.Length() - kMDBDirectoryRootLen, server->fileName);
       
     // Create the directories
-    rv = CreateDirectoriesFromFactory(URI, server, PR_FALSE /* notify */);
+    rv = CreateDirectoriesFromFactory(URI, server, false /* notify */);
 
     // If we failed, this could be because something has set a pref for us
     // which is now broke (e.g. no factory present). So just ignore this one
@@ -193,14 +157,14 @@ nsresult nsAbBSDirectory::EnsureInitialized()
       NS_WARNING("CreateDirectoriesFromFactory failed - Invalid factory?");
   }
     
-  mInitialized = PR_TRUE;
+  mInitialized = true;
   // sort directories by position...
   return NS_OK;
 }
 
 NS_IMETHODIMP nsAbBSDirectory::CreateNewDirectory(const nsAString &aDirName,
                                                   const nsACString &aURI,
-                                                  PRUint32 aType,
+                                                  uint32_t aType,
                                                   const nsACString &aPrefName,
                                                   nsACString &aResult)
 {
@@ -225,7 +189,7 @@ NS_IMETHODIMP nsAbBSDirectory::CreateNewDirectory(const nsAString &aDirName,
    * is more general.
    *
    */
-  DIR_Server* server = nsnull;
+  DIR_Server* server = nullptr;
   rv = DIR_AddNewAddressBook(aDirName, EmptyCString(), URI,
                              (DirectoryType)aType, aPrefName, &server);
   NS_ENSURE_SUCCESS (rv, rv);
@@ -238,7 +202,7 @@ NS_IMETHODIMP nsAbBSDirectory::CreateNewDirectory(const nsAString &aDirName,
 
   aResult.Assign(server->prefName);
 
-  rv = CreateDirectoriesFromFactory(URI, server, PR_TRUE /* notify */);
+  rv = CreateDirectoriesFromFactory(URI, server, true /* notify */);
   NS_ENSURE_SUCCESS(rv,rv);
   return rv;
 }
@@ -253,12 +217,12 @@ NS_IMETHODIMP nsAbBSDirectory::CreateDirectoryByURI(const nsAString &aDisplayNam
   if (StringBeginsWith(aURI, NS_LITERAL_CSTRING(kMDBDirectoryRoot)))
     fileName = Substring(aURI, kMDBDirectoryRootLen);
 
-  DIR_Server * server = nsnull;
+  DIR_Server * server = nullptr;
   rv = DIR_AddNewAddressBook(aDisplayName, fileName, aURI,
                              PABDirectory, EmptyCString(), &server);
   NS_ENSURE_SUCCESS(rv,rv);
 
-  rv = CreateDirectoriesFromFactory(aURI, server, PR_TRUE /* notify */);
+  rv = CreateDirectoriesFromFactory(aURI, server, true /* notify */);
   NS_ENSURE_SUCCESS(rv,rv);
 	return rv;
 }
@@ -291,7 +255,7 @@ NS_IMETHODIMP nsAbBSDirectory::DeleteDirectory(nsIAbDirectory *directory)
   nsresult rv = EnsureInitialized();
   NS_ENSURE_SUCCESS(rv, rv);
 
-  DIR_Server *server = nsnull;
+  DIR_Server *server = nullptr;
   mServers.Get(directory, &server);
 
   if (!server)
@@ -307,15 +271,15 @@ NS_IMETHODIMP nsAbBSDirectory::DeleteDirectory(nsIAbDirectory *directory)
     do_GetService(NS_ABDIRFACTORYSERVICE_CONTRACTID,&rv);
   NS_ENSURE_SUCCESS (rv, rv);
 
-  PRUint32 count = getDirectories.directories.Count();
+  uint32_t count = getDirectories.directories.Count();
 
   nsCOMPtr<nsIAbManager> abManager = do_GetService(NS_ABMANAGER_CONTRACTID);
 
-  for (PRUint32 i = 0; i < count; i++) {
+  for (uint32_t i = 0; i < count; i++) {
     nsCOMPtr<nsIAbDirectory> d = getDirectories.directories[i];
 
     mServers.Remove(d);
-    rv = mSubDirectories.RemoveObject(d);
+    mSubDirectories.RemoveObject(d);
 
     if (abManager)
       abManager->NotifyDirectoryDeleted(this, d);
@@ -335,7 +299,7 @@ NS_IMETHODIMP nsAbBSDirectory::DeleteDirectory(nsIAbDirectory *directory)
   return rv;
 }
 
-NS_IMETHODIMP nsAbBSDirectory::HasDirectory(nsIAbDirectory *dir, PRBool *hasDir)
+NS_IMETHODIMP nsAbBSDirectory::HasDirectory(nsIAbDirectory *dir, bool *hasDir)
 {
   if (!hasDir)
     return NS_ERROR_NULL_POINTER;
@@ -343,18 +307,18 @@ NS_IMETHODIMP nsAbBSDirectory::HasDirectory(nsIAbDirectory *dir, PRBool *hasDir)
   nsresult rv = EnsureInitialized();
   NS_ENSURE_SUCCESS(rv, rv);
 
-  DIR_Server *dirServer = nsnull;
+  DIR_Server *dirServer = nullptr;
   mServers.Get(dir, &dirServer);
   return DIR_ContainsServer(dirServer, hasDir);
 }
 
 NS_IMETHODIMP nsAbBSDirectory::UseForAutocomplete(const nsACString &aIdentityKey,
-                                                  PRBool *aResult)
+                                                  bool *aResult)
 {
   // For the "root" directory (kAllDirectoryRoot) always return true so that
   // we can search sub directories that may or may not be local.
   NS_ENSURE_ARG_POINTER(aResult);
-  *aResult = PR_TRUE;
+  *aResult = true;
   return NS_OK;
 }
 

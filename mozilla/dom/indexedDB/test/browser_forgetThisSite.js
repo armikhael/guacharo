@@ -20,8 +20,8 @@ function test()
 {
   waitForExplicitFinish();
   // Avoids the prompt
-  setPermission(testPageURL1, "indexedDB");
-  setPermission(testPageURL2, "indexedDB");
+  setPermission(testPageURL1, "indexedDB", "unknown");
+  setPermission(testPageURL2, "indexedDB", "unknown");
   executeSoon(test1);
 }
 
@@ -33,7 +33,7 @@ function test1()
     gBrowser.selectedBrowser.removeEventListener("load", arguments.callee, true);
 
     setFinishedCallback(function(result, exception) {
-      ok(result == "11", "Set version on database in " + testPageURL1);
+      ok(result == 11, "Set version on database in " + testPageURL1);
       ok(!exception, "No exception");
       gBrowser.removeCurrentTab();
 
@@ -51,7 +51,7 @@ function test2()
     gBrowser.selectedBrowser.removeEventListener("load", arguments.callee, true);
 
     setFinishedCallback(function(result, exception) {
-      ok(result == "11", "Set version on database in " + testPageURL2);
+      ok(result == 11, "Set version on database in " + testPageURL2);
       ok(!exception, "No exception");
       gBrowser.removeCurrentTab();
 
@@ -67,7 +67,7 @@ function test3()
   Components.classes["@mozilla.org/privatebrowsing;1"]
             .getService(Components.interfaces.nsIPrivateBrowsingService)
             .removeDataFromDomain(domains[1]);
-  setPermission(testPageURL4, "indexedDB");
+  setPermission(testPageURL4, "indexedDB", "unknown");
   executeSoon(test4);
 }
 
@@ -79,7 +79,7 @@ function test4()
     gBrowser.selectedBrowser.removeEventListener("load", arguments.callee, true);
 
     setFinishedCallback(function(result, exception) {
-      ok(result == "11", "Got correct version on database in " + testPageURL3);
+      ok(result == 11, "Got correct version on database in " + testPageURL3);
       ok(!exception, "No exception");
       gBrowser.removeCurrentTab();
 
@@ -97,7 +97,7 @@ function test5()
     gBrowser.selectedBrowser.removeEventListener("load", arguments.callee, true);
 
     setFinishedCallback(function(result, exception) {
-      ok(result == "", "Got correct version on database in " + testPageURL4);
+      ok(result == 1, "Got correct version on database in " + testPageURL4);
       ok(!exception, "No exception");
       gBrowser.removeCurrentTab();
 

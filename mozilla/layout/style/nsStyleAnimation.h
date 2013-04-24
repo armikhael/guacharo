@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is nsStyleAnimation.
- *
- * The Initial Developer of the Original Code is
- * The Mozilla Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Daniel Holbert <dholbert@mozilla.com>, Mozilla Corporation
- *   L. David Baron <dbaron@dbaron.org>, Mozilla Corporation
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* Utilities for animation of computed style values */
 
@@ -49,16 +15,12 @@
 #include "nsCSSProperty.h"
 #include "nsCoord.h"
 #include "nsColor.h"
+#include "nsCSSValue.h"
 
 class nsPresContext;
 class nsStyleContext;
-class nsCSSValue;
-struct nsCSSValueList;
-struct nsCSSValuePair;
-struct nsCSSValueTriplet;
-struct nsCSSValuePairList;
 struct nsCSSRect;
-struct gfxMatrix;
+class gfx3DMatrix;
 
 namespace mozilla {
 namespace dom {
@@ -85,10 +47,10 @@ public:
    * @param aDest       The value to add to.
    * @param aValueToAdd The value to add.
    * @param aCount      The number of times to add aValueToAdd.
-   * @return PR_TRUE on success, PR_FALSE on failure.
+   * @return true on success, false on failure.
    */
-  static PRBool Add(nsCSSProperty aProperty, Value& aDest,
-                    const Value& aValueToAdd, PRUint32 aCount) {
+  static bool Add(nsCSSProperty aProperty, Value& aDest,
+                    const Value& aValueToAdd, uint32_t aCount) {
     return AddWeighted(aProperty, 1.0, aDest, aCount, aValueToAdd, aDest);
   }
 
@@ -108,9 +70,9 @@ public:
    * @param aEndValue   The end of the interval for which the distance
    *                    should be calculated.
    * @param aDistance   The result of the calculation.
-   * @return PR_TRUE on success, PR_FALSE on failure.
+   * @return true on success, false on failure.
    */
-  static PRBool ComputeDistance(nsCSSProperty aProperty,
+  static bool ComputeDistance(nsCSSProperty aProperty,
                                 const Value& aStartValue,
                                 const Value& aEndValue,
                                 double& aDistance);
@@ -129,9 +91,9 @@ public:
    * @param aPortion    A number in the range [0.0, 1.0] defining the
    *                    distance of the interpolated value in the interval.
    * @param [out] aResultValue The resulting interpolated value.
-   * @return PR_TRUE on success, PR_FALSE on failure.
+   * @return true on success, false on failure.
    */
-  static PRBool Interpolate(nsCSSProperty aProperty,
+  static bool Interpolate(nsCSSProperty aProperty,
                             const Value& aStartValue,
                             const Value& aEndValue,
                             double aPortion,
@@ -146,7 +108,7 @@ public:
    *
    * @param [out] aResultValue The resulting interpolated value.  May be
    *                           the same as aValue1 or aValue2.
-   * @return PR_TRUE on success, PR_FALSE on failure.
+   * @return true on success, false on failure.
    *
    * NOTE: Current callers always pass aCoeff1 and aCoeff2 >= 0.  They
    * are currently permitted to be negative; however, if, as we add
@@ -154,7 +116,7 @@ public:
    * difficulty, we might change this to restrict them to being
    * positive.
    */
-  static PRBool AddWeighted(nsCSSProperty aProperty,
+  static bool AddWeighted(nsCSSProperty aProperty,
                             double aCoeff1, const Value& aValue1,
                             double aCoeff2, const Value& aValue2,
                             Value& aResultValue);
@@ -166,7 +128,7 @@ public:
    * (property ID + string).  A style context is needed in case the
    * specified value depends on inherited style or on the values of other
    * properties.
-   * 
+   *
    * @param aProperty       The property whose value we're computing.
    * @param aTargetElement  The content node to which our computed value is
    *                        applicable.
@@ -175,13 +137,22 @@ public:
    * @param aUseSVGMode     A flag to indicate whether we should parse
    *                        |aSpecifiedValue| in SVG mode.
    * @param [out] aComputedValue The resulting computed value.
-   * @return PR_TRUE on success, PR_FALSE on failure.
+   * @param [out] aIsContextSensitive
+   *                        Set to true if |aSpecifiedValue| may produce
+   *                        a different |aComputedValue| depending on other CSS
+   *                        properties on |aTargetElement| or its ancestors.
+   *                        false otherwise.
+   *                        Note that the operation of this method is
+   *                        significantly faster when |aIsContextSensitive| is
+   *                        nullptr.
+   * @return true on success, false on failure.
    */
-  static PRBool ComputeValue(nsCSSProperty aProperty,
-                             mozilla::dom::Element* aElement,
+  static bool ComputeValue(nsCSSProperty aProperty,
+                             mozilla::dom::Element* aTargetElement,
                              const nsAString& aSpecifiedValue,
-                             PRBool aUseSVGMode,
-                             Value& aComputedValue);
+                             bool aUseSVGMode,
+                             Value& aComputedValue,
+                             bool* aIsContextSensitive = nullptr);
 
   /**
    * Creates a specified value for the given computed value.
@@ -196,13 +167,13 @@ public:
    *                       which we're working.
    * @param aComputedValue The computed value to be converted.
    * @param [out] aSpecifiedValue The resulting specified value.
-   * @return PR_TRUE on success, PR_FALSE on failure.
+   * @return true on success, false on failure.
    */
-  static PRBool UncomputeValue(nsCSSProperty aProperty,
+  static bool UncomputeValue(nsCSSProperty aProperty,
                                nsPresContext* aPresContext,
                                const Value& aComputedValue,
                                nsCSSValue& aSpecifiedValue);
-  static PRBool UncomputeValue(nsCSSProperty aProperty,
+  static bool UncomputeValue(nsCSSProperty aProperty,
                                nsPresContext* aPresContext,
                                const Value& aComputedValue,
                                nsAString& aSpecifiedValue);
@@ -214,9 +185,9 @@ public:
    * @param aProperty     The property whose value we're looking up.
    * @param aStyleContext The style context to check for the computed value.
    * @param [out] aComputedValue The resulting computed value.
-   * @return PR_TRUE on success, PR_FALSE on failure.
+   * @return true on success, false on failure.
    */
-  static PRBool ExtractComputedValue(nsCSSProperty aProperty,
+  static bool ExtractComputedValue(nsCSSProperty aProperty,
                                      nsStyleContext* aStyleContext,
                                      Value& aComputedValue);
 
@@ -224,12 +195,16 @@ public:
     * Interpolates between 2 matrices by decomposing them.
     *
     * @param aMatrix1   First matrix, using CSS pixel units.
-    * @param aCoeff1    Interpolation value in the range [0.0, 1.0]
     * @param aMatrix2   Second matrix, using CSS pixel units.
-    * @param aCoeff2    Interpolation value in the range [0.0, 1.0]
+    * @param aProgress  Interpolation value in the range [0.0, 1.0]
     */
-   static gfxMatrix InterpolateTransformMatrix(const gfxMatrix &aMatrix1, double aCoeff1,
-                                               const gfxMatrix &aMatrix2, double aCoeff2);
+   static gfx3DMatrix InterpolateTransformMatrix(const gfx3DMatrix &aMatrix1,
+                                                 const gfx3DMatrix &aMatrix2,
+                                                 double aProgress);
+
+   static already_AddRefed<nsCSSValue::Array>
+     AppendTransformFunction(nsCSSKeyword aTransformFunction,
+                             nsCSSValueList**& aListTail);
 
   /**
    * The types and values for the values that we extract and animate.
@@ -255,6 +230,7 @@ public:
     eUnit_Dasharray, // nsCSSValueList* (never null)
     eUnit_Shadow, // nsCSSValueList* (may be null)
     eUnit_Transform, // nsCSSValueList* (never null)
+    eUnit_BackgroundPosition, // nsCSSValueList* (never null)
     eUnit_CSSValuePairList, // nsCSSValuePairList* (never null)
     eUnit_UnparsedString // nsStringBuffer* (never null)
   };
@@ -263,7 +239,7 @@ public:
   private:
     Unit mUnit;
     union {
-      PRInt32 mInt;
+      int32_t mInt;
       nscoord mCoord;
       float mFloat;
       nscolor mColor;
@@ -283,11 +259,11 @@ public:
 
     // Accessor to let us verify assumptions about presence of null unit,
     // without tripping the assertion in GetUnit().
-    PRBool IsNull() const {
+    bool IsNull() const {
       return mUnit == eUnit_Null;
     }
 
-    PRInt32 GetIntValue() const {
+    int32_t GetIntValue() const {
       NS_ASSERTION(IsIntUnit(mUnit), "unit mismatch");
       return mValue.mInt;
     }
@@ -339,7 +315,7 @@ public:
     void GetStringValue(nsAString& aBuffer) const {
       NS_ASSERTION(IsStringUnit(mUnit), "unit mismatch");
       aBuffer.Truncate();
-      PRUint32 len = NS_strlen(GetBufferValue(mValue.mString));
+      uint32_t len = NS_strlen(GetBufferValue(mValue.mString));
       mValue.mString->ToString(len, aBuffer);
     }
 
@@ -350,7 +326,7 @@ public:
     }
     Value(const Value& aOther) : mUnit(eUnit_Null) { *this = aOther; }
     enum IntegerConstructorType { IntegerConstructor };
-    Value(PRInt32 aInt, Unit aUnit, IntegerConstructorType);
+    Value(int32_t aInt, Unit aUnit, IntegerConstructorType);
     enum CoordConstructorType { CoordConstructor };
     Value(nscoord aLength, CoordConstructorType);
     enum PercentConstructorType { PercentConstructor };
@@ -365,7 +341,7 @@ public:
     void SetNormalValue();
     void SetAutoValue();
     void SetNoneValue();
-    void SetIntValue(PRInt32 aInt, Unit aUnit);
+    void SetIntValue(int32_t aInt, Unit aUnit);
     void SetCoordValue(nscoord aCoord);
     void SetPercentValue(float aPercent);
     void SetFloatValue(float aFloat);
@@ -383,8 +359,8 @@ public:
 
     Value& operator=(const Value& aOther);
 
-    PRBool operator==(const Value& aOther) const;
-    PRBool operator!=(const Value& aOther) const
+    bool operator==(const Value& aOther) const;
+    bool operator!=(const Value& aOther) const
       { return !(*this == aOther); }
 
   private:
@@ -394,30 +370,30 @@ public:
       return static_cast<PRUnichar*>(aBuffer->Data());
     }
 
-    static PRBool IsIntUnit(Unit aUnit) {
+    static bool IsIntUnit(Unit aUnit) {
       return aUnit == eUnit_Enumerated || aUnit == eUnit_Visibility ||
              aUnit == eUnit_Integer;
     }
-    static PRBool IsCSSValueUnit(Unit aUnit) {
+    static bool IsCSSValueUnit(Unit aUnit) {
       return aUnit == eUnit_Calc;
     }
-    static PRBool IsCSSValuePairUnit(Unit aUnit) {
+    static bool IsCSSValuePairUnit(Unit aUnit) {
       return aUnit == eUnit_CSSValuePair;
     }
-    static PRBool IsCSSValueTripletUnit(Unit aUnit) {
+    static bool IsCSSValueTripletUnit(Unit aUnit) {
       return aUnit == eUnit_CSSValueTriplet;
     }
-    static PRBool IsCSSRectUnit(Unit aUnit) {
+    static bool IsCSSRectUnit(Unit aUnit) {
       return aUnit == eUnit_CSSRect;
     }
-    static PRBool IsCSSValueListUnit(Unit aUnit) {
+    static bool IsCSSValueListUnit(Unit aUnit) {
       return aUnit == eUnit_Dasharray || aUnit == eUnit_Shadow ||
-             aUnit == eUnit_Transform;
+             aUnit == eUnit_Transform || aUnit == eUnit_BackgroundPosition;
     }
-    static PRBool IsCSSValuePairListUnit(Unit aUnit) {
+    static bool IsCSSValuePairListUnit(Unit aUnit) {
       return aUnit == eUnit_CSSValuePairList;
     }
-    static PRBool IsStringUnit(Unit aUnit) {
+    static bool IsStringUnit(Unit aUnit) {
       return aUnit == eUnit_UnparsedString;
     }
   };

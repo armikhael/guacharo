@@ -41,7 +41,7 @@ TestFailedCtorSubParent::AllocPTestFailedCtorSubsub()
         return mThree = a;
     } else {
         fail("unexpected Alloc()");
-        return nsnull;
+        return nullptr;
     }
 }
 bool
@@ -110,7 +110,8 @@ TestFailedCtorChild::DeallocPTestFailedCtorSub(PTestFailedCtorSubChild* actor)
 void
 TestFailedCtorChild::ProcessingError(Result what)
 {
-    _exit(0);
+    if (OtherProcess() != 0) // thread-mode
+        _exit(0);
 }
 
 PTestFailedCtorSubsubChild*

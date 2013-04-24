@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-  */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef _MDB_
 #include "mdb.h"
@@ -292,7 +260,7 @@ morkFile::WriteNewlines(morkEnv* ev, mork_count inNewlines)
 NS_IMETHODIMP
 morkFile::Eof(nsIMdbEnv* mev, mdb_pos* outPos)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   mdb_pos pos = -1;
   morkEnv *ev = morkEnv::FromMdbEnv(mev);
   pos = Length(ev);
@@ -322,7 +290,7 @@ NS_IMETHODIMP
 morkFile::Put(nsIMdbEnv* mev, const void* inBuf, mdb_size inSize,
   mdb_pos inPos, mdb_size* outActualSize)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   *outActualSize = 0;
   morkEnv *ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -341,7 +309,7 @@ morkFile::Put(nsIMdbEnv* mev, const void* inBuf, mdb_size inSize,
 NS_IMETHODIMP
 morkFile::Path(nsIMdbEnv* mev, mdbYarn* outFilePath)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   if ( outFilePath )
     outFilePath->mYarn_Fill = 0;
   morkEnv *ev = morkEnv::FromMdbEnv(mev);
@@ -361,7 +329,7 @@ morkFile::Path(nsIMdbEnv* mev, mdbYarn* outFilePath)
 NS_IMETHODIMP
 morkFile::Thief(nsIMdbEnv* mev, nsIMdbFile** acqThief)
 {
-  mdb_err outErr = 0;
+  mdb_err outErr = NS_OK;
   nsIMdbFile* outThief = 0;
   morkEnv *ev = morkEnv::FromMdbEnv(mev);
   if ( ev )
@@ -908,16 +876,6 @@ morkStdioFile::Steal(nsIMdbEnv* ev, nsIMdbFile* ioThief)
 void mork_fileflush(FILE * file)
 {
   fflush(file);
-#ifndef WINCE
-  OSVERSIONINFOA vi = { sizeof(OSVERSIONINFOA) };
-  if ((GetVersionExA(&vi) && vi.dwPlatformId == VER_PLATFORM_WIN32_WINDOWS))
-  {
-    // Win9x/ME
-    int fd = fileno(file);
-    HANDLE fh = (HANDLE)_get_osfhandle(fd);
-    FlushFileBuffers(fh);
-  }
-#endif
 }
 
 #endif /*MORK_WIN*/

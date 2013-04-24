@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #include "nsMsgCopy.h"
 
 #include "nsCOMPtr.h"
@@ -79,7 +46,7 @@ NS_INTERFACE_MAP_END_THREADSAFE
 
 CopyListener::CopyListener(void)
 {
-  mCopyInProgress = PR_FALSE;
+  mCopyInProgress = false;
 }
 
 CopyListener::~CopyListener(void)
@@ -99,7 +66,7 @@ CopyListener::OnStartCopy()
 }
 
 nsresult
-CopyListener::OnProgress(PRUint32 aProgress, PRUint32 aProgressMax)
+CopyListener::OnProgress(uint32_t aProgress, uint32_t aProgressMax)
 {
 #ifdef NS_DEBUG
   printf("CopyListener::OnProgress() %d of %d\n", aProgress, aProgressMax);
@@ -112,7 +79,7 @@ CopyListener::OnProgress(PRUint32 aProgress, PRUint32 aProgressMax)
 }
 
 nsresult
-CopyListener::SetMessageKey(PRUint32 aMessageKey)
+CopyListener::SetMessageKey(uint32_t aMessageKey)
 {
   if (mComposeAndSend)
       mComposeAndSend->SetMessageKey(aMessageKey);
@@ -147,7 +114,7 @@ CopyListener::OnStopCopy(nsresult aStatus)
   {
       PR_CEnterMonitor(this);
       PR_CNotifyAll(this);
-      mCopyInProgress = PR_FALSE;
+      mCopyInProgress = false;
       PR_CExitMonitor(this);
   }
   if (mComposeAndSend)
@@ -175,9 +142,9 @@ NS_IMPL_ISUPPORTS1(nsMsgCopy, nsIUrlListener)
 
 nsMsgCopy::nsMsgCopy()
 {
-  mFile = nsnull;
+  mFile = nullptr;
   mMode = nsIMsgSend::nsMsgDeliverNow;
-  mSavePref = nsnull;
+  mSavePref = nullptr;
 }
 
 nsMsgCopy::~nsMsgCopy()
@@ -194,8 +161,8 @@ nsMsgCopy::StartCopyOperation(nsIMsgIdentity       *aUserIdentity,
                               nsIMsgDBHdr            *aMsgToReplace)
 {
   nsCOMPtr<nsIMsgFolder>  dstFolder;
-  PRBool                  isDraft = PR_FALSE;
-  PRBool                  waitForUrl = PR_FALSE;
+  bool                    isDraft = false;
+  bool                    waitForUrl = false;
   nsresult                rv;
 
   if (!aMsgSendObj)
@@ -214,7 +181,7 @@ nsMsgCopy::StartCopyOperation(nsIMsgIdentity       *aUserIdentity,
       aMode == nsIMsgSend::nsMsgDeliverBackground)
   {
     rv = GetUnsentMessagesFolder(aUserIdentity, getter_AddRefs(dstFolder), &waitForUrl);
-    isDraft = PR_FALSE;
+    isDraft = false;
     if (!dstFolder || NS_FAILED(rv)) {
       return NS_MSG_UNABLE_TO_SEND_LATER;
     }
@@ -222,21 +189,21 @@ nsMsgCopy::StartCopyOperation(nsIMsgIdentity       *aUserIdentity,
   else if (aMode == nsIMsgSend::nsMsgSaveAsDraft)    // SaveAsDraft (Drafts)
   {
     rv = GetDraftsFolder(aUserIdentity, getter_AddRefs(dstFolder), &waitForUrl);
-    isDraft = PR_TRUE;
+    isDraft = true;
     if (!dstFolder || NS_FAILED(rv))
       return NS_MSG_UNABLE_TO_SAVE_DRAFT;
   }
   else if (aMode == nsIMsgSend::nsMsgSaveAsTemplate) // SaveAsTemplate (Templates)
   {
     rv = GetTemplatesFolder(aUserIdentity, getter_AddRefs(dstFolder), &waitForUrl);
-    isDraft = PR_FALSE;
+    isDraft = false;
     if (!dstFolder || NS_FAILED(rv))
 	    return NS_MSG_UNABLE_TO_SAVE_TEMPLATE;
   }
   else // SaveInSentFolder (Sent) -  nsMsgDeliverNow or nsMsgSendUnsent
   {
     rv = GetSentFolder(aUserIdentity, getter_AddRefs(dstFolder), &waitForUrl);
-    isDraft = PR_FALSE;
+    isDraft = false;
     if (!dstFolder || NS_FAILED(rv))
       return NS_MSG_COULDNT_OPEN_FCC_FOLDER;
   }
@@ -268,7 +235,7 @@ nsMsgCopy::StartCopyOperation(nsIMsgIdentity       *aUserIdentity,
 
 nsresult
 nsMsgCopy::DoCopy(nsIFile *aDiskFile, nsIMsgFolder *dstFolder,
-                  nsIMsgDBHdr *aMsgToReplace, PRBool aIsDraft,
+                  nsIMsgDBHdr *aMsgToReplace, bool aIsDraft,
                   nsIMsgWindow *msgWindow,
                   nsIMsgSend   *aMsgSendObj)
 {
@@ -295,14 +262,14 @@ nsMsgCopy::DoCopy(nsIFile *aDiskFile, nsIMsgFolder *dstFolder,
         nsCOMPtr<nsIMsgAccountManager> accountManager =
                  do_GetService(NS_MSGACCOUNTMANAGER_CONTRACTID, &rv);
         if (NS_FAILED(rv)) return rv;
-        PRBool shutdownInProgress = PR_FALSE;
+        bool shutdownInProgress = false;
         rv = accountManager->GetShutdownInProgress(&shutdownInProgress);
 
         if (NS_SUCCEEDED(rv) && shutdownInProgress && imapFolder)
         {
           // set the following only when we were in the middle of shutdown
           // process
-            copyListener->mCopyInProgress = PR_TRUE;
+            copyListener->mCopyInProgress = true;
             thread = do_GetCurrentThread();
         }
     }
@@ -341,13 +308,13 @@ nsMsgCopy::OnStopRunningUrl(nsIURI * aUrl, nsresult aExitCode)
   nsresult rv = aExitCode;
   if (NS_SUCCEEDED(aExitCode))
   {
-    rv = DoCopy(mFile, mDstFolder, mMsgToReplace, mIsDraft, nsnull, mMsgSendObj);
+    rv = DoCopy(mFile, mDstFolder, mMsgToReplace, mIsDraft, nullptr, mMsgSendObj);
   }
   return rv;
 }
 
 nsresult
-nsMsgCopy::GetUnsentMessagesFolder(nsIMsgIdentity   *userIdentity, nsIMsgFolder **folder, PRBool *waitForUrl)
+nsMsgCopy::GetUnsentMessagesFolder(nsIMsgIdentity   *userIdentity, nsIMsgFolder **folder, bool *waitForUrl)
 {
   nsresult ret = LocateMessageFolder(userIdentity, nsIMsgSend::nsMsgQueueForLater, mSavePref, folder);
   if (*folder)
@@ -357,7 +324,7 @@ nsMsgCopy::GetUnsentMessagesFolder(nsIMsgIdentity   *userIdentity, nsIMsgFolder 
 }
 
 nsresult
-nsMsgCopy::GetDraftsFolder(nsIMsgIdentity *userIdentity, nsIMsgFolder **folder, PRBool *waitForUrl)
+nsMsgCopy::GetDraftsFolder(nsIMsgIdentity *userIdentity, nsIMsgFolder **folder, bool *waitForUrl)
 {
   nsresult ret = LocateMessageFolder(userIdentity, nsIMsgSend::nsMsgSaveAsDraft, mSavePref, folder);
   if (*folder)
@@ -367,7 +334,7 @@ nsMsgCopy::GetDraftsFolder(nsIMsgIdentity *userIdentity, nsIMsgFolder **folder, 
 }
 
 nsresult
-nsMsgCopy::GetTemplatesFolder(nsIMsgIdentity *userIdentity, nsIMsgFolder **folder, PRBool *waitForUrl)
+nsMsgCopy::GetTemplatesFolder(nsIMsgIdentity *userIdentity, nsIMsgFolder **folder, bool *waitForUrl)
 {
   nsresult ret = LocateMessageFolder(userIdentity, nsIMsgSend::nsMsgSaveAsTemplate, mSavePref, folder);
   if (*folder)
@@ -377,7 +344,7 @@ nsMsgCopy::GetTemplatesFolder(nsIMsgIdentity *userIdentity, nsIMsgFolder **folde
 }
 
 nsresult
-nsMsgCopy::GetSentFolder(nsIMsgIdentity *userIdentity, nsIMsgFolder **folder, PRBool *waitForUrl)
+nsMsgCopy::GetSentFolder(nsIMsgIdentity *userIdentity, nsIMsgFolder **folder, bool *waitForUrl)
 {
   nsresult ret = LocateMessageFolder(userIdentity, nsIMsgSend::nsMsgDeliverNow, mSavePref, folder);
   if (*folder)
@@ -393,7 +360,7 @@ nsMsgCopy::GetSentFolder(nsIMsgIdentity *userIdentity, nsIMsgFolder **folder, PR
 }
 
 nsresult
-nsMsgCopy::CreateIfMissing(nsIMsgFolder **folder, PRBool *waitForUrl)
+nsMsgCopy::CreateIfMissing(nsIMsgFolder **folder, bool *waitForUrl)
 {
   nsresult ret = NS_OK;
   if (folder && *folder)
@@ -402,22 +369,22 @@ nsMsgCopy::CreateIfMissing(nsIMsgFolder **folder, PRBool *waitForUrl)
     (*folder)->GetParent(getter_AddRefs(parent));
     if (!parent)
     {
-      nsCOMPtr <nsILocalFile> folderPath;
+      nsCOMPtr <nsIFile> folderPath;
       // for local folders, path is to the berkeley mailbox.
       // for imap folders, path needs to have .msf appended to the name
       (*folder)->GetFilePath(getter_AddRefs(folderPath));
-        PRBool isImapFolder = !PL_strncasecmp(mSavePref, "imap:", 5);
+        bool isImapFolder = !PL_strncasecmp(mSavePref, "imap:", 5);
       // if we can't get the path from the folder, then try to create the storage.
       // for imap, it doesn't matter if the .msf file exists - it still might not
       // exist on the server, so we should try to create it
-      PRBool exists = PR_FALSE;
+      bool exists = false;
       if (!isImapFolder && folderPath)
         folderPath->Exists(&exists);
         if (!exists)
         {
           (*folder)->CreateStorageIfMissing(this);
           if (isImapFolder)
-            *waitForUrl = PR_TRUE;
+            *waitForUrl = true;
 
           ret = NS_OK;
         }
@@ -437,7 +404,7 @@ LocateMessageFolder(nsIMsgIdentity   *userIdentity,
   nsresult                  rv = NS_OK;
 
   if (!msgFolder) return NS_ERROR_NULL_POINTER;
-  *msgFolder = nsnull;
+  *msgFolder = nullptr;
 
   if (!aFolderURI || !*aFolderURI)
     return NS_ERROR_INVALID_ARG;
@@ -472,8 +439,8 @@ LocateMessageFolder(nsIMsgIdentity   *userIdentity,
   }
   else
   {
-    PRUint32                  cnt = 0;
-    PRUint32                  i;
+    uint32_t                  cnt = 0;
+    uint32_t                  i;
 
     if (!userIdentity)
       return NS_ERROR_INVALID_ARG;
@@ -559,7 +526,7 @@ nsresult
 MessageFolderIsLocal(nsIMsgIdentity   *userIdentity,
                      nsMsgDeliverMode aFolderType,
                      const char       *aFolderURI,
-		     PRBool 	      *aResult)
+		     bool 	      *aResult)
 {
   nsresult rv;
 

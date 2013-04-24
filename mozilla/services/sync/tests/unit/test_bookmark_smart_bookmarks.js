@@ -1,7 +1,7 @@
 Cu.import("resource://services-sync/engines.js");
 Cu.import("resource://services-sync/engines/bookmarks.js");
 Cu.import("resource://services-sync/record.js");
-Cu.import("resource://services-sync/log4moz.js");
+Cu.import("resource://services-common/log4moz.js");
 Cu.import("resource://services-sync/util.js");
 
 Cu.import("resource://services-sync/service.js");
@@ -46,10 +46,20 @@ function clearBookmarks() {
   PlacesUtils.bookmarks.removeFolderChildren(PlacesUtils.bookmarks.unfiledBookmarksFolder);
   startCount = smartBookmarkCount();
 }
-  
+
+function serverForFoo(engine) {
+  return serverForUsers({"foo": "password"}, {
+    meta: {global: {engines: {bookmarks: {version: engine.version,
+                                          syncID: engine.syncID}}}},
+    bookmarks: {}
+  });
+}
+
 // Verify that Places smart bookmarks have their annotation uploaded and
 // handled locally.
 add_test(function test_annotation_uploaded() {
+  new SyncTestingInfrastructure();
+
   let startCount = smartBookmarkCount();
   
   _("Start count is " + startCount);
@@ -63,9 +73,7 @@ add_test(function test_annotation_uploaded() {
   _("Create a smart bookmark in the toolbar.");
   let parent = PlacesUtils.toolbarFolderId;
   let uri =
-    Utils.makeURI("place:redirectsMode=" +
-                  Ci.nsINavHistoryQueryOptions.REDIRECTS_MODE_TARGET +
-                  "&sort=" +
+    Utils.makeURI("place:sort=" +
                   Ci.nsINavHistoryQueryOptions.SORT_BY_VISITCOUNT_DESCENDING +
                   "&maxResults=10");
   let title = "Most Visited";
@@ -98,29 +106,20 @@ add_test(function test_annotation_uploaded() {
   do_check_eq(smartBookmarkCount(), startCount + 1);
 
   _("Sync record to the server.");
-  Svc.Prefs.set("username", "foo");
-  Service.serverURL = "http://localhost:8080/";
-  Service.clusterURL = "http://localhost:8080/";
-
-  let collection = new ServerCollection({}, true);
-  let global = new ServerWBO('global',
-                             {engines: {bookmarks: {version: engine.version,
-                                                    syncID: engine.syncID}}});
-  let server = httpd_setup({
-    "/1.1/foo/storage/meta/global": global.handler(),
-    "/1.1/foo/storage/bookmarks": collection.handler()
-  });
+  let server = serverForFoo(engine);
+  let collection = server.user("foo").collection("bookmarks");
 
   try {
     engine.sync();
-    let wbos = [id for ([id, wbo] in Iterator(collection.wbos))
-                   if (["menu", "toolbar", "mobile"].indexOf(id) == -1)];
+    let wbos = collection.keys(function (id) {
+                 return ["menu", "toolbar", "mobile"].indexOf(id) == -1;
+               });
     do_check_eq(wbos.length, 1);
 
     _("Verify that the server WBO has the annotation.");
     let serverGUID = wbos[0];
     do_check_eq(serverGUID, guid);
-    let serverWBO = collection.wbos[serverGUID];
+    let serverWBO = collection.wbo(serverGUID);
     do_check_true(!!serverWBO);
     let body = JSON.parse(JSON.parse(serverWBO.payload).ciphertext);
     do_check_eq(body.queryId, "MostVisited");
@@ -132,7 +131,6 @@ add_test(function test_annotation_uploaded() {
     
     // "Clear" by changing attributes: if we delete it, apparently it sticks
     // around as a deleted record...
-    PlacesUtils.bookmarks.setItemGUID(mostVisitedID, "abcdefabcdef");
     PlacesUtils.bookmarks.setItemTitle(mostVisitedID, "Not Most Visited");
     PlacesUtils.bookmarks.changeBookmarkURI(
       mostVisitedID, Utils.makeURI("http://something/else"));
@@ -175,11 +173,11 @@ add_test(function test_annotation_uploaded() {
 });
 
 add_test(function test_smart_bookmarks_duped() {
+  new SyncTestingInfrastructure();
+
   let parent = PlacesUtils.toolbarFolderId;
   let uri =
-    Utils.makeURI("place:redirectsMode=" +
-                  Ci.nsINavHistoryQueryOptions.REDIRECTS_MODE_TARGET +
-                  "&sort=" +
+    Utils.makeURI("place:sort=" +
                   Ci.nsINavHistoryQueryOptions.SORT_BY_VISITCOUNT_DESCENDING +
                   "&maxResults=10");
   let title = "Most Visited";
@@ -189,19 +187,9 @@ add_test(function test_smart_bookmarks_duped() {
   let record = store.createRecord(mostVisitedGUID);
   
   _("Prepare sync.");
-  Svc.Prefs.set("username", "foo");
-  Service.serverURL = "http://localhost:8080/";
-  Service.clusterURL = "http://localhost:8080/";
+  let server = serverForFoo(engine);
+  let collection = server.user("foo").collection("bookmarks");
 
-  let collection = new ServerCollection({}, true);
-  let global = new ServerWBO('global',
-                             {engines: {bookmarks: {version: engine.version,
-                                                    syncID: engine.syncID}}});
-  let server = httpd_setup({
-    "/1.1/foo/storage/meta/global": global.handler(),
-    "/1.1/foo/storage/bookmarks": collection.handler()
-  });
-  
   try {
     engine._syncStartup();
     

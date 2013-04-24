@@ -1,43 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Rajiv Dayal <rdayal@netscape.com>
- *   Dan Mosedale <dan.mosedale@oracle.com>
- *   Mark Banner <mark@standard8.demon.co.uk>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsAbLDAPChangeLogData.h"
 #include "nsAbLDAPChangeLogQuery.h"
@@ -48,7 +13,6 @@
 #include "nsAbUtils.h"
 #include "nsAbMDBCard.h"
 #include "nsAbLDAPCard.h"
-#include "nsProxiedService.h"
 #include "nsIAuthPrompt.h"
 #include "nsIStringBundle.h"
 #include "nsIWindowWatcher.h"
@@ -56,6 +20,7 @@
 #include "plstr.h"
 #include "nsILDAPErrors.h"
 #include "prmem.h"
+#include "mozilla/Services.h"
 
 // Defined here since to be used
 // only locally to this file.
@@ -67,7 +32,7 @@ enum UpdateOp {
 };
 
 nsAbLDAPProcessChangeLogData::nsAbLDAPProcessChangeLogData()
-: mUseChangeLog(PR_FALSE),
+: mUseChangeLog(false),
   mChangeLogEntriesCount(0),
   mEntriesAddedQueryCount(0)
 {
@@ -101,16 +66,16 @@ nsresult nsAbLDAPProcessChangeLogData::OnLDAPBind(nsILDAPMessage *aMessage)
 	if(!mInitialized) 
         return NS_ERROR_NOT_INITIALIZED;
 
-    PRInt32 errCode;
+    int32_t errCode;
 
     nsresult rv = aMessage->GetErrorCode(&errCode);
     if(NS_FAILED(rv)) {
-        Done(PR_FALSE);
+        Done(false);
         return rv;
     }
 
     if(errCode != nsILDAPErrors::SUCCESS) {
-        Done(PR_FALSE);
+        Done(false);
         return NS_ERROR_FAILURE;
     }
 
@@ -177,7 +142,7 @@ nsresult nsAbLDAPProcessChangeLogData::OnLDAPSearchResult(nsILDAPMessage *aMessa
     if (!mInitialized)
         return NS_ERROR_NOT_INITIALIZED;
 
-    PRInt32 errorCode;
+    int32_t errorCode;
     
     nsresult rv = aMessage->GetErrorCode(&errorCode);
 
@@ -195,7 +160,7 @@ nsresult nsAbLDAPProcessChangeLogData::OnLDAPSearchResult(nsILDAPMessage *aMessa
                 nsCOMPtr<nsIAddrBookSession> abSession = do_GetService(NS_ADDRBOOKSESSION_CONTRACTID, &rv);
                 if (NS_FAILED(rv)) 
                     break;
-                nsCOMPtr<nsILocalFile> dbPath;
+                nsCOMPtr<nsIFile> dbPath;
                 rv = abSession->GetUserProfileDirectory(getter_AddRefs(dbPath));
                 if (NS_FAILED(rv)) 
                     break;
@@ -209,25 +174,25 @@ nsresult nsAbLDAPProcessChangeLogData::OnLDAPSearchResult(nsILDAPMessage *aMessa
                 if (NS_FAILED(rv)) 
                     break;
 
-                PRBool fileExists;
+                bool fileExists;
                 rv = dbPath->Exists(&fileExists);
                 if (NS_FAILED(rv)) 
                     break;
 
-                PRInt64 fileSize;
+                int64_t fileSize;
                 rv = dbPath->GetFileSize(&fileSize);
                 if(NS_FAILED(rv)) 
                     break;
 
                 if (!fileExists || !fileSize)
-                    mUseChangeLog = PR_FALSE;
+                    mUseChangeLog = false;
 
                 // Open / create the AB here since it calls Done,
                 // just return from here.
                 if (mUseChangeLog)
-                   rv = OpenABForReplicatedDir(PR_FALSE);
+                   rv = OpenABForReplicatedDir(false);
                 else
-                   rv = OpenABForReplicatedDir(PR_TRUE);
+                   rv = OpenABForReplicatedDir(true);
                 if (NS_FAILED(rv))
                    return rv;
                 
@@ -287,9 +252,9 @@ nsresult nsAbLDAPProcessChangeLogData::GetAuthData()
     if (NS_FAILED(rv)) 
         return rv;
 
-    nsCOMPtr<nsIStringBundleService> bundleService = do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-    if (NS_FAILED (rv)) 
-        return rv ;
+    nsCOMPtr<nsIStringBundleService> bundleService =
+      mozilla::services::GetStringBundleService();
+    NS_ENSURE_TRUE(bundleService, NS_ERROR_UNEXPECTED);
     nsCOMPtr<nsIStringBundle> bundle;
     rv = bundleService->CreateBundle("chrome://messenger/locale/addressbook/addressBook.properties", getter_AddRefs(bundle));
     if (NS_FAILED (rv)) 
@@ -307,7 +272,7 @@ nsresult nsAbLDAPProcessChangeLogData::GetAuthData()
 
     nsString username;
     nsString password;
-    PRBool btnResult = PR_FALSE;
+    bool btnResult = false;
 	rv = dialog->PromptUsernameAndPassword(title, desc, 
                                             NS_ConvertUTF8toUTF16(serverUri).get(), 
                                             nsIAuthPrompt::SAVE_PASSWORD_PERMANENTLY,
@@ -353,7 +318,7 @@ nsresult nsAbLDAPProcessChangeLogData::ParseRootDSEEntry(nsILDAPMessage *aMessag
     if(NS_FAILED(rv)) 
         return rv;
 
-    for(PRInt32 i=attrs.GetSize()-1; i >= 0; i--) {
+    for(int32_t i=attrs.GetSize()-1; i >= 0; i--) {
         PRUnicharPtrArrayGuard vals;
         rv = aMessage->GetValues(attrs.GetArray()[i], vals.GetSizeAddr(), vals.GetArrayAddr());
         if(NS_FAILED(rv))
@@ -370,17 +335,17 @@ nsresult nsAbLDAPProcessChangeLogData::ParseRootDSEEntry(nsILDAPMessage *aMessag
         }
     }
 
-    PRInt32 lastChangeNumber;
+    int32_t lastChangeNumber;
     mDirectory->GetLastChangeNumber(&lastChangeNumber);
 
     if ((mRootDSEEntry.lastChangeNumber > 0) &&
         (lastChangeNumber < mRootDSEEntry.lastChangeNumber) &&
         (lastChangeNumber > mRootDSEEntry.firstChangeNumber))
-        mUseChangeLog = PR_TRUE;
+        mUseChangeLog = true;
 
     if (mRootDSEEntry.lastChangeNumber &&
         (lastChangeNumber == mRootDSEEntry.lastChangeNumber)) {
-        Done(PR_TRUE); // We are up to date no need to replicate, db not open yet so call Done
+        Done(true); // We are up to date no need to replicate, db not open yet so call Done
         return NS_OK;
     }
 
@@ -400,7 +365,7 @@ nsresult nsAbLDAPProcessChangeLogData::OnSearchRootDSEDone()
            return rv;
         mState = kFindingChanges;
         if(mListener)
-            mListener->OnStateChange(nsnull, nsnull, nsIWebProgressListener::STATE_START, PR_FALSE);
+            mListener->OnStateChange(nullptr, nullptr, nsIWebProgressListener::STATE_START, false);
     }
     else {
         rv = mQuery->QueryAllEntries();
@@ -408,7 +373,7 @@ nsresult nsAbLDAPProcessChangeLogData::OnSearchRootDSEDone()
            return rv;
         mState = kReplicatingAll;
         if(mListener)
-            mListener->OnStateChange(nsnull, nsnull, nsIWebProgressListener::STATE_START, PR_TRUE);
+            mListener->OnStateChange(nullptr, nullptr, nsIWebProgressListener::STATE_START, true);
     }
 
     rv = mDirectory->SetLastChangeNumber(mRootDSEEntry.lastChangeNumber);
@@ -434,7 +399,7 @@ nsresult nsAbLDAPProcessChangeLogData::ParseChangeLogEntries(nsILDAPMessage *aMe
 
     nsAutoString targetDN;
     UpdateOp operation = NO_OP;
-    for(PRInt32 i = attrs.GetSize()-1; i >= 0; i--) {
+    for(int32_t i = attrs.GetSize()-1; i >= 0; i--) {
         PRUnicharPtrArrayGuard vals;
         rv = aMessage->GetValues(attrs.GetArray()[i], vals.GetSizeAddr(), vals.GetArrayAddr());
         if(NS_FAILED(rv))
@@ -455,7 +420,7 @@ nsresult nsAbLDAPProcessChangeLogData::ParseChangeLogEntries(nsILDAPMessage *aMe
 
     mChangeLogEntriesCount++;
     if(!(mChangeLogEntriesCount % 10)) { // Inform the listener every 10 entries
-        mListener->OnProgressChange(nsnull,nsnull,mChangeLogEntriesCount, -1, mChangeLogEntriesCount, -1);
+        mListener->OnProgressChange(nullptr,nullptr,mChangeLogEntriesCount, -1, mChangeLogEntriesCount, -1);
         // In case if the LDAP Connection thread is starved and causes problem
         // uncomment this one and try.
         // PR_Sleep(PR_INTERVAL_NO_WAIT); // give others a chance
@@ -517,16 +482,16 @@ nsresult nsAbLDAPProcessChangeLogData::OnFindingChangesDone()
         if(mReplicationDB && mDBOpen) {
             // Close the DB, no need to commit since we have not made
             // any changes yet to the DB.
-            rv = mReplicationDB->Close(PR_FALSE);
+            rv = mReplicationDB->Close(false);
             NS_ASSERTION(NS_SUCCEEDED(rv), "Replication DB Close(no commit) on Success failed");
-            mDBOpen = PR_FALSE;
+            mDBOpen = false;
             // Once are done with the replication file, delete the backup file
             if(mBackupReplicationFile) {
-                rv = mBackupReplicationFile->Remove(PR_FALSE);
+                rv = mBackupReplicationFile->Remove(false);
                 NS_ASSERTION(NS_SUCCEEDED(rv), "Replication BackupFile Remove on Success failed");
             }
         }
-        Done(PR_TRUE);
+        Done(true);
         return NS_OK;
     }
 
@@ -537,7 +502,7 @@ nsresult nsAbLDAPProcessChangeLogData::OnFindingChangesDone()
         return rv;
 
     if(mListener && NS_SUCCEEDED(rv))
-        mListener->OnStateChange(nsnull, nsnull, nsIWebProgressListener::STATE_START, PR_TRUE);
+        mListener->OnStateChange(nullptr, nullptr, nsIWebProgressListener::STATE_START, true);
 
     mState = kReplicatingChanges;
     return rv;
@@ -553,16 +518,16 @@ nsresult nsAbLDAPProcessChangeLogData::OnReplicatingChangeDone()
     if(!mEntriesAddedQueryCount)
     {
         if(mReplicationDB && mDBOpen) {
-            rv = mReplicationDB->Close(PR_TRUE); // Commit and close the DB
+            rv = mReplicationDB->Close(true); // Commit and close the DB
             NS_ASSERTION(NS_SUCCEEDED(rv), "Replication DB Close (commit) on Success failed");
-            mDBOpen = PR_FALSE;
+            mDBOpen = false;
         }
         // Once we done with the replication file, delete the backup file.
         if(mBackupReplicationFile) {
-            rv = mBackupReplicationFile->Remove(PR_FALSE);
+            rv = mBackupReplicationFile->Remove(false);
             NS_ASSERTION(NS_SUCCEEDED(rv), "Replication BackupFile Remove on Success failed");
         }
-        Done(PR_TRUE);  // All data is received
+        Done(true);  // All data is received
         return NS_OK;
     }
 

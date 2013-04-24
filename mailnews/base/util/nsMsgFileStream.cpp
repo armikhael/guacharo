@@ -1,4 +1,8 @@
-#include "nsILocalFile.h"
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "nsIFile.h"
 #include "nsMsgFileStream.h"
 #include "prerr.h"
 #include "prerror.h"
@@ -29,8 +33,8 @@ ErrorAccordingToNSPR()
 
 nsMsgFileStream::nsMsgFileStream() 
 {
-  mFileDesc = nsnull;
-  mSeekedToEnd = PR_FALSE;
+  mFileDesc = nullptr;
+  mSeekedToEnd = false;
 }
 
 nsMsgFileStream::~nsMsgFileStream()
@@ -41,23 +45,23 @@ nsMsgFileStream::~nsMsgFileStream()
 
 NS_IMPL_ISUPPORTS3(nsMsgFileStream, nsIInputStream, nsIOutputStream, nsISeekableStream)
 
-nsresult nsMsgFileStream::InitWithFile(nsILocalFile *file)
+nsresult nsMsgFileStream::InitWithFile(nsIFile *file)
 {
   return file->OpenNSPRFileDesc(PR_RDWR|PR_CREATE_FILE, 0664, &mFileDesc);
 }
 
 NS_IMETHODIMP
-nsMsgFileStream::Seek(PRInt32 whence, PRInt64 offset)
+nsMsgFileStream::Seek(int32_t whence, int64_t offset)
 {
-  if (mFileDesc == nsnull)
+  if (mFileDesc == nullptr)
     return NS_BASE_STREAM_CLOSED;
 
-  PRBool seekingToEnd = whence == PR_SEEK_END && offset == 0;
+  bool seekingToEnd = whence == PR_SEEK_END && offset == 0;
   if (seekingToEnd && mSeekedToEnd)
     return NS_OK;
 
-  PRInt64 cnt = PR_Seek64(mFileDesc, offset, (PRSeekWhence)whence);
-  if (cnt == PRInt64(-1)) {
+  int64_t cnt = PR_Seek64(mFileDesc, offset, (PRSeekWhence)whence);
+  if (cnt == int64_t(-1)) {
     return ErrorAccordingToNSPR();
   }
 
@@ -66,13 +70,13 @@ nsMsgFileStream::Seek(PRInt32 whence, PRInt64 offset)
 }
 
 NS_IMETHODIMP
-nsMsgFileStream::Tell(PRInt64 *result)
+nsMsgFileStream::Tell(int64_t *result)
 {
-  if (mFileDesc == nsnull)
+  if (mFileDesc == nullptr)
     return NS_BASE_STREAM_CLOSED;
   
-  PRInt64 cnt = PR_Seek64(mFileDesc, 0, PR_SEEK_CUR);
-  if (cnt == PRInt64(-1)) {
+  int64_t cnt = PR_Seek64(mFileDesc, 0, PR_SEEK_CUR);
+  if (cnt == int64_t(-1)) {
     return ErrorAccordingToNSPR();
   }
   *result = cnt;
@@ -82,7 +86,7 @@ nsMsgFileStream::Tell(PRInt64 *result)
 NS_IMETHODIMP
 nsMsgFileStream::SetEOF()
 {
-  if (mFileDesc == nsnull)
+  if (mFileDesc == nullptr)
     return NS_BASE_STREAM_CLOSED;
   return NS_ERROR_NOT_IMPLEMENTED;
 }
@@ -93,17 +97,17 @@ NS_IMETHODIMP nsMsgFileStream::Close()
   nsresult rv = NS_OK;
   if (mFileDesc && (PR_Close(mFileDesc) == PR_FAILURE))
         rv = NS_BASE_STREAM_OSERROR;
-    mFileDesc = nsnull;
+    mFileDesc = nullptr;
   return rv;
 }
 
-/* unsigned long available (); */
-NS_IMETHODIMP nsMsgFileStream::Available(PRUint32 *aResult)
+/* unsigned long long available (); */
+NS_IMETHODIMP nsMsgFileStream::Available(uint64_t *aResult)
 {
   if (!mFileDesc) 
     return NS_BASE_STREAM_CLOSED;
   
-  PRInt32 avail = PR_Available(mFileDesc);
+  int64_t avail = PR_Available64(mFileDesc);
   if (avail == -1)
     return ErrorAccordingToNSPR();
 
@@ -112,7 +116,7 @@ NS_IMETHODIMP nsMsgFileStream::Available(PRUint32 *aResult)
 }
 
 /* [noscript] unsigned long read (in charPtr aBuf, in unsigned long aCount); */
-NS_IMETHODIMP nsMsgFileStream::Read(char * aBuf, PRUint32 aCount, PRUint32 *aResult)
+NS_IMETHODIMP nsMsgFileStream::Read(char * aBuf, uint32_t aCount, uint32_t *aResult)
 {
   if (!mFileDesc) 
   {
@@ -120,7 +124,7 @@ NS_IMETHODIMP nsMsgFileStream::Read(char * aBuf, PRUint32 aCount, PRUint32 *aRes
     return NS_OK;
   }
   
-  PRInt32 bytesRead = PR_Read(mFileDesc, aBuf, aCount);
+  int32_t bytesRead = PR_Read(mFileDesc, aBuf, aCount);
   if (bytesRead == -1)
     return ErrorAccordingToNSPR();
   
@@ -129,25 +133,25 @@ NS_IMETHODIMP nsMsgFileStream::Read(char * aBuf, PRUint32 aCount, PRUint32 *aRes
 }
 
 /* [noscript] unsigned long readSegments (in nsWriteSegmentFun aWriter, in voidPtr aClosure, in unsigned long aCount); */
-NS_IMETHODIMP nsMsgFileStream::ReadSegments(nsWriteSegmentFun aWriter, void * aClosure, PRUint32 aCount, PRUint32 *_retval)
+NS_IMETHODIMP nsMsgFileStream::ReadSegments(nsWriteSegmentFun aWriter, void * aClosure, uint32_t aCount, uint32_t *_retval)
 {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 /* boolean isNonBlocking (); */
-NS_IMETHODIMP nsMsgFileStream::IsNonBlocking(PRBool *aNonBlocking)
+NS_IMETHODIMP nsMsgFileStream::IsNonBlocking(bool *aNonBlocking)
 {
-  *aNonBlocking = PR_FALSE;
+  *aNonBlocking = false;
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsMsgFileStream::Write(const char *buf, PRUint32 count, PRUint32 *result)
+nsMsgFileStream::Write(const char *buf, uint32_t count, uint32_t *result)
 {
-  if (mFileDesc == nsnull)
+  if (mFileDesc == nullptr)
     return NS_BASE_STREAM_CLOSED;
   
-  PRInt32 cnt = PR_Write(mFileDesc, buf, count);
+  int32_t cnt = PR_Write(mFileDesc, buf, count);
   if (cnt == -1) {
     return ErrorAccordingToNSPR();
   }
@@ -158,10 +162,10 @@ nsMsgFileStream::Write(const char *buf, PRUint32 count, PRUint32 *result)
 NS_IMETHODIMP
 nsMsgFileStream::Flush(void)
 {
-  if (mFileDesc == nsnull)
+  if (mFileDesc == nullptr)
     return NS_BASE_STREAM_CLOSED;
   
-  PRInt32 cnt = PR_Sync(mFileDesc);
+  int32_t cnt = PR_Sync(mFileDesc);
   if (cnt == -1) 
     return ErrorAccordingToNSPR();
 
@@ -169,7 +173,7 @@ nsMsgFileStream::Flush(void)
 }
 
 NS_IMETHODIMP
-nsMsgFileStream::WriteFrom(nsIInputStream *inStr, PRUint32 count, PRUint32 *_retval)
+nsMsgFileStream::WriteFrom(nsIInputStream *inStr, uint32_t count, uint32_t *_retval)
 {
   NS_NOTREACHED("WriteFrom (see source comment)");
   return NS_ERROR_NOT_IMPLEMENTED;
@@ -179,7 +183,7 @@ nsMsgFileStream::WriteFrom(nsIInputStream *inStr, PRUint32 count, PRUint32 *_ret
 }
 
 NS_IMETHODIMP
-nsMsgFileStream::WriteSegments(nsReadSegmentFun reader, void * closure, PRUint32 count, PRUint32 *_retval)
+nsMsgFileStream::WriteSegments(nsReadSegmentFun reader, void * closure, uint32_t count, uint32_t *_retval)
 {
   NS_NOTREACHED("WriteSegments (see source comment)");
   return NS_ERROR_NOT_IMPLEMENTED;

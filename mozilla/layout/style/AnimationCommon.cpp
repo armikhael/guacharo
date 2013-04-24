@@ -1,48 +1,35 @@
 /* vim: set shiftwidth=2 tabstop=8 autoindent cindent expandtab: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is AnimationCommon, common animation code for transitions
- * and animations.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   L. David Baron <dbaron@dbaron.org>, Mozilla Corporation (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#include "gfxPlatform.h"
 #include "AnimationCommon.h"
 #include "nsRuleData.h"
 #include "nsCSSValue.h"
 #include "nsStyleContext.h"
+#include "nsIFrame.h"
+#include "nsAnimationManager.h"
+#include "nsLayoutUtils.h"
 
 namespace mozilla {
 namespace css {
+
+/* static */ bool
+IsGeometricProperty(nsCSSProperty aProperty)
+{
+  switch (aProperty) {
+    case eCSSProperty_bottom:
+    case eCSSProperty_height:
+    case eCSSProperty_left:
+    case eCSSProperty_right:
+    case eCSSProperty_top:
+    case eCSSProperty_width:
+      return true;
+    default:
+      return false;
+  }
+}
 
 CommonAnimationManager::CommonAnimationManager(nsPresContext *aPresContext)
   : mPresContext(aPresContext)
@@ -61,7 +48,7 @@ CommonAnimationManager::Disconnect()
   // Content nodes might outlive the transition or animation manager.
   RemoveAllElementData();
 
-  mPresContext = nsnull;
+  mPresContext = nullptr;
 }
 
 void
@@ -108,10 +95,10 @@ CommonAnimationManager::HasStateDependentStyle(StateRuleProcessorData* aData)
   return nsRestyleHint(0);
 }
 
-PRBool
+bool
 CommonAnimationManager::HasDocumentStateDependentStyle(StateRuleProcessorData* aData)
 {
-  return PR_FALSE;
+  return false;
 }
 
 nsRestyleHint
@@ -120,25 +107,38 @@ CommonAnimationManager::HasAttributeDependentStyle(AttributeRuleProcessorData* a
   return nsRestyleHint(0);
 }
 
-/* virtual */ PRBool
+/* virtual */ bool
 CommonAnimationManager::MediumFeaturesChanged(nsPresContext* aPresContext)
 {
-  return PR_FALSE;
+  return false;
 }
 
-/* virtual */ PRInt64
-CommonAnimationManager::SizeOf() const
+/* virtual */ size_t
+CommonAnimationManager::SizeOfExcludingThis(nsMallocSizeOfFun aMallocSizeOf) const
 {
-  return sizeof(*this);
+  // Measurement of the following members may be added later if DMD finds it is
+  // worthwhile:
+  // - mElementData
+  //
+  // The following members are not measured
+  // - mPresContext, because it's non-owning
+
+  return 0;
 }
 
-/* static */ PRBool
+/* virtual */ size_t
+CommonAnimationManager::SizeOfIncludingThis(nsMallocSizeOfFun aMallocSizeOf) const
+{
+  return aMallocSizeOf(this) + SizeOfExcludingThis(aMallocSizeOf);
+}
+
+/* static */ bool
 CommonAnimationManager::ExtractComputedValueForTransition(
                           nsCSSProperty aProperty,
                           nsStyleContext* aStyleContext,
                           nsStyleAnimation::Value& aComputedValue)
 {
-  PRBool result =
+  bool result =
     nsStyleAnimation::ExtractComputedValue(aProperty, aStyleContext,
                                            aComputedValue);
   if (aProperty == eCSSProperty_visibility) {
@@ -164,7 +164,7 @@ AnimValuesStyleRule::MapRuleInfoInto(nsRuleData* aRuleData)
     return;
   }
 
-  for (PRUint32 i = 0, i_end = mPropertyValuePairs.Length(); i < i_end; ++i) {
+  for (uint32_t i = 0, i_end = mPropertyValuePairs.Length(); i < i_end; ++i) {
     PropertyValuePair &cv = mPropertyValuePairs[i];
     if (aRuleData->mSIDs & nsCachedStyleData::GetBitForSID(
                              nsCSSProps::kSIDTable[cv.mProperty]))
@@ -172,7 +172,7 @@ AnimValuesStyleRule::MapRuleInfoInto(nsRuleData* aRuleData)
       nsCSSValue *prop = aRuleData->ValueFor(cv.mProperty);
       if (prop->GetUnit() == eCSSUnit_Null) {
 #ifdef DEBUG
-        PRBool ok =
+        bool ok =
 #endif
           nsStyleAnimation::UncomputeValue(cv.mProperty,
                                            aRuleData->mPresContext,
@@ -185,7 +185,7 @@ AnimValuesStyleRule::MapRuleInfoInto(nsRuleData* aRuleData)
 
 #ifdef DEBUG
 /* virtual */ void
-AnimValuesStyleRule::List(FILE* out, PRInt32 aIndent) const
+AnimValuesStyleRule::List(FILE* out, int32_t aIndent) const
 {
   // WRITE ME?
 }
@@ -204,10 +204,10 @@ ComputedTimingFunction::Init(const nsTimingFunction &aFunction)
 }
 
 static inline double
-StepEnd(PRUint32 aSteps, double aPortion)
+StepEnd(uint32_t aSteps, double aPortion)
 {
   NS_ABORT_IF_FALSE(0.0 <= aPortion && aPortion <= 1.0, "out of range");
-  PRUint32 step = PRUint32(aPortion * aSteps); // floor
+  uint32_t step = uint32_t(aPortion * aSteps); // floor
   return double(step) / double(aSteps);
 }
 
@@ -226,11 +226,100 @@ ComputedTimingFunction::GetValue(double aPortion) const
       // really meant it.
       return 1.0 - StepEnd(mSteps, 1.0 - aPortion);
     default:
-      NS_ABORT_IF_FALSE(PR_FALSE, "bad type");
+      NS_ABORT_IF_FALSE(false, "bad type");
       // fall through
     case nsTimingFunction::StepEnd:
       return StepEnd(mSteps, aPortion);
   }
+}
+
+bool
+CommonElementAnimationData::CanAnimatePropertyOnCompositor(const dom::Element *aElement,
+                                                           nsCSSProperty aProperty,
+                                                           bool aHasGeometricProperties)
+{
+  bool shouldLog = nsLayoutUtils::IsAnimationLoggingEnabled();
+  if (shouldLog && !gfxPlatform::OffMainThreadCompositingEnabled()) {
+    nsCString message;
+    message.AppendLiteral("Performance warning: Compositor disabled");
+    LogAsyncAnimationFailure(message);
+    return false;
+  }
+
+  nsIFrame* frame = aElement->GetPrimaryFrame();
+  if (IsGeometricProperty(aProperty)) {
+    if (shouldLog) {
+      nsCString message;
+      message.AppendLiteral("Performance warning: Async animation of geometric property '");
+      message.Append(aProperty);
+      message.AppendLiteral(" is disabled");
+      LogAsyncAnimationFailure(message, aElement);
+    }
+    return false;
+  }
+  if (aProperty == eCSSProperty_opacity) {
+    bool enabled = nsLayoutUtils::AreOpacityAnimationsEnabled();
+    if (!enabled && shouldLog) {
+      nsCString message;
+      message.AppendLiteral("Performance warning: Async animation of 'opacity' is disabled");
+      LogAsyncAnimationFailure(message);
+    }
+    return enabled;
+  }
+  if (aProperty == eCSSProperty_transform) {
+    if (frame->Preserves3D() &&
+        frame->Preserves3DChildren()) {
+      if (shouldLog) {
+        nsCString message;
+        message.AppendLiteral("Gecko bug: Async animation of 'preserve-3d' transforms is not supported.  See bug 779598");
+        LogAsyncAnimationFailure(message, aElement);
+      }
+      return false;
+    }
+    if (frame->IsSVGTransformed()) {
+      if (shouldLog) {
+        nsCString message;
+        message.AppendLiteral("Gecko bug: Async 'transform' animations of frames with SVG transforms is not supported.  See bug 779599");
+        LogAsyncAnimationFailure(message, aElement);
+      }
+      return false;
+    }
+    if (aHasGeometricProperties) {
+      if (shouldLog) {
+        nsCString message;
+        message.AppendLiteral("Performance warning: Async animation of 'transform' not possible due to presence of geometric properties");
+        LogAsyncAnimationFailure(message, aElement);
+      }
+      return false;
+    }
+    bool enabled = nsLayoutUtils::AreTransformAnimationsEnabled();
+    if (!enabled && shouldLog) {
+      nsCString message;
+      message.AppendLiteral("Performance warning: Async animation of 'transform' is disabled");
+      LogAsyncAnimationFailure(message);
+    }
+    return enabled;
+  }
+  return true;
+}
+
+/* static */ void
+CommonElementAnimationData::LogAsyncAnimationFailure(nsCString& aMessage,
+                                                     const nsIContent* aContent)
+{
+  if (aContent) {
+    aMessage.AppendLiteral(" [");
+    aMessage.Append(nsAtomCString(aContent->Tag()));
+
+    nsIAtom* id = aContent->GetID();
+    if (id) {
+      aMessage.AppendLiteral(" with id '");
+      aMessage.Append(nsAtomCString(aContent->GetID()));
+      aMessage.AppendLiteral("'");
+    }
+    aMessage.AppendLiteral("]");
+  }
+  printf_stderr(aMessage.get());
 }
 
 }

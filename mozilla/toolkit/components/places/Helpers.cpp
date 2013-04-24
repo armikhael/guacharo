@@ -1,40 +1,7 @@
 /* vim: sw=2 ts=2 et lcs=trail\:.,tab\:>~ :
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Places code.
- *
- * The Initial Developer of the Original Code is
- * the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Shawn Wilsher <me@shawnwilsher.com> (Original Author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "Helpers.h"
 #include "mozIStorageError.h"
@@ -69,7 +36,7 @@ AsyncStatementCallback::HandleResult(mozIStorageResultSet *aResultSet)
 }
 
 NS_IMETHODIMP
-AsyncStatementCallback::HandleCompletion(PRUint16 aReason)
+AsyncStatementCallback::HandleCompletion(uint16_t aReason)
 {
   return NS_OK;
 }
@@ -78,7 +45,7 @@ NS_IMETHODIMP
 AsyncStatementCallback::HandleError(mozIStorageError *aError)
 {
 #ifdef DEBUG
-  PRInt32 result;
+  int32_t result;
   nsresult rv = aError->GetResult(&result);
   NS_ENSURE_SUCCESS(rv, rv);
   nsCAutoString message;
@@ -105,7 +72,7 @@ AsyncStatementCallback::HandleError(mozIStorageError *aError)
 // Bind URI to statement by index.
 nsresult // static
 URIBinder::Bind(mozIStorageStatement* aStatement,
-                PRInt32 aIndex,
+                int32_t aIndex,
                 nsIURI* aURI)
 {
   NS_ASSERTION(aStatement, "Must have non-null statement");
@@ -118,7 +85,7 @@ URIBinder::Bind(mozIStorageStatement* aStatement,
 // Statement URLCString to statement by index.
 nsresult // static
 URIBinder::Bind(mozIStorageStatement* aStatement,
-                PRInt32 index,
+                int32_t index,
                 const nsACString& aURLString)
 {
   NS_ASSERTION(aStatement, "Must have non-null statement");
@@ -155,7 +122,7 @@ URIBinder::Bind(mozIStorageStatement* aStatement,
 // Bind URI to params by index.
 nsresult // static
 URIBinder::Bind(mozIStorageBindingParams* aParams,
-                PRInt32 aIndex,
+                int32_t aIndex,
                 nsIURI* aURI)
 {
   NS_ASSERTION(aParams, "Must have non-null statement");
@@ -168,7 +135,7 @@ URIBinder::Bind(mozIStorageBindingParams* aParams,
 // Bind URLCString to params by index.
 nsresult // static
 URIBinder::Bind(mozIStorageBindingParams* aParams,
-                PRInt32 index,
+                int32_t index,
                 const nsACString& aURLString)
 {
   NS_ASSERTION(aParams, "Must have non-null statement");
@@ -232,23 +199,24 @@ void
 ReverseString(const nsString& aInput, nsString& aReversed)
 {
   aReversed.Truncate(0);
-  for (PRInt32 i = aInput.Length() - 1; i >= 0; i--) {
+  for (int32_t i = aInput.Length() - 1; i >= 0; i--) {
     aReversed.Append(aInput[i]);
   }
 }
 
 static
 nsresult
-Base64urlEncode(const PRUint8* aBytes,
-                PRUint32 aNumBytes,
+Base64urlEncode(const uint8_t* aBytes,
+                uint32_t aNumBytes,
                 nsCString& _result)
 {
   // SetLength does not set aside space for NULL termination.  PL_Base64Encode
   // will not NULL terminate, however, nsCStrings must be NULL terminated.  As a
   // result, we set the capacity to be one greater than what we need, and the
   // length to our desired length.
-  PRUint32 length = (aNumBytes + 2) / 3 * 4; // +2 due to integer math.
-  NS_ENSURE_TRUE(_result.SetCapacity(length + 1), NS_ERROR_OUT_OF_MEMORY);
+  uint32_t length = (aNumBytes + 2) / 3 * 4; // +2 due to integer math.
+  NS_ENSURE_TRUE(_result.SetCapacity(length + 1, fallible_t()),
+                 NS_ERROR_OUT_OF_MEMORY);
   _result.SetLength(length);
   (void)PL_Base64Encode(reinterpret_cast<const char*>(aBytes), aNumBytes,
                         _result.BeginWriting());
@@ -269,8 +237,8 @@ Base64urlEncode(const PRUint8* aBytes,
 
 static
 nsresult
-GenerateRandomBytes(PRUint32 aSize,
-                    PRUint8* _buffer)
+GenerateRandomBytes(uint32_t aSize,
+                    uint8_t* _buffer)
 {
   // On Windows, we'll use its built-in cryptographic API.
 #if defined(XP_WIN)
@@ -289,8 +257,8 @@ GenerateRandomBytes(PRUint32 aSize,
   PRFileDesc* urandom = PR_Open("/dev/urandom", PR_RDONLY, 0);
   nsresult rv = NS_ERROR_FAILURE;
   if (urandom) {
-    PRInt32 bytesRead = PR_Read(urandom, _buffer, aSize);
-    if (bytesRead == static_cast<PRInt32>(aSize)) {
+    int32_t bytesRead = PR_Read(urandom, _buffer, aSize);
+    if (bytesRead == static_cast<int32_t>(aSize)) {
       rv = NS_OK;
     }
     (void)PR_Close(urandom);
@@ -301,7 +269,7 @@ GenerateRandomBytes(PRUint32 aSize,
     do_GetService("@mozilla.org/security/random-generator;1");
   NS_ENSURE_STATE(rg);
 
-  PRUint8* temp;
+  uint8_t* temp;
   nsresult rv = rg->GenerateRandomBytes(aSize, &temp);
   NS_ENSURE_SUCCESS(rv, rv);
   memcpy(_buffer, temp, aSize);
@@ -317,10 +285,10 @@ GenerateGUID(nsCString& _guid)
 
   // Request raw random bytes and base64url encode them.  For each set of three
   // bytes, we get one character.
-  const PRUint32 kRequiredBytesLength =
-    static_cast<PRUint32>(GUID_LENGTH / 4 * 3);
+  const uint32_t kRequiredBytesLength =
+    static_cast<uint32_t>(GUID_LENGTH / 4 * 3);
 
-  PRUint8 buffer[kRequiredBytesLength];
+  uint8_t buffer[kRequiredBytesLength];
   nsresult rv = GenerateRandomBytes(kRequiredBytesLength, buffer);
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -353,19 +321,32 @@ IsValidGUID(const nsCString& aGUID)
 }
 
 void
-ForceWALCheckpoint(mozIStorageConnection* aDBConn)
+TruncateTitle(const nsACString& aTitle, nsACString& aTrimmed)
 {
-  nsCOMPtr<mozIStorageAsyncStatement> stmt;
-  (void)aDBConn->CreateAsyncStatement(NS_LITERAL_CSTRING(
-    "pragma wal_checkpoint "
-  ), getter_AddRefs(stmt));
-  nsCOMPtr<mozIStoragePendingStatement> handle;
-  (void)stmt->ExecuteAsync(nsnull, getter_AddRefs(handle));
+  aTrimmed = aTitle;
+  if (aTitle.Length() > TITLE_LENGTH_MAX) {
+    aTrimmed = StringHead(aTitle, TITLE_LENGTH_MAX);
+  }
+}
+
+void
+ForceWALCheckpoint()
+{
+  nsRefPtr<Database> DB = Database::GetDatabase();
+  if (DB) {
+    nsCOMPtr<mozIStorageAsyncStatement> stmt = DB->GetAsyncStatement(
+      "pragma wal_checkpoint "
+    );
+    if (stmt) {
+      nsCOMPtr<mozIStoragePendingStatement> handle;
+      (void)stmt->ExecuteAsync(nullptr, getter_AddRefs(handle));
+    }
+  }
 }
 
 bool
 GetHiddenState(bool aIsRedirect,
-               PRUint32 aTransitionType)
+               uint32_t aTransitionType)
 {
   return aTransitionType == nsINavHistoryService::TRANSITION_FRAMED_LINK ||
          aTransitionType == nsINavHistoryService::TRANSITION_EMBED ||
@@ -377,14 +358,6 @@ GetHiddenState(bool aIsRedirect,
 
 PlacesEvent::PlacesEvent(const char* aTopic)
 : mTopic(aTopic)
-, mDoubleEnqueue(false)
-{
-}
-
-PlacesEvent::PlacesEvent(const char* aTopic,
-                         bool aDoubleEnqueue)
-: mTopic(aTopic)
-, mDoubleEnqueue(aDoubleEnqueue)
 {
 }
 
@@ -395,34 +368,49 @@ PlacesEvent::Run()
   return NS_OK;
 }
 
-NS_IMETHODIMP
-PlacesEvent::Complete()
-{
-  Notify();
-  return NS_OK;
-}
-
 void
 PlacesEvent::Notify()
 {
-  if (mDoubleEnqueue) {
-    mDoubleEnqueue = false;
-    (void)NS_DispatchToMainThread(this);
-  }
-  else {
-    NS_ASSERTION(NS_IsMainThread(), "Must only be used on the main thread!");
-    nsCOMPtr<nsIObserverService> obs = mozilla::services::GetObserverService();
-    if (obs) {
-      (void)obs->NotifyObservers(nsnull, mTopic, nsnull);
-    }
+  NS_ASSERTION(NS_IsMainThread(), "Must only be used on the main thread!");
+  nsCOMPtr<nsIObserverService> obs = mozilla::services::GetObserverService();
+  if (obs) {
+    (void)obs->NotifyObservers(nullptr, mTopic, nullptr);
   }
 }
 
-NS_IMPL_THREADSAFE_ISUPPORTS2(
+NS_IMPL_THREADSAFE_ISUPPORTS1(
   PlacesEvent
-, mozIStorageCompletionCallback
 , nsIRunnable
 )
+
+////////////////////////////////////////////////////////////////////////////////
+//// AsyncStatementCallbackNotifier
+
+NS_IMETHODIMP
+AsyncStatementCallbackNotifier::HandleCompletion(uint16_t aReason)
+{
+  if (aReason != mozIStorageStatementCallback::REASON_FINISHED)
+    return NS_ERROR_UNEXPECTED;
+
+  nsCOMPtr<nsIObserverService> obs = services::GetObserverService();
+  if (obs) {
+    (void)obs->NotifyObservers(nullptr, mTopic, nullptr);
+  }
+
+  return NS_OK;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//// AsyncStatementCallbackNotifier
+
+NS_IMETHODIMP
+AsyncStatementTelemetryTimer::HandleCompletion(uint16_t aReason)
+{
+  if (aReason == mozIStorageStatementCallback::REASON_FINISHED) {
+    Telemetry::AccumulateTimeDelta(mHistogramId, mStart);
+  }
+  return NS_OK;
+}
 
 } // namespace places
 } // namespace mozilla

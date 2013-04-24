@@ -1,45 +1,8 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is this file as it was released upon January 6, 2001.
- *
- * The Initial Developer of the Original Code is
- * Peter Annema.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Peter Annema <disttsc@bart.nl> (Original Author)
- *   Jonas Sicking <sicking@bigfoot.com>
- *   Myk Melez <myk@mozilla.org>
- *   Dão Gottwald <dao@mozilla.com>
- *   Ehsan Akhgari <ehsan.akhgari@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // One of the possible values for the mousewheel.* preferences.
 // From nsEventStateManager.cpp.
@@ -88,7 +51,7 @@ var FullZoom = {
 
   init: function FullZoom_init() {
     // Listen for scrollwheel events so we can save scrollwheel-based changes.
-    window.addEventListener("DOMMouseScroll", this, false);
+    window.addEventListener("wheel", this, false);
 
     // Register ourselves with the service so we know when our pref changes.
     Services.contentPrefs.addObserver(this.name, this);
@@ -105,7 +68,7 @@ var FullZoom = {
   destroy: function FullZoom_destroy() {
     Services.prefs.removeObserver("browser.zoom.", this);
     Services.contentPrefs.removeObserver(this.name, this);
-    window.removeEventListener("DOMMouseScroll", this, false);
+    window.removeEventListener("wheel", this, false);
   },
 
 
@@ -116,7 +79,7 @@ var FullZoom = {
 
   handleEvent: function FullZoom_handleEvent(event) {
     switch (event.type) {
-      case "DOMMouseScroll":
+      case "wheel":
         this._handleMouseScrolled(event);
         break;
     }
@@ -124,30 +87,25 @@ var FullZoom = {
 
   _handleMouseScrolled: function FullZoom_handleMouseScrolled(event) {
     // Construct the "mousewheel action" pref key corresponding to this event.
-    // Based on nsEventStateManager::GetBasePrefKeyForMouseWheel.
-    var pref = "mousewheel";
-    if (event.axis == event.HORIZONTAL_AXIS)
-      pref += ".horizscroll";
-
-    if (event.shiftKey)
-      pref += ".withshiftkey";
-    else if (event.ctrlKey)
-      pref += ".withcontrolkey";
-    else if (event.altKey)
-      pref += ".withaltkey";
-    else if (event.metaKey)
-      pref += ".withmetakey";
-    else
-      pref += ".withnokey";
-
-    pref += ".action";
+    // Based on nsEventStateManager::WheelPrefs::GetIndexFor.
+    var modifiers = {
+      Alt: "mousewheel.with_alt.action",
+      Control: "mousewheel.with_control.action",
+      Meta: "mousewheel.with_meta.action",
+      Shift: "mousewheel.with_shift.action",
+      OS: "mousewheel.with_win.action"
+    };
+    var pref = [];
+    for (var key in modifiers)
+      if (event.getModifierState(key))
+        pref.push(modifiers[key]);
+    if (pref.length == 1)
+      pref = pref[0];
+    else // Multiple or no modifiers, use default action
+      pref = "mousewheel.default.action";
 
     // Don't do anything if this isn't a "zoom" scroll event.
-    var isZoomEvent = false;
-    try {
-      isZoomEvent = (Services.prefs.getIntPref(pref) == MOUSE_SCROLL_ZOOM);
-    } catch (e) {}
-    if (!isZoomEvent)
+    if (GetIntPref(pref, 0) != MOUSE_SCROLL_ZOOM)
       return;
 
     // XXX Lazily cache all the possible action prefs so we don't have to get
@@ -232,6 +190,12 @@ var FullZoom = {
       return;
     }
 
+    // Image documents should always start at 1, and are not affected by prefs.
+    if (!aIsTabSwitch && aBrowser.contentDocument.mozSyntheticDocument) {
+      ZoomManager.setZoomForBrowser(aBrowser, this._ensureValid(1));
+      return;
+    }
+
     if (Services.contentPrefs.hasCachedPref(aURI, this.name)) {
       let zoomValue = Services.contentPrefs.getPref(aURI, this.name);
       this._applyPrefToSetting(zoomValue, aBrowser);
@@ -281,6 +245,21 @@ var FullZoom = {
     this._removePref();
   },
 
+  setOther: function setZoomOther() {
+    var zoomOther = document.getElementById("menu_zoomOther");
+    // open dialog and ask for new value
+    var o = {value: zoomOther.getAttribute("value"),
+             zoomMin: ZoomManager.MIN * 100,
+             zoomMax: ZoomManager.MAX * 100};
+    window.openDialog("chrome://communicator/content/askViewZoom.xul",
+                      "", "chrome,modal,centerscreen", o);
+    if (o.zoomOK) {
+      zoomOther.setAttribute("value", o.value);
+      ZoomManager.zoom = o.value / 100;
+      this._applySettingToPref();
+    }
+  },
+
   /**
    * Set the zoom level for the current tab.
    *
@@ -288,7 +267,7 @@ var FullZoom = {
    * without significant impact on performance, as the setting is only applied
    * if it differs from the current setting.  In fact getting the zoom and then
    * checking ourselves if it differs costs more.
-   * 
+   *
    * And perhaps we should always set the zoom even if it was more expensive,
    * since DocumentViewerImpl::SetTextZoom claims that child documents can have
    * a different text zoom (although it would be unusual), and it implies that
@@ -301,14 +280,14 @@ var FullZoom = {
    * one.
    **/
   _applyPrefToSetting: function FullZoom_applyPrefToSetting(aValue, aBrowser) {
-    if (!this.siteSpecific || window.gInPrintPreviewMode)
+    var browser = aBrowser || (getBrowser() && getBrowser().selectedBrowser);
+
+    if (!this.siteSpecific || window.gInPrintPreviewMode ||
+        browser.contentDocument.mozSyntheticDocument)
       return;
 
-    var browser = aBrowser || (getBrowser() && getBrowser().selectedBrowser);
     try {
-      if (browser.contentDocument instanceof Components.interfaces.nsIImageDocument)
-        ZoomManager.setZoomForBrowser(browser, this._ensureValid(1));
-      else if (typeof aValue != "undefined")
+      if (typeof aValue != "undefined")
         ZoomManager.setZoomForBrowser(browser, this._ensureValid(aValue));
       else if (typeof this.globalValue != "undefined")
         ZoomManager.setZoomForBrowser(browser, this.globalValue);
@@ -320,7 +299,7 @@ var FullZoom = {
 
   _applySettingToPref: function FullZoom_applySettingToPref() {
     if (!this.siteSpecific || window.gInPrintPreviewMode ||
-        content.document instanceof Components.interfaces.nsIImageDocument)
+        content.document.mozSyntheticDocument)
       return;
 
     var zoomLevel = ZoomManager.zoom;
@@ -328,7 +307,7 @@ var FullZoom = {
   },
 
   _removePref: function FullZoom_removePref() {
-    if (!(content.document instanceof Components.interfaces.nsIImageDocument))
+    if (!content.document.mozSyntheticDocument)
       Services.contentPrefs.removePref(getBrowser().currentURI, this.name);
   },
 
@@ -443,19 +422,5 @@ function updateZoomMenu() {
         item.removeAttribute("checked");
     }
     item = item.previousSibling;
-  }
-}
-
-function setZoomOther() {
-  var zoomOther = document.getElementById("menu_zoomOther");
-  // open dialog and ask for new value
-  var o = {value: zoomOther.getAttribute("value"),
-           zoomMin: ZoomManager.MIN * 100,
-           zoomMax: ZoomManager.MAX * 100};
-  window.openDialog("chrome://communicator/content/askViewZoom.xul",
-                    "", "chrome,modal,centerscreen", o);
-  if (o.zoomOK) {
-    zoomOther.setAttribute("value", o.value);
-    ZoomManager.zoom = o.value / 100;
   }
 }

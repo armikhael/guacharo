@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version:MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla calendar tests code.
- *
- * The Initial Developer of the Original Code is
- *   Michiel van Leeuwen <mvl@exedo.nl>
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Philipp Kewisch <mozilla@kewis.ch>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 function makeEvent(str) {
     return createEventFromIcalString("BEGIN:VEVENT\n" + str + "END:VEVENT");
@@ -131,6 +98,26 @@ function run_test() {
                ["20020402T114500Z", "20020403T114500Z"],
                true /* ignore next occ check, bug 455490 */);
 
+    test_recur(createEventFromIcalString("BEGIN:VCALENDAR\nBEGIN:VEVENT\n" +
+                                         "DESCRIPTION:Repeat Daily on weekdays with UNTIL\n" +
+                                         "RRULE:FREQ=DAILY;UNTIL=20111217T220000Z;BYDAY=MO,TU,WE,TH,FR\n" +
+                                         "DTSTART:20111212T220000Z\n" +
+                                         "DTEND:20111212T230000Z\n" +
+                                         "END:VEVENT\nEND:VCALENDAR\n"),
+               ["20111212T220000Z", "20111213T220000Z", "20111214T220000Z", "20111215T220000Z",
+                "20111216T220000Z"],
+               false);
+
+    test_recur(createEventFromIcalString("BEGIN:VCALENDAR\nBEGIN:VEVENT\n" +
+                                         "DESCRIPTION:Repeat Daily on weekdays with UNTIL and exception\n" +
+                                         "RRULE:FREQ=DAILY;UNTIL=20111217T220000Z;BYDAY=MO,TU,WE,TH,FR\n" +
+                                         "EXDATE:20111214T220000Z\n" +
+                                         "DTSTART:20111212T220000Z\n" +
+                                         "DTEND:20111212T230000Z\n" +
+                                         "END:VEVENT\nEND:VCALENDAR\n"),
+               ["20111212T220000Z", "20111213T220000Z", "20111215T220000Z", "20111216T220000Z"],
+               false);
+
     var item = makeEvent("DESCRIPTION:occurrence on day 1 moved between the occurrences " +
                                      "on days 2 and 3\n" +
                          "RRULE:FREQ=DAILY;COUNT=3\n" +
@@ -174,15 +161,15 @@ function run_test() {
 function test_recur(event, expected, ignoreNextOccCheck) {
     dump("Checking '" + event.getProperty("DESCRIPTION") + "'\n");
     // Get recurrence dates
-    var start = createDate(1990, 0, 1);
-    var end = createDate(2010, 0, 1);
-    var recdates = event.recurrenceInfo.getOccurrenceDates(start, end, 0, {});
-    var occurrences = event.recurrenceInfo.getOccurrences(start, end, 0, {});
+    let start = createDate(1990, 0, 1);
+    let end = createDate(2020, 0, 1);
+    let recdates = event.recurrenceInfo.getOccurrenceDates(start, end, 0, {});
+    let occurrences = event.recurrenceInfo.getOccurrences(start, end, 0, {});
 
     // Check number of items
     do_check_eq(recdates.length, expected.length);
 
-    for (var i = 0; i < expected.length; i++) {
+    for (let i = 0; i < expected.length; i++) {
         // Check each date
         do_check_eq(recdates[i].icalString, expected[i]);
 
@@ -194,7 +181,7 @@ function test_recur(event, expected, ignoreNextOccCheck) {
         }
 
         // Make sure getNextOccurrence works correctly
-        var nextOcc = event.recurrenceInfo.getNextOccurrence(recdates[i]);
+        let nextOcc = event.recurrenceInfo.getNextOccurrence(recdates[i]);
         if (expected.length > i + 1) {
             do_check_neq(nextOcc, null);
             do_check_eq(nextOcc.startDate.icalString, expected[i + 1]);
@@ -203,13 +190,31 @@ function test_recur(event, expected, ignoreNextOccCheck) {
         }
 
         // Make sure getPreviousOccurrence works correctly
-        var prevOcc = event.recurrenceInfo.getPreviousOccurrence(recdates[i]);
+        let prevOcc = event.recurrenceInfo.getPreviousOccurrence(recdates[i]);
         if (i > 0) {
             do_check_neq(prevOcc, null);
             do_check_eq(prevOcc.startDate.icalString, expected[i - 1]);
         } else {
             do_check_eq(prevOcc, null);
         }
+    }
+
+    //  Make sure recurrenceInfo.clone works correctly
+    test_clone(event);
+}
+
+function test_clone(event) {
+    let oldRecurItems = event.recurrenceInfo.getRecurrenceItems({});
+    let cloned = event.recurrenceInfo.clone();
+    let newRecurItems = cloned.getRecurrenceItems({});
+
+    // Check number of recurrence items
+    do_check_eq(oldRecurItems.length, newRecurItems.length);
+
+    for (let i = 0; i < oldRecurItems.length; i++) {
+        // Check if recurrence item cloned correctly
+        do_check_eq(oldRecurItems[i].icalProperty.icalString,
+                    newRecurItems[i].icalProperty.icalString);
     }
 }
 

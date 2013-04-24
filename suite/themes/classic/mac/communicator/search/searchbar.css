@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 .searchbar-textbox {
   width: 6em;
   min-width: 6em;
@@ -31,7 +35,7 @@
 .toolbarbutton-icon {
   height: 16px;
   width: 16px;
-  list-style-image: url("chrome://global/skin/tree/item.png");
+  list-style-image: url("chrome://communicator/skin/icons//item.png");
 }
 
 .searchbar-engine-button {

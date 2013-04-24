@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "MediaDocument.h"
 #include "nsIPluginDocument.h"
@@ -47,6 +15,8 @@
 #include "nsContentPolicyUtils.h"
 #include "nsIPropertyBag2.h"
 #include "mozilla/dom/Element.h"
+#include "nsObjectLoadingContent.h"
+#include "sampler.h"
 
 namespace mozilla {
 namespace dom {
@@ -66,17 +36,17 @@ public:
                                      nsILoadGroup*       aLoadGroup,
                                      nsISupports*        aContainer,
                                      nsIStreamListener** aDocListener,
-                                     PRBool              aReset = PR_TRUE,
-                                     nsIContentSink*     aSink = nsnull);
+                                     bool                aReset = true,
+                                     nsIContentSink*     aSink = nullptr);
 
   virtual void SetScriptGlobalObject(nsIScriptGlobalObject* aScriptGlobalObject);
-  virtual PRBool CanSavePresentation(nsIRequest *aNewRequest);
+  virtual bool CanSavePresentation(nsIRequest *aNewRequest);
 
   const nsCString& GetType() const { return mMimeType; }
   nsIContent*      GetPluginContent() { return mPluginContent; }
 
   void AllowNormalInstantiation() {
-    mWillHandleInstantiation = PR_FALSE;
+    mWillHandleInstantiation = false;
   }
 
   void StartLayout() { MediaDocument::StartLayout(); }
@@ -92,7 +62,7 @@ protected:
   // Hack to handle the fact that plug-in loading lives in frames and that the
   // frames may not be around when we need to instantiate.  Once plug-in
   // loading moves to content, this can all go away.
-  PRBool                                   mWillHandleInstantiation;
+  bool                                     mWillHandleInstantiation;
 };
 
 class PluginStreamListener : public MediaDocumentStreamListener
@@ -113,6 +83,7 @@ private:
 NS_IMETHODIMP
 PluginStreamListener::OnStartRequest(nsIRequest* request, nsISupports *ctxt)
 {
+  SAMPLE_LABEL("PluginStreamListener", "OnStartRequest");
   // Have to set up our plugin stuff before we call OnStartRequest, so
   // that the plugin listener can get that call.
   nsresult rv = SetupPlugin();
@@ -144,20 +115,12 @@ PluginStreamListener::SetupPlugin()
   // nsObjectFrame does that at the end of reflow.
   shell->FlushPendingNotifications(Flush_Layout);
 
-  nsIFrame* frame = embed->GetPrimaryFrame();
-  if (!frame) {
-    mPluginDoc->AllowNormalInstantiation();
-    return NS_OK;
-  }
-
-  nsIObjectFrame* objFrame = do_QueryFrame(frame);
-  if (!objFrame) {
-    mPluginDoc->AllowNormalInstantiation();
+  nsCOMPtr<nsIObjectLoadingContent> olc(do_QueryInterface(embed));
+  if (!olc) {
     return NS_ERROR_UNEXPECTED;
   }
-
-  nsresult rv = objFrame->Instantiate(mPluginDoc->GetType().get(),
-                                      mDocument->nsIDocument::GetDocumentURI());
+  nsObjectLoadingContent* olcc = static_cast<nsObjectLoadingContent*>(olc.get());
+  nsresult rv = olcc->InstantiatePluginInstance();
   if (NS_FAILED(rv)) {
     return rv;
   }
@@ -174,7 +137,7 @@ PluginStreamListener::SetupPlugin()
   // bother initializing members to 0.
 
 PluginDocument::PluginDocument()
-  : mWillHandleInstantiation(PR_TRUE)
+  : mWillHandleInstantiation(true)
 {
 }
 
@@ -215,18 +178,19 @@ PluginDocument::SetScriptGlobalObject(nsIScriptGlobalObject* aScriptGlobalObject
         CreateSyntheticPluginDocument();
       NS_ASSERTION(NS_SUCCEEDED(rv), "failed to create synthetic document");
     }
+    BecomeInteractive();
   } else {
-    mStreamListener = nsnull;
+    mStreamListener = nullptr;
   }
 }
 
 
-PRBool
+bool
 PluginDocument::CanSavePresentation(nsIRequest *aNewRequest)
 {
   // Full-page plugins cannot be cached, currently, because we don't have
   // the stream listener data to feed to the plugin instance.
-  return PR_FALSE;
+  return false;
 }
 
 
@@ -236,14 +200,14 @@ PluginDocument::StartDocumentLoad(const char*         aCommand,
                                   nsILoadGroup*       aLoadGroup,
                                   nsISupports*        aContainer,
                                   nsIStreamListener** aDocListener,
-                                  PRBool              aReset,
+                                  bool                aReset,
                                   nsIContentSink*     aSink)
 {
   // do not allow message panes to host full-page plugins
   // returning an error causes helper apps to take over
   nsCOMPtr<nsIDocShellTreeItem> dsti (do_QueryInterface(aContainer));
   if (dsti) {
-    PRBool isMsgPane = PR_FALSE;
+    bool isMsgPane = false;
     dsti->NameEquals(NS_LITERAL_STRING("messagepane").get(), &isMsgPane);
     if (isMsgPane) {
       return NS_ERROR_FAILURE;
@@ -291,13 +255,13 @@ PluginDocument::CreateSyntheticPluginDocument()
 
   // remove margins from body
   NS_NAMED_LITERAL_STRING(zero, "0");
-  body->SetAttr(kNameSpaceID_None, nsGkAtoms::marginwidth, zero, PR_FALSE);
-  body->SetAttr(kNameSpaceID_None, nsGkAtoms::marginheight, zero, PR_FALSE);
+  body->SetAttr(kNameSpaceID_None, nsGkAtoms::marginwidth, zero, false);
+  body->SetAttr(kNameSpaceID_None, nsGkAtoms::marginheight, zero, false);
 
 
   // make plugin content
   nsCOMPtr<nsINodeInfo> nodeInfo;
-  nodeInfo = mNodeInfoManager->GetNodeInfo(nsGkAtoms::embed, nsnull,
+  nodeInfo = mNodeInfoManager->GetNodeInfo(nsGkAtoms::embed, nullptr,
                                            kNameSpaceID_XHTML,
                                            nsIDOMNode::ELEMENT_NODE);
   NS_ENSURE_TRUE(nodeInfo, NS_ERROR_OUT_OF_MEMORY);
@@ -307,28 +271,28 @@ PluginDocument::CreateSyntheticPluginDocument()
 
   // make it a named element
   mPluginContent->SetAttr(kNameSpaceID_None, nsGkAtoms::name,
-                          NS_LITERAL_STRING("plugin"), PR_FALSE);
+                          NS_LITERAL_STRING("plugin"), false);
 
   // fill viewport and auto-resize
   NS_NAMED_LITERAL_STRING(percent100, "100%");
   mPluginContent->SetAttr(kNameSpaceID_None, nsGkAtoms::width, percent100,
-                          PR_FALSE);
+                          false);
   mPluginContent->SetAttr(kNameSpaceID_None, nsGkAtoms::height, percent100,
-                          PR_FALSE);
+                          false);
 
   // set URL
   nsCAutoString src;
   mDocumentURI->GetSpec(src);
   mPluginContent->SetAttr(kNameSpaceID_None, nsGkAtoms::src,
-                          NS_ConvertUTF8toUTF16(src), PR_FALSE);
+                          NS_ConvertUTF8toUTF16(src), false);
 
   // set mime type
   mPluginContent->SetAttr(kNameSpaceID_None, nsGkAtoms::type,
-                          NS_ConvertUTF8toUTF16(mMimeType), PR_FALSE);
+                          NS_ConvertUTF8toUTF16(mMimeType), false);
 
   // This will not start the load because nsObjectLoadingContent checks whether
   // its document is an nsIPluginDocument
-  body->AppendChildTo(mPluginContent, PR_FALSE);
+  body->AppendChildTo(mPluginContent, false);
 
   return NS_OK;
 
@@ -355,14 +319,14 @@ PluginDocument::Print()
   nsIObjectFrame* objectFrame =
     do_QueryFrame(mPluginContent->GetPrimaryFrame());
   if (objectFrame) {
-    nsCOMPtr<nsNPAPIPluginInstance> pi;
+    nsRefPtr<nsNPAPIPluginInstance> pi;
     objectFrame->GetPluginInstance(getter_AddRefs(pi));
     if (pi) {
       NPPrint npprint;
       npprint.mode = NP_FULL;
-      npprint.print.fullPrint.pluginPrinted = PR_FALSE;
-      npprint.print.fullPrint.printOne = PR_FALSE;
-      npprint.print.fullPrint.platformPrint = nsnull;
+      npprint.print.fullPrint.pluginPrinted = false;
+      npprint.print.fullPrint.printOne = false;
+      npprint.print.fullPrint.platformPrint = nullptr;
 
       pi->Print(&npprint);
     }
@@ -372,7 +336,7 @@ PluginDocument::Print()
 }
 
 NS_IMETHODIMP
-PluginDocument::GetWillHandleInstantiation(PRBool* aWillHandle)
+PluginDocument::GetWillHandleInstantiation(bool* aWillHandle)
 {
   *aWillHandle = mWillHandleInstantiation;
   return NS_OK;

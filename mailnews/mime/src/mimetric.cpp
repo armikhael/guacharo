@@ -1,39 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #include "mimetric.h"
 #include "mimebuf.h"
 #include "prmem.h"
@@ -46,9 +14,9 @@
 MimeDefClass(MimeInlineTextRichtext, MimeInlineTextRichtextClass,
        mimeInlineTextRichtextClass, &MIME_SUPERCLASS);
 
-static int MimeInlineTextRichtext_parse_line (const char *, PRInt32, MimeObject *);
+static int MimeInlineTextRichtext_parse_line (const char *, int32_t, MimeObject *);
 static int MimeInlineTextRichtext_parse_begin (MimeObject *);
-static int MimeInlineTextRichtext_parse_eof (MimeObject *, PRBool);
+static int MimeInlineTextRichtext_parse_eof (MimeObject *, bool);
 
 static int
 MimeInlineTextRichtextClassInitialize(MimeInlineTextRichtextClass *clazz)
@@ -65,11 +33,11 @@ MimeInlineTextRichtextClassInitialize(MimeInlineTextRichtextClass *clazz)
    from outside this module (no MimeObject, etc.)
  */
 int
-MimeRichtextConvert (const char *line, PRInt32 length,
+MimeRichtextConvert (const char *line, int32_t length,
            MimeObject *obj,
            char **obufferP,
-           PRInt32 *obuffer_sizeP,
-           PRBool enriched_p)
+           int32_t *obuffer_sizeP,
+           bool enriched_p)
 {
   /* RFC 1341 (the original MIME spec) defined text/richtext.
    RFC 1563 superceded text/richtext with text/enriched.
@@ -105,11 +73,11 @@ MimeRichtextConvert (const char *line, PRInt32 length,
   // The code below must never expand the input by more than 5x;
   // if it does, the desired_size multiplier (5) below must be changed too
 #define BGROWTH 5
-  if ( (PRUint32)length >= ( (PRUint32) 0xfffffffe)/BGROWTH )
+  if ( (uint32_t)length >= ( (uint32_t) 0xfffffffe)/BGROWTH )
       return -1;
   desired_size = (length * BGROWTH) + 1;
 #undef BGROWTH  
-  if (desired_size >= (PRUint32) *obuffer_sizeP)
+  if (desired_size >= (uint32_t) *obuffer_sizeP)
   status = mime_GrowBuffer (desired_size, sizeof(char), 1024,
                obufferP, obuffer_sizeP);
   if (status < 0) return status;
@@ -121,11 +89,11 @@ MimeRichtextConvert (const char *line, PRInt32 length,
     if (this_start >= line + length) /* blank line */
     {
       PL_strncpyz (*obufferP, "<BR>", *obuffer_sizeP);
-      return MimeObject_write(obj, *obufferP, strlen(*obufferP), PR_TRUE);
+      return MimeObject_write(obj, *obufferP, strlen(*obufferP), true);
     }
   }
 
-  PRUint32 outlen = (PRUint32) *obuffer_sizeP;
+  uint32_t outlen = (uint32_t) *obuffer_sizeP;
   out = *obufferP;
   *out = 0;
 
@@ -133,7 +101,7 @@ MimeRichtextConvert (const char *line, PRInt32 length,
   last_end = line;
   this_start = last_end;
   this_end = this_start;
-  PRUint32 addedlen = 0;
+  uint32_t addedlen = 0;
   while (this_end < data_end)
   {
     /* Skip forward to next special character. */
@@ -344,14 +312,14 @@ MimeRichtextConvert (const char *line, PRInt32 length,
   }
   *out = 0;
 
-  return MimeObject_write(obj, *obufferP, out - *obufferP, PR_TRUE);
+  return MimeObject_write(obj, *obufferP, out - *obufferP, true);
 }
 
 
 static int
-MimeInlineTextRichtext_parse_line (const char *line, PRInt32 length, MimeObject *obj)
+MimeInlineTextRichtext_parse_line (const char *line, int32_t length, MimeObject *obj)
 {
-  PRBool enriched_p = (((MimeInlineTextRichtextClass *) obj->clazz)
+  bool enriched_p = (((MimeInlineTextRichtextClass *) obj->clazz)
             ->enriched_p);
 
   return MimeRichtextConvert (line, length,
@@ -367,12 +335,12 @@ MimeInlineTextRichtext_parse_begin (MimeObject *obj)
   int status = ((MimeObjectClass*)&MIME_SUPERCLASS)->parse_begin(obj);
   char s[] = "";
   if (status < 0) return status;
-  return MimeObject_write(obj, s, 0, PR_TRUE); /* force out any separators... */
+  return MimeObject_write(obj, s, 0, true); /* force out any separators... */
 }
 
 
 static int
-MimeInlineTextRichtext_parse_eof (MimeObject *obj, PRBool abort_p)
+MimeInlineTextRichtext_parse_eof (MimeObject *obj, bool abort_p)
 {
   int status;
   if (obj->closed_p) return 0;

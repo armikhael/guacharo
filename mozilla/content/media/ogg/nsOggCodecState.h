@@ -1,41 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim:set ts=2 sw=2 sts=2 et cindent: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: ML 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla code.
- *
- * The Initial Developer of the Original Code is the Mozilla Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Chris Double <chris.double@double.co.nz>
- *  Chris Pearce <chris@pearce.org.nz>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #if !defined(nsOggCodecState_h_)
 #define nsOggCodecState_h_
 
@@ -46,10 +13,22 @@
 #else
 #include <vorbis/codec.h>
 #endif
+#ifdef MOZ_OPUS
+#include <opus/opus.h>
+extern "C" {
+#include "opus/opus_multistream.h"
+}
+// For MOZ_SAMPLE_TYPE_*
+#include "nsBuiltinDecoderStateMachine.h"
+#include "nsBuiltinDecoderReader.h"
+#endif
+#include <nsAutoRef.h>
 #include <nsDeque.h>
 #include <nsTArray.h>
 #include <nsClassHashtable.h>
 #include "VideoUtils.h"
+
+#include "mozilla/StandardInteger.h"
 
 // Uncomment the following to validate that we're predicting the number
 // of Vorbis samples in each packet correctly.
@@ -64,7 +43,7 @@ class OggPacketDeallocator : public nsDequeFunctor {
     ogg_packet* p = static_cast<ogg_packet*>(aPacket);
     delete [] p->packet;
     delete p;
-    return nsnull;
+    return nullptr;
   }
 };
 
@@ -82,7 +61,7 @@ class nsPacketQueue : private nsDeque {
 public:
   nsPacketQueue() : nsDeque(new OggPacketDeallocator()) {}
   ~nsPacketQueue() { Erase(); }
-  PRBool IsEmpty() { return nsDeque::GetSize() == 0; }
+  bool IsEmpty() { return nsDeque::GetSize() == 0; }
   void Append(ogg_packet* aPacket);
   ogg_packet* PopFront() { return static_cast<ogg_packet*>(nsDeque::PopFront()); }
   ogg_packet* PeekFront() { return static_cast<ogg_packet*>(nsDeque::PeekFront()); }
@@ -99,8 +78,9 @@ public:
   enum CodecType {
     TYPE_VORBIS=0,
     TYPE_THEORA=1,
-    TYPE_SKELETON=2,
-    TYPE_UNKNOWN=3
+    TYPE_OPUS=2,
+    TYPE_SKELETON=3,
+    TYPE_UNKNOWN=4
   };
 
   virtual ~nsOggCodecState();
@@ -110,45 +90,47 @@ public:
   static nsOggCodecState* Create(ogg_page* aPage);
   
   virtual CodecType GetType() { return TYPE_UNKNOWN; }
-  
-  // Reads a header packet. Returns PR_TRUE when last header has been read.
-  virtual PRBool DecodeHeader(ogg_packet* aPacket) {
-    return (mDoneReadingHeaders = PR_TRUE);
+
+  // Reads a header packet. Returns true when last header has been read.
+  // This function takes ownership of the packet and is responsible for
+  // releasing it or queuing it for later processing.
+  virtual bool DecodeHeader(ogg_packet* aPacket) {
+    return (mDoneReadingHeaders = true);
   }
 
   // Returns the end time that a granulepos represents.
-  virtual PRInt64 Time(PRInt64 granulepos) { return -1; }
+  virtual int64_t Time(int64_t granulepos) { return -1; }
 
   // Returns the start time that a granulepos represents.
-  virtual PRInt64 StartTime(PRInt64 granulepos) { return -1; }
+  virtual int64_t StartTime(int64_t granulepos) { return -1; }
 
   // Initializes the codec state.
-  virtual PRBool Init();
+  virtual bool Init();
 
-  // Returns PR_TRUE when this bitstream has finished reading all its
+  // Returns true when this bitstream has finished reading all its
   // header packets.
-  PRBool DoneReadingHeaders() { return mDoneReadingHeaders; }
+  bool DoneReadingHeaders() { return mDoneReadingHeaders; }
 
   // Deactivates the bitstream. Only the primary video and audio bitstreams
   // should be active.
   void Deactivate() {
-    mActive = PR_FALSE;
-    mDoneReadingHeaders = PR_TRUE;
+    mActive = false;
+    mDoneReadingHeaders = true;
     Reset();
   }
 
   // Resets decoding state.
   virtual nsresult Reset();
 
-  // Returns PR_TRUE if the nsOggCodecState thinks this packet is a header
+  // Returns true if the nsOggCodecState thinks this packet is a header
   // packet. Note this does not verify the validity of the header packet,
   // it just guarantees that the packet is marked as a header packet (i.e.
   // it is definintely not a data packet). Do not use this to identify
   // streams, use it to filter header packets from data packets while
   // decoding.
-  virtual PRBool IsHeader(ogg_packet* aPacket) { return PR_FALSE; }
+  virtual bool IsHeader(ogg_packet* aPacket) { return false; }
 
-  // Returns the next packet in the stream, or nsnull if there are no more
+  // Returns the next packet in the stream, or nullptr if there are no more
   // packets buffered in the packet queue. More packets can be buffered by
   // inserting one or more pages into the stream by calling PageIn(). The
   // caller is responsible for deleting returned packet's using
@@ -168,10 +150,10 @@ public:
   virtual nsresult PageIn(ogg_page* aPage);
 
   // Number of packets read.  
-  PRUint64 mPacketCount;
+  uint64_t mPacketCount;
 
   // Serial number of the bitstream.
-  PRUint32 mSerial;
+  uint32_t mSerial;
 
   // Ogg specific state.
   ogg_stream_state mState;
@@ -181,16 +163,16 @@ public:
   nsPacketQueue mPackets;
 
   // Is the bitstream active; whether we're decoding and playing this bitstream.
-  PRPackedBool mActive;
+  bool mActive;
   
-  // PR_TRUE when all headers packets have been read.
-  PRPackedBool mDoneReadingHeaders;
+  // True when all headers packets have been read.
+  bool mDoneReadingHeaders;
 
 protected:
   // Constructs a new nsOggCodecState. aActive denotes whether the stream is
   // active. For streams of unsupported or unknown types, aActive should be
-  // PR_FALSE.
-  nsOggCodecState(ogg_page* aBosPage, PRBool aActive);
+  // false.
+  nsOggCodecState(ogg_page* aBosPage, bool aActive);
 
   // Deallocates all packets stored in mUnstamped, and clears the array.
   void ClearUnstamped();
@@ -202,7 +184,7 @@ protected:
   // the granulepos of the packets in mUnstamped can be inferred, and they
   // can be pushed over to mPackets. Used by PageIn() implementations in
   // subclasses.
-  nsresult PacketOutUntilGranulepos(PRBool& aFoundGranulepos);
+  nsresult PacketOutUntilGranulepos(bool& aFoundGranulepos);
 
   // Temporary buffer in which to store packets while we're reading packets
   // in order to capture granulepos.
@@ -215,15 +197,15 @@ public:
   virtual ~nsVorbisState();
 
   CodecType GetType() { return TYPE_VORBIS; }
-  PRBool DecodeHeader(ogg_packet* aPacket);
-  PRInt64 Time(PRInt64 granulepos);
-  PRBool Init();
+  bool DecodeHeader(ogg_packet* aPacket);
+  int64_t Time(int64_t granulepos);
+  bool Init();
   nsresult Reset();
-  PRBool IsHeader(ogg_packet* aPacket);
+  bool IsHeader(ogg_packet* aPacket);
   nsresult PageIn(ogg_page* aPage); 
 
   // Returns the end time that a granulepos represents.
-  static PRInt64 Time(vorbis_info* aInfo, PRInt64 aGranulePos); 
+  static int64_t Time(vorbis_info* aInfo, int64_t aGranulePos); 
 
   vorbis_info mInfo;
   vorbis_comment mComment;
@@ -245,7 +227,7 @@ private:
   // Granulepos (end sample) of the last decoded Vorbis packet. This is used
   // to calculate the Vorbis granulepos when we don't find a granulepos to
   // back-propagate from.
-  PRInt64 mGranulepos;
+  int64_t mGranulepos;
 
 #ifdef VALIDATE_VORBIS_SAMPLE_CALCULATION
   // When validating that we've correctly predicted Vorbis packets' number
@@ -273,7 +255,7 @@ public:
 };
 
 // Returns 1 if the Theora info struct is decoding a media of Theora
-// verion (maj,min,sub) or later, otherwise returns 0.
+// version (maj,min,sub) or later, otherwise returns 0.
 int TheoraVersion(th_info* info,
                   unsigned char maj,
                   unsigned char min,
@@ -285,19 +267,19 @@ public:
   virtual ~nsTheoraState();
 
   CodecType GetType() { return TYPE_THEORA; }
-  PRBool DecodeHeader(ogg_packet* aPacket);
-  PRInt64 Time(PRInt64 granulepos);
-  PRInt64 StartTime(PRInt64 granulepos);
-  PRBool Init();
-  PRBool IsHeader(ogg_packet* aPacket);
+  bool DecodeHeader(ogg_packet* aPacket);
+  int64_t Time(int64_t granulepos);
+  int64_t StartTime(int64_t granulepos);
+  bool Init();
+  bool IsHeader(ogg_packet* aPacket);
   nsresult PageIn(ogg_page* aPage); 
 
   // Returns the maximum number of microseconds which a keyframe can be offset
   // from any given interframe.
-  PRInt64 MaxKeyframeOffset();
+  int64_t MaxKeyframeOffset();
 
   // Returns the end time that a granulepos represents.
-  static PRInt64 Time(th_info* aInfo, PRInt64 aGranulePos); 
+  static int64_t Time(th_info* aInfo, int64_t aGranulePos); 
 
   th_info mInfo;
   th_comment mComment;
@@ -317,6 +299,63 @@ private:
 
 };
 
+class nsOpusState : public nsOggCodecState {
+#ifdef MOZ_OPUS
+public:
+  nsOpusState(ogg_page* aBosPage);
+  virtual ~nsOpusState();
+
+  CodecType GetType() { return TYPE_OPUS; }
+  bool DecodeHeader(ogg_packet* aPacket);
+  int64_t Time(int64_t aGranulepos);
+  bool Init();
+  nsresult Reset();
+  nsresult Reset(bool aStart);
+  bool IsHeader(ogg_packet* aPacket);
+  nsresult PageIn(ogg_page* aPage);
+
+  // Returns the end time that a granulepos represents.
+  static int64_t Time(int aPreSkip, int64_t aGranulepos);
+
+  // Various fields from the Ogg Opus header.
+  int mRate;        // Sample rate the decoder uses (always 48 kHz).
+  uint32_t mNominalRate; // Original sample rate of the data (informational).
+  int mChannels;    // Number of channels the stream encodes.
+  uint16_t mPreSkip; // Number of samples to strip after decoder reset.
+#ifdef MOZ_SAMPLE_TYPE_FLOAT32
+  float mGain;      // Gain to apply to decoder output.
+#else
+  int32_t mGain_Q16; // Gain to apply to the decoder output.
+#endif
+  int mChannelMapping; // Channel mapping family.
+  int mStreams;     // Number of packed streams in each packet.
+  int mCoupledStreams; // Number of packed coupled streams in each packet.
+  unsigned char mMappingTable[255]; // Channel mapping table.
+
+  OpusMSDecoder *mDecoder;
+
+  int mSkip;        // Number of samples left to trim before playback.
+  // Granule position (end sample) of the last decoded Opus packet. This is
+  // used to calculate the amount we should trim from the last packet.
+  int64_t mPrevPacketGranulepos;
+
+private:
+
+  // Reconstructs the granulepos of Opus packets stored in the
+  // mUnstamped array. mUnstamped must be filled with consecutive packets from
+  // the stream, with the last packet having a known granulepos. Using this
+  // known granulepos, and the known frame numbers, we recover the granulepos
+  // of all frames in the array. This enables us to determine their timestamps.
+  bool ReconstructOpusGranulepos();
+
+  // Granule position (end sample) of the last decoded Opus page. This is
+  // used to calculate the Opus per-packet granule positions on the last page,
+  // where we may need to trim some samples from the end.
+  int64_t mPrevPageGranulepos;
+
+#endif /* MOZ_OPUS */
+};
+
 // Constructs a 32bit version number out of two 16 bit major,minor
 // version numbers.
 #define SKELETON_VERSION(major, minor) (((major)<<16)|(minor))
@@ -326,36 +365,36 @@ public:
   nsSkeletonState(ogg_page* aBosPage);
   ~nsSkeletonState();
   CodecType GetType() { return TYPE_SKELETON; }
-  PRBool DecodeHeader(ogg_packet* aPacket);
-  PRInt64 Time(PRInt64 granulepos) { return -1; }
-  PRBool Init() { return PR_TRUE; }
-  PRBool IsHeader(ogg_packet* aPacket) { return PR_TRUE; }
+  bool DecodeHeader(ogg_packet* aPacket);
+  int64_t Time(int64_t granulepos) { return -1; }
+  bool Init() { return true; }
+  bool IsHeader(ogg_packet* aPacket) { return true; }
 
-  // Return PR_TRUE if the given time (in milliseconds) is within
+  // Return true if the given time (in milliseconds) is within
   // the presentation time defined in the skeleton track.
-  PRBool IsPresentable(PRInt64 aTime) { return aTime >= mPresentationTime; }
+  bool IsPresentable(int64_t aTime) { return aTime >= mPresentationTime; }
 
   // Stores the offset of the page on which a keyframe starts,
   // and its presentation time.
   class nsKeyPoint {
   public:
     nsKeyPoint()
-      : mOffset(PR_INT64_MAX),
-        mTime(PR_INT64_MAX) {}
+      : mOffset(INT64_MAX),
+        mTime(INT64_MAX) {}
 
-    nsKeyPoint(PRInt64 aOffset, PRInt64 aTime)
+    nsKeyPoint(int64_t aOffset, int64_t aTime)
       : mOffset(aOffset),
         mTime(aTime) {}
 
     // Offset from start of segment/link-in-the-chain in bytes.
-    PRInt64 mOffset;
+    int64_t mOffset;
 
     // Presentation time in usecs.
-    PRInt64 mTime;
+    int64_t mTime;
 
-    PRBool IsNull() {
-      return mOffset == PR_INT64_MAX &&
-             mTime == PR_INT64_MAX;
+    bool IsNull() {
+      return mOffset == INT64_MAX &&
+             mTime == INT64_MAX;
     }
   };
 
@@ -365,8 +404,8 @@ public:
   public:
     nsSeekTarget() : mSerial(0) {}
     nsKeyPoint mKeyPoint;
-    PRUint32 mSerial;
-    PRBool IsNull() {
+    uint32_t mSerial;
+    bool IsNull() {
       return mKeyPoint.IsNull() &&
              mSerial == 0;
     }
@@ -375,11 +414,11 @@ public:
   // Determines from the seek index the keyframe which you must seek back to
   // in order to get all keyframes required to render all streams with
   // serialnos in aTracks, at time aTarget.
-  nsresult IndexedSeekTarget(PRInt64 aTarget,
-                             nsTArray<PRUint32>& aTracks,
+  nsresult IndexedSeekTarget(int64_t aTarget,
+                             nsTArray<uint32_t>& aTracks,
                              nsSeekTarget& aResult);
 
-  PRBool HasIndex() const {
+  bool HasIndex() const {
     return mIndex.IsInitialized() && mIndex.Count() > 0;
   }
 
@@ -387,34 +426,34 @@ public:
   // an index. aTracks must be filled with the serialnos of the active tracks.
   // The duration is calculated as the greatest end time of all active tracks,
   // minus the smalled start time of all the active tracks.
-  nsresult GetDuration(const nsTArray<PRUint32>& aTracks, PRInt64& aDuration);
+  nsresult GetDuration(const nsTArray<uint32_t>& aTracks, int64_t& aDuration);
 
 private:
 
-  // Decodes an index packet. Returns PR_FALSE on failure.
-  PRBool DecodeIndex(ogg_packet* aPacket);
+  // Decodes an index packet. Returns false on failure.
+  bool DecodeIndex(ogg_packet* aPacket);
 
   // Gets the keypoint you must seek to in order to get the keyframe required
   // to render the stream at time aTarget on stream with serial aSerialno.
-  nsresult IndexedSeekTargetForTrack(PRUint32 aSerialno,
-                                     PRInt64 aTarget,
+  nsresult IndexedSeekTargetForTrack(uint32_t aSerialno,
+                                     int64_t aTarget,
                                      nsKeyPoint& aResult);
 
   // Version of the decoded skeleton track, as per the SKELETON_VERSION macro.
-  PRUint32 mVersion;
+  uint32_t mVersion;
 
   // Presentation time of the resource in milliseconds
-  PRInt64 mPresentationTime;
+  int64_t mPresentationTime;
 
   // Length of the resource in bytes.
-  PRInt64 mLength;
+  int64_t mLength;
 
   // Stores the keyframe index and duration information for a particular
   // stream.
   class nsKeyFrameIndex {
   public:
 
-    nsKeyFrameIndex(PRInt64 aStartTime, PRInt64 aEndTime) 
+    nsKeyFrameIndex(int64_t aStartTime, int64_t aEndTime) 
       : mStartTime(aStartTime),
         mEndTime(aEndTime)
     {
@@ -425,23 +464,23 @@ private:
       MOZ_COUNT_DTOR(nsKeyFrameIndex);
     }
 
-    void Add(PRInt64 aOffset, PRInt64 aTimeMs) {
+    void Add(int64_t aOffset, int64_t aTimeMs) {
       mKeyPoints.AppendElement(nsKeyPoint(aOffset, aTimeMs));
     }
 
-    const nsKeyPoint& Get(PRUint32 aIndex) const {
+    const nsKeyPoint& Get(uint32_t aIndex) const {
       return mKeyPoints[aIndex];
     }
 
-    PRUint32 Length() const {
+    uint32_t Length() const {
       return mKeyPoints.Length();
     }
 
     // Presentation time of the first sample in this stream in usecs.
-    const PRInt64 mStartTime;
+    const int64_t mStartTime;
 
     // End time of the last sample in this stream in usecs.
-    const PRInt64 mEndTime;
+    const int64_t mEndTime;
 
   private:
     nsTArray<nsKeyPoint> mKeyPoints;
@@ -449,6 +488,17 @@ private:
 
   // Maps Ogg serialnos to the index-keypoint list.
   nsClassHashtable<nsUint32HashKey, nsKeyFrameIndex> mIndex;
+};
+
+// This allows the use of nsAutoRefs for an ogg_packet that properly free the
+// contents of the packet.
+template <>
+class nsAutoRefTraits<ogg_packet> : public nsPointerRefTraits<ogg_packet>
+{
+public:
+  static void Release(ogg_packet* aPacket) {
+    nsOggCodecState::ReleasePacket(aPacket);
+  }
 };
 
 #endif

@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla History System
- *
- * The Initial Developer of the Original Code is
- * Google Inc.
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Brett Wilson <brettw@gmail.com> (Original author)
- *   Asaf Romano <mano@mozilla.com> (JavaScript version)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 function PlacesTreeView() {
   this._tree = null;
@@ -89,7 +55,7 @@ PlacesTreeView.prototype = {
       selection.selectEventsSuppressed = true;
 
     if (!this._rootNode.containerOpen) {
-      // This triggers containerOpened which then builds the visible section.
+      // This triggers containerStateChanged which then builds the visible section.
       this._rootNode.containerOpen = true;
     }
     else
@@ -122,16 +88,13 @@ PlacesTreeView.prototype = {
    * @return true if aContainer is a plain container, false otherwise.
    */
   _isPlainContainer: function PTV__isPlainContainer(aContainer) {
-    if (aContainer._plainContainer !== undefined)
-      return aContainer._plainContainer;
-
     // All history containers are query containers, but we need to QI
     aContainer.QueryInterface(Components.interfaces.nsINavHistoryQueryResultNode);
 
     // Of all history containers, only URI containers are flat, and they don't
     // contain folders, no need to check that either.
-    return aContainer._plainContainer = (aContainer.queryOptions.resultType ==
-               Components.interfaces.nsINavHistoryQueryOptions.RESULTS_AS_URI)
+    return aContainer.queryOptions.resultType ==
+               Components.interfaces.nsINavHistoryQueryOptions.RESULTS_AS_URI;
   },
 
   /**
@@ -161,12 +124,21 @@ PlacesTreeView.prototype = {
   _getRowForNode:
   function PTV__getRowForNode(aNode, aForceBuild, aParentRow, aNodeIndex) {
     if (aNode == this._rootNode)
-      throw "The root node is never visible";
+      throw new Error("The root node is never visible");
 
-    let ancestors = PlacesUtils.nodeAncestors(aNode);
-    for (let ancestor in ancestors) {
+    // A node is removed form the view either if it has no parent or if its
+    // root-ancestor is not the root node (in which case that's the node
+    // for which nodeRemoved was called).
+    let ancestors = [x for each (x in PlacesUtils.nodeAncestors(aNode))];
+    if (ancestors.length == 0 ||
+        ancestors[ancestors.length - 1] != this._rootNode) {
+      throw new Error("Removed node passed to _getRowForNode");
+    }
+
+    // Ensure that the entire chain is open, otherwise that node is invisible.
+    for (let ancestor of ancestors) {
       if (!ancestor.containerOpen)
-        throw "Invisible node passed to _getRowForNode";
+        throw new Error("Invisible node passed to _getRowForNode");
     }
 
     // Non-plain containers are initially built with their contents.
@@ -273,7 +245,7 @@ PlacesTreeView.prototype = {
   {
     // There's nothing to do if the container is closed.
     if (!aContainer.containerOpen)
-      return;
+      return 0;
 
     // Inserting the new elements into the rows array in one shot (by
     // Array.concat) is faster than resizing the array (by splice) on each loop
@@ -691,16 +663,10 @@ PlacesTreeView.prototype = {
 
   nodeLastModifiedChanged: function PTV_nodeLastModifiedChanged(aNode, aNewValue) { },
 
-  containerOpened: function PTV_containerOpened(aNode) {
-    this.invalidateContainer(aNode);
-  },
-
-  containerClosed: function PTV_containerClosed(aNode) {
-    this.invalidateContainer(aNode);
-  },
-
   containerStateChanged:
-  function PTV_containerStateChanged(aNode, aOldState, aNewState) {},
+  function PTV_containerStateChanged(aNode, aOldState, aNewState) {
+    this.invalidateContainer(aNode);
+  },
 
   invalidateContainer: function PTV_invalidateContainer(aContainer) {
     NS_ASSERT(this._result, "Need to have a result to update");
@@ -861,8 +827,16 @@ PlacesTreeView.prototype = {
       this._rootNode.containerOpen = false;
     }
 
-    this._result = val;
-    this._rootNode = val ? val.root : null;
+    if (val) {
+      this._result = val;
+      this._rootNode = val.root;
+      this._cellProperties = new Map();
+    }
+    else if (this._result) {
+      delete this._result;
+      delete this._rootNode;
+      delete this._cellProperties;
+    }
 
     // If the tree is not set yet, setTree will call finishInit.
     if (this._tree && val)
@@ -914,9 +888,10 @@ PlacesTreeView.prototype = {
     if (aColumn.id != "Name")
       return;
 
-    var node = this._getNodeForRow(aRow);
-    if (!node._cellProperties) {
-      let properties = new Array();
+    let node = this._getNodeForRow(aRow);
+    let properties = this._cellProperties.get(node, null);
+    if (!properties) {
+      properties = [];
       if (node.type == Components.interfaces.nsINavHistoryResultNode.RESULT_TYPE_QUERY) {
         properties.push(this._getAtomFor("query"));
         if (PlacesUtils.nodeIsDay(node))
@@ -925,10 +900,11 @@ PlacesTreeView.prototype = {
           properties.push(this._getAtomFor("hostContainer"));
       }
 
-      node._cellProperties = properties;
+      this._cellProperties.set(node, properties);
     }
-    for (let i = 0; i < node._cellProperties.length; i++)
-      aProperties.AppendElement(node._cellProperties[i]);
+    for (let property of properties) {
+      aProperties.AppendElement(property);
+    }
   },
 
   getColumnProperties: function(aColumn, aProperties) { },

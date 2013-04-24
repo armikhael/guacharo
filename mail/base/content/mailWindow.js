@@ -1,46 +1,14 @@
 /** ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jan Varga <varga@nixcorp.com>
- *   Håkan Waara <hwaara@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+Components.utils.import("resource:///modules/mailServices.js");
 Components.utils.import("resource:///modules/appIdleManager.js");
 Components.utils.import("resource://gre/modules/XPCOMUtils.jsm");
 Components.utils.import("resource:///modules/gloda/log4moz.js");
 Components.utils.import("resource:///modules/gloda/public.js");
+Components.utils.import("resource:///modules/glodaWebSearch.js");
 
 //This file stores variables common to mail windows
 var messenger;
@@ -48,7 +16,6 @@ var pref;
 var statusFeedback;
 var msgWindow;
 
-var msgComposeService;
 var accountManager;
 
 var gContextMenu;
@@ -79,6 +46,9 @@ function OnMailWindowUnload()
 
   msgWindow.closeWindow();
 
+  msgWindow.msgHeaderSink = null;
+  msgWindow.notificationCallbacks = null;
+  gDBView = null;
   window.MsgStatusFeedback.unload();
   Components.classes["@mozilla.org/activity-manager;1"]
             .getService(Components.interfaces.nsIActivityManager)
@@ -92,7 +62,7 @@ function CreateMailWindowGlobals()
                         .createInstance(Components.interfaces.nsIMessenger);
 
   pref = Components.classes["@mozilla.org/preferences-service;1"]
-          .getService(Components.interfaces.nsIPrefBranch2);
+          .getService(Components.interfaces.nsIPrefBranch);
 
   window.addEventListener("blur", appIdleManager.onBlur, false);
   window.addEventListener("focus", appIdleManager.onFocus, false);
@@ -123,9 +93,6 @@ function CreateMailWindowGlobals()
   msgWindow = Components.classes["@mozilla.org/messenger/msgwindow;1"]
                         .createInstance(Components.interfaces.nsIMsgWindow);
 
-  msgComposeService = Components.classes['@mozilla.org/messengercompose;1']
-                                .getService(Components.interfaces.nsIMsgComposeService);
-
   accountManager = Components.classes["@mozilla.org/messenger/account-manager;1"].getService(Components.interfaces.nsIMsgAccountManager);
 
   msgWindow.notificationCallbacks = new BadCertHandler();
@@ -148,6 +115,8 @@ function InitMsgWindow()
   msgWindow.rootDocShell.appType = Components.interfaces.nsIDocShell.APP_TYPE_MAIL;
   // Ensure we don't load xul error pages into the main window
   msgWindow.rootDocShell.useErrorPages = false;
+
+  GlodaWebSearch.onLoad();
 }
 
 // We're going to implement our status feedback for the mail window in JS now.
@@ -460,25 +429,6 @@ nsMsgWindowCommands.prototype =
 }
 
 /**
- * @returns the pref name to use for fetching the start page url. Every time the application version changes,
- * return "mailnews.start_page.override_url". If this is the first time the application has been
- * launched, return "mailnews.start_page.welcome_url". Otherwise return "mailnews.start_page.url".
- */
-function startPageUrlPref()
-{
-  var prefForStartPageUrl = "mailnews.start_page.url";
-  var savedVersion = null;
-  try {
-    savedVersion = pref.getCharPref("mailnews.start_page_override.mstone");
-  } catch (ex) {}
-
-  if (!savedVersion && savedVersion != "ignore")
-    prefForStartPageUrl = "mailnews.start_page.welcome_url";
-
-  return prefForStartPageUrl;
-}
-
-/**
  * Loads the mail start page.
  */
 function loadStartPage(aForce)
@@ -491,7 +441,7 @@ function loadStartPage(aForce)
   gMessageNotificationBar.clearMsgNotifications();
   let startpage = Components.classes["@mozilla.org/toolkit/URLFormatterService;1"]
                             .getService(Components.interfaces.nsIURLFormatter)
-                            .formatURLPref(startPageUrlPref());
+                            .formatURLPref("mailnews.start_page.url");
   if (startpage)
   {
     try {
@@ -533,7 +483,7 @@ function getNotificationBox(aWindow) {
                       tabInfo[i].mode.tabType.getBrowser;
     if (browserFunc) {
       var possBrowser = browserFunc.call(tabInfo[i].mode.tabType, tabInfo[i]);
-      if (possBrowser && possBrowser.contentWindow == aWindow)
+      if (possBrowser && possBrowser.contentWindow == aWindow && possBrowser.parentNode.tagName == "notificationbox")
         return possBrowser.parentNode;
     }
   }

@@ -46,7 +46,8 @@ def getmtime(path):
 
 def stripdotslash(s):
     if s.startswith('./'):
-        return s[2:]
+        st = s[2:]
+        return st if st != '' else '.'
     return s
 
 def stripdotslashes(sl):
@@ -61,10 +62,84 @@ def _if_else(c, t, f):
         return t()
     return f()
 
-class StringExpansion(object):
+
+class BaseExpansion(object):
+    """Base class for expansions.
+
+    A make expansion is the parsed representation of a string, which may
+    contain references to other elements.
+    """
+
+    @property
+    def is_static_string(self):
+        """Returns whether the expansion is composed of static string content.
+
+        This is always True for StringExpansion. It will be True for Expansion
+        only if all elements of that Expansion are static strings.
+        """
+        raise Exception('Must be implemented in child class.')
+
+    def functions(self, descend=False):
+        """Obtain all functions inside this expansion.
+
+        This is a generator for pymake.functions.Function instances.
+
+        By default, this only returns functions existing as the primary
+        elements of this expansion. If `descend` is True, it will descend into
+        child expansions and extract all functions in the tree.
+        """
+        # An empty generator. Yeah, it's weird.
+        for x in []:
+            yield x
+
+    def variable_references(self, descend=False):
+        """Obtain all variable references in this expansion.
+
+        This is a generator for pymake.functionsVariableRef instances.
+
+        To retrieve the names of variables, simply query the `vname` field on
+        the returned instances. Most of the time these will be StringExpansion
+        instances.
+        """
+        for f in self.functions(descend=descend):
+            if not isinstance(f, functions.VariableRef):
+                continue
+
+            yield f
+
+    @property
+    def is_filesystem_dependent(self):
+        """Whether this expansion may query the filesystem for evaluation.
+
+        This effectively asks "is any function in this expansion dependent on
+        the filesystem.
+        """
+        for f in self.functions(descend=True):
+            if f.is_filesystem_dependent:
+                return True
+
+        return False
+
+    @property
+    def is_shell_dependent(self):
+        """Whether this expansion may invoke a shell for evaluation."""
+
+        for f in self.functions(descend=True):
+            if isinstance(f, functions.ShellFunction):
+                return True
+
+        return False
+
+
+class StringExpansion(BaseExpansion):
+    """An Expansion representing a static string.
+
+    This essentially wraps a single str instance.
+    """
+
     __slots__ = ('loc', 's',)
     simple = True
-    
+
     def __init__(self, s, loc):
         assert isinstance(s, str)
         self.s = s
@@ -93,6 +168,10 @@ class StringExpansion(object):
         e.appendstr(self.s)
         return e
 
+    @property
+    def is_static_string(self):
+        return True
+
     def __len__(self):
         return 1
 
@@ -100,22 +179,43 @@ class StringExpansion(object):
         assert i == 0
         return self.s, False
 
-    def __str__(self):
+    def __repr__(self):
         return "Exp<%s>(%r)" % (self.loc, self.s)
 
-class Expansion(list):
-    """
-    A representation of expanded data, such as that for a recursively-expanded variable, a command, etc.
+    def __eq__(self, other):
+        """We only compare the string contents."""
+        return self.s == other
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def to_source(self, escape_variables=False, escape_comments=False):
+        s = self.s
+
+        if escape_comments:
+            s = s.replace('#', '\\#')
+
+        if escape_variables:
+            return s.replace('$', '$$')
+
+        return s
+
+
+class Expansion(BaseExpansion, list):
+    """A representation of expanded data.
+
+    This is effectively an ordered list of StringExpansion and
+    pymake.function.Function instances. Every item in the collection appears in
+    the same context in a make file.
     """
 
-    __slots__ = ('loc', 'hasfunc')
+    __slots__ = ('loc',)
     simple = False
 
     def __init__(self, loc=None):
         # A list of (element, isfunc) tuples
         # element is either a string or a function
         self.loc = loc
-        self.hasfunc = False
 
     @staticmethod
     def fromstring(s, path):
@@ -136,7 +236,6 @@ class Expansion(list):
     def appendfunc(self, func):
         assert isinstance(func, functions.Function)
         self.append((func, True))
-        self.hasfunc = True
 
     def concat(self, o):
         """Concatenate the other expansion on to this one."""
@@ -144,7 +243,6 @@ class Expansion(list):
             self.appendstr(o.s)
         else:
             self.extend(o)
-            self.hasfunc = self.hasfunc or o.hasfunc
 
     def isempty(self):
         return (not len(self)) or self[0] == ('', False)
@@ -178,10 +276,33 @@ class Expansion(list):
             del self[-1]
 
     def finish(self):
-        if self.hasfunc:
-            return self
+        # Merge any adjacent literal strings:
+        strings = []
+        elements = []
+        for (e, isfunc) in self:
+            if isfunc:
+                if strings:
+                    s = ''.join(strings)
+                    if s:
+                        elements.append((s, False))
+                    strings = []
+                elements.append((e, True))
+            else:
+                strings.append(e)
 
-        return StringExpansion(''.join([i for i, isfunc in self]), self.loc)
+        if not elements:
+            # This can only happen if there were no function elements.
+            return StringExpansion(''.join(strings), self.loc)
+
+        if strings:
+            s = ''.join(strings)
+            if s:
+                elements.append((s, False))
+
+        if len(elements) < len(self):
+            self[:] = elements
+
+        return self
 
     def resolve(self, makefile, variables, fd, setting=[]):
         """
@@ -211,8 +332,90 @@ class Expansion(list):
     def resolvesplit(self, makefile, variables, setting=[]):
         return self.resolvestr(makefile, variables, setting).split()
 
+    @property
+    def is_static_string(self):
+        """An Expansion is static if all its components are strings, not
+        functions."""
+        for e, is_func in self:
+            if is_func:
+                return False
+
+        return True
+
+    def functions(self, descend=False):
+        for e, is_func in self:
+            if is_func:
+                yield e
+
+            if descend:
+                for exp in e.expansions(descend=True):
+                    for f in exp.functions(descend=True):
+                        yield f
+
     def __repr__(self):
         return "<Expansion with elements: %r>" % ([e for e, isfunc in self],)
+
+    def to_source(self, escape_variables=False, escape_comments=False):
+        parts = []
+        for e, is_func in self:
+            if is_func:
+                parts.append(e.to_source())
+                continue
+
+            if escape_variables:
+                parts.append(e.replace('$', '$$'))
+                continue
+
+            parts.append(e)
+
+        return ''.join(parts)
+
+    def __eq__(self, other):
+        if not isinstance(other, (Expansion, StringExpansion)):
+            return False
+
+        # Expansions are equivalent if adjacent string literals normalize to
+        # the same value. So, we must normalize before any comparisons are
+        # made.
+        a = self.clone().finish()
+
+        if isinstance(other, StringExpansion):
+            if isinstance(a, StringExpansion):
+                return a == other
+
+            # A normalized Expansion != StringExpansion.
+            return False
+
+        b = other.clone().finish()
+
+        # b could be a StringExpansion now.
+        if isinstance(b, StringExpansion):
+            if isinstance(a, StringExpansion):
+                return a == b
+
+            # Our normalized Expansion != normalized StringExpansion.
+            return False
+
+        if len(a) != len(b):
+            return False
+
+        for i in xrange(len(self)):
+            e1, is_func1 = a[i]
+            e2, is_func2 = b[i]
+
+            if is_func1 != is_func2:
+                return False
+
+            if type(e1) != type(e2):
+                return False
+
+            if e1 != e2:
+                return False
+
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 class Variables(object):
     """
@@ -693,7 +896,10 @@ class RemakeRuleContext(object):
             else:
                 for d, weak in self.deps:
                     if mtimeislater(d.mtime, self.target.mtime):
-                        self.target.beingremade()
+                        if d.mtime is None:
+                            self.target.beingremade()
+                        else:
+                            _log.info("%sNot remaking %s ubecause it would have no effect, even though %s is newer.", indent, self.target.target, d.target)
                         break
             cb(error=False)
             return
@@ -978,31 +1184,45 @@ class Target(object):
             search += [util.normaljoin(dir, self.target).replace('\\', '/')
                        for dir in makefile.getvpath(self.target)]
 
-        for t in search:
+        targetandtime = self.searchinlocs(makefile, search)
+        if targetandtime is not None:
+            (self.vpathtarget, self.mtime) = targetandtime
+            return
+
+        self.vpathtarget = self.target
+        self.mtime = None
+
+    def searchinlocs(self, makefile, locs):
+        """
+        Look in the given locations relative to the makefile working directory
+        for a file. Return a pair of the target and the mtime if found, None
+        if not.
+        """
+        for t in locs:
             fspath = util.normaljoin(makefile.workdir, t).replace('\\', '/')
             mtime = getmtime(fspath)
 #            _log.info("Searching %s ... checking %s ... mtime %r" % (t, fspath, mtime))
             if mtime is not None:
-                self.vpathtarget = t
-                self.mtime = mtime
-                return
+                return (t, mtime)
 
-        self.vpathtarget = self.target
-        self.mtime = None
+        return None
         
     def beingremade(self):
         """
-        When we remake ourself, we need to reset our mtime and vpathtarget.
-
-        We store our old mtime so that $? can calculate out-of-date prerequisites.
+        When we remake ourself, we have to drop any vpath prefixes.
         """
-        self.realmtime = self.mtime
-        self.mtime = None
         self.vpathtarget = self.target
         self.wasremade = True
 
     def notifydone(self, makefile):
         assert self._state == MAKESTATE_WORKING, "State was %s" % self._state
+        # If we were remade then resolve mtime again
+        if self.wasremade:
+            targetandtime = self.searchinlocs(makefile, [self.target])
+            if targetandtime is not None:
+                (_, self.mtime) = targetandtime
+            else:
+                self.mtime = None
 
         self._state = MAKESTATE_FINISHED
         for cb in self._callbacks:
@@ -1109,7 +1329,7 @@ def setautomaticvariables(v, makefile, target, prerequisites):
     prtargets = [makefile.gettarget(p) for p in prerequisites]
     prall = [pt.vpathtarget for pt in prtargets]
     proutofdate = [pt.vpathtarget for pt in withoutdups(prtargets)
-                   if target.realmtime is None or mtimeislater(pt.mtime, target.realmtime)]
+                   if target.mtime is None or mtimeislater(pt.mtime, target.mtime)]
     
     setautomatic(v, '@', [target.vpathtarget])
     if len(prall):
@@ -1180,7 +1400,7 @@ class _NativeWrapper(_CommandWrapper):
         _CommandWrapper.__init__(self, cline, ignoreErrors, loc, context,
                                  **kwargs)
         # get the module and method to call
-        parts, badchar = process.clinetoargv(cline)
+        parts, badchar = process.clinetoargv(cline, blacklist_gray=False)
         if parts is None:
             raise DataError("native command '%s': shell metacharacter '%s' in command line" % (cline, badchar), self.loc)
         if len(parts) < 2:
@@ -1517,6 +1737,10 @@ class Makefile(object):
         np = self.gettarget('.NOTPARALLEL')
         if len(np.rules):
             self.context = process.getcontext(1)
+
+        flavor, source, value = self.variables.get('.DEFAULT_GOAL')
+        if value is not None:
+            self.defaulttarget = value.resolvestr(self, self.variables, ['.DEFAULT_GOAL']).strip()
 
         self.error = False
 

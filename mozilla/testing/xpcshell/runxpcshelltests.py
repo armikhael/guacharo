@@ -1,50 +1,18 @@
 #!/usr/bin/env python
 #
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
-# The Original Code is mozilla.org code.
-#
-# The Initial Developer of the Original Code is The Mozilla Foundation
-# Portions created by the Initial Developer are Copyright (C) 2009
-# the Initial Developer. All Rights Reserved.
-#
-# Contributor(s):
-#  Serge Gautherie <sgautherie.bz@free.fr>
-#  Ted Mielczarek <ted.mielczarek@gmail.com>
-#  Joel Maher <joel.maher@gmail.com>
-#
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK ***** */
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import re, sys, os, os.path, logging, shutil, signal, math, time
+import re, sys, os, os.path, logging, shutil, signal, math, time, traceback
+import xml.dom.minidom
 from glob import glob
 from optparse import OptionParser
 from subprocess import Popen, PIPE, STDOUT
 from tempfile import mkdtemp, gettempdir
 import manifestparser
 import mozinfo
+import random
 
 from automationutils import *
 
@@ -67,10 +35,11 @@ class XPCShellTests(object):
   oldcwd = os.getcwd()
 
   def __init__(self, log=sys.stdout):
-    """ Init logging """
+    """ Init logging and node status """
     handler = logging.StreamHandler(log)
     self.log.setLevel(logging.INFO)
     self.log.addHandler(handler)
+    self.nodeProc = None
 
   def buildTestList(self):
     """
@@ -162,10 +131,7 @@ class XPCShellTests(object):
     self.env["MOZ_CRASHREPORTER_NO_REPORT"] = "1"
     # Capturing backtraces is very slow on some platforms, and it's
     # disabled by automation.py too
-    if not (sys.platform == 'osx' or sys.platform == "darwin"):
-      # XXX automation.py has this odd special case; without it, bug
-      # 618052 seems to be exacerbated
-      self.env["NS_TRACE_MALLOC_DISABLE_STACKS"] = "1"
+    self.env["NS_TRACE_MALLOC_DISABLE_STACKS"] = "1"
 
     if sys.platform == 'win32':
       self.env["PATH"] = self.env["PATH"] + ";" + self.xrePath
@@ -222,10 +188,28 @@ class XPCShellTests(object):
     #   do_load_child_test_harness() in head.js
     if not self.appPath:
         self.appPath = self.xrePath
-    self.xpcsCmd = [self.xpcshell, '-g', self.xrePath, '-a', self.appPath, '-r', self.httpdManifest, '-j', '-s'] + \
-        ['-e', 'const _HTTPD_JS_PATH = "%s";' % self.httpdJSPath,
-         '-e', 'const _HEAD_JS_PATH = "%s";' % self.headJSPath,
-         '-f', os.path.join(self.testharnessdir, 'head.js')]
+
+    self.xpcsCmd = [
+        self.xpcshell,
+        '-g', self.xrePath,
+        '-a', self.appPath,
+        '-r', self.httpdManifest,
+        '-m',
+        '-n',
+        '-s',
+        '-e', 'const _HTTPD_JS_PATH = "%s";' % self.httpdJSPath,
+        '-e', 'const _HEAD_JS_PATH = "%s";' % self.headJSPath
+    ]
+
+    if self.testingModulesDir:
+        # Escape backslashes in string literal.
+        sanitized = self.testingModulesDir.replace('\\', '\\\\')
+        self.xpcsCmd.extend([
+            '-e',
+            'const _TESTING_MODULES_DIR = "%s";' % sanitized
+        ])
+
+    self.xpcsCmd.extend(['-f', os.path.join(self.testharnessdir, 'head.js')])
 
     if self.debuggerInfo:
       self.xpcsCmd = [self.debuggerInfo["path"]] + self.debuggerInfo["args"] + self.xpcsCmd
@@ -255,24 +239,29 @@ class XPCShellTests(object):
         # Simply remove optional ending separator.
         self.testPath = self.testPath.rstrip("/")
 
+  def getHeadAndTailFiles(self, test):
+      """Obtain the list of head and tail files.
 
-  def getHeadFiles(self, test):
-    """
-      test['head'] is a whitespace delimited list of head files.
-      return the list of head files as paths including the subdir if the head file exists
+      Returns a 2-tuple. The first element is a list of head files. The second
+      is a list of tail files.
+      """
+      def sanitize_list(s, kind):
+          for f in s.strip().split(' '):
+              f = f.strip()
+              if len(f) < 1:
+                  continue
 
-      On a remote system, this is overloaded to list files in a remote directory structure.
-    """
-    return [os.path.join(test['here'], f).strip() for f in sorted(test['head'].split(' ')) if os.path.isfile(os.path.join(test['here'], f))]
+              path = os.path.normpath(os.path.join(test['here'], f))
+              if not os.path.exists(path):
+                  raise Exception('%s file does not exist: %s' % (kind, path))
 
-  def getTailFiles(self, test):
-    """
-      test['tail'] is a whitespace delimited list of head files.
-      return the list of tail files as paths including the subdir if the tail file exists
+              if not os.path.isfile(path):
+                  raise Exception('%s file is not a file: %s' % (kind, path))
 
-      On a remote system, this is overloaded to list files in a remote directory structure.
-    """
-    return [os.path.join(test['here'], f).strip() for f in sorted(test['tail'].split(' ')) if os.path.isfile(os.path.join(test['here'], f))]
+              yield path
+
+      return (list(sanitize_list(test['head'], 'head')),
+              list(sanitize_list(test['tail'], 'tail')))
 
   def setupProfileDir(self):
     """
@@ -280,7 +269,7 @@ class XPCShellTests(object):
       When running check-interactive and check-one, the directory is well-defined and
       retained for inspection once the tests complete.
 
-      On a remote system, we overload this to use a remote path structure.
+      On a remote system, this may be overloaded to use a remote path structure.
     """
     if self.interactive or self.singleFile:
       profileDir = os.path.join(gettempdir(), self.profileName, "xpcshellprofile")
@@ -301,7 +290,7 @@ class XPCShellTests(object):
     """
       Enable leaks (only) detection to its own log file and set environment variables.
 
-      On a remote system, we overload this to use a remote filename and path structure
+      On a remote system, this may be overloaded to use a remote filename and path structure
     """
     filename = "runxpcshelltests_leaks.log"
 
@@ -325,6 +314,20 @@ class XPCShellTests(object):
       On a remote system, this is overloaded to handle remote process communication.
     """
     return proc.communicate()
+
+  def poll(self, proc):
+    """
+      Simple wrapper to check if a process has terminated.
+      On a remote system, this is overloaded to handle remote process communication.
+    """
+    return proc.poll()
+
+  def kill(self, proc):
+    """
+      Simple wrapper to kill a process.
+      On a remote system, this is overloaded to handle remote process communication.
+    """
+    return proc.kill()
         
   def removeDir(self, dirname):
     """
@@ -381,12 +384,174 @@ class XPCShellTests(object):
              '-e', 'const _HEAD_FILES = [%s];' % cmdH,
              '-e', 'const _TAIL_FILES = [%s];' % cmdT]
 
+  def buildCmdTestFile(self, name):
+    """
+      Build the command line arguments for the test file.
+      On a remote system, this may be overloaded to use a remote path structure.
+    """
+    return ['-e', 'const _TEST_FILE = ["%s"];' %
+              replaceBackSlashes(name)]
+
+  def trySetupNode(self):
+    """
+      Run node for SPDY tests, if available, and updates mozinfo as appropriate.
+    """
+    nodeMozInfo = {'hasNode': False} # Assume the worst
+    nodeBin = None
+
+    # We try to find the node executable in the path given to us by the user in
+    # the MOZ_NODE_PATH environment variable
+    localPath = os.getenv('MOZ_NODE_PATH', None)
+    if localPath and os.path.exists(localPath) and os.path.isfile(localPath):
+      nodeBin = localPath
+
+    if nodeBin:
+      self.log.info('Found node at %s' % (nodeBin,))
+      myDir = os.path.split(os.path.abspath(__file__))[0]
+      mozSpdyJs = os.path.join(myDir, 'moz-spdy', 'moz-spdy.js')
+
+      if os.path.exists(mozSpdyJs):
+        # OK, we found our SPDY server, let's try to get it running
+        self.log.info('Found moz-spdy at %s' % (mozSpdyJs,))
+        stdout, stderr = self.getPipes()
+        try:
+          # We pipe stdin to node because the spdy server will exit when its
+          # stdin reaches EOF
+          self.nodeProc = Popen([nodeBin, mozSpdyJs], stdin=PIPE, stdout=PIPE,
+                  stderr=STDOUT, env=self.env, cwd=os.getcwd())
+
+          # Check to make sure the server starts properly by waiting for it to
+          # tell us it's started
+          msg = self.nodeProc.stdout.readline()
+          if msg.startswith('SPDY server listening'):
+              nodeMozInfo['hasNode'] = True
+        except OSError, e:
+          # This occurs if the subprocess couldn't be started
+          self.log.error('Could not run node SPDY server: %s' % (str(e),))
+
+    mozinfo.update(nodeMozInfo)
+
+  def shutdownNode(self):
+    """
+      Shut down our node process, if it exists
+    """
+    if self.nodeProc:
+      self.log.info('Node SPDY server shutting down ...')
+      # moz-spdy exits when its stdin reaches EOF, so force that to happen here
+      self.nodeProc.communicate()
+
+  def writeXunitResults(self, results, name=None, filename=None, fh=None):
+    """
+      Write Xunit XML from results.
+
+      The function receives an iterable of results dicts. Each dict must have
+      the following keys:
+
+        classname - The "class" name of the test.
+        name - The simple name of the test.
+
+      In addition, it must have one of the following saying how the test
+      executed:
+
+        passed - Boolean indicating whether the test passed. False if it
+          failed.
+        skipped - True if the test was skipped.
+
+      The following keys are optional:
+
+        time - Execution time of the test in decimal seconds.
+        failure - Dict describing test failure. Requires keys:
+          type - String type of failure.
+          message - String describing basic failure.
+          text - Verbose string describing failure.
+
+      Arguments:
+
+      |name|, Name of the test suite. Many tools expect Java class dot notation
+        e.g. dom.simple.foo. A directory with '/' converted to '.' is a good
+        choice.
+      |fh|, File handle to write XML to.
+      |filename|, File name to write XML to.
+      |results|, Iterable of tuples describing the results.
+    """
+    if filename is None and fh is None:
+      raise Exception("One of filename or fh must be defined.")
+
+    if name is None:
+      name = "xpcshell"
+    else:
+      assert isinstance(name, str)
+
+    if filename is not None:
+      fh = open(filename, 'wb')
+
+    doc = xml.dom.minidom.Document()
+    testsuite = doc.createElement("testsuite")
+    testsuite.setAttribute("name", name)
+    doc.appendChild(testsuite)
+
+    total = 0
+    passed = 0
+    failed = 0
+    skipped = 0
+
+    for result in results:
+      total += 1
+
+      if result.get("skipped", None):
+        skipped += 1
+      elif result["passed"]:
+        passed += 1
+      else:
+        failed += 1
+
+      testcase = doc.createElement("testcase")
+      testcase.setAttribute("classname", result["classname"])
+      testcase.setAttribute("name", result["name"])
+
+      if "time" in result:
+        testcase.setAttribute("time", str(result["time"]))
+      else:
+        # It appears most tools expect the time attribute to be present.
+        testcase.setAttribute("time", "0")
+
+      if "failure" in result:
+        failure = doc.createElement("failure")
+        failure.setAttribute("type", str(result["failure"]["type"]))
+        failure.setAttribute("message", result["failure"]["message"])
+
+        # Lossy translation but required to not break CDATA. Also, text could
+        # be None and Python 2.5's minidom doesn't accept None. Later versions
+        # do, however.
+        cdata = result["failure"]["text"]
+        if not isinstance(cdata, str):
+            cdata = ""
+
+        cdata = cdata.replace("]]>", "]] >")
+        text = doc.createCDATASection(cdata)
+        failure.appendChild(text)
+        testcase.appendChild(failure)
+
+      if result.get("skipped", None):
+        e = doc.createElement("skipped")
+        testcase.appendChild(e)
+
+      testsuite.appendChild(testcase)
+
+    testsuite.setAttribute("tests", str(total))
+    testsuite.setAttribute("failures", str(failed))
+    testsuite.setAttribute("skip", str(skipped))
+
+    doc.writexml(fh, addindent="  ", newl="\n", encoding="utf-8")
+
   def runTests(self, xpcshell, xrePath=None, appPath=None, symbolsPath=None,
-               manifest=None, testdirs=[], testPath=None,
+               manifest=None, testdirs=None, testPath=None,
                interactive=False, verbose=False, keepGoing=False, logfiles=True,
                thisChunk=1, totalChunks=1, debugger=None,
                debuggerArgs=None, debuggerInteractive=False,
-               profileName=None, mozInfo=None):
+               profileName=None, mozInfo=None, shuffle=False,
+               testsRootDir=None, xunitFilename=None, xunitName=None,
+               testingModulesDir=None, **otherOptions):
     """Run xpcshell tests.
 
     |xpcshell|, is the xpcshell executable to use to run the tests.
@@ -410,9 +575,57 @@ class XPCShellTests(object):
     |profileName|, if set, specifies the name of the application for the profile
       directory if running only a subset of tests.
     |mozInfo|, if set, specifies specifies build configuration information, either as a filename containing JSON, or a dict.
+    |shuffle|, if True, execute tests in random order.
+    |testsRootDir|, absolute path to root directory of all tests. This is used
+      by xUnit generation to determine the package name of the tests.
+    |xunitFilename|, if set, specifies the filename to which to write xUnit XML
+      results.
+    |xunitName|, if outputting an xUnit XML file, the str value to use for the
+      testsuite name.
+    |testingModulesDir|, if provided, specifies where JS modules reside.
+      xpcshell will register a resource handler mapping this path.
+    |otherOptions| may be present for the convenience of subclasses
     """
 
-    global gotSIGINT 
+    global gotSIGINT
+
+    if testdirs is None:
+        testdirs = []
+
+    if xunitFilename is not None or xunitName is not None:
+        if not isinstance(testsRootDir, str):
+            raise Exception("testsRootDir must be a str when outputting xUnit.")
+
+        if not os.path.isabs(testsRootDir):
+            testsRootDir = os.path.abspath(testsRootDir)
+
+        if not os.path.exists(testsRootDir):
+            raise Exception("testsRootDir path does not exists: %s" %
+                    testsRootDir)
+
+    # Try to guess modules directory.
+    # This somewhat grotesque hack allows the buildbot machines to find the
+    # modules directory without having to configure the buildbot hosts. This
+    # code path should never be executed in local runs because the build system
+    # should always set this argument.
+    if not testingModulesDir:
+        ourDir = os.path.dirname(__file__)
+        possible = os.path.join(ourDir, os.path.pardir, 'modules')
+
+        if os.path.isdir(possible):
+            testingModulesDir = possible
+
+    if testingModulesDir:
+        # The resource loader expects native paths. Depending on how we were
+        # invoked, a UNIX style path may sneak in on Windows. We try to
+        # normalize that.
+        testingModulesDir = os.path.normpath(testingModulesDir)
+
+        if not os.path.isabs(testingModulesDir):
+            testingModulesDir = os.path.abspath(testingModulesDir)
+
+        if not testingModulesDir.endswith(os.path.sep):
+            testingModulesDir += os.path.sep
 
     self.xpcshell = xpcshell
     self.xrePath = xrePath
@@ -430,6 +643,7 @@ class XPCShellTests(object):
     self.debuggerInfo = getDebuggerInfo(self.oldcwd, debugger, debuggerArgs, debuggerInteractive)
     self.profileName = profileName or "xpcshell"
     self.mozInfo = mozInfo
+    self.testingModulesDir = testingModulesDir
 
     # If we have an interactive debugger, disable ctrl-c.
     if self.debuggerInfo and self.debuggerInfo["interactive"]:
@@ -457,10 +671,19 @@ class XPCShellTests(object):
         return False
       self.mozInfo = parse_json(open(mozInfoFile).read())
     mozinfo.update(self.mozInfo)
+
+    # We have to do this before we build the test list so we know whether or
+    # not to run tests that depend on having the node spdy server
+    self.trySetupNode()
     
     pStdout, pStderr = self.getPipes()
 
     self.buildTestList()
+
+    if shuffle:
+      random.shuffle(self.alltests)
+
+    xunitResults = []
 
     for test in self.alltests:
       name = test['path']
@@ -472,18 +695,33 @@ class XPCShellTests(object):
 
       self.testCount += 1
 
+      xunitResult = {"name": test["name"], "classname": "xpcshell"}
+      # The xUnit package is defined as the path component between the root
+      # dir and the test with path characters replaced with '.' (using Java
+      # class notation).
+      if testsRootDir is not None:
+          testsRootDir = os.path.normpath(testsRootDir)
+          if test["here"].find(testsRootDir) != 0:
+              raise Exception("testsRootDir is not a parent path of %s" %
+                  test["here"])
+          relpath = test["here"][len(testsRootDir):].lstrip("/\\")
+          xunitResult["classname"] = relpath.replace("/", ".").replace("\\", ".")
+
       # Check for skipped tests
       if 'disabled' in test:
         self.log.info("TEST-INFO | skipping %s | %s" %
                       (name, test['disabled']))
+
+        xunitResult["skipped"] = True
+        xunitResults.append(xunitResult)
         continue
+
       # Check for known-fail tests
       expected = test['expected'] == 'pass'
 
       testdir = os.path.dirname(name)
       self.buildXpcsCmd(testdir)
-      testHeadFiles = self.getHeadFiles(test)
-      testTailFiles = self.getTailFiles(test)
+      testHeadFiles, testTailFiles = self.getHeadAndTailFiles(test)
       cmdH = self.buildCmdHead(testHeadFiles, testTailFiles, self.xpcsCmd)
 
       # create a temp dir that the JS harness can stick a profile in
@@ -491,15 +729,31 @@ class XPCShellTests(object):
       self.leakLogFile = self.setupLeakLogging()
 
       # The test file will have to be loaded after the head files.
-      cmdT = ['-e', 'const _TEST_FILE = ["%s"];' %
-                replaceBackSlashes(name)]
+      cmdT = self.buildCmdTestFile(name)
+
+      args = self.xpcsRunArgs[:]
+      if 'debug' in test:
+          args.insert(0, '-d')
+
+      completeCmd = cmdH + cmdT + args
 
       try:
         self.log.info("TEST-INFO | %s | running test ..." % name)
+        if verbose:
+            self.log.info("TEST-INFO | %s | full command: %r" % (name, completeCmd))
+            self.log.info("TEST-INFO | %s | current directory: %r" % (name, testdir))
+            # Show only those environment variables that are changed from
+            # the ambient environment.
+            changedEnv = (set("%s=%s" % i for i in self.env.iteritems())
+                          - set("%s=%s" % i for i in os.environ.iteritems()))
+            self.log.info("TEST-INFO | %s | environment: %s" % (name, list(changedEnv)))
         startTime = time.time()
 
-        proc = self.launchProcess(cmdH + cmdT + self.xpcsRunArgs,
+        proc = self.launchProcess(completeCmd,
                     stdout=pStdout, stderr=pStderr, env=self.env, cwd=testdir)
+
+        if interactive:
+          self.log.info("TEST-INFO | %s | Process ID: %d" % (name, proc.pid))
 
         # Allow user to kill hung subprocess with SIGINT w/o killing this script
         # - don't move this line above launchProcess, or child will inherit the SIG_IGN
@@ -515,25 +769,48 @@ class XPCShellTests(object):
         def print_stdout(stdout):
           """Print stdout line-by-line to avoid overflowing buffers."""
           self.log.info(">>>>>>>")
-          for line in stdout.splitlines():
-            self.log.info(line)
+          if (stdout):
+            for line in stdout.splitlines():
+              self.log.info(line)
           self.log.info("<<<<<<<")
 
         result = not ((self.getReturnCode(proc) != 0) or
+                      # if do_throw or do_check failed
                       (stdout and re.search("^((parent|child): )?TEST-UNEXPECTED-",
                                             stdout, re.MULTILINE)) or
+                      # if syntax error in xpcshell file
                       (stdout and re.search(": SyntaxError:", stdout,
-                                            re.MULTILINE)))
+                                            re.MULTILINE)) or
+                      # if e10s test started but never finished (child process crash)
+                      (stdout and re.search("^child: CHILD-TEST-STARTED", 
+                                            stdout, re.MULTILINE) 
+                              and not re.search("^child: CHILD-TEST-COMPLETED",
+                                                stdout, re.MULTILINE)))
 
         if result != expected:
-          self.log.error("TEST-UNEXPECTED-%s | %s | test failed (with xpcshell return code: %d), see following log:" % ("FAIL" if expected else "PASS", name, self.getReturnCode(proc)))
+          failureType = "TEST-UNEXPECTED-%s" % ("FAIL" if expected else "PASS")
+          message = "%s | %s | test failed (with xpcshell return code: %d), see following log:" % (
+                        failureType, name, self.getReturnCode(proc))
+          self.log.error(message)
           print_stdout(stdout)
           self.failCount += 1
+          xunitResult["passed"] = False
+
+          xunitResult["failure"] = {
+            "type": failureType,
+            "message": message,
+            "text": stdout
+          }
         else:
-          timeTaken = (time.time() - startTime) * 1000
+          now = time.time()
+          timeTaken = (now - startTime) * 1000
+          xunitResult["time"] = now - startTime
           self.log.info("TEST-%s | %s | test passed (time: %.3fms)" % ("PASS" if expected else "KNOWN-FAIL", name, timeTaken))
           if verbose:
             print_stdout(stdout)
+
+          xunitResult["passed"] = True
+
           if expected:
             self.passCount += 1
           else:
@@ -552,16 +829,58 @@ class XPCShellTests(object):
         if self.logfiles and stdout:
           self.createLogFile(name, stdout, leakLogs)
       finally:
+        # We can sometimes get here before the process has terminated, which would
+        # cause removeDir() to fail - so check for the process & kill it it needed.
+        if self.poll(proc) is None:
+          message = "TEST-UNEXPECTED-FAIL | %s | Process still running after test!" % name
+          self.log.error(message)
+          print_stdout(stdout)
+          self.failCount += 1
+          xunitResult["passed"] = False
+          xunitResult["failure"] = {
+            "type": "TEST-UNEXPECTED-FAIL",
+            "message": message,
+            "text": stdout
+          }
+          self.kill(proc)
         # We don't want to delete the profile when running check-interactive
         # or check-one.
         if self.profileDir and not self.interactive and not self.singleFile:
-          self.removeDir(self.profileDir)
+          try:
+            self.removeDir(self.profileDir)
+          except Exception:
+            message = "TEST-UNEXPECTED-FAIL | %s | Failed to clean up the test profile directory: %s" % (name, sys.exc_info()[1])
+            self.log.error(message)
+            print_stdout(stdout)
+            print_stdout(traceback.format_exc())
+            self.failCount += 1
+            xunitResult["passed"] = False
+            xunitResult["failure"] = {
+              "type": "TEST-UNEXPECTED-FAIL",
+              "message": message,
+              "text": "%s\n%s" % (stdout, traceback.format_exc())
+            }
+
       if gotSIGINT:
+        xunitResult["passed"] = False
+        xunitResult["time"] = "0.0"
+        xunitResult["failure"] = {
+          "type": "SIGINT",
+          "message": "Received SIGINT",
+          "text": "Received SIGINT (control-C) during test execution."
+        }
+
         self.log.error("TEST-UNEXPECTED-FAIL | Received SIGINT (control-C) during test execution")
         if (keepGoing):
           gotSIGINT = False
         else:
+          xunitResults.append(xunitResult)
           break
+
+      xunitResults.append(xunitResult)
+
+    self.shutdownNode()
+
     if self.testCount == 0:
       self.log.error("TEST-UNEXPECTED-FAIL | runxpcshelltests.py | No tests run. Did you pass an invalid --test-path?")
       self.failCount = 1
@@ -571,10 +890,15 @@ INFO | Passed: %d
 INFO | Failed: %d
 INFO | Todo: %d""" % (self.passCount, self.failCount, self.todoCount))
 
+    if xunitFilename is not None:
+        self.writeXunitResults(filename=xunitFilename, results=xunitResults,
+                               name=xunitName)
+
     if gotSIGINT and not keepGoing:
       self.log.error("TEST-UNEXPECTED-FAIL | Received SIGINT (control-C), so stopped run. " \
                      "(Use --keep-going to keep running tests after killing one with SIGINT)")
       return False
+
     return self.failCount == 0
 
 class XPCShellOptions(OptionParser):
@@ -607,6 +931,12 @@ class XPCShellOptions(OptionParser):
     self.add_option("--test-path",
                     type="string", dest="testPath", default=None,
                     help="single path and/or test filename to test")
+    self.add_option("--tests-root-dir",
+                    type="string", dest="testsRootDir", default=None,
+                    help="absolute path to directory where all tests are located. this is typically $(objdir)/_tests")
+    self.add_option("--testing-modules-dir",
+                    dest="testingModulesDir", default=None,
+                    help="Directory where testing modules are located.")
     self.add_option("--total-chunks",
                     type = "int", dest = "totalChunks", default=1,
                     help = "how many chunks to split the tests up into")
@@ -619,6 +949,15 @@ class XPCShellOptions(OptionParser):
     self.add_option("--build-info-json",
                     type = "string", dest="mozInfo", default=None,
                     help="path to a mozinfo.json including information about the build configuration. defaults to looking for mozinfo.json next to the script.")
+    self.add_option("--shuffle",
+                    action="store_true", dest="shuffle", default=False,
+                    help="Execute tests in random order")
+    self.add_option("--xunit-file", dest="xunitFilename",
+                    help="path to file where xUnit results will be written.")
+    self.add_option("--xunit-suite-name", dest="xunitName",
+                    help="name to record for this xUnit test suite. Many "
+                         "tools expect Java class notation, e.g. "
+                         "dom.basic.foo")
 
 def main():
   parser = XPCShellOptions()

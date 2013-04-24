@@ -1,39 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*   mimefilt.c --- test harness for libmime.a
 
@@ -126,7 +94,7 @@ test_file_type (const char *filename, void *stream_closure)
 }
 
 static int
-test_output_fn(char *buf, PRInt32 size, void *closure)
+test_output_fn(char *buf, int32_t size, void *closure)
 {
   FILE *out = (FILE *) closure;
   if (out)
@@ -185,7 +153,7 @@ test_image_make_image_html(void *image_data)
             "an inlined image would have gone here for<BR>");
   const char *suffix = "</TD></TR></TABLE></CENTER><P>";
 #endif
-  PRUint32 buflen = strlen (prefix) + strlen (suffix) + strlen (url) + 20;
+  uint32_t buflen = strlen (prefix) + strlen (suffix) + strlen (url) + 20;
   char *buf = (char *) PR_MALLOC (buflen);
   if (!buf) return 0;
   *buf = 0;
@@ -195,7 +163,7 @@ test_image_make_image_html(void *image_data)
   return buf;
 }
 
-static int test_image_write_buffer(const char *buf, PRInt32 size, void *image_closure)
+static int test_image_write_buffer(const char *buf, int32_t size, void *image_closure)
 {
   return 0;
 }
@@ -217,22 +185,22 @@ test_passwd_prompt (PK11SlotInfo *slot, void *wincx)
 int
 test(FILE *in, FILE *out,
    const char *url,
-   PRBool fancy_headers_p,
-   PRBool html_p,
-   PRBool outline_p,
-   PRBool dexlate_p,
-   PRBool variable_width_plaintext_p)
+   bool fancy_headers_p,
+   bool html_p,
+   bool outline_p,
+   bool dexlate_p,
+   bool variable_width_plaintext_p)
 {
   int status = 0;
   MimeObject *obj = 0;
   MimeDisplayOptions *opt = new MimeDisplayOptions;
 //  memset(opt, 0, sizeof(*opt));
 
-  if (dexlate_p) html_p = PR_FALSE;
+  if (dexlate_p) html_p = false;
 
   opt->fancy_headers_p = fancy_headers_p;
   opt->headers = MimeHeadersSome;
-  opt->rot13_p = PR_FALSE;
+  opt->rot13_p = false;
 
   status = mime_parse_url_options(url, opt);
   if (status < 0)
@@ -247,7 +215,7 @@ test(FILE *in, FILE *out,
   opt->output_init_fn    = test_output_init_fn;
   opt->output_fn      = test_output_fn;
   opt->charset_conversion_fn= 0;
-  opt->rfc1522_conversion_p = PR_FALSE;
+  opt->rfc1522_conversion_p = false;
   opt->file_type_fn      = test_file_type;
   opt->stream_closure    = out;
 
@@ -292,9 +260,9 @@ test(FILE *in, FILE *out,
     }
   }
 
-  status = obj->class->parse_eof(obj, PR_FALSE);
+  status = obj->class->parse_eof(obj, false);
   if (status >= 0)
-  status = obj->class->parse_end(obj, PR_FALSE);
+  status = obj->class->parse_end(obj, false);
   if (status < 0)
   {
     mime_free(obj);
@@ -344,12 +312,12 @@ extern void SEC_Init(void);
 int
 main (int argc, char **argv)
 {
-  PRInt32 i = 1;
+  int32_t i = 1;
   char *url = "";
-  PRBool fancy_p = PR_TRUE;
-  PRBool html_p = PR_TRUE;
-  PRBool outline_p = PR_FALSE;
-  PRBool dexlate_p = PR_FALSE;
+  bool fancy_p = true;
+  bool html_p = true;
+  bool outline_p = false;
+  bool dexlate_p = false;
   char filename[1000];
   CERTCertDBHandle *cdb_handle;
   SECKEYKeyDBHandle *kdb_handle;
@@ -358,13 +326,13 @@ main (int argc, char **argv)
 
   cdb_handle = (CERTCertDBHandle *)  calloc(1, sizeof(*cdb_handle));
 
-  if (SECSuccess != CERT_OpenCertDB(cdb_handle, PR_FALSE, test_cdb_name_cb, NULL))
+  if (SECSuccess != CERT_OpenCertDB(cdb_handle, false, test_cdb_name_cb, NULL))
   CERT_OpenVolatileCertDB(cdb_handle);
   CERT_SetDefaultCertDB(cdb_handle);
 
   RNG_RNGInit();
 
-  kdb_handle = SECKEY_OpenKeyDB(PR_FALSE, test_kdb_name_cb, NULL);
+  kdb_handle = SECKEY_OpenKeyDB(false, test_kdb_name_cb, NULL);
   SECKEY_SetDefaultKeyDB(kdb_handle);
 
   PK11_SetPasswordFunc(test_passwd_prompt);
@@ -386,22 +354,22 @@ main (int argc, char **argv)
   if (url &&
     (PL_strstr(url, "?part=") ||
      PL_strstr(url, "&part=")))
-  html_p = PR_FALSE;
+  html_p = false;
 
   while (i < argc)
   {
     if (!strcmp(argv[i], "-fancy"))
-    fancy_p = PR_TRUE;
+    fancy_p = true;
     else if (!strcmp(argv[i], "-no-fancy"))
-    fancy_p = PR_FALSE;
+    fancy_p = false;
     else if (!strcmp(argv[i], "-html"))
-    html_p = PR_TRUE;
+    html_p = true;
     else if (!strcmp(argv[i], "-raw"))
-    html_p = PR_FALSE;
+    html_p = false;
     else if (!strcmp(argv[i], "-outline"))
-    outline_p = PR_TRUE;
+    outline_p = true;
     else if (!strcmp(argv[i], "-dexlate"))
-    dexlate_p = PR_TRUE;
+    dexlate_p = true;
     else
     {
       fprintf(stderr,
@@ -416,7 +384,7 @@ main (int argc, char **argv)
     i++;
   }
 
-  i = test(stdin, stdout, url, fancy_p, html_p, outline_p, dexlate_p, PR_TRUE);
+  i = test(stdin, stdout, url, fancy_p, html_p, outline_p, dexlate_p, true);
   fprintf(stdout, "\n");
   fflush(stdout);
 

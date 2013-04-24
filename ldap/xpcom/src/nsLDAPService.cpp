@@ -1,54 +1,20 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * 
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the mozilla.org LDAP XPCOM SDK.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Leif Hedstrom <leif@netscape.com>
- *   Jeremy Laine <jeremy.laine@m4x.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsLDAPInternal.h"
 #include "nsLDAPService.h"
 #include "nsLDAPConnection.h"
 #include "nsLDAPOperation.h"
-#include "nsXPIDLString.h"
-#include "nsReadableUtils.h"
 #include "nsIServiceManager.h"
 #include "nsIConsoleService.h"
 #include "nsILDAPURL.h"
 #include "nsCRT.h"
 #include "nsILDAPErrors.h"
+#include "nsComponentManagerUtils.h"
+#include "nsServiceManagerUtils.h"
 
 using namespace mozilla;
 
@@ -65,24 +31,18 @@ static NS_DEFINE_CID(kLDAPOperationCID, NS_LDAPOPERATION_CID);
 //
 nsLDAPServiceEntry::nsLDAPServiceEntry()
     : mLeases(0),
-      mDelete(PR_FALSE),
-      mRebinding(PR_FALSE)
+      mTimestamp(0),
+      mDelete(false),
+      mRebinding(false)
 
-{
-    mTimestamp = LL_Zero();
-}
-
-// destructor
-//
-nsLDAPServiceEntry::~nsLDAPServiceEntry()
 {
 }
 
 // Init function
 //
-PRBool nsLDAPServiceEntry::Init()
+bool nsLDAPServiceEntry::Init()
 {
-    return PR_TRUE;
+    return true;
 }
 
 // Set/Get the timestamp when this server was last used. We might have
@@ -105,16 +65,16 @@ void nsLDAPServiceEntry::IncrementLeases()
 {
     mLeases++;
 }
-PRBool nsLDAPServiceEntry::DecrementLeases()
+bool nsLDAPServiceEntry::DecrementLeases()
 {
     if (!mLeases) {
-        return PR_FALSE;
+        return false;
     }
     mLeases--;
 
-    return PR_TRUE;
+    return true;
 }
-PRUint32 nsLDAPServiceEntry::GetLeases()
+uint32_t nsLDAPServiceEntry::GetLeases()
 {
     return mLeases;
 }
@@ -128,14 +88,14 @@ already_AddRefed<nsILDAPServer> nsLDAPServiceEntry::GetServer()
     NS_IF_ADDREF(server = mServer);
     return server;
 }
-PRBool nsLDAPServiceEntry::SetServer(nsILDAPServer *aServer)
+bool nsLDAPServiceEntry::SetServer(nsILDAPServer *aServer)
 {
     if (!aServer) {
-        return PR_FALSE;
+        return false;
     }
     mServer = aServer;
 
-    return PR_TRUE;
+    return true;
 }
 
 // Get/Set/Clear the nsLDAPConnection object for this entry.
@@ -174,7 +134,7 @@ void nsLDAPServiceEntry::SetMessage(nsILDAPMessage *aMessage)
 already_AddRefed<nsILDAPMessageListener> nsLDAPServiceEntry::PopListener()
 {
     nsILDAPMessageListener *listener;
-    PRInt32 count = mListeners.Count();
+    int32_t count = mListeners.Count();
     if (!count) {
         return 0;
     }
@@ -185,9 +145,9 @@ already_AddRefed<nsILDAPMessageListener> nsLDAPServiceEntry::PopListener()
 
     return listener;
 }
-PRBool nsLDAPServiceEntry::PushListener(nsILDAPMessageListener *listener)
+bool nsLDAPServiceEntry::PushListener(nsILDAPMessageListener *listener)
 {
-    PRBool ret;
+    bool ret;
     ret = mListeners.InsertObjectAt(listener, mListeners.Count());
 
     return ret;
@@ -197,11 +157,11 @@ PRBool nsLDAPServiceEntry::PushListener(nsILDAPMessageListener *listener)
 // race condition where multiple consumers could potentially request
 // to reconnect the connection.
 //
-PRBool nsLDAPServiceEntry::IsRebinding()
+bool nsLDAPServiceEntry::IsRebinding()
 {
     return mRebinding;
 }
-void nsLDAPServiceEntry::SetRebinding(PRBool aState)
+void nsLDAPServiceEntry::SetRebinding(bool aState)
 {
     mRebinding = aState;
 }
@@ -209,11 +169,11 @@ void nsLDAPServiceEntry::SetRebinding(PRBool aState)
 // Mark a service entry for deletion, this is "dead" code right now,
 // see bug #75966.
 //
-PRBool nsLDAPServiceEntry::DeleteEntry()
+bool nsLDAPServiceEntry::DeleteEntry()
 {
-    mDelete = PR_TRUE;
+    mDelete = true;
 
-    return PR_TRUE;
+    return true;
 }
 // This is the end of the nsLDAPServiceEntry class
 
@@ -228,9 +188,7 @@ NS_IMPL_THREADSAFE_ISUPPORTS2(nsLDAPService,
 // constructor
 //
 nsLDAPService::nsLDAPService()
-    : mLock("nsLDAPService.mLock"),
-      mServers(0),
-      mConnections(0)
+    : mLock("nsLDAPService.mLock")
 {
 }
 
@@ -238,36 +196,14 @@ nsLDAPService::nsLDAPService()
 //
 nsLDAPService::~nsLDAPService()
 {
-    // Delete the hash table holding the entries
-    if (mServers) {
-        delete mServers;
-    }
-
-    // Delete the hash holding the "reverse" lookups from conn to server
-    if (mConnections) {
-        delete mConnections;
-    }
 }
 
 // Initializer, create some internal hash tables etc.
 //
 nsresult nsLDAPService::Init()
 {
-    if (!mServers) {
-        mServers = new nsHashtable(16, PR_FALSE);
-        if (!mServers) {
-            NS_ERROR("nsLDAPService::Init: out of memory ");
-            return NS_ERROR_OUT_OF_MEMORY;
-        }
-    }
-
-    if (!mConnections) {
-        mConnections = new nsHashtable(16, PR_FALSE);
-        if (!mConnections) {
-            NS_ERROR("nsLDAPService::Init: out of memory ");
-            return NS_ERROR_OUT_OF_MEMORY;
-        }
-    }
+    mServers.Init();
+    mConnections.Init();
 
     return NS_OK;
 }
@@ -276,7 +212,7 @@ nsresult nsLDAPService::Init()
 NS_IMETHODIMP nsLDAPService::AddServer(nsILDAPServer *aServer)
 {
     nsLDAPServiceEntry *entry;
-    nsXPIDLString key;
+    nsString key;
     nsresult rv;
     
     if (!aServer) {
@@ -323,17 +259,16 @@ NS_IMETHODIMP nsLDAPService::AddServer(nsILDAPServer *aServer)
     // need to decrement the counter as well.
     //
     {
-        nsStringKey hashKey(key);
         MutexAutoLock lock(mLock);
 
-        if (mServers->Exists(&hashKey)) {
+        if (mServers.Get(key)) {
             // Collision detected, lets just throw away this service entry
             // and keep the old one.
             //
             delete entry;
             return NS_ERROR_FAILURE;
         }
-        mServers->Put(&hashKey, entry);
+        mServers.Put(key, entry);
     }
     NS_ADDREF(aServer);
 
@@ -344,14 +279,13 @@ NS_IMETHODIMP nsLDAPService::AddServer(nsILDAPServer *aServer)
 NS_IMETHODIMP nsLDAPService::DeleteServer(const PRUnichar *aKey)
 {
     nsLDAPServiceEntry *entry;
-    nsStringKey hashKey(aKey, -1, nsStringKey::NEVER_OWN);
     MutexAutoLock lock(mLock);
         
     // We should probably rename the key for this entry now that it's
     // "deleted", so that we can add in a new one with the same ID.
     // This is bug #77669.
     //
-    entry = static_cast<nsLDAPServiceEntry *>(mServers->Get(&hashKey));
+    mServers.Get(nsDependentString(aKey), &entry);
     if (entry) {
         if (entry->GetLeases() > 0) {
             return NS_ERROR_FAILURE;
@@ -371,7 +305,6 @@ NS_IMETHODIMP nsLDAPService::GetServer(const PRUnichar *aKey,
                                        nsILDAPServer **_retval)
 {
     nsLDAPServiceEntry *entry;
-    nsStringKey hashKey(aKey, -1, nsStringKey::NEVER_OWN);
     MutexAutoLock lock(mLock);
 
     if (!_retval) {
@@ -379,8 +312,7 @@ NS_IMETHODIMP nsLDAPService::GetServer(const PRUnichar *aKey,
         return NS_ERROR_NULL_POINTER;
     }
 
-    entry = static_cast<nsLDAPServiceEntry *>(mServers->Get(&hashKey));
-    if (!entry) {
+    if (!mServers.Get(nsDependentString(aKey), &entry)) {
         *_retval = 0;
         return NS_ERROR_FAILURE;
     }
@@ -400,7 +332,6 @@ NS_IMETHODIMP nsLDAPService::RequestConnection(const PRUnichar *aKey,
     nsCOMPtr<nsILDAPConnection> conn;
     nsCOMPtr<nsILDAPMessage> message;
     nsresult rv;
-    nsStringKey hashKey(aKey, -1, nsStringKey::NEVER_OWN);
 
     if (!aListener) {
         NS_ERROR("nsLDAPService::RequestConection: null pointer ");
@@ -412,8 +343,7 @@ NS_IMETHODIMP nsLDAPService::RequestConnection(const PRUnichar *aKey,
     {
         MutexAutoLock lock(mLock);
 
-        entry = static_cast<nsLDAPServiceEntry *>(mServers->Get(&hashKey));
-        if (!entry) {
+        if (!mServers.Get(nsDependentString(aKey), &entry)) {
             return NS_ERROR_FAILURE;
         }
         entry->SetTimestamp();
@@ -445,8 +375,7 @@ NS_IMETHODIMP nsLDAPService::RequestConnection(const PRUnichar *aKey,
     {
         MutexAutoLock lock(mLock);
             
-        entry = static_cast<nsLDAPServiceEntry *>(mServers->Get(&hashKey));
-        if (!entry ||
+        if (!mServers.Get(nsDependentString(aKey), &entry) ||
             !entry->PushListener(static_cast<nsILDAPMessageListener *>
                                             (aListener))) {
             return NS_ERROR_FAILURE;
@@ -461,7 +390,6 @@ NS_IMETHODIMP nsLDAPService::GetConnection(const PRUnichar *aKey,
                                            nsILDAPConnection **_retval)
 {
     nsLDAPServiceEntry *entry;
-    nsStringKey hashKey(aKey, -1, nsStringKey::NEVER_OWN);
     MutexAutoLock lock(mLock);
 
     if (!_retval) {
@@ -469,8 +397,7 @@ NS_IMETHODIMP nsLDAPService::GetConnection(const PRUnichar *aKey,
         return NS_ERROR_NULL_POINTER;
     }
 
-    entry = static_cast<nsLDAPServiceEntry *>(mServers->Get(&hashKey));
-    if (!entry) {
+    if (!mServers.Get(nsDependentString(aKey), &entry)) {
         *_retval = 0;
         return NS_ERROR_FAILURE;
     }
@@ -487,11 +414,9 @@ NS_IMETHODIMP nsLDAPService::GetConnection(const PRUnichar *aKey,
 NS_IMETHODIMP nsLDAPService::ReleaseConnection(const PRUnichar *aKey)
 {
     nsLDAPServiceEntry *entry;
-    nsStringKey hashKey(aKey, -1, nsStringKey::NEVER_OWN);
     MutexAutoLock lock(mLock);
 
-    entry = static_cast<nsLDAPServiceEntry *>(mServers->Get(&hashKey));
-    if (!entry) {
+    if (!mServers.Get(nsDependentString(aKey), &entry)) {
         return NS_ERROR_FAILURE;
     }
 
@@ -513,7 +438,6 @@ NS_IMETHODIMP nsLDAPService::ReconnectConnection(const PRUnichar *aKey,
 {
     nsLDAPServiceEntry *entry;
     nsresult rv;
-    nsStringKey hashKey(aKey, -1, nsStringKey::NEVER_OWN);
 
     if (!aListener) {
         NS_ERROR("nsLDAPService::ReconnectConnection: null pointer ");
@@ -523,8 +447,7 @@ NS_IMETHODIMP nsLDAPService::ReconnectConnection(const PRUnichar *aKey,
     {
         MutexAutoLock lock(mLock);
         
-        entry = static_cast<nsLDAPServiceEntry *>(mServers->Get(&hashKey));
-        if (!entry) {
+        if (!mServers.Get(nsDependentString(aKey), &entry)) {
             return NS_ERROR_FAILURE;
         }
         entry->SetTimestamp();
@@ -547,7 +470,7 @@ NS_IMETHODIMP nsLDAPService::ReconnectConnection(const PRUnichar *aKey,
 
         // Get a new connection
         //
-        entry->SetRebinding(PR_TRUE);
+        entry->SetRebinding(true);
     }
 
     rv = EstablishConnection(entry, aListener);
@@ -560,7 +483,7 @@ NS_IMETHODIMP nsLDAPService::ReconnectConnection(const PRUnichar *aKey,
         
         if (!entry->PushListener(static_cast<nsILDAPMessageListener *>
                                             (aListener))) {
-            entry->SetRebinding(PR_FALSE);
+            entry->SetRebinding(false);
             return NS_ERROR_FAILURE;
         }
     }
@@ -580,7 +503,7 @@ nsLDAPService::OnLDAPMessage(nsILDAPMessage *aMessage)
 {
     nsCOMPtr<nsILDAPOperation> operation;
     nsCOMPtr<nsILDAPConnection> connection;
-    PRInt32 messageType;
+    int32_t messageType;
 
     // XXXleif: NULL messages are supposedly allowed, but the semantics
     // are not definted (yet?). This is something to look out for...
@@ -621,13 +544,9 @@ nsLDAPService::OnLDAPMessage(nsILDAPMessage *aMessage)
             nsCOMPtr<nsILDAPMessageListener> listener;
             nsCOMPtr<nsILDAPMessage> message;
             nsLDAPServiceEntry *entry;
-            nsVoidKey connKey(static_cast<nsILDAPConnection *>
-                                         (connection));
             MutexAutoLock lock(mLock);
 
-            entry = static_cast<nsLDAPServiceEntry *>
-                               (mConnections->Get(&connKey));
-            if (!entry) {
+            if (!mConnections.Get(connection, &entry)) {
                 return NS_ERROR_FAILURE;
             }
 
@@ -638,7 +557,7 @@ nsLDAPService::OnLDAPMessage(nsILDAPMessage *aMessage)
                 return NS_ERROR_FAILURE;
             }
 
-            entry->SetRebinding(PR_FALSE);
+            entry->SetRebinding(false);
             entry->SetMessage(aMessage);
 
             // Now process all the pending callbacks/listeners. We
@@ -699,7 +618,7 @@ nsLDAPService::EstablishConnection(nsLDAPServiceEntry *aEntry,
     nsCOMPtr<nsILDAPMessage> message;
     nsCAutoString binddn;
     nsCAutoString password;
-    PRUint32 protocolVersion;
+    uint32_t protocolVersion;
     nsresult rv;
 
     server = aEntry->GetServer();
@@ -737,7 +656,7 @@ nsLDAPService::EstablishConnection(nsLDAPServiceEntry *aEntry,
         return NS_ERROR_FAILURE;
     }
 
-    rv = conn->Init(url, binddn, this, nsnull, protocolVersion);
+    rv = conn->Init(url, binddn, this, nullptr, protocolVersion);
     if (NS_FAILED(rv)) {
         switch (rv) {
         // Only pass along errors we are aware of
@@ -792,11 +711,10 @@ nsLDAPService::EstablishConnection(nsLDAPServiceEntry *aEntry,
     // server entry related to a particular connection).
     //
     {
-        nsVoidKey connKey(static_cast<nsILDAPConnection *>(conn));
         MutexAutoLock lock(mLock);
 
         aEntry->SetConnection(conn);
-        mConnections->Put(&connKey, aEntry);
+        mConnections.Put(conn, aEntry);
     }
 
     // Setup the bind() operation.
@@ -806,7 +724,7 @@ nsLDAPService::EstablishConnection(nsLDAPServiceEntry *aEntry,
         return NS_ERROR_FAILURE;
     }
 
-    rv = operation->Init(conn, this, nsnull);
+    rv = operation->Init(conn, this, nullptr);
     if (NS_FAILED(rv)) {
         return NS_ERROR_UNEXPECTED; // this should never happen
     }
@@ -834,7 +752,7 @@ nsLDAPService::EstablishConnection(nsLDAPServiceEntry *aEntry,
 }
 
 /* AString createFilter (in unsigned long aMaxSize, in AString aPattern, in AString aPrefix, in AString aSuffix, in AString aAttr, in AString aValue); */
-NS_IMETHODIMP nsLDAPService::CreateFilter(PRUint32 aMaxSize, 
+NS_IMETHODIMP nsLDAPService::CreateFilter(uint32_t aMaxSize, 
                                           const nsACString & aPattern,
                                           const nsACString & aPrefix,
                                           const nsACString & aSuffix,
@@ -846,16 +764,12 @@ NS_IMETHODIMP nsLDAPService::CreateFilter(PRUint32 aMaxSize,
         return NS_ERROR_INVALID_ARG;
     }
 
-    // prepare to tokenize |value| for %vM ... %vN
-    //
-    nsReadingIterator<char> iter, iterEnd; // setup the iterators
-    aValue.BeginReading(iter);
-    aValue.EndReading(iterEnd);
-
     // figure out how big of an array we're going to need for the tokens,
     // including a trailing NULL, and allocate space for it.
     //
-    PRUint32 numTokens = CountTokens(iter, iterEnd); 
+    const char *iter = aValue.BeginReading();
+    const char *iterEnd = aValue.EndReading();
+    uint32_t numTokens = CountTokens(iter, iterEnd); 
     char **valueWords;
     valueWords = static_cast<char **>(nsMemory::Alloc((numTokens + 1) *
                                                 sizeof(char *)));
@@ -865,9 +779,9 @@ NS_IMETHODIMP nsLDAPService::CreateFilter(PRUint32 aMaxSize,
 
     // build the array of values
     //
-    PRUint32 curToken = 0;
+    uint32_t curToken = 0;
     while (iter != iterEnd && curToken < numTokens ) {
-        valueWords[curToken] = NextToken(iter, iterEnd);
+        valueWords[curToken] = NextToken(&iter, &iterEnd);
         if ( !valueWords[curToken] ) {
             NS_FREE_XPCOM_ALLOCATED_POINTER_ARRAY(curToken, valueWords);
             return NS_ERROR_OUT_OF_MEMORY;
@@ -933,7 +847,7 @@ NS_IMETHODIMP nsLDAPService::CreateFilter(PRUint32 aMaxSize,
 NS_IMETHODIMP nsLDAPService::ParseDn(const char *aDn,
                                    nsACString &aRdn,
                                    nsACString &aBaseDn,
-                                   PRUint32 *aRdnCount,
+                                   uint32_t *aRdnCount,
                                    char ***aRdnAttrs)
 {
     NS_ENSURE_ARG_POINTER(aRdnCount);
@@ -969,7 +883,7 @@ NS_IMETHODIMP nsLDAPService::ParseDn(const char *aDn,
     }
 
     // count RDN attributes
-    PRUint32 rdnCount = 0;
+    uint32_t rdnCount = 0;
     for (char **component = rdnComponents; *component; ++component)
         ++rdnCount;
     if (rdnCount < 1) {
@@ -988,9 +902,9 @@ NS_IMETHODIMP nsLDAPService::ParseDn(const char *aDn,
         ldap_value_free(rdnComponents);
         return NS_ERROR_OUT_OF_MEMORY;
     }
-    PRUint32 index = 0;
+    uint32_t index = 0;
     for (char **component = rdnComponents; *component; ++component) {
-        PRUint32 len = 0;
+        uint32_t len = 0;
         char *p;
         for (p = *component; *p != '\0' && *p != '='; ++p)
             ++len;
@@ -1024,11 +938,11 @@ NS_IMETHODIMP nsLDAPService::ParseDn(const char *aDn,
 
 // Count the number of space-separated tokens between aIter and aIterEnd
 //
-PRUint32
-nsLDAPService::CountTokens(nsReadingIterator<char> aIter,
-                           nsReadingIterator<char> aIterEnd)
+uint32_t
+nsLDAPService::CountTokens(const char *aIter,
+                           const char *aIterEnd)
 {
-    PRUint32 count(0);
+    uint32_t count(0);
 
     // keep iterating through the string until we hit the end
     //
@@ -1037,7 +951,7 @@ nsLDAPService::CountTokens(nsReadingIterator<char> aIter,
         // move past any leading spaces
         //
         while (aIter != aIterEnd &&
-               ldap_utf8isspace(const_cast<char *>(aIter.get()))){
+               ldap_utf8isspace(const_cast<char *>(aIter))){
             ++aIter;
         }
 
@@ -1045,7 +959,7 @@ nsLDAPService::CountTokens(nsReadingIterator<char> aIter,
         //
         while (aIter != aIterEnd) {
 
-            if (ldap_utf8isspace(const_cast<char *>(aIter.get()))) {
+            if (ldap_utf8isspace(const_cast<char *>(aIter))) {
                 ++count;    // token finished; increment the count
                 ++aIter;    // move past the space
                 break;
@@ -1070,24 +984,24 @@ nsLDAPService::CountTokens(nsReadingIterator<char> aIter,
 // return the next token in this iterator
 //
 char*
-nsLDAPService::NextToken(nsReadingIterator<char> & aIter,
-                         nsReadingIterator<char> & aIterEnd)
+nsLDAPService::NextToken(const char **aIter,
+                         const char **aIterEnd)
 {
     // move past any leading whitespace
     //
-    while (aIter != aIterEnd &&
-           ldap_utf8isspace(const_cast<char *>(aIter.get()))) {
-        ++aIter;
+    while (*aIter != *aIterEnd &&
+           ldap_utf8isspace(const_cast<char *>(*aIter))) {
+        ++(*aIter);
     }
 
-    nsACString::const_iterator start(aIter);
+    const char *start = *aIter;
 
     // copy the token into our local variable
     //
-    while (aIter != aIterEnd &&
-           !ldap_utf8isspace(const_cast<char *>(aIter.get()))) {
-        ++aIter;
+    while (*aIter != *aIterEnd &&
+           !ldap_utf8isspace(const_cast<char *>(*aIter))) {
+        ++(*aIter);
     }
 
-    return ToNewCString(Substring(start, aIter));
+    return ToNewCString(Substring(start, *aIter));
 }

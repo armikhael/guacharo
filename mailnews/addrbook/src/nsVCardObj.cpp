@@ -1,39 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /***************************************************************************
 (C) Copyright 1996 Apple Computer, Inc., AT&T Corp., International             
@@ -117,17 +85,17 @@ static void initVObjectIterator(VObjectIterator *i, VObject *o);
   deleteStrItem
    ----------------------------------------------------------------------*/
 
-static PRBool needsQuotedPrintable (const char *s)
+static bool needsQuotedPrintable (const char *s)
 {
   const unsigned char *p = (const unsigned char *)s;
 
   while (*p) {
     if (*p & 0x80 || *p == '\015' || *p == '\012')
-      return PR_TRUE;
+      return true;
     p++;
   }
 
-  return PR_FALSE;
+  return false;
 }
 
 VObject* newVObject_(const char *id)
@@ -984,9 +952,9 @@ static void writeQPString(OFile *fp, const char *s)
     const unsigned char *p = (const unsigned char *)s;
   int current_column = 0;
   static const char hexdigits[] = "0123456789ABCDEF";
-  PRBool white = PR_FALSE;
-  PRBool contWhite = PR_FALSE;
-  PRBool mb_p = PR_FALSE;
+  bool white = false;
+  bool contWhite = false;
+  bool mb_p = false;
 
   if (needsQuotedPrintable (s)) 
   {
@@ -1016,13 +984,13 @@ static void writeQPString(OFile *fp, const char *s)
           appendcOFile(fp,'=');
           appendcOFile(fp,'\n');
           appendcOFile(fp,'\t');
-          contWhite = PR_FALSE;
+          contWhite = false;
         }
 
         /* If its CRLF, swallow two chars instead of one. */
         if (*p == '\r' && *(p+1) == '\n')
           p++;
-        white = PR_FALSE;
+        white = false;
         current_column = 0;
       }
       else
@@ -1033,8 +1001,8 @@ static void writeQPString(OFile *fp, const char *s)
         {
           appendcOFile(fp,*p);
           current_column++;
-          white = PR_FALSE;
-          contWhite = PR_FALSE;
+          white = false;
+          contWhite = false;
         }
         else if (*p == ' ' || *p == '\t')   /* whitespace */
         {
@@ -1044,14 +1012,14 @@ static void writeQPString(OFile *fp, const char *s)
             appendcOFile(fp,hexdigits[*p >> 4]);
             appendcOFile(fp,hexdigits[*p & 0xF]);
             current_column += 3;
-            contWhite = PR_FALSE;
+            contWhite = false;
           }
           else
           {
             appendcOFile(fp,*p);
             current_column++;
           }
-          white = PR_TRUE;
+          white = true;
         }
         else                    /* print as =FF */
         {
@@ -1059,8 +1027,8 @@ static void writeQPString(OFile *fp, const char *s)
           appendcOFile(fp,hexdigits[*p >> 4]);
           appendcOFile(fp,hexdigits[*p & 0xF]);
           current_column += 3;
-          white = PR_FALSE;
-          contWhite = PR_FALSE;
+          white = false;
+          contWhite = false;
         }
 
         NS_ASSERTION(current_column <= 76, "1.10 <rhp@netscape.com> 06 Jan 2000 08:01"); /* Hard limit required by spec */
@@ -1072,10 +1040,10 @@ static void writeQPString(OFile *fp, const char *s)
           appendcOFile(fp,'\t');
           current_column = 0;
           if (white)
-            contWhite = PR_TRUE;
+            contWhite = true;
           else 
-            contWhite = PR_FALSE;
-          white = PR_FALSE;
+            contWhite = false;
+          white = false;
         }
       } 
       p++;
@@ -1272,7 +1240,7 @@ char* writeMemVObject(char *s, int *len, VObject *o)
 }
 
 extern "C" 
-char * writeMemoryVObjects(char *s, int *len, VObject *list, PRBool expandSpaces)
+char * writeMemoryVObjects(char *s, int *len, VObject *list, bool expandSpaces)
 {
     OFile ofp;
     initMemOFile(&ofp,s,len?*len:0);

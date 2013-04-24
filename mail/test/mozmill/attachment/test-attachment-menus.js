@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Thunderbird test code
- *
- * The Initial Developer of the Original Code is
- * The Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jim Porter <squibblyflabbetydoo@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var MODULE_NAME = "test-attachment-menus";
 
@@ -325,10 +292,21 @@ function check_toolbar_menu_states_multiple(expected) {
  */
 function check_menu_states_single(index, expected) {
   let attachmentList = mc.e("attachmentList");
-  let node = new elib.Elem(attachmentList.children[index]);
-  mc.click(node);
-  mc.rightClick(node);
-  wait_for_popup_to_open(mc.e("attachmentListContext"));
+  let node = attachmentList.getItemAtIndex(index);
+
+  // So this next bit is a little ugly. Attachment items themselves ignore
+  // mouse events, but the attachment name always responds to them, so that's
+  // what we want to interact with.  We drag out the attachment name
+  // by querying for it via getAnonymousElementByAttribute.
+  let clickable = mc.window
+                    .document
+                    .getAnonymousElementByAttribute(node, "class",
+                                                    "attachmentcell-name");
+
+  attachmentList.selectItem(node);
+  let menu = mc.getMenu("#attachmentItemContext");
+  menu.open(new elib.Elem(clickable));
+  wait_for_popup_to_open(mc.e("attachmentItemContext"));
 
   try {
     assert_shown("context-openAttachment",   true);
@@ -336,12 +314,6 @@ function check_menu_states_single(index, expected) {
     assert_shown("context-menu-separator",   true);
     assert_shown("context-detachAttachment", true);
     assert_shown("context-deleteAttachment", true);
-
-    assert_shown("context-openAllAttachments",   false);
-    assert_shown("context-saveAllAttachments",   false);
-    assert_shown("context-menu-separator-all",   false);
-    assert_shown("context-detachAllAttachments", false);
-    assert_shown("context-deleteAllAttachments", false);
 
     assert_enabled("context-openAttachment",   expected.open);
     assert_enabled("context-saveAttachment",   expected.save);
@@ -352,7 +324,7 @@ function check_menu_states_single(index, expected) {
     throw e;
   }
   finally {
-    close_popup(mc, mc.eid("attachmentListContext"));
+    menu.close();
   }
 }
 
@@ -366,12 +338,6 @@ function check_menu_states_all(expected) {
   wait_for_popup_to_open(mc.e("attachmentListContext"));
 
   try {
-    assert_shown("context-openAttachment",   false);
-    assert_shown("context-saveAttachment",   false);
-    assert_shown("context-menu-separator",   false);
-    assert_shown("context-detachAttachment", false);
-    assert_shown("context-deleteAttachment", false);
-
     assert_shown("context-openAllAttachments",   true);
     assert_shown("context-saveAllAttachments",   true);
     assert_shown("context-menu-separator-all",   true);

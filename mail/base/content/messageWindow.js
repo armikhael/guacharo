@@ -1,40 +1,7 @@
 /** ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Magnus Melin <mkmelin+mozilla@iki.fi>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* This is where functions related to the standalone message window are kept */
 
@@ -548,6 +515,9 @@ function ShowMenus()
   var openMail3Pane_menuitem = document.getElementById('tasksMenuMail');
   if (openMail3Pane_menuitem)
     openMail3Pane_menuitem.removeAttribute("hidden");
+  openMail3Pane_menuitem = document.getElementById('appmenu_tasksMenuMail');
+  if (openMail3Pane_menuitem)
+    openMail3Pane_menuitem.removeAttribute("hidden");
 }
 
 function HideMenus()
@@ -555,6 +525,18 @@ function HideMenus()
   var message_menuitem=document.getElementById('menu_showMessage');
   if (message_menuitem)
     message_menuitem.setAttribute("hidden", "true");
+
+  message_menuitem = document.getElementById('appmenu_showMessage');
+  if (message_menuitem)
+    message_menuitem.setAttribute("hidden", "true");
+
+  var folderPane_menuitem=document.getElementById('menu_showFolderPane');
+  if (folderPane_menuitem)
+    folderPane_menuitem.setAttribute("hidden", "true");
+
+  folderPane_menuitem = document.getElementById('appmenu_showFolderPane');
+  if (folderPane_menuitem)
+    folderPane_menuitem.setAttribute("hidden", "true");
 
   var showSearch_showMessage_Separator = document.getElementById('menu_showSearch_showMessage_Separator');
   if (showSearch_showMessage_Separator)
@@ -568,7 +550,15 @@ function HideMenus()
   if (menuDeleteFolder)
     menuDeleteFolder.hidden = true;
 
+  menuDeleteFolder = document.getElementById('appmenu_deleteFolder');
+  if (menuDeleteFolder)
+    menuDeleteFolder.hidden = true;
+
   var renameFolderMenu = document.getElementById('menu_renameFolder');
+  if (renameFolderMenu)
+    renameFolderMenu.setAttribute("hidden", "true");
+
+  renameFolderMenu = document.getElementById('appmenu_renameFolder');
   if (renameFolderMenu)
     renameFolderMenu.setAttribute("hidden", "true");
 
@@ -576,7 +566,15 @@ function HideMenus()
   if (viewLayoutMenu)
     viewLayoutMenu.setAttribute("hidden", "true");
 
+  viewLayoutMenu = document.getElementById("appmenu_MessagePaneLayout");
+  if (viewLayoutMenu)
+    viewLayoutMenu.setAttribute("hidden", "true");
+
   var viewFolderMenu = document.getElementById("menu_FolderViews");
+  if (viewFolderMenu)
+    viewFolderMenu.setAttribute("hidden", "true");
+
+  viewFolderMenu = document.getElementById("appmenu_FolderViews");
   if (viewFolderMenu)
     viewFolderMenu.setAttribute("hidden", "true");
 
@@ -584,7 +582,15 @@ function HideMenus()
   if (viewMessagesMenu)
     viewMessagesMenu.setAttribute("hidden", "true");
 
+  viewMessagesMenu = document.getElementById('appmenu_viewMessagesMenu');
+  if (viewMessagesMenu)
+    viewMessagesMenu.setAttribute("hidden", "true");
+
   var viewMessageViewMenu = document.getElementById('viewMessageViewMenu');
+  if (viewMessageViewMenu)
+    viewMessageViewMenu.setAttribute("hidden", "true");
+
+  viewMessageViewMenu = document.getElementById('appmenu_viewMessageViewMenu');
   if (viewMessageViewMenu)
     viewMessageViewMenu.setAttribute("hidden", "true");
 
@@ -592,7 +598,15 @@ function HideMenus()
   if (viewMessagesMenuSeparator)
     viewMessagesMenuSeparator.setAttribute("hidden", "true");
 
+  viewMessagesMenuSeparator = document.getElementById('appmenu_viewMessagesMenuSeparator');
+  if (viewMessagesMenuSeparator)
+    viewMessagesMenuSeparator.setAttribute("hidden", "true");
+
   var openMessageMenu = document.getElementById('openMessageWindowMenuitem');
+  if (openMessageMenu)
+    openMessageMenu.setAttribute("hidden", "true");
+
+  openMessageMenu = document.getElementById('appmenu_openMessageWindowMenuitem');
   if (openMessageMenu)
     openMessageMenu.setAttribute("hidden", "true");
 
@@ -600,7 +614,15 @@ function HideMenus()
   if (viewSortMenuSeparator)
     viewSortMenuSeparator.setAttribute("hidden", "true");
 
+  viewSortMenuSeparator = document.getElementById('appmenu_viewSortMenuSeparator');
+  if (viewSortMenuSeparator)
+    viewSortMenuSeparator.setAttribute("hidden", "true");
+
   var viewSortMenu = document.getElementById('viewSortMenu');
+  if (viewSortMenu)
+    viewSortMenu.setAttribute("hidden", "true");
+
+  viewSortMenu = document.getElementById('appmenu_viewSortMenu');
   if (viewSortMenu)
     viewSortMenu.setAttribute("hidden", "true");
 
@@ -608,11 +630,23 @@ function HideMenus()
   if (emptryTrashMenu)
     emptryTrashMenu.setAttribute("hidden", "true");
 
+  emptryTrashMenu = document.getElementById('appmenu_emptyTrash');
+  if (emptryTrashMenu)
+    emptryTrashMenu.setAttribute("hidden", "true");
+
   var menuPropertiesSeparator = document.getElementById("editPropertiesSeparator");
   if (menuPropertiesSeparator)
     menuPropertiesSeparator.setAttribute("hidden", "true");
 
+  menuPropertiesSeparator = document.getElementById("appmenu_editPropertiesSeparator");
+  if (menuPropertiesSeparator)
+    menuPropertiesSeparator.setAttribute("hidden", "true");
+
   var menuProperties = document.getElementById('menu_properties');
+  if (menuProperties)
+    menuProperties.setAttribute("hidden", "true");
+
+  menuProperties = document.getElementById('appmenu_properties');
   if (menuProperties)
     menuProperties.setAttribute("hidden", "true");
 
@@ -623,7 +657,17 @@ function HideMenus()
     favoriteFolder.setAttribute("hidden", "true");
   }
 
+  favoriteFolder = document.getElementById('appmenu_favoriteFolder');
+  if (favoriteFolder) {
+    favoriteFolder.disabled = true;
+    favoriteFolder.setAttribute("hidden", "true");
+  }
+
   var compactFolderMenu = document.getElementById('menu_compactFolder');
+  if (compactFolderMenu)
+    compactFolderMenu.setAttribute("hidden", "true");
+
+  compactFolderMenu = document.getElementById('appmenu_compactFolder');
   if (compactFolderMenu)
     compactFolderMenu.setAttribute("hidden", "true");
 
@@ -635,7 +679,15 @@ function HideMenus()
   if (goStartPageSeparator)
     goStartPageSeparator.hidden = true;
 
+  goStartPageSeparator = document.getElementById('appmenu_goNextSeparator');
+  if (goStartPageSeparator)
+    goStartPageSeparator.hidden = true;
+
   var goStartPage = document.getElementById('goStartPage');
+  if (goStartPage)
+   goStartPage.hidden = true;
+
+  goStartPage = document.getElementById('appmenu_goStartPage');
   if (goStartPage)
    goStartPage.hidden = true;
 
@@ -647,6 +699,10 @@ function HideMenus()
 
 function OnUnloadMessageWindow()
 {
+  if (gFolderDisplay._magicTreeSelection) {
+    gFolderDisplay._magicTreeSelection.tree = null;
+    gFolderDisplay._magicTreeSelection = null;
+  }
   gFolderDisplay.close();
   UnloadCommandUpdateHandlers();
   // FIX ME - later we will be able to use onunload from the overlay
@@ -677,21 +733,6 @@ function ReloadMessage()
     gFolderDisplay.view.dbView.reloadMessage();
 }
 
-function MsgDeleteMessageFromMessageWindow(reallyDelete, fromToolbar)
-{
-  // if from the toolbar, return right away if this is a news message
-  // only allow cancel from the menu:  "Edit | Cancel / Delete Message"
-  if (fromToolbar && gFolderDisplay.view.isNewsFolder)
-      return;
-
-  gFolderDisplay.hintAboutToDeleteMessages();
-
-  if (reallyDelete)
-    gFolderDisplay.doCommand(nsMsgViewCommandType.deleteNoTrash);
-  else
-    gFolderDisplay.doCommand(nsMsgViewCommandType.deleteMsg);
-}
-
 // MessageWindowController object (handles commands when one of the trees does not have focus)
 var MessageWindowController =
 {
@@ -707,7 +748,10 @@ var MessageWindowController =
       case "button_delete":
       case "button_junk":
       case "cmd_shiftDelete":
+      case "button_shiftDelete":
       case "cmd_tag":
+      case "cmd_addTag":
+      case "cmd_manageTags":
       case "cmd_removeTags":
       case "cmd_tag1":
       case "cmd_tag2":
@@ -741,15 +785,17 @@ var MessageWindowController =
       case "cmd_viewPageSource":
       case "cmd_getMsgsForAuthAccounts":
       case "button_file":
+      case "button_previousMsg":
+      case "cmd_previousMsg":
+      case "button_previous":
+      case "cmd_previousUnreadMsg":
+      case "cmd_previousFlaggedMsg":
+      case "button_nextMsg":
       case "cmd_nextMsg":
       case "button_next":
-      case "button_previous":
       case "cmd_nextUnreadMsg":
       case "cmd_nextFlaggedMsg":
       case "cmd_nextUnreadThread":
-      case "cmd_previousMsg":
-      case "cmd_previousUnreadMsg":
-      case "cmd_previousFlaggedMsg":
       case "cmd_goForward":
       case "cmd_goBack":
       case "button_goForward":
@@ -760,6 +806,7 @@ var MessageWindowController =
       case "button_reply":
       case "cmd_replySender":
       case "cmd_replyGroup":
+      case "button_followup":
       case "cmd_replyall":
       case "button_replyall":
       case "cmd_replylist":
@@ -821,6 +868,7 @@ var MessageWindowController =
         UpdateDeleteToolbarButton();
         return gFolderDisplay.getCommandStatus(nsMsgViewCommandType.deleteMsg);
       case "cmd_shiftDelete":
+      case "button_shiftDelete":
         return gFolderDisplay.getCommandStatus(nsMsgViewCommandType.deleteNoTrash);
       case "button_junk":
         UpdateJunkToolbarButton();
@@ -842,9 +890,9 @@ var MessageWindowController =
       case "cmd_replylist":
       case "button_replylist":
         return gFolderDisplay.selectedMessage && IsReplyListEnabled();
-
       case "cmd_replySender":
       case "cmd_replyGroup":
+      case "button_followup":
       case "cmd_forward":
       case "button_forward":
       case "cmd_forwardInline":
@@ -859,6 +907,8 @@ var MessageWindowController =
       case "cmd_reload":
       case "cmd_find":
       case "cmd_tag":
+      case "cmd_addTag":
+      case "cmd_manageTags":
       case "cmd_removeTags":
       case "cmd_tag1":
       case "cmd_tag2":
@@ -890,8 +940,7 @@ var MessageWindowController =
       case "cmd_getNewMessages":
       case "button_getNewMessages":
       case "cmd_getMsgsForAuthAccounts":
-        // GetMsgs should always be enabled, see bugs 89404 and 111102.
-        return true;
+        return IsGetNewMessagesEnabled();
       case "cmd_getNextNMessages":
         return IsGetNextNMessagesEnabled();
       case "cmd_downloadFlagged":
@@ -900,13 +949,15 @@ var MessageWindowController =
         return MailOfflineMgr.isOnline();
       case "cmd_settingsOffline":
         return IsAccountOfflineEnabled();
+      case "button_nextMsg":
       case "cmd_nextMsg":
       case "button_next":
       case "cmd_nextUnreadMsg":
       case "cmd_nextFlaggedMsg":
       case "cmd_nextUnreadThread":
-      case "button_previous":
+      case "button_previousMsg":
       case "cmd_previousMsg":
+      case "button_previous":
       case "cmd_previousUnreadMsg":
       case "cmd_previousFlaggedMsg":
       case "cmd_findAgain":
@@ -1021,17 +1072,16 @@ var MessageWindowController =
       case "cmd_createFilterFromMenu":
         MsgCreateFilter();
         break;
+      case "button_delete":
       case "cmd_delete":
-        MsgDeleteMessageFromMessageWindow(false, false);
+        gFolderDisplay.doCommand(nsMsgViewCommandType.deleteMsg);
         break;
+      case "button_shiftDelete":
       case "cmd_shiftDelete":
-        MsgDeleteMessageFromMessageWindow(true, false);
+        gFolderDisplay.doCommand(nsMsgViewCommandType.deleteNoTrash);
         break;
       case "button_junk":
         MsgJunk();
-        break;
-      case "button_delete":
-        MsgDeleteMessageFromMessageWindow(false, true);
         break;
       case "cmd_printSetup":
         PrintUtils.showPageSetup();
@@ -1066,6 +1116,12 @@ var MessageWindowController =
       case "cmd_search":
         MsgSearchMessages();
         break;
+      case "cmd_addTag":
+        AddTag();
+        return;
+      case "cmd_manageTags":
+        ManageTags();
+        return;
       case "cmd_removeTags":
         RemoveAllMessageTags();
         return;
@@ -1135,19 +1191,21 @@ var MessageWindowController =
       case "cmd_settingsOffline":
         MailOfflineMgr.openOfflineAccountSettings();
         return;
-      case "cmd_nextUnreadMsg":
       case "button_next":
+      case "cmd_nextUnreadMsg":
         performNavigation(nsMsgNavigationType.nextUnreadMessage);
         break;
       case "cmd_nextUnreadThread":
         performNavigation(nsMsgNavigationType.nextUnreadThread);
         break;
+      case "button_nextMsg":
       case "cmd_nextMsg":
         performNavigation(nsMsgNavigationType.nextMessage);
         break;
       case "cmd_nextFlaggedMsg":
         performNavigation(nsMsgNavigationType.nextFlagged);
         break;
+      case "button_previousMsg":
       case "cmd_previousMsg":
         performNavigation(nsMsgNavigationType.previousMessage);
         break;

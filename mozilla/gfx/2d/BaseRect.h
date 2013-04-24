@@ -1,44 +1,13 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Corporation code.
- *
- * The Initial Developer of the Original Code is Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Robert O'Callahan <robert@ocallahan.org>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef MOZILLA_GFX_BASERECT_H_
 #define MOZILLA_GFX_BASERECT_H_
 
 #include <cmath>
+#include <mozilla/Assertions.h>
 
 namespace mozilla {
 namespace gfx {
@@ -308,6 +277,83 @@ struct BaseRect {
   T XMost() const { return x + width; }
   T YMost() const { return y + height; }
 
+  // Moves one edge of the rect without moving the opposite edge.
+  void SetLeftEdge(T aX) {
+    MOZ_ASSERT(aX <= XMost());
+    width = XMost() - aX;
+    x = aX;
+  }
+  void SetRightEdge(T aXMost) { 
+    MOZ_ASSERT(aXMost >= x);
+    width = aXMost - x; 
+  }
+  void SetTopEdge(T aY) {
+    MOZ_ASSERT(aY <= YMost());
+    height = YMost() - aY;
+    y = aY;
+  }
+  void SetBottomEdge(T aYMost) { 
+    MOZ_ASSERT(aYMost >= y);
+    height = aYMost - y; 
+  }
+
+  // Round the rectangle edges to integer coordinates, such that the rounded
+  // rectangle has the same set of pixel centers as the original rectangle.
+  // Edges at offset 0.5 round up.
+  // Suitable for most places where integral device coordinates
+  // are needed, but note that any translation should be applied first to
+  // avoid pixel rounding errors.
+  // Note that this is *not* rounding to nearest integer if the values are negative.
+  // They are always rounding as floor(n + 0.5).
+  // See https://bugzilla.mozilla.org/show_bug.cgi?id=410748#c14
+  // If you need similar method which is using NS_round(), you should create
+  // new |RoundAwayFromZero()| method.
+  void Round()
+  {
+    T x0 = static_cast<T>(floor(T(X()) + 0.5));
+    T y0 = static_cast<T>(floor(T(Y()) + 0.5));
+    T x1 = static_cast<T>(floor(T(XMost()) + 0.5));
+    T y1 = static_cast<T>(floor(T(YMost()) + 0.5));
+
+    x = x0;
+    y = y0;
+
+    width = x1 - x0;
+    height = y1 - y0;
+  }
+
+  // Snap the rectangle edges to integer coordinates, such that the
+  // original rectangle contains the resulting rectangle.
+  void RoundIn()
+  {
+    T x0 = static_cast<T>(ceil(T(X())));
+    T y0 = static_cast<T>(ceil(T(Y())));
+    T x1 = static_cast<T>(floor(T(XMost())));
+    T y1 = static_cast<T>(floor(T(YMost())));
+
+    x = x0;
+    y = y0;
+
+    width = x1 - x0;
+    height = y1 - y0;
+  }
+
+  // Snap the rectangle edges to integer coordinates, such that the
+  // resulting rectangle contains the original rectangle.
+  void RoundOut()
+  {
+    T x0 = static_cast<T>(floor(T(X())));
+    T y0 = static_cast<T>(floor(T(Y())));
+    T x1 = static_cast<T>(ceil(T(XMost())));
+    T y1 = static_cast<T>(ceil(T(YMost())));
+
+    x = x0;
+    y = y0;
+
+    width = x1 - x0;
+    height = y1 - y0;
+  }
+
   // Scale 'this' by aScale, converting coordinates to integers so that the result is
   // the smallest integer-coordinate rectangle containing the unrounded result.
   // Note: this can turn an empty rectangle into a non-empty rectangle
@@ -356,6 +402,16 @@ struct BaseRect {
     y = static_cast<T>(floor(double(y) / aYScale));
     width = right - x;
     height = bottom - y;
+  }
+
+  /**
+   * Clamp aPoint to this rectangle. It is allowed to end up on any
+   * edge of the rectangle.
+   */
+  Point ClampPoint(const Point& aPoint) const
+  {
+    return Point(NS_MAX(x, NS_MIN(XMost(), aPoint.x)),
+                 NS_MAX(y, NS_MIN(YMost(), aPoint.y)));
   }
 
 private:

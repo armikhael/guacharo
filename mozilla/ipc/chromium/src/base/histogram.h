@@ -45,11 +45,6 @@
 #include <string>
 #include <vector>
 
-#if defined(CHROMIUM_MOZILLA_BUILD)
-#define BASE_API
-#else
-#include "base/base_api.h"
-#endif
 #include "testing/gtest/include/gtest/gtest_prod.h"
 #include "base/time.h"
 #include "base/lock.h"
@@ -264,7 +259,7 @@ class CustomHistogram;
 class Histogram;
 class LinearHistogram;
 
-class BASE_API Histogram {
+class Histogram {
  public:
   typedef int Sample;  // Used for samples (and ranges of samples).
   typedef int Count;  // Used to count samples in a bucket.
@@ -281,6 +276,7 @@ class BASE_API Histogram {
     HISTOGRAM,
     LINEAR_HISTOGRAM,
     BOOLEAN_HISTOGRAM,
+    FLAG_HISTOGRAM,
     CUSTOM_HISTOGRAM,
     NOT_VALID_IN_RENDERER
   };
@@ -302,7 +298,7 @@ class BASE_API Histogram {
     // histogram!).
     kIPCSerializationSourceFlag = 0x10,
 
-    kHexRangePrintingFlag = 0x8000,  // Fancy bucket-naming supported.
+    kHexRangePrintingFlag = 0x8000  // Fancy bucket-naming supported.
   };
 
   enum Inconsistencies {
@@ -323,7 +319,7 @@ class BASE_API Histogram {
   //----------------------------------------------------------------------------
   // Statistic values, developed over the life of the histogram.
 
-  class BASE_API SampleSet {
+  class SampleSet {
    public:
     explicit SampleSet();
     ~SampleSet();
@@ -340,6 +336,7 @@ class BASE_API Histogram {
     Count TotalCount() const;
     int64 sum() const { return sum_; }
     int64 redundant_count() const { return redundant_count_; }
+    size_t size() const { return counts_.size(); }
 
     // Arithmetic manipulation of corresponding elements of the set.
     void Add(const SampleSet& other);
@@ -386,6 +383,7 @@ class BASE_API Histogram {
                                    Flags flags);
 
   void Add(int value);
+  void Subtract(int value);
 
   // This method is an interface, used only by BooleanHistogram.
   virtual void AddBoolean(bool value);
@@ -395,7 +393,9 @@ class BASE_API Histogram {
     Add(static_cast<int>(time.InMilliseconds()));
   }
 
-  void AddSampleSet(const SampleSet& sample);
+  virtual void AddSampleSet(const SampleSet& sample);
+
+  void Clear();
 
   // This method is an interface, used only by LinearHistogram.
   virtual void SetRangeDescriptions(const DescriptionPair descriptions[]);
@@ -582,7 +582,7 @@ class BASE_API Histogram {
 
 // LinearHistogram is a more traditional histogram, with evenly spaced
 // buckets.
-class BASE_API LinearHistogram : public Histogram {
+class LinearHistogram : public Histogram {
  public:
   virtual ~LinearHistogram();
 
@@ -638,7 +638,7 @@ class BASE_API LinearHistogram : public Histogram {
 //------------------------------------------------------------------------------
 
 // BooleanHistogram is a histogram for booleans.
-class BASE_API BooleanHistogram : public LinearHistogram {
+class BooleanHistogram : public LinearHistogram {
  public:
   static Histogram* FactoryGet(const std::string& name, Flags flags);
 
@@ -646,7 +646,7 @@ class BASE_API BooleanHistogram : public LinearHistogram {
 
   virtual void AddBoolean(bool value);
 
- private:
+ protected:
   explicit BooleanHistogram(const std::string& name);
 
   DISALLOW_COPY_AND_ASSIGN(BooleanHistogram);
@@ -654,8 +654,29 @@ class BASE_API BooleanHistogram : public LinearHistogram {
 
 //------------------------------------------------------------------------------
 
+// FlagHistogram is like boolean histogram, but only allows a single off/on value.
+class FlagHistogram : public BooleanHistogram
+{
+public:
+  static Histogram *FactoryGet(const std::string &name, Flags flags);
+
+  virtual ClassType histogram_type() const;
+
+  virtual void Accumulate(Sample value, Count count, size_t index);
+
+  virtual void AddSampleSet(const SampleSet& sample);
+
+private:
+  explicit FlagHistogram(const std::string &name);
+  bool mSwitched;
+
+  DISALLOW_COPY_AND_ASSIGN(FlagHistogram);
+};
+
+//------------------------------------------------------------------------------
+
 // CustomHistogram is a histogram for a set of custom integers.
-class BASE_API CustomHistogram : public Histogram {
+class CustomHistogram : public Histogram {
  public:
 
   static Histogram* FactoryGet(const std::string& name,
@@ -681,7 +702,7 @@ class BASE_API CustomHistogram : public Histogram {
 // general place for histograms to register, and supports a global API for
 // accessing (i.e., dumping, or graphing) the data in all the histograms.
 
-class BASE_API StatisticsRecorder {
+class StatisticsRecorder {
  public:
   typedef std::vector<Histogram*> Histograms;
 

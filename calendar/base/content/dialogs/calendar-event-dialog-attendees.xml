@@ -1,41 +1,7 @@
 <?xml version="1.0"?>
-<!-- ***** BEGIN LICENSE BLOCK *****
-   - Version: MPL 1.1/GPL 2.0/LGPL 2.1
-   -
-   - The contents of this file are subject to the Mozilla Public License Version
-   - 1.1 (the "License"); you may not use this file except in compliance with
-   - the License. You may obtain a copy of the License at
-   - http://www.mozilla.org/MPL/
-   -
-   - Software distributed under the License is distributed on an "AS IS" basis,
-   - WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-   - for the specific language governing rights and limitations under the
-   - License.
-   -
-   - The Original Code is Sun Microsystems code.
-   -
-   - The Initial Developer of the Original Code is Sun Microsystems.
-   - Portions created by the Initial Developer are Copyright (C) 2006
-   - the Initial Developer. All Rights Reserved.
-   -
-   - Contributor(s):
-   -   Michael Buettner <michael.buettner@sun.com>
-   -   Philipp Kewisch <mozilla@kewis.ch>
-   -   Daniel Boelzle <daniel.boelzle@sun.com>
-   -
-   - Alternatively, the contents of this file may be used under the terms of
-   - either the GNU General Public License Version 2 or later (the "GPL"), or
-   - the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-   - in which case the provisions of the GPL or the LGPL are applicable instead
-   - of those above. If you wish to allow use of your version of this file only
-   - under the terms of either the GPL or the LGPL, and not to allow others to
-   - use your version of this file under the terms of the MPL, indicate your
-   - decision by deleting the provisions above and replace them with the notice
-   - and other provisions required by the GPL or the LGPL. If you do not delete
-   - the provisions above, a recipient may use your version of this file under
-   - the terms of any one of the MPL, the GPL or the LGPL.
-   -
-   - ***** END LICENSE BLOCK ***** -->
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
 
 <!DOCTYPE dialog [
   <!ENTITY % dtd1 SYSTEM "chrome://calendar/locale/global.dtd" > %dtd1;
@@ -55,19 +21,23 @@
                    flex="1">
         <xul:listcols>
           <xul:listcol/>
+          <xul:listcol/>
           <xul:listcol flex="1"/>
         </xul:listcols>
         <xul:listitem anonid="item" class="addressingWidgetItem" allowevents="true">
           <xul:listcell class="addressingWidgetCell" align="center" pack="center">
-            <xul:image id="attendeeCol1#1" anonid="icon"/>
+            <xul:image id="attendeeCol1#1" anonid="rolestatus-icon"/>
           </xul:listcell>
           <xul:listcell class="addressingWidgetCell">
-            <xul:textbox id="attendeeCol2#1"
+              <xul:image id="attendeeCol2#1" anonid="usertype-icon" class="usertype-icon" onclick="this.parentNode.select();"/>
+          </xul:listcell>
+          <xul:listcell class="addressingWidgetCell">
+            <xul:textbox id="attendeeCol3#1"
                          anonid="input"
                          class="plain textbox-addressingWidget uri-element"
                          type="autocomplete"
                          flex="1"
-                         autocompletesearch="addrbook"
+                         autocompletesearch="addrbook ldap"
                          timeout="300"
                          maxrows="4"
                          completedefaultindex="true"
@@ -76,7 +46,6 @@
                          onblur="if (this.localName == 'textbox') document.getBindingParent(this).onBlurInput(event);"
                          ignoreblurwhilesearching="true"
                          oninput="this.setAttribute('dirty', 'true');">
-              <xul:image class="person-icon" onclick="this.parentNode.select();"/>
             </xul:textbox>
           </xul:listcell>
         </xul:listitem>
@@ -140,7 +109,6 @@
             this.mPrefs = Components.classes["@mozilla.org/preferences-service;1"]
                                     .getService(Components.interfaces.nsIPrefService)
                                     .getBranch(null);
-            this.mPrefs = this.mPrefs.QueryInterface(Components.interfaces.nsIPrefBranch2);
         } catch (ex) {
         }
 
@@ -154,19 +122,6 @@
           var template =
               document.getAnonymousElementByAttribute(
                   this, "anonid", "item");
-
-          // we need to enforce several layout constraints which can't be modelled
-          // with plain xul and css, at least as far as i know.
-          const kStylesheet = "chrome://calendar/skin/calendar-event-dialog.css";
-          for each (var stylesheet in document.styleSheets) {
-              if (stylesheet.href == kStylesheet) {
-                  // the height of the text blocks contained in the grid items needs
-                  // to have the same height as the items of the attendee-list.
-                  var height = template.boxObject.height - 1;
-                  stylesheet.insertRule(".freebusy-grid { min-height: " + height + "px; }", 0);
-                  break;
-              }
-          }
 
           this.onInitialize();
 
@@ -286,9 +241,12 @@
           var input =
               document.getAnonymousElementByAttribute(
                   newNode, "anonid", "input");
-          var icon =
+          var roleStatusIcon =
               document.getAnonymousElementByAttribute(
-                  newNode, "anonid", "icon");
+                  newNode, "anonid", "rolestatus-icon");
+          var userTypeIcon =
+              document.getAnonymousElementByAttribute(
+                  newNode, "anonid", "usertype-icon");
 
           // We always clone the first row. The problem is that the first row
           // could be focused. When we clone that row, we end up with a cloned
@@ -307,11 +265,13 @@
           // the template could have its fields disabled,
           // that's why we need to reset their status.
           input.removeAttribute("disabled");
-          icon.removeAttribute("disabled");
+          userTypeIcon.removeAttribute("disabled");
+          roleStatusIcon.removeAttribute("disabled");
 
           if (this.mIsReadOnly || this.mIsInvitation) {
               input.setAttribute("disabled", "true");
-              icon.setAttribute("disabled", "true");
+              userTypeIcon.setAttribute("disabled", "true");
+              roleStatusIcon.setAttribute("disabled", "true");
           }
 
           // disable the input-field [name <email>] if this attendee
@@ -323,8 +283,9 @@
           this.mMaxAttendees++;
           var rowNumber = this.mMaxAttendees;
           if (rowNumber >= 0) {
-              icon.setAttribute("id", "attendeeCol1#" + rowNumber);
-              input.setAttribute("id", "attendeeCol2#" + rowNumber);
+              roleStatusIcon.setAttribute("id", "attendeeCol1#" + rowNumber);
+              userTypeIcon.setAttribute("id", "attendeeCol2#" + rowNumber);
+              input.setAttribute("id", "attendeeCol3#" + rowNumber);
           }
 
           if (!aAttendee) {
@@ -369,17 +330,21 @@
           input.attendee = aAttendee;
           input.setAttribute("dirty", "true");
 
-          if (aAttendee && aAttendee.isOrganizer) {
-              icon.setAttribute("class", "status-icon");
-              setElementValue(icon, aAttendee.participationStatus || false, "status");
-              return true;
+          if (aAttendee) {
+              // Set up userType
+              setElementValue(userTypeIcon, aAttendee.userType || false, "cutype");
+              this.updateTooltip(userTypeIcon);
+
+              // Set up role/status icon
+              if (aAttendee.isOrganizer) {
+                  roleStatusIcon.setAttribute("class", "status-icon");
+                  setElementValue(roleStatusIcon, aAttendee.participationStatus || false, "status");
+              } else {
+                  roleStatusIcon.setAttribute("class", "role-icon");
+                  setElementValue(roleStatusIcon, aAttendee.role || false, "role");
+              }
+              this.updateTooltip(roleStatusIcon);
           }
-
-          icon.setAttribute("class", "role-icon");
-          setElementValue(icon, aAttendee.role || false, "role");
-
-          // Set tooltip for rolenames
-          this.updateTooltip(icon);
 
           return true;
         ]]></body>
@@ -411,25 +376,31 @@
               var input =
                   document.getAnonymousElementByAttribute(
                       newNode, "anonid", "input");
-              var icon =
+              var roleStatusIcon =
                   document.getAnonymousElementByAttribute(
-                      newNode, "anonid", "icon");
+                      newNode, "anonid", "rolestatus-icon");
+              var userTypeIcon =
+                  document.getAnonymousElementByAttribute(
+                      newNode, "anonid", "usertype-icon");
 
               // the template could have its fields disabled,
               // that's why we need to reset their status.
               input.removeAttribute("disabled");
-              icon.removeAttribute("disabled");
+              roleStatusIcon.removeAttribute("disabled");
+              userTypeIcon.removeAttribute("disabled");
 
               if (this.mIsReadOnly || this.mIsInvitation) {
                   input.setAttribute("disabled", "true");
-                  icon.setAttribute("disabled", "true");
+                  roleStatusIcon.setAttribute("disabled", "true");
+                  userTypeIcon.setAttribute("disabled", "true");
               }
 
               this.mMaxAttendees++;
               var rowNumber = this.mMaxAttendees;
               if (rowNumber >= 0) {
-                  icon.setAttribute("id", "attendeeCol1#" + rowNumber);
-                  input.setAttribute("id", "attendeeCol2#" + rowNumber);
+                  roleStatusIcon.setAttribute("id", "attendeeCol1#" + rowNumber);
+                  userTypeIcon.setAttribute("id", "attendeeCol2#" + rowNumber);
+                  input.setAttribute("id", "attendeeCol3#" + rowNumber);
               }
 
               input.value = null;
@@ -439,11 +410,13 @@
               // set role and participation status
               //status.setAttribute("status", newAttendee.participationStatus);
               //role.setAttribute("role", newAttendee.role);
-              icon.setAttribute("class", "role-icon");
-              icon.setAttribute("role", "REQ-PARTICIPANT");
+              roleStatusIcon.setAttribute("class", "role-icon");
+              roleStatusIcon.setAttribute("role", "REQ-PARTICIPANT");
+              userTypeIcon.setAttribute("cutype", "INDIVIDUAL");
 
-              // Set tooltip for rolenames
-              this.updateTooltip(icon);
+              // Set tooltip for rolenames and usertype icon
+              this.updateTooltip(roleStatusIcon);
+              this.updateTooltip(userTypeIcon);
 
               // We always clone the first row.  The problem is that the first row
               // could be focused.  When we clone that row, we end up with a cloned
@@ -459,7 +432,7 @@
 
               // this copies the autocomplete sessions list from first attendee
               if (this.mLDAPSession && this.mSessionAdded) {
-                  input.syncSessions(document.getAnonymousElementByAttribute(this, "id", 'attendeeCol2#1'));
+                  input.syncSessions(document.getAnonymousElementByAttribute(this, "id", 'attendeeCol3#1'));
               }
 
               // focus on new input widget
@@ -486,6 +459,8 @@
 
                   attendee.role = this.getRoleElement(i).getAttribute("role");
                   //attendee.participationStatus = this.getStatusElement(i).getAttribute("status");
+                  let userType = this.getUserTypeElement(i).getAttribute("cutype");
+                  attendee.userType = (userType == "INDIVIDUAL" ? null : userType) // INDIVIDUAL is the default
 
                   // break the list of potentially many attendees back into individual names
                   var emailAddresses = {};
@@ -541,6 +516,8 @@
 
                   //attendee.role = this.getRoleElement(i).getAttribute("role");
                   attendee.participationStatus = this.getStatusElement(i).getAttribute("status");
+                  // Organizers do not have a CUTYPE
+                  attendee.userType = null;
 
                   // break the list of potentially many attendees back into individual names
                   var emailAddresses = {};
@@ -610,125 +587,171 @@
       </method>
 
       <method name="_resolveListByName">
-          <parameter name="value"/>
-          <body><![CDATA[
-              let mailingListURI = null;
-              if (this.mHeaderParser) {
-                  let emailAddresses = {};
-                  let names = {};
-                  let fullNames = {};
-                  this.mHeaderParser.parseHeadersWithArray(value,
-                                                           emailAddresses,
-                                                           names,
-                                                           fullNames);
+        <parameter name="value"/>
+        <body><![CDATA[
+            if (this.mHeaderParser) {
+              let emailAddresses = {};
+              let names = {};
+              let fullNames = {};
+              this.mHeaderParser.parseHeadersWithArray(value,
+                                                       emailAddresses,
+                                                       names,
+                                                       fullNames);
 
-                  let abManager = Components.classes["@mozilla.org/abmanager;1"]
-                                            .getService(Components.interfaces.nsIAbManager);
-                  let allAddressBooks = abManager.directories;
-
-                  while (!mailingListURI && allAddressBooks.hasMoreElements()) {
-                      let abDir = null;
-                      try {
-                          abDir = allAddressBooks.getNext()
-                                                 .QueryInterface(Components.interfaces.nsIAbDirectory);
-                      } catch (ex) {
-                          cal.WARN ("[eventDialog] Error Encountered" + ex);
-                      }
-
-                      if (abDir != null) {
-                          let abCardsEnumerator = abDir.childCards;
-                          while (!mailingListURI && abCardsEnumerator.hasMoreElements()) {
-                              let abCard = null;
-                              try {
-                                  abCard = abCardsEnumerator.getNext().QueryInterface(Components.interfaces.nsIAbCard);
-                              } catch (ex) {
-                                  cal.WARN ("[eventDialog] Error Encountered" + ex);
-                              }
-
-                              if (abCard && abCard.isMailList && (abCard.displayName == names.value[0])) {
-                                  mailingListURI = abCard.mailListURI;
-                              }
-                          }
-                      }
-                  }
-              }
-              return mailingListURI;
-            ]]></body>
-      </method>
-
-      <method name="_getListEntries">
-          <parameter name="mailingListURI"/>
-          <body><![CDATA[
               let abManager = Components.classes["@mozilla.org/abmanager;1"]
                                         .getService(Components.interfaces.nsIAbManager);
 
-              let mailingList = abManager.getDirectory(mailingListURI);
-              let list = [];
+              let abDir=this._findListInAddrBooks(abManager, names.value[0]);
 
-              let error = false;
-              let continueSearch = true;
-              let abCardsEnumerator = mailingList.childCards;
-              while (abCardsEnumerator.hasMoreElements()) {
-                  let abCard = null;
+              return abDir;
+            }
+            return null;
+          ]]></body>
+    </method>
+
+    <method name="_findListInAddrBooks">
+        <parameter name="abManager"/>
+        <parameter name="entryname"/>
+        <body><![CDATA[
+            let allAddressBooks = abManager.directories;
+
+            while (allAddressBooks.hasMoreElements()) {
+              let abDir = null;
+              try {
+                abDir = allAddressBooks.getNext()
+                                  .QueryInterface(Components.interfaces.nsIAbDirectory);
+              } catch (ex) {
+                cal.WARN ("[eventDialog] Error Encountered" + ex);
+              }
+
+              if (abDir != null && abDir.supportsMailingLists) {
+
+                let childNodes = abDir.childNodes;
+                while (childNodes.hasMoreElements()) {
+                  let dir = null;
                   try {
-                      abCard = abCardsEnumerator.getNext().QueryInterface(Components.interfaces.nsIAbCard);
+                    dir = childNodes.getNext().QueryInterface(Components.interfaces.nsIAbDirectory);
                   } catch (ex) {
-                      cal.WARN ("[eventDialog] Error Encountered" + ex);
+                    cal.WARN ("[eventDialog] Error Encountered" + ex);
                   }
-                  if (abCard) {
-                      let thisId = abCard.primaryEmail;
-                      if (abCard.displayName.length > 0) {
-                          let rCn = abCard.displayName;
-                          if (rCn.indexOf(",") >= 0) {
-                              rCn = '"' + rCn + '"';
-                          }
-                          thisId = rCn + " <" + thisId + ">";
-                      }
-                      list.push(thisId);
+
+                  if (dir && dir.isMailList && (dir.dirName == entryname)) {
+                    return dir;
                   }
+                }
               }
-              return list;
-            ]]></body>
-      </method>
+            }
+            return null;
+        ]]></body>
+    </method>
 
-      <method name="_fillListItemWithEntry">
-          <parameter name="listitem"/>
-          <parameter name="entry"/>
-          <parameter name="rowNumber"/>
-          <body><![CDATA[
-              let newAttendee = this.createAttendee(entry);
-              let input = document.getAnonymousElementByAttribute(listitem, "anonid", "input");
-              input.removeAttribute("disabled");
-              input.setAttribute("id", "attendeeCol2#" + rowNumber);
+    <method name="_getListEntriesInt">
+        <parameter name="mailingList"/>
+        <parameter name="attendees"/>
+        <parameter name="allListsUri"/>
+        <body><![CDATA[
 
-              if (this.mLDAPSession && this.mSessionAdded) {
-                  input.syncSessions(document.getElementById('attendeeCol2#1'));
+            function in_list(aList, listid) {
+              for (var l=0;l<aList.length;l++){
+                if (aList[l]===listid) return true;
+              }
+              return false;
+            }
+
+            let abManager = Components.classes["@mozilla.org/abmanager;1"]
+                                      .getService(Components.interfaces.nsIAbManager);
+
+            let addressLists=mailingList.addressLists;
+            for (var i=0;i<addressLists.length;i++) {
+              let abCard=addressLists.queryElementAt(i, Components.interfaces.nsIAbCard);
+              let thisId = abCard.primaryEmail;
+              if (abCard.displayName.length > 0) {
+                  let rCn = abCard.displayName;
+                  if (rCn.indexOf(",") >= 0) {
+                      rCn = '"' + rCn + '"';
+                  }
+                  thisId = rCn + " <" + thisId + ">";
+              }
+              if (in_list(attendees, thisId)) continue;
+
+              if (abCard.displayName.length > 0) {
+                let ml=this._findListInAddrBooks(abManager, abCard.displayName);
+                if (null!=ml){
+                  if (in_list(allListsUri, ml.URI)) continue;
+                  allListsUri.push(ml.URI);
+
+                  this._getListEntriesInt(ml, attendees, allListsUri);
+
+                  continue;
+                }
               }
 
-              input.attendee = newAttendee;
-              input.value = entry;
-              input.setAttribute("value", entry);
-              input.setAttribute("dirty", "true");
-              if (input.getAttribute('focused') != '') {
-                  input.removeAttribute('focused');
-              }
+              attendees.push(thisId);
+            }
 
-              let icon = document.getAnonymousElementByAttribute(listitem, "anonid", "icon");
-              icon.removeAttribute("disabled");
-              icon.setAttribute("id", "attendeeCol1#" + rowNumber);
-              icon.setAttribute("class", "role-icon");
-              icon.setAttribute("role", newAttendee.role);
-            ]]></body>
-      </method>
+            return attendees;
+          ]]></body>
+    </method>
 
-      <method name="resolvePotentialList">
-          <parameter name="input"/>
-          <body><![CDATA[
-              let fieldValue = input.value;
-              if (input.id.length > 0 && fieldValue.length > 0) {
-                  let mailingListURI = this._resolveListByName(fieldValue);
-                  if (mailingListURI) {
-                      let entries = this._getListEntries(mailingListURI);
+    <method name="_getListEntries">
+        <parameter name="mailingList"/>
+        <body><![CDATA[
+
+            let attendees = [];
+            let allListsUri = [];
+
+            allListsUri.push(mailingList.URI);
+
+            this._getListEntriesInt(mailingList, attendees, allListsUri);
+
+            return attendees;
+
+          ]]></body>
+    </method>
+
+    <method name="_fillListItemWithEntry">
+        <parameter name="listitem"/>
+        <parameter name="entry"/>
+        <parameter name="rowNumber"/>
+        <body><![CDATA[
+            let newAttendee = this.createAttendee(entry);
+            let input = document.getAnonymousElementByAttribute(listitem, "anonid", "input");
+            input.removeAttribute("disabled");
+            input.setAttribute("id", "attendeeCol3#" + rowNumber);
+
+            if (this.mLDAPSession && this.mSessionAdded) {
+                input.syncSessions(document.getElementById('attendeeCol3#1'));
+            }
+
+            input.attendee = newAttendee;
+            input.value = entry;
+            input.setAttribute("value", entry);
+            input.setAttribute("dirty", "true");
+            if (input.getAttribute('focused') != '') {
+                input.removeAttribute('focused');
+            }
+
+            let roleStatusIcon = document.getAnonymousElementByAttribute(listitem, "anonid", "rolestatus-icon");
+            roleStatusIcon.removeAttribute("disabled");
+            roleStatusIcon.setAttribute("id", "attendeeCol1#" + rowNumber);
+            roleStatusIcon.setAttribute("class", "role-icon");
+            roleStatusIcon.setAttribute("role", newAttendee.role);
+
+            let userTypeIcon = document.getAnonymousElementByAttribute(listitem, "anonid", "usertype-icon");
+            userTypeIcon.removeAttribute("disabled");
+            userTypeIcon.setAttribute("id", "attendeeCol2#" + rowNumber);
+            userTypeIcon.setAttribute("cutype", newAttendee.userType);
+          ]]></body>
+    </method>
+
+    <method name="resolvePotentialList">
+        <parameter name="input"/>
+        <body><![CDATA[
+            let fieldValue = input.value;
+            if (input.id.length > 0 && fieldValue.length > 0) {
+                let mailingList = this._resolveListByName(fieldValue);
+                if (mailingList) {
+                    let entries = this._getListEntries(mailingList);
                       if (entries.length > 0) {
                           let currentIndex = parseInt(input.id.substr(13));
                           let template = document.getAnonymousElementByAttribute(this, "anonid", "item");
@@ -739,17 +762,21 @@
                           currentIndex++;
                           for each (let entry in entries) {
                               currentNode = template.cloneNode(true);
-                              this._fillListItemWithEntry(currentNode, entry, currentIndex);
                               template.parentNode.insertBefore(currentNode, nextNode);
+                              this._fillListItemWithEntry(currentNode, entry, currentIndex);
                               currentIndex++;
                           }
                           this.mMaxAttendees += entries.length;
                           for (let i = currentIndex; i <= this.mMaxAttendees; i++) {
                               let row = template.parentNode.childNodes[i];
-                              let icon = document.getAnonymousElementByAttribute(row, "anonid", "icon");
-                              icon.setAttribute("id", "attendeeCol1#" + i);
+                              let roleStatusIcon = document.getAnonymousElementByAttribute(row, "anonid", "rolestatus-icon");
+                              roleStatusIcon.setAttribute("id", "attendeeCol1#" + i);
+
+                              let userTypeIcon = document.getAnonymousElementByAttribute(row, "anonid", "usertype-icon");
+                              userTypeIcon.setAttribute("id", "attendeeCol2#" + i);
+
                               let input = document.getAnonymousElementByAttribute(row, "anonid", "input");
-                              input.setAttribute("id", "attendeeCol2#" + i);
+                              input.setAttribute("id", "attendeeCol3#" + i);
                               input.setAttribute("dirty", "true");
                           }
                       }
@@ -822,20 +849,32 @@
             let role = targetIcon.getAttribute("role");
             // Set tooltip for rolenames
 
-            const strMap = {
+            const roleMap = {
               "REQ-PARTICIPANT": "required",
               "OPT-PARTICIPANT": "optional",
               "NON-PARTICIPANT": "nonparticipant",
               "CHAIR": "chair"
             }
 
-            let roleNameString = "event.attendee.role." + (role in strMap ? strMap[role] : "unknown");
+            let roleNameString = "event.attendee.role." + (role in roleMap ? roleMap[role] : "unknown");
             let tooltip = cal.calGetString("calendar-event-dialog-attendees",
                                            roleNameString,
-                                           (role in strMap ? null : [role]));
+                                           (role in roleMap ? null : [role]));
             targetIcon.setAttribute("tooltiptext", tooltip);
+        } else if (targetIcon.className == "usertype-icon") {
+            let cutype = targetIcon.getAttribute("cutype");
+            const cutypeMap = {
+                "INDIVIDUAL": "individual",
+                "GROUP": "group",
+                "RESOURCE": "resource",
+                "ROOM": "room",
+                // I've decided UNKNOWN will not be handled.
+            };
 
-            return;
+            let cutypeString = "event.attendee.usertype." + (cutype in cutypeMap ? cutypeMap[cutype] : "unknown");
+            let tooltip = cal.calGetString("calendar-event-dialog-attendees",
+                                           cutypeString,
+                                           (cutypeString in cutypeMap ? null : [cutype]));
         }
       ]]></body>
       </method>
@@ -993,7 +1032,7 @@
       <method name="getInputElement">
         <parameter name="aRow"/>
         <body><![CDATA[
-          return document.getAnonymousElementByAttribute(this, "id", "attendeeCol2#" + aRow);
+          return document.getAnonymousElementByAttribute(this, "id", "attendeeCol3#" + aRow);
         ]]></body>
       </method>
 
@@ -1008,6 +1047,13 @@
         <parameter name="aRow"/>
         <body><![CDATA[
           return document.getAnonymousElementByAttribute(this, "id", "attendeeCol1#" + aRow);
+        ]]></body>
+      </method>
+
+      <method name="getUserTypeElement">
+        <parameter name="aRow"/>
+        <body><![CDATA[
+          return document.getAnonymousElementByAttribute(this, "id", "attendeeCol2#" + aRow);
         ]]></body>
       </method>
 
@@ -1495,6 +1541,18 @@
 
                 let nextValue = cycle(statusCycle, target.getAttribute("status"));
                 target.setAttribute("status", nextValue);
+                this.updateTooltip(target);
+            }
+        } else if (target.className == "usertype-icon") {
+            let fieldNum = target.getAttribute("id").split("#")[1];
+            let inputField = this.getInputElement(fieldNum);
+            if (target.getAttribute("disabled") != "true" &&
+                !inputField.attendee.isOrganizer) {
+                const cutypeCycle = [ "INDIVIDUAL", "GROUP", "RESOURCE", "ROOM" ];
+
+                let nextValue = cycle(cutypeCycle, target.getAttribute("cutype"));
+                target.setAttribute("cutype", nextValue);
+                this.updateTooltip(target);
             }
         } else if (this.mIsReadOnly || this.mIsInvitation || target == null ||
                    (target.localName != "listboxbody" &&
@@ -1524,14 +1582,14 @@
         }
         if (event.originalTarget.localName == "input") {
             switch (event.keyCode) {
-                case 46:
-                case 8:
+                case KeyEvent.DOM_VK_DELETE:
+                case KeyEvent.DOM_VK_BACK_SPACE:
                     if (!event.originalTarget.value) {
                         this.deleteHit(event.originalTarget);
                     }
                     event.stopPropagation();
                     break;
-                case 13:
+                case KeyEvent.DOM_VK_RETURN:
                     this.arrowHit(event.originalTarget, 1);
                     event.stopPropagation();
                     event.preventDefault();

@@ -20,30 +20,20 @@ https://bugzilla.mozilla.org/show_bug.cgi?id=574663
 
 /** Test for Bug 574663 **/
 
-// This test depends on general.smoothScroll being off.
-
 function sendTouchpadScrollMotion(scrollbox, direction, ctrl, momentum) {
   var win = scrollbox.ownerDocument.defaultView;
   let event = {
-    'type': "DOMMouseScroll",
-    'axis': "vertical",
-    'delta': direction,
-    'hasPixels': true,
-    'ctrlKey': ctrl,
-    'isMomentum': momentum,
+    deltaMode: WheelEvent.DOM_DELTA_PIXEL,
+    deltaY: direction * 3,
+    lineOrPageDeltaY: direction,
+    ctrlKey: ctrl,
+    isMomentum: momentum
   };
-  // first a line scroll
-  synthesizeMouseScroll(scrollbox, 10, 10, event, win);
-  // Then a line scroll with hasPixels set to false
-  event.hasPixels = false;
-  synthesizeMouseScroll(scrollbox, 10, 10, event, win);
-  // then 5 pixel scrolls
-  event.hasPixels = true;
-  event.delta *= 3;
-  event.type = "MozMousePixelScroll";
-  event.hasPixels = false;
+  synthesizeWheel(scrollbox, 10, 10, event, win);
+  // then 5 additional pixel scrolls
+  event.lineOrPageDeltaY = 0;
   for (let i = 0; i < 5; ++i) {
-    synthesizeMouseScroll(scrollbox, 10, 10, event, win);
+    synthesizeWheel(scrollbox, 10, 10, event, win);
   }
 }
 
@@ -54,9 +44,7 @@ function runTest() {
     '</div>', '_blank', 'width=300,height=300');
   SimpleTest.waitForFocus(function () {
     var scrollbox = win.document.getElementById("scrollbox");
-    netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
-    let winUtils = win.QueryInterface(Components.interfaces.nsIInterfaceRequestor)
-                      .getInterface(Components.interfaces.nsIDOMWindowUtils);
+    let winUtils = SpecialPowers.getDOMWindowUtils(win);
     let outstandingTests = [
       [false, false],
       [false, true],
@@ -95,8 +83,8 @@ function runTest() {
         }
         // Revert the effect.
         sendTouchpadScrollMotion(scrollbox, -1, ctrlKey, isMomentum);
-        setTimeout(nextTest, 0);
-      }, 0);
+        setTimeout(nextTest, 20);
+      }, 20);
     }
     nextTest();
   }, win);
@@ -106,26 +94,25 @@ function initPrefs()
 {
   netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
   var prefSvc = Components.classes["@mozilla.org/preferences-service;1"].
-                  getService(Components.interfaces.nsIPrefBranch2);
+                  getService(Components.interfaces.nsIPrefBranch);
+  prefSvc.setBoolPref("general.smoothScroll", false);
   // Disables the app level scroll acceleration
   prefSvc.setIntPref("mousewheel.acceleration.start", -1);
   prefSvc.setBoolPref("mousewheel.system_scroll_override_on_root_content.enabled", false);
   // Enable zooming for ctrl-scrolling
-  prefSvc.setIntPref("mousewheel.withcontrolkey.action", 3);
+  prefSvc.setIntPref("mousewheel.with_control.action", 3);
 }
 
 function clearPrefs()
 {
   netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
   var prefSvc = Components.classes["@mozilla.org/preferences-service;1"].
-                  getService(Components.interfaces.nsIPrefBranch2);
+                  getService(Components.interfaces.nsIPrefBranch);
 
-  if (prefSvc.prefHasUserValue("mousewheel.acceleration.start"))
-    prefSvc.clearUserPref("mousewheel.acceleration.start");
-  if (prefSvc.prefHasUserValue("mousewheel.system_scroll_override_on_root_content.enabled"))
-    prefSvc.clearUserPref("mousewheel.system_scroll_override_on_root_content.enabled");
-  if (prefSvc.prefHasUserValue("mousewheel.withcontrolkey.action"))
-    prefSvc.clearUserPref("mousewheel.withcontrolkey.action");
+  prefSvc.clearUserPref("general.smoothScroll");
+  prefSvc.clearUserPref("mousewheel.acceleration.start");
+  prefSvc.clearUserPref("mousewheel.system_scroll_override_on_root_content.enabled");
+  prefSvc.clearUserPref("mousewheel.with_control.action");
 }
 
 window.onload = function () {

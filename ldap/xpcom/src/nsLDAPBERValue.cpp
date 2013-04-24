@@ -1,46 +1,12 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * 
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the mozilla.org LDAP XPCOM SDK.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Dan Mosedale <dmose@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsLDAPBERValue.h"
 #include "nsMemory.h"
-#include "nsString.h"
-#include "nsReadableUtils.h"
+#include "nsStringGlue.h"
 
 NS_IMPL_THREADSAFE_ISUPPORTS1(nsLDAPBERValue, nsILDAPBERValue)
 
@@ -58,14 +24,14 @@ nsLDAPBERValue::~nsLDAPBERValue()
 // void get (out unsigned long aCount, 
 //           [array, size_is (aCount), retval] out octet aRetVal); */
 NS_IMETHODIMP 
-nsLDAPBERValue::Get(PRUint32 *aCount, PRUint8 **aRetVal)
+nsLDAPBERValue::Get(uint32_t *aCount, uint8_t **aRetVal)
 {
     // if mSize = 0, return a count of a 0 and a null pointer
 
     if (mSize) {
         // get a buffer to hold a copy of the data
         //
-        PRUint8 *array = static_cast<PRUint8 *>(nsMemory::Alloc(mSize));
+        uint8_t *array = static_cast<uint8_t *>(nsMemory::Alloc(mSize));
 
         if (!array) {
             return NS_ERROR_OUT_OF_MEMORY;
@@ -86,7 +52,7 @@ nsLDAPBERValue::Get(PRUint32 *aCount, PRUint8 **aRetVal)
 // void set(in unsigned long aCount, 
 //          [array, size_is(aCount)] in octet aValue);
 NS_IMETHODIMP
-nsLDAPBERValue::Set(PRUint32 aCount, PRUint8 *aValue)
+nsLDAPBERValue::Set(uint32_t aCount, uint8_t *aValue)
 {
     // get rid of any old value being held here
     //
@@ -99,7 +65,7 @@ nsLDAPBERValue::Set(PRUint32 aCount, PRUint8 *aValue)
     if (aCount) { 
         // get a buffer to hold a copy of this data
         //
-        mValue = static_cast<PRUint8 *>(nsMemory::Alloc(aCount));
+        mValue = static_cast<uint8_t *>(nsMemory::Alloc(aCount));
         if (!mValue) {
             return NS_ERROR_OUT_OF_MEMORY;
         }
@@ -132,7 +98,7 @@ nsLDAPBERValue::SetFromUTF8(const nsACString & aValue)
     //
     mSize = aValue.Length();
     if (mSize) {
-        mValue = reinterpret_cast<PRUint8 *>(ToNewCString(aValue));
+        mValue = reinterpret_cast<uint8_t *>(ToNewCString(aValue));
     } else {
         mValue = 0;
     }

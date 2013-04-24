@@ -2,7 +2,7 @@
 <head>
   <title>NPAPI ClearSiteData/GetSitesWithData Functionality</title>
   <script type="application/javascript" src="chrome://mochikit/content/tests/SimpleTest/SimpleTest.js"></script>
-  <script type="application/javascript" src="chrome://mochikit/content/tests/SimpleTest/PluginUtils.js"></script>
+  <script type="application/javascript" src="chrome://mochikit/content/tests/SimpleTest/ChromeUtils.js"></script>
 </head>
 <body>
   <embed id="plugin1" type="application/x-test" width="200" height="200"></embed>
@@ -21,6 +21,7 @@
     p.setSitesWithDataCapabilities(true);
 
     ok(PluginUtils.withTestPlugin(runTest), "Test plugin found");
+    SimpleTest.finish();
 
     function stored(needles) {
       var something = pluginHost.siteHasData(this.pluginTag, null);
@@ -191,8 +192,6 @@
       ok(!stored(["b\u00FCcher.nz"]), "Data cleared for UTF-8 representation");
       ok(!stored(["xn--bcher-kva.nz"]), "Data cleared for ACE representation");
       ok(!stored(null), "All data cleared");
-
-      SimpleTest.finish();
     }
   </script>
 </body>

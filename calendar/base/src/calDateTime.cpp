@@ -1,44 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Oracle Corporation code.
- *
- * The Initial Developer of the Original Code is
- *  Oracle Corporation
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Vladimir Vukicevic <vladimir.vukicevic@oracle.com>
- *   Dan Mosedale <dan.mosedale@oracle.com>
- *   Michiel van Leeuwen <mvl@exedo.nl>
- *   Clint Talbert <cmtalbert@myfastmail.com>
- *   Daniel Boelzle <daniel.boelzle@sun.com>
- *   Philipp Kewisch <mozilla@kewis.ch>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "calDateTime.h"
 #include "calBaseCID.h"
@@ -49,7 +11,9 @@
 #include "calIErrors.h"
 #include "calDuration.h"
 
-#include "jsdate.h"
+#include "jsapi.h"
+#include "jsfriendapi.h"
+#include "jswrapper.h"
 #include "prprf.h"
 
 extern "C" {
@@ -61,22 +25,22 @@ extern "C" {
 #include "calAttributeHelpers.h"
 
 NS_IMPL_CLASSINFO(calDateTime, NULL, 0, CAL_DATETIME_CID)
-NS_IMPL_ISUPPORTS2_CI(calDateTime, calIDateTime, nsIXPCScriptable)
+NS_IMPL_ISUPPORTS1_CI(calDateTime, calIDateTime)
 
 calDateTime::calDateTime()
-    : mImmutable(PR_FALSE)
+    : mImmutable(false)
 {
     Reset();
 }
 
 calDateTime::calDateTime(icaltimetype const* atimeptr, calITimezone *tz)
-    : mImmutable(PR_FALSE)
+    : mImmutable(false)
 {
     FromIcalTime(atimeptr, tz);
 }
 
 NS_IMETHODIMP
-calDateTime::GetIsMutable(PRBool *aResult)
+calDateTime::GetIsMutable(bool *aResult)
 {
     NS_ENSURE_ARG_POINTER(aResult);
     *aResult = !mImmutable;
@@ -86,7 +50,7 @@ calDateTime::GetIsMutable(PRBool *aResult)
 NS_IMETHODIMP
 calDateTime::MakeImmutable()
 {
-    mImmutable = PR_TRUE;
+    mImmutable = true;
     return NS_OK;
 }
 
@@ -103,12 +67,12 @@ calDateTime::Clone(calIDateTime **aResult)
 }
 
 NS_IMETHODIMP
-calDateTime::ResetTo(PRInt16 year,
-                     PRInt16 month,
-                     PRInt16 day,
-                     PRInt16 hour,
-                     PRInt16 minute,
-                     PRInt16 second,
+calDateTime::ResetTo(int16_t year,
+                     int16_t month,
+                     int16_t day,
+                     int16_t hour,
+                     int16_t minute,
+                     int16_t second,
                      calITimezone * tz)
 {
     NS_ENSURE_FALSE(mImmutable, NS_ERROR_OBJECT_IS_IMMUTABLE);
@@ -119,7 +83,7 @@ calDateTime::ResetTo(PRInt16 year,
     mHour = hour;
     mMinute = minute;
     mSecond = second;
-    mIsDate = PR_FALSE;
+    mIsDate = false;
     mTimezone = tz;
     Normalize();
     return NS_OK;
@@ -137,24 +101,24 @@ calDateTime::Reset()
     mSecond = 0;
     mWeekday = 4;
     mYearday = 1;
-    mIsDate = PR_FALSE;
-    mTimezone = nsnull;
+    mIsDate = false;
+    mTimezone = nullptr;
     mNativeTime = 0;
-    mIsValid = PR_TRUE;
+    mIsValid = true;
     return NS_OK;
 }
 
-CAL_VALUETYPE_ATTR(calDateTime, PRInt16, Year)
-CAL_VALUETYPE_ATTR(calDateTime, PRInt16, Month)
-CAL_VALUETYPE_ATTR(calDateTime, PRInt16, Day)
-CAL_VALUETYPE_ATTR(calDateTime, PRInt16, Hour)
-CAL_VALUETYPE_ATTR(calDateTime, PRInt16, Minute)
-CAL_VALUETYPE_ATTR(calDateTime, PRInt16, Second)
-CAL_VALUETYPE_ATTR(calDateTime, PRBool, IsDate)
-CAL_VALUETYPE_ATTR_GETTER(calDateTime, PRBool, IsValid)
+CAL_VALUETYPE_ATTR(calDateTime, int16_t, Year)
+CAL_VALUETYPE_ATTR(calDateTime, int16_t, Month)
+CAL_VALUETYPE_ATTR(calDateTime, int16_t, Day)
+CAL_VALUETYPE_ATTR(calDateTime, int16_t, Hour)
+CAL_VALUETYPE_ATTR(calDateTime, int16_t, Minute)
+CAL_VALUETYPE_ATTR(calDateTime, int16_t, Second)
+CAL_VALUETYPE_ATTR(calDateTime, bool, IsDate)
+CAL_VALUETYPE_ATTR_GETTER(calDateTime, bool, IsValid)
 CAL_VALUETYPE_ATTR_GETTER(calDateTime, PRTime, NativeTime)
-CAL_VALUETYPE_ATTR_GETTER(calDateTime, PRInt16, Weekday)
-CAL_VALUETYPE_ATTR_GETTER(calDateTime, PRInt16, Yearday)
+CAL_VALUETYPE_ATTR_GETTER(calDateTime, int16_t, Weekday)
+CAL_VALUETYPE_ATTR_GETTER(calDateTime, int16_t, Yearday)
 
 
 NS_IMETHODIMP
@@ -178,7 +142,7 @@ calDateTime::SetTimezone(calITimezone *aValue)
 }
 
 NS_IMETHODIMP
-calDateTime::GetTimezoneOffset(PRInt32 *aResult)
+calDateTime::GetTimezoneOffset(int32_t *aResult)
 {
     NS_ENSURE_ARG_POINTER(aResult);
     icaltimetype icalt;
@@ -192,7 +156,7 @@ NS_IMETHODIMP
 calDateTime::SetNativeTime(PRTime aNativeTime)
 {
     icaltimetype icalt;
-    PRTimeToIcaltime(aNativeTime, PR_FALSE, icaltimezone_get_utc_timezone(), &icalt);
+    PRTimeToIcaltime(aNativeTime, false, icaltimezone_get_utc_timezone(), &icalt);
     FromIcalTime(&icalt, cal::UTC());
     return NS_OK;
 }
@@ -228,7 +192,7 @@ calDateTime::SubtractDate(calIDateTime *aDate, calIDuration **aDuration)
     // for a duration, need to convert the difference in microseconds (prtime)
     // to seconds (libical), so divide by one million.
     icaldurationtype const idt = icaldurationtype_from_int(
-        static_cast<int>((mNativeTime - t2t) / PRInt64(PR_USEC_PER_SEC)));
+        static_cast<int>((mNativeTime - t2t) / int64_t(PR_USEC_PER_SEC)));
 
     calDuration * const dur = new calDuration(&idt);
     CAL_ENSURE_MEMORY(dur);
@@ -245,11 +209,11 @@ calDateTime::ToString(nsACString & aResult)
     ensureTimezone();
     mTimezone->GetTzid(tzid);
 
-    PRUint32 const length = PR_snprintf(
-        buffer, sizeof(buffer), "%04hd/%02hd/%02hd %02hd:%02hd:%02hd %s isDate=%01hd",
+    uint32_t const length = PR_snprintf(
+        buffer, sizeof(buffer), "%04hd/%02hd/%02hd %02hd:%02hd:%02hd %s isDate=%01hd nativeTime=%lld",
         mYear, mMonth + 1, mDay, mHour, mMinute, mSecond,
-        tzid.get(), static_cast<PRInt16>(mIsDate));
-    if (length != static_cast<PRUint32>(-1))
+        tzid.get(), static_cast<int16_t>(mIsDate), mNativeTime);
+    if (length != static_cast<uint32_t>(-1))
         aResult.Assign(buffer, length);
     return NS_OK;
 }
@@ -260,7 +224,7 @@ calDateTime::SetTimeInTimezone(PRTime aTime, calITimezone * aTimezone)
     NS_ENSURE_FALSE(mImmutable, NS_ERROR_OBJECT_IS_IMMUTABLE);
     NS_ENSURE_ARG_POINTER(aTimezone);
     icaltimetype icalt;
-    PRTimeToIcaltime(aTime, PR_FALSE, cal::getIcalTimezone(aTimezone), &icalt);
+    PRTimeToIcaltime(aTime, false, cal::getIcalTimezone(aTimezone), &icalt);
     FromIcalTime(&icalt, aTimezone);
     return NS_OK;
 }
@@ -433,7 +397,7 @@ calDateTime::SetIcalString(nsACString const& aIcalString)
     if (icaltime_is_null_time(icalt)) {
         return calIErrors::ICS_ERROR_BASE + icalerrno;
     }
-    FromIcalTime(&icalt, nsnull);
+    FromIcalTime(&icalt, nullptr);
     return NS_OK;
 }
 
@@ -454,7 +418,7 @@ void calDateTime::Normalize()
 void
 calDateTime::ensureTimezone()
 {
-    if (mTimezone == nsnull) {
+    if (mTimezone == nullptr) {
         mTimezone = cal::UTC();
     }
 }
@@ -488,9 +452,9 @@ void calDateTime::FromIcalTime(icaltimetype const* icalt, calITimezone * tz)
 {
     icaltimetype t = *icalt;
     mIsValid = (icaltime_is_null_time(t) ||
-                icaltime_is_valid_time(t) ? PR_TRUE : PR_FALSE);
+                icaltime_is_valid_time(t) ? true : false);
 
-    mIsDate = t.is_date ? PR_TRUE : PR_FALSE;
+    mIsDate = t.is_date ? true : false;
     if (mIsDate) {
         t.hour = 0;
         t.minute = 0;
@@ -501,17 +465,17 @@ void calDateTime::FromIcalTime(icaltimetype const* icalt, calITimezone * tz)
         t = icaltime_normalize(t);
     }
 
-    mYear = static_cast<PRInt16>(t.year);
-    mMonth = static_cast<PRInt16>(t.month - 1);
-    mDay = static_cast<PRInt16>(t.day);
-    mHour = static_cast<PRInt16>(t.hour);
-    mMinute = static_cast<PRInt16>(t.minute);
-    mSecond = static_cast<PRInt16>(t.second);
+    mYear = static_cast<int16_t>(t.year);
+    mMonth = static_cast<int16_t>(t.month - 1);
+    mDay = static_cast<int16_t>(t.day);
+    mHour = static_cast<int16_t>(t.hour);
+    mMinute = static_cast<int16_t>(t.minute);
+    mSecond = static_cast<int16_t>(t.second);
 
     if (tz) {
         mTimezone = tz;
     } else {
-        mTimezone = cal::detectTimezone(t, nsnull);
+        mTimezone = cal::detectTimezone(t, nullptr);
     }
 #if defined(DEBUG)
     if (mTimezone) {
@@ -532,8 +496,8 @@ void calDateTime::FromIcalTime(icaltimetype const* icalt, calITimezone * tz)
     }
 #endif
 
-    mWeekday = static_cast<PRInt16>(icaltime_day_of_week(t) - 1);
-    mYearday = static_cast<PRInt16>(icaltime_day_of_year(t));
+    mWeekday = static_cast<int16_t>(icaltime_day_of_week(t) - 1);
+    mYearday = static_cast<int16_t>(icaltime_day_of_year(t));
 
     // mNativeTime: not moving the existing date to UTC,
     // but merely representing it a UTC-based way.
@@ -570,14 +534,14 @@ PRTime calDateTime::IcaltimeToPRTime(icaltimetype const* icalt, icaltimezone con
         et.tm_min = tt.minute;
         et.tm_hour = tt.hour;
     }
-    et.tm_mday = static_cast<PRInt16>(tt.day);
-    et.tm_month = static_cast<PRInt16>(tt.month-1);
-    et.tm_year = static_cast<PRInt16>(tt.year);
+    et.tm_mday = static_cast<int16_t>(tt.day);
+    et.tm_month = static_cast<int16_t>(tt.month-1);
+    et.tm_year = static_cast<int16_t>(tt.year);
 
     return PR_ImplodeTime(&et);
 }
 
-void calDateTime::PRTimeToIcaltime(PRTime time, PRBool isdate,
+void calDateTime::PRTimeToIcaltime(PRTime time, bool isdate,
                                    icaltimezone const* tz,
                                    icaltimetype * icalt)
 {
@@ -610,12 +574,12 @@ void calDateTime::PRTimeToIcaltime(PRTime time, PRBool isdate,
 }
 
 NS_IMETHODIMP
-calDateTime::Compare(calIDateTime * aOther, PRInt32 * aResult)
+calDateTime::Compare(calIDateTime * aOther, int32_t * aResult)
 {
     NS_ENSURE_ARG_POINTER(aOther);
     NS_ENSURE_ARG_POINTER(aResult);
 
-    PRBool otherIsDate = PR_FALSE;
+    bool otherIsDate = false;
     aOther->GetIsDate(&otherIsDate);
 
     icaltimetype a, b;
@@ -640,272 +604,41 @@ calDateTime::Compare(calIDateTime * aOther, PRInt32 * aResult)
     return NS_OK;
 }
 
-/*
- * nsIXPCScriptable impl
- */
-
-/* readonly attribute string className; */
 NS_IMETHODIMP
-calDateTime::GetClassName(char ** aClassName)
+calDateTime::GetJsDate(JSContext* aCx, JS::Value* aResult)
 {
-    NS_ENSURE_ARG_POINTER(aClassName);
-    *aClassName = static_cast<char *>(nsMemory::Clone(CAL_STRLEN_ARGS("calDateTime") +1));
-    CAL_ENSURE_MEMORY(*aClassName);
-    return NS_OK;
-}
+    double msec = double(mNativeTime / 1000);
+    ensureTimezone();
 
-/* readonly attribute PRUint32 scriptableFlags; */
-NS_IMETHODIMP
-calDateTime::GetScriptableFlags(PRUint32 * aScriptableFlags)
-{
-    NS_ENSURE_ARG_POINTER(aScriptableFlags);
-    *aScriptableFlags = nsIXPCScriptable::WANT_GETPROPERTY |
-                        nsIXPCScriptable::WANT_SETPROPERTY |
-                        nsIXPCScriptable::WANT_NEWRESOLVE |
-                        nsIXPCScriptable::ALLOW_PROP_MODS_DURING_RESOLVE;
-    return NS_OK;
-}
-
-/* PRBool getProperty (in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj, in jsid id, in JSValPtr vp); */
-NS_IMETHODIMP
-calDateTime::GetProperty(nsIXPConnectWrappedNative *wrapper, JSContext * cx,
-                         JSObject * obj_, jsid id, jsval * vp, PRBool *_retval)
-{
-    NS_ENSURE_ARG_POINTER(vp);
-    NS_ENSURE_ARG_POINTER(_retval);
-
-    if (JSID_IS_STRING(id)) {
-        size_t length;
-        JSString *idString = JSID_TO_STRING(id);
-        const jschar *str = JS_GetStringCharsAndLength(cx, idString, &length);
-
-        nsDependentString const val(reinterpret_cast<PRUnichar const*>(str), length);
-
-        if (val.EqualsLiteral("jsDate")) {
-            PRTime tmp, thousand;
-            jsdouble msec;
-            LL_I2L(thousand, 1000);
-            LL_DIV(tmp, mNativeTime, thousand);
-            LL_L2D(msec, tmp);
-            ensureTimezone();
-
-            JSObject *obj;
-            PRBool b;
-            if (NS_SUCCEEDED(mTimezone->GetIsFloating(&b)) && b) {
-                obj = js_NewDateObject(cx, mYear, mMonth, mDay, mHour, mMinute, mSecond);
-            } else {
-                obj = js_NewDateObjectMsec(cx, msec);
-            }
-
-            *vp = OBJECT_TO_JSVAL(obj);
-            *_retval = PR_TRUE;
-            return NS_SUCCESS_I_DID_SOMETHING;
-        }
+    JSObject* obj;
+    bool b;
+    if (NS_SUCCEEDED(mTimezone->GetIsFloating(&b)) && b) {
+        obj = JS_NewDateObject(aCx, mYear, mMonth, mDay, mHour, mMinute, mSecond);
+    } else {
+        obj = JS_NewDateObjectMsec(aCx, msec);
     }
 
-    *_retval = PR_TRUE;
+    *aResult = JS::ObjectOrNullValue(obj);
     return NS_OK;
 }
 
-
-/* PRBool setProperty (in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj, in jsid id, in JSValPtr vp); */
 NS_IMETHODIMP
-calDateTime::SetProperty(nsIXPConnectWrappedNative *wrapper, JSContext * cx,
-                         JSObject * obj, jsid id, jsval * vp, PRBool *_retval)
+calDateTime::SetJsDate(JSContext* aCx, const JS::Value& aDate)
 {
-    NS_ENSURE_ARG_POINTER(_retval);
-
-    if (JSID_IS_STRING(id)) {
-        size_t length;
-        JSString *idString = JSID_TO_STRING(id);
-        const jschar *str = JS_GetStringCharsAndLength(cx, idString, &length);
-
-        nsDependentString const val(reinterpret_cast<PRUnichar const*>(str), length);
-
-        if (val.EqualsLiteral("jsDate") && vp) {
-            JSObject *dobj;
-            if (!JSVAL_IS_OBJECT(*vp) ||
-                !js_DateIsValid(cx, (dobj = JSVAL_TO_OBJECT(*vp)))) {
-                mIsValid = PR_FALSE;
-            } else {
-                jsdouble utcMsec = js_DateGetMsecSinceEpoch(cx, dobj);
-                PRTime utcTime, thousands;
-                LL_F2L(utcTime, utcMsec);
-                LL_I2L(thousands, 1000);
-                LL_MUL(utcTime, utcTime, thousands);
-
-                nsresult rv = SetNativeTime(utcTime);
-                if (NS_SUCCEEDED(rv)) {
-                    mIsValid = PR_TRUE;
-                } else {
-                    mIsValid = PR_FALSE;
-                }
-            }
-
-            *_retval = PR_TRUE;
-            return NS_SUCCESS_I_DID_SOMETHING;
-        }
-    }
-    *_retval = PR_TRUE;
-    return NS_OK;
-}
-
-/* void preCreate (in nsISupports nativeObj, in JSContextPtr cx, in JSObjectPtr globalObj, out JSObjectPtr parentObj); */
-NS_IMETHODIMP
-calDateTime::PreCreate(nsISupports *nativeObj, JSContext * cx,
-                       JSObject * globalObj, JSObject * *parentObj)
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-/* void create (in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj); */
-NS_IMETHODIMP
-calDateTime::Create(nsIXPConnectWrappedNative *wrapper, JSContext * cx, JSObject * obj)
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-/* void postCreate (in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj); */
-NS_IMETHODIMP
-calDateTime::PostCreate(nsIXPConnectWrappedNative *wrapper, JSContext * cx, JSObject * obj)
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-calDateTime::PostCreatePrototype(JSContext * cx, JSObject * proto)
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-/* PRBool addProperty (in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj, in jsid id, in JSValPtr vp); */
-NS_IMETHODIMP
-calDateTime::AddProperty(nsIXPConnectWrappedNative *wrapper, JSContext * cx,
-                         JSObject * obj, jsid id, jsval * vp, PRBool *_retval)
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-/* PRBool delProperty (in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj, in jsid id, in JSValPtr vp); */
-NS_IMETHODIMP
-calDateTime::DelProperty(nsIXPConnectWrappedNative *wrapper, JSContext * cx,
-                         JSObject * obj, jsid id, jsval * vp, PRBool *_retval)
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-/* PRBool enumerate (in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj); */
-NS_IMETHODIMP
-calDateTime::Enumerate(nsIXPConnectWrappedNative *wrapper, JSContext * cx,
-                       JSObject * obj, PRBool *_retval)
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-/* PRBool newEnumerate (in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj, in PRUint32 enum_op, in JSValPtr statep, out JSID idp); */
-NS_IMETHODIMP
-calDateTime::NewEnumerate(nsIXPConnectWrappedNative *wrapper, JSContext * cx,
-                          JSObject * obj, PRUint32 enum_op, jsval * statep, jsid *idp, PRBool *_retval)
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-/* PRBool newResolve (in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj, in jsid id, in PRUint32 flags, out JSObjectPtr objp); */
-NS_IMETHODIMP
-calDateTime::NewResolve(nsIXPConnectWrappedNative *wrapper, JSContext * cx,
-                        JSObject * obj, jsid id, PRUint32 flags,
-                        JSObject * *objp, PRBool *_retval)
-{
-    NS_ENSURE_ARG_POINTER(objp);
-    NS_ENSURE_ARG_POINTER(_retval);
-
-    if (JSID_IS_STRING(id)) {
-        size_t length;
-        JSString *idString = JSID_TO_STRING(id);
-        const jschar *str = JS_GetStringCharsAndLength(cx, idString, &length);
-
-        nsDependentString const name(reinterpret_cast<PRUnichar const*>(str), length);
-
-        if (name.EqualsLiteral("jsDate")) {
-            *_retval = JS_DefineUCProperty(cx, obj, str,
-                                           length,
-                                           JSVAL_VOID,
-                                           nsnull, nsnull, 0);
-            *objp = obj;
-            return *_retval ? NS_OK : NS_ERROR_FAILURE;
-        }
+    if (!aDate.isObject()) {
+        mIsValid = false;
+        return NS_OK;
     }
 
-    *_retval = PR_TRUE;
+    JSObject* dobj = js::UnwrapObjectChecked(aCx, JSVAL_TO_OBJECT(aDate));
+    JSAutoCompartment ac(aCx, dobj);
+
+    if (!JS_ObjectIsDate(aCx, dobj) || !js_DateIsValid(aCx, dobj)) {
+        mIsValid = false;
+        return NS_OK;
+    }
+
+    PRTime utcTime = PRTime(js_DateGetMsecSinceEpoch(aCx, dobj)) * 1000;
+    mIsValid = NS_SUCCEEDED(SetNativeTime(utcTime));
     return NS_OK;
-}
-
-/* PRBool convert (in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj, in PRUint32 type, in JSValPtr vp); */
-NS_IMETHODIMP
-calDateTime::Convert(nsIXPConnectWrappedNative *wrapper, JSContext * cx,
-                     JSObject * obj, PRUint32 type, jsval * vp, PRBool *_retval)
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-/* void finalize (in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj); */
-NS_IMETHODIMP
-calDateTime::Finalize(nsIXPConnectWrappedNative *wrapper, JSContext * cx, JSObject * obj)
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-/* PRBool checkAccess (in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj, in jsid id, in PRUint32 mode, in JSValPtr vp); */
-NS_IMETHODIMP
-calDateTime::CheckAccess(nsIXPConnectWrappedNative *wrapper, JSContext * cx,
-                         JSObject * obj, jsid id, PRUint32 mode, jsval * vp, PRBool *_retval)
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-/* PRBool call (in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj, in PRUint32 argc, in JSValPtr argv, in JSValPtr vp); */
-NS_IMETHODIMP
-calDateTime::Call(nsIXPConnectWrappedNative *wrapper, JSContext * cx,
-                  JSObject * obj, PRUint32 argc, jsval * argv, jsval * vp, PRBool *_retval)
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-/* PRBool construct (in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj, in PRUint32 argc, in JSValPtr argv, in JSValPtr vp); */
-NS_IMETHODIMP
-calDateTime::Construct(nsIXPConnectWrappedNative *wrapper, JSContext * cx,
-                       JSObject * obj, PRUint32 argc, jsval * argv, jsval * vp, PRBool *_retval)
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-/* PRBool hasInstance (in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj, in JSVal val, out PRBool bp); */
-NS_IMETHODIMP
-calDateTime::HasInstance(nsIXPConnectWrappedNative *wrapper, JSContext * cx,
-                         JSObject * obj, const jsval &val, PRBool *bp, PRBool *_retval)
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-/* void trace (in nsIXPConnectWrappedNative wrapper, in JSTracePtr trc, in JSObjectPtr obj); */
-NS_IMETHODIMP
-calDateTime::Trace(nsIXPConnectWrappedNative *wrapper, JSTracer *trc, JSObject *obj)
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-/* PRBool equality(in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj, in JSVal val); */
-NS_IMETHODIMP
-calDateTime::Equality(nsIXPConnectWrappedNative *wrapper, JSContext *cx,
-                      JSObject *obj, const jsval &val, PRBool *_retval)
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-/* JSObjectPtr outerObject(in nsIXPConnectWrappedNative wrapper, in JSContextPtr cx, in JSObjectPtr obj); */
-NS_IMETHODIMP
-calDateTime::OuterObject(nsIXPConnectWrappedNative *wrapper, JSContext *cx,
-                         JSObject *obj, JSObject **_retval)
-{
-    return NS_ERROR_NOT_IMPLEMENTED;
 }

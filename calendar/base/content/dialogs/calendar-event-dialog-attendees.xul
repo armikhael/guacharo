@@ -1,43 +1,10 @@
 <?xml version="1.0"?>
-<!-- ***** BEGIN LICENSE BLOCK *****
-   - Version: MPL 1.1/GPL 2.0/LGPL 2.1
-   -
-   - The contents of this file are subject to the Mozilla Public License Version
-   - 1.1 (the "License"); you may not use this file except in compliance with
-   - the License. You may obtain a copy of the License at
-   - http://www.mozilla.org/MPL/
-   -
-   - Software distributed under the License is distributed on an "AS IS" basis,
-   - WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-   - for the specific language governing rights and limitations under the
-   - License.
-   -
-   - The Original Code is Sun Microsystems code.
-   -
-   - The Initial Developer of the Original Code is Sun Microsystems.
-   - Portions created by the Initial Developer are Copyright (C) 2006
-   - the Initial Developer. All Rights Reserved.
-   -
-   - Contributor(s):
-   -   Michael Buettner <michael.buettner@sun.com>
-   -   Simon Vaillancourt <simon.at.orcl@gmail.com>   
-   -   Stefan Sitter <ssitter@gmail.com>
-   -
-   - Alternatively, the contents of this file may be used under the terms of
-   - either the GNU General Public License Version 2 or later (the "GPL"), or
-   - the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-   - in which case the provisions of the GPL or the LGPL are applicable instead
-   - of those above. If you wish to allow use of your version of this file only
-   - under the terms of either the GPL or the LGPL, and not to allow others to
-   - use your version of this file under the terms of the MPL, indicate your
-   - decision by deleting the provisions above and replace them with the notice
-   - and other provisions required by the GPL or the LGPL. If you do not delete
-   - the provisions above, a recipient may use your version of this file under
-   - the terms of any one of the MPL, the GPL or the LGPL.
-   -
-   - ***** END LICENSE BLOCK ***** -->
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
 
 <?xml-stylesheet type="text/css" href="chrome://global/skin/global.css"?>
+<?xml-stylesheet type="text/css" href="chrome://calendar/skin/calendar-attendees.css"?>
 <?xml-stylesheet type="text/css" href="chrome://calendar/skin/calendar-event-dialog.css"?>
 <?xml-stylesheet type="text/css" href="chrome://calendar/content/calendar-event-dialog.css"?>
 <?xml-stylesheet type="text/css" href="chrome://calendar/content/datetimepickers/datetimepickers.css"?>
@@ -148,36 +115,47 @@
             <row align="center">
               <image class="role-icon" role="REQ-PARTICIPANT"/>
               <label value="&event.attendee.role.required;"/>
+              <image class="usertype-icon" cutype="INDIVIDUAL"/>
+              <label value="&event.attendee.usertype.individual;"/>
               <box class="legend" status="FREE"/>
               <label value="&event.freebusy.legend.free;"/>
-              <box class="legend" status="UNKNOWN"/>
-              <label value="&event.freebusy.legend.unknown;"/>
             </row>
             <row align="center">
               <image class="role-icon" role="OPT-PARTICIPANT"/>
               <label value="&event.attendee.role.optional;"/>
+              <image class="usertype-icon" cutype="GROUP"/>
+              <label value="&event.attendee.usertype.group;"/>
               <box class="legend" status="BUSY_TENTATIVE"/>
               <label value="&event.freebusy.legend.busy_tentative;"/>
             </row>
             <row align="center">
               <image class="role-icon" role="CHAIR"/>
               <label value="&event.attendee.role.chair;"/>
+              <image class="usertype-icon" cutype="RESOURCE"/>
+              <label value="&event.attendee.usertype.resource;"/>
               <box class="legend" status="BUSY"/>
               <label value="&event.freebusy.legend.busy;"/>
             </row>
             <row align="center">
               <image class="role-icon" role="NON-PARTICIPANT"/>
               <label value="&event.attendee.role.nonparticipant;"/>
+              <image class="usertype-icon" cutype="ROOM"/>
+              <label value="&event.attendee.usertype.room;"/>
               <box class="legend" status="BUSY_UNAVAILABLE"/>
               <label value="&event.freebusy.legend.busy_unavailable;"/>
+            </row>
+            <row align="center">
+              <spacer/>
+              <spacer/>
+              <spacer/>
+              <spacer/>
+              <box class="legend" status="UNKNOWN"/>
+              <label value="&event.freebusy.legend.unknown;"/>
             </row>
           </rows>
         </grid>
       </hbox>
       <hbox align="center">
-          <button label="&event.freebusy.minus;" oncommand="onMinus();"/>
-          <button label="&event.freebusy.plus;"  oncommand="onPlus();"/>
-          <spacer/>
           <label value="&event.organizer.label;"
                  collapsed="true"
                  disabled="true"

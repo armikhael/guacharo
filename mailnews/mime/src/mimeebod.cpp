@@ -1,40 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #include "nsCOMPtr.h"
 #include "nsIURL.h"
 #include "mimeebod.h"
@@ -60,14 +27,14 @@ extern MimeObjectClass mimeMultipartAppleDoubleClass;
 
 static int MimeExternalBody_initialize (MimeObject *);
 static void MimeExternalBody_finalize (MimeObject *);
-static int MimeExternalBody_parse_line (const char *, PRInt32, MimeObject *);
-static int MimeExternalBody_parse_eof (MimeObject *, PRBool);
-static PRBool MimeExternalBody_displayable_inline_p (MimeObjectClass *clazz,
+static int MimeExternalBody_parse_line (const char *, int32_t, MimeObject *);
+static int MimeExternalBody_parse_eof (MimeObject *, bool);
+static bool MimeExternalBody_displayable_inline_p (MimeObjectClass *clazz,
                             MimeHeaders *hdrs);
 
 #if 0
 #if defined(DEBUG) && defined(XP_UNIX)
-static int MimeExternalBody_debug_print (MimeObject *, PRFileDesc *, PRInt32);
+static int MimeExternalBody_debug_print (MimeObject *, PRFileDesc *, int32_t);
 #endif
 #endif /* 0 */
 
@@ -114,7 +81,7 @@ MimeExternalBody_finalize (MimeObject *object)
 }
 
 static int
-MimeExternalBody_parse_line (const char *line, PRInt32 length, MimeObject *obj)
+MimeExternalBody_parse_line (const char *line, int32_t length, MimeObject *obj)
 {
   MimeExternalBody *bod = (MimeExternalBody *) obj;
   int status = 0;
@@ -129,7 +96,7 @@ MimeExternalBody_parse_line (const char *line, PRInt32 length, MimeObject *obj)
   if (obj->options &&
     !obj->options->write_html_p &&
     obj->options->output_fn)
-  return MimeObject_write(obj, line, length, PR_TRUE);
+  return MimeObject_write(obj, line, length, true);
 
 
   /* If we already have a `body' then we're done parsing headers, and all
@@ -178,7 +145,7 @@ MimeExternalBody_make_url(const char *ct,
               const char *svr, const char *subj, const char *body)
 {
   char *s;
-  PRUint32 slen;
+  uint32_t slen;
   if (!at)
   {
     return 0;
@@ -209,8 +176,8 @@ MimeExternalBody_make_url(const char *ct,
 #ifdef XP_UNIX
     if (!PL_strcasecmp(at, "afs"))   /* only if there is a /afs/ directory */
     {
-      nsCOMPtr <nsILocalFile> fs = do_CreateInstance(NS_LOCAL_FILE_CONTRACTID);
-      PRBool exists = PR_FALSE;
+      nsCOMPtr <nsIFile> fs = do_CreateInstance(NS_LOCAL_FILE_CONTRACTID);
+      bool exists = false;
       if (fs)
       {
         fs->InitWithNativePath(NS_LITERAL_CSTRING("/afs/."));
@@ -274,7 +241,7 @@ else if (!PL_strcasecmp(at, "url"))      /* RFC 2017 */
 }
 
 static int
-MimeExternalBody_parse_eof (MimeObject *obj, PRBool abort_p)
+MimeExternalBody_parse_eof (MimeObject *obj, bool abort_p)
 {
   int status = 0;
   MimeExternalBody *bod = (MimeExternalBody *) obj;
@@ -296,11 +263,11 @@ MimeExternalBody_parse_eof (MimeObject *obj, PRBool abort_p)
       obj->options &&
       obj->options->write_html_p)
   {
-    PRBool all_headers_p = obj->options->headers == MimeHeadersAll;
+    bool all_headers_p = obj->options->headers == MimeHeadersAll;
     MimeDisplayOptions *newopt = obj->options;  /* copy it */
 
     char *ct = MimeHeaders_get(obj->headers, HEADER_CONTENT_TYPE,
-                               PR_FALSE, PR_FALSE);
+                               false, false);
     char *at, *lexp, *size, *perm;
     char *url, *dir, *mode, *name, *site, *svr, *subj;
     char *h = 0, *lname = 0, *lurl = 0, *body = 0;
@@ -323,9 +290,9 @@ MimeExternalBody_parse_eof (MimeObject *obj, PRBool abort_p)
 
     /* the *internal* content-type */
     ct = MimeHeaders_get(bod->hdrs, HEADER_CONTENT_TYPE,
-                         PR_TRUE, PR_FALSE);
+                         true, false);
 						 
-    PRUint32 hlen = ((at ? strlen(at) : 0) +
+    uint32_t hlen = ((at ? strlen(at) : 0) +
                     (lexp ? strlen(lexp) : 0) +
                     (size ? strlen(size) : 0) +
                     (perm ? strlen(perm) : 0) +
@@ -402,10 +369,10 @@ MimeExternalBody_parse_eof (MimeObject *obj, PRBool abort_p)
     else
     {
       lname = MimeGetStringByID(MIME_MSG_DOCUMENT_INFO);
-      all_headers_p = PR_TRUE;
+      all_headers_p = true;
     }
 
-    all_headers_p = PR_TRUE;  /* #### just do this all the time? */
+    all_headers_p = true;  /* #### just do this all the time? */
 
     if (bod->body && all_headers_p)
     {
@@ -416,7 +383,7 @@ MimeExternalBody_parse_eof (MimeObject *obj, PRBool abort_p)
         char *s2;
         const char *pre = "<P><PRE>";
         const char *suf = "</PRE>";
-        PRInt32 i;
+        int32_t i;
         for(i = strlen(s)-1; i >= 0 && IS_SPACE(s[i]); i--)
           s[i] = 0;
         s2 = MsgEscapeHTML(s);
@@ -434,7 +401,7 @@ MimeExternalBody_parse_eof (MimeObject *obj, PRBool abort_p)
       }
     }
 
-    newopt->fancy_headers_p = PR_TRUE;
+    newopt->fancy_headers_p = true;
     newopt->headers = (all_headers_p ? MimeHeadersAll : MimeHeadersSome);
 
 FAIL:
@@ -468,7 +435,7 @@ done:
 #if 0
 #if defined(DEBUG) && defined(XP_UNIX)
 static int
-MimeExternalBody_debug_print (MimeObject *obj, PRFileDesc *stream, PRInt32 depth)
+MimeExternalBody_debug_print (MimeObject *obj, PRFileDesc *stream, int32_t depth)
 {
   MimeExternalBody *bod = (MimeExternalBody *) obj;
   int i;
@@ -476,9 +443,9 @@ MimeExternalBody_debug_print (MimeObject *obj, PRFileDesc *stream, PRInt32 depth
   char *addr = mime_part_address(obj);
 
   if (obj->headers)
-  ct = MimeHeaders_get (obj->headers, HEADER_CONTENT_TYPE, PR_FALSE, PR_FALSE);
+  ct = MimeHeaders_get (obj->headers, HEADER_CONTENT_TYPE, false, false);
   if (bod->hdrs)
-  ct2 = MimeHeaders_get (bod->hdrs, HEADER_CONTENT_TYPE, PR_FALSE, PR_FALSE);
+  ct2 = MimeHeaders_get (bod->hdrs, HEADER_CONTENT_TYPE, false, false);
 
   for (i=0; i < depth; i++)
   PR_Write(stream, "  ", 2);
@@ -493,7 +460,7 @@ MimeExternalBody_debug_print (MimeObject *obj, PRFileDesc *stream, PRInt32 depth
       ct ? ct : "<none>",
       ct2 ? ct2 : "<none>",
       bod->body ? bod->body : "<none>",
-      (PRUint32) obj);
+      (uint32_t) obj);
 ***/
   PR_FREEIF(addr);
   PR_FREEIF(ct);
@@ -503,13 +470,13 @@ MimeExternalBody_debug_print (MimeObject *obj, PRFileDesc *stream, PRInt32 depth
 #endif
 #endif /* 0 */
 
-static PRBool
+static bool
 MimeExternalBody_displayable_inline_p (MimeObjectClass *clazz,
                      MimeHeaders *hdrs)
 {
-  char *ct = MimeHeaders_get (hdrs, HEADER_CONTENT_TYPE, PR_FALSE, PR_FALSE);
+  char *ct = MimeHeaders_get (hdrs, HEADER_CONTENT_TYPE, false, false);
   char *at = MimeHeaders_get_parameter(ct, "access-type", NULL, NULL);
-  PRBool inline_p = PR_FALSE;
+  bool inline_p = false;
 
   if (!at)
   ;
@@ -518,12 +485,12 @@ MimeExternalBody_displayable_inline_p (MimeObjectClass *clazz,
        !PL_strcasecmp(at, "local-file") ||
        !PL_strcasecmp(at, "mail-server") ||
        !PL_strcasecmp(at, "url"))
-  inline_p = PR_TRUE;
+  inline_p = true;
 #ifdef XP_UNIX
   else if (!PL_strcasecmp(at, "afs"))   /* only if there is a /afs/ directory */
   {
-    nsCOMPtr <nsILocalFile> fs = do_CreateInstance(NS_LOCAL_FILE_CONTRACTID);
-    PRBool exists = PR_FALSE;
+    nsCOMPtr <nsIFile> fs = do_CreateInstance(NS_LOCAL_FILE_CONTRACTID);
+    bool exists = false;
     if (fs)
     {
       fs->InitWithNativePath(NS_LITERAL_CSTRING("/afs/."));
@@ -532,7 +499,7 @@ MimeExternalBody_displayable_inline_p (MimeObjectClass *clazz,
     if  (!exists)
       return 0;
 
-    inline_p = PR_TRUE;
+    inline_p = true;
   }
 #endif /* XP_UNIX */
 

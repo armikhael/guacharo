@@ -1,42 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Bookmarks Sync.
- *
- * The Initial Developer of the Original Code is Mozilla.
- * Portions created by the Initial Developer are Copyright (C) 2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Dan Mills <thunder@mozilla.com>
- *  Myk Melez <myk@mozilla.org>
- *  Anant Narayanan <anant@kix.in>
- *  Philipp von Weitershausen <philipp@weitershausen.de>
- *  Richard Newman <rnewman@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 const EXPORTED_SYMBOLS = ['Engines', 'Engine', 'SyncEngine',
                           'Tracker', 'Store'];
@@ -46,12 +10,12 @@ const Ci = Components.interfaces;
 const Cr = Components.results;
 const Cu = Components.utils;
 
-Cu.import("resource://services-sync/async.js");
+Cu.import("resource://services-common/async.js");
 Cu.import("resource://services-sync/record.js");
 Cu.import("resource://services-sync/constants.js");
-Cu.import("resource://services-sync/ext/Observers.js");
+Cu.import("resource://services-common/observers.js");
 Cu.import("resource://services-sync/identity.js");
-Cu.import("resource://services-sync/log4moz.js");
+Cu.import("resource://services-common/log4moz.js");
 Cu.import("resource://services-sync/resource.js");
 Cu.import("resource://services-sync/util.js");
 
@@ -181,9 +145,24 @@ Tracker.prototype = {
 
 
 
-/*
- * Data Stores
- * These can wrap, serialize items and apply commands
+/**
+ * The Store serves as the interface between Sync and stored data.
+ *
+ * The name "store" is slightly a misnomer because it doesn't actually "store"
+ * anything. Instead, it serves as a gateway to something that actually does
+ * the "storing."
+ *
+ * The store is responsible for record management inside an engine. It tells
+ * Sync what items are available for Sync, converts items to and from Sync's
+ * record format, and applies records from Sync into changes on the underlying
+ * store.
+ *
+ * Store implementations require a number of functions to be implemented. These
+ * are all documented below.
+ *
+ * For stores that deal with many records or which have expensive store access
+ * routines, it is highly recommended to implement a custom applyIncomingBatch
+ * and/or applyIncoming function on top of the basic APIs.
  */
 
 function Store(name) {
@@ -206,6 +185,21 @@ Store.prototype = {
     Async.waitForSyncCallback(cb);
   },
 
+  /**
+   * Apply multiple incoming records against the store.
+   *
+   * This is called with a set of incoming records to process. The function
+   * should look at each record, reconcile with the current local state, and
+   * make the local changes required to bring its state in alignment with the
+   * record.
+   *
+   * The default implementation simply iterates over all records and calls
+   * applyIncoming(). Store implementations may overwrite this function
+   * if desired.
+   *
+   * @param  records Array of records to apply
+   * @return Array of record IDs which did not apply cleanly
+   */
   applyIncomingBatch: function applyIncomingBatch(records) {
     let failed = [];
     for each (let record in records) {
@@ -225,6 +219,19 @@ Store.prototype = {
     return failed;
   },
 
+  /**
+   * Apply a single record against the store.
+   *
+   * This takes a single record and makes the local changes required so the
+   * local state matches what's in the record.
+   *
+   * The default implementation calls one of remove(), create(), or update()
+   * depending on the state obtained from the store itself. Store
+   * implementations may overwrite this function if desired.
+   *
+   * @param record
+   *        Record to apply
+   */
   applyIncoming: function Store_applyIncoming(record) {
     if (record.deleted)
       this.remove(record);
@@ -236,34 +243,109 @@ Store.prototype = {
 
   // override these in derived objects
 
+  /**
+   * Create an item in the store from a record.
+   *
+   * This is called by the default implementation of applyIncoming(). If using
+   * applyIncomingBatch(), this won't be called unless your store calls it.
+   *
+   * @param record
+   *        The store record to create an item from
+   */
   create: function Store_create(record) {
     throw "override create in a subclass";
   },
 
+  /**
+   * Remove an item in the store from a record.
+   *
+   * This is called by the default implementation of applyIncoming(). If using
+   * applyIncomingBatch(), this won't be called unless your store calls it.
+   *
+   * @param record
+   *        The store record to delete an item from
+   */
   remove: function Store_remove(record) {
     throw "override remove in a subclass";
   },
 
+  /**
+   * Update an item from a record.
+   *
+   * This is called by the default implementation of applyIncoming(). If using
+   * applyIncomingBatch(), this won't be called unless your store calls it.
+   *
+   * @param record
+   *        The record to use to update an item from
+   */
   update: function Store_update(record) {
     throw "override update in a subclass";
   },
 
+  /**
+   * Determine whether a record with the specified ID exists.
+   *
+   * Takes a string record ID and returns a booleans saying whether the record
+   * exists.
+   *
+   * @param  id
+   *         string record ID
+   * @return boolean indicating whether record exists locally
+   */
   itemExists: function Store_itemExists(id) {
     throw "override itemExists in a subclass";
   },
 
+  /**
+   * Create a record from the specified ID.
+   *
+   * If the ID is known, the record should be populated with metadata from
+   * the store. If the ID is not known, the record should be created with the
+   * delete field set to true.
+   *
+   * @param  id
+   *         string record ID
+   * @param  collection
+   *         Collection to add record to. This is typically passed into the
+   *         constructor for the newly-created record.
+   * @return record type for this engine
+   */
   createRecord: function Store_createRecord(id, collection) {
     throw "override createRecord in a subclass";
   },
 
+  /**
+   * Change the ID of a record.
+   *
+   * @param  oldID
+   *         string old/current record ID
+   * @param  newID
+   *         string new record ID
+   */
   changeItemID: function Store_changeItemID(oldID, newID) {
     throw "override changeItemID in a subclass";
   },
 
+  /**
+   * Obtain the set of all known record IDs.
+   *
+   * @return Object with ID strings as keys and values of true. The values
+   *         are ignored.
+   */
   getAllIDs: function Store_getAllIDs() {
     throw "override getAllIDs in a subclass";
   },
 
+  /**
+   * Wipe all data in the store.
+   *
+   * This function is called during remote wipes or when replacing local data
+   * with remote data.
+   *
+   * This function should delete all local data that the store is managing. It
+   * can be thought of as clearing out all state and restoring the "new
+   * browser" state.
+   */
   wipe: function Store_wipe() {
     throw "override wipe in a subclass";
   }
@@ -285,7 +367,7 @@ function EngineManagerSvc() {
 EngineManagerSvc.prototype = {
   get: function EngMgr_get(name) {
     // Return an array of engines if we have an array of names
-    if (Utils.isArray(name)) {
+    if (Array.isArray(name)) {
       let engines = [];
       name.forEach(function(name) {
         let engine = this.get(name);
@@ -319,7 +401,7 @@ EngineManagerSvc.prototype = {
    * @return The engine object if anything failed
    */
   register: function EngMgr_register(engineObject) {
-    if (Utils.isArray(engineObject))
+    if (Array.isArray(engineObject))
       return engineObject.map(this.register, this);
 
     try {
@@ -455,7 +537,7 @@ SyncEngine.prototype = {
   applyIncomingBatchSize: DEFAULT_STORE_BATCH_SIZE,
 
   get storageURL() Svc.Prefs.get("clusterURL") + SYNC_API_VERSION +
-    "/" + ID.get("WeaveID").username + "/storage/",
+    "/" + Identity.username + "/storage/",
 
   get engineURL() this.storageURL + this.name,
 
@@ -606,7 +688,7 @@ SyncEngine.prototype = {
     // Delete any existing data and reupload on bad version or missing meta.
     // No crypto component here...? We could regenerate per-collection keys...
     if (needsWipe) {
-      this.wipeServer(true);
+      this.wipeServer();
     }
 
     // Save objects that need to be uploaded in this._modified. We also save
@@ -622,17 +704,15 @@ SyncEngine.prototype = {
       // Mark all items to be uploaded, but treat them as changed from long ago
       this._log.debug("First sync, uploading all items");
       this._modified = {};
-      for (let id in this._store.getAllIDs())
+      for (let id in this._store.getAllIDs()) {
         this._modified[id] = 0;
+      }
     }
     // Clear the tracker now. If the sync fails we'll add the ones we failed
     // to upload back.
     this._tracker.clearChangedIDs();
- 
-    // Array of just the IDs from this._modified. This is what we iterate over
-    // so we can modify this._modified during the iteration.
-    this._modifiedIDs = [id for (id in this._modified)];
-    this._log.info(this._modifiedIDs.length +
+
+    this._log.info(Object.keys(this._modified).length +
                    " outgoing items pre-reconciliation");
 
     // Keep track of what to delete at the end of sync
@@ -652,7 +732,7 @@ SyncEngine.prototype = {
       batchSize = MOBILE_BATCH_SIZE;
     }
     newitems.newer = this.lastSync;
-    newitems.full = true;
+    newitems.full  = true;
     newitems.limit = batchSize;
     
     // applied    => number of items that should be applied.
@@ -876,8 +956,10 @@ SyncEngine.prototype = {
     doApplyBatchAndPersistFailed.call(this);
 
     count.newFailed = Utils.arraySub(this.previousFailed, failedInPreviousSync).length;
+    count.succeeded = Math.max(0, count.applied - count.failed);
     this._log.info(["Records:",
                     count.applied, "applied,",
+                    count.succeeded, "successfully,",
                     count.failed, "failed to apply,",
                     count.newFailed, "newly failed to apply,",
                     count.reconciled, "reconciled."].join(" "));
@@ -894,19 +976,6 @@ SyncEngine.prototype = {
     // By default, assume there's no dupe items for the engine
   },
 
-  _isEqual: function SyncEngine__isEqual(item) {
-    let local = this._createRecord(item.id);
-    if (this._log.level <= Log4Moz.Level.Trace)
-      this._log.trace("Local record: " + local);
-    if (Utils.deepEquals(item.cleartext, local.cleartext)) {
-      this._log.trace("Local record is the same");
-      return true;
-    } else {
-      this._log.trace("Local record is different");
-      return false;
-    }
-  },
-
   _deleteId: function _deleteId(id) {
     this._tracker.removeChangedID(id);
 
@@ -917,69 +986,195 @@ SyncEngine.prototype = {
       this._delete.ids.push(id);
   },
 
-  _handleDupe: function _handleDupe(item, dupeId) {
-    // Prefer shorter guids; for ties, just do an ASCII compare
-    let preferLocal = dupeId.length < item.id.length ||
-      (dupeId.length == item.id.length && dupeId < item.id);
-
-    if (preferLocal) {
-      this._log.trace("Preferring local id: " + [dupeId, item.id]);
-      this._deleteId(item.id);
-      item.id = dupeId;
-      this._tracker.addChangedID(dupeId, 0);
-    }
-    else {
-      this._log.trace("Switching local id to incoming: " + [item.id, dupeId]);
-      this._store.changeItemID(dupeId, item.id);
-      this._deleteId(dupeId);
-    }
-  },
-
-  // Reconcile incoming and existing records.  Return true if server
-  // data should be applied.
-  _reconcile: function SyncEngine__reconcile(item) {
-    if (this._log.level <= Log4Moz.Level.Trace)
+  /**
+   * Reconcile incoming record with local state.
+   *
+   * This function essentially determines whether to apply an incoming record.
+   *
+   * @param  item
+   *         Record from server to be tested for application.
+   * @return boolean
+   *         Truthy if incoming record should be applied. False if not.
+   */
+  _reconcile: function _reconcile(item) {
+    if (this._log.level <= Log4Moz.Level.Trace) {
       this._log.trace("Incoming: " + item);
+    }
 
-    this._log.trace("Reconcile step 1: Check for conflicts");
-    if (item.id in this._modified) {
-      // If the incoming and local changes are the same, skip
-      if (this._isEqual(item)) {
-        delete this._modified[item.id];
+    // We start reconciling by collecting a bunch of state. We do this here
+    // because some state may change during the course of this function and we
+    // need to operate on the original values.
+    let existsLocally   = this._store.itemExists(item.id);
+    let locallyModified = item.id in this._modified;
+
+    // TODO Handle clock drift better. Tracked in bug 721181.
+    let remoteAge = AsyncResource.serverTime - item.modified;
+    let localAge  = locallyModified ?
+      (Date.now() / 1000 - this._modified[item.id]) : null;
+    let remoteIsNewer = remoteAge < localAge;
+
+    this._log.trace("Reconciling " + item.id + ". exists=" +
+                    existsLocally + "; modified=" + locallyModified +
+                    "; local age=" + localAge + "; incoming age=" +
+                    remoteAge);
+
+    // We handle deletions first so subsequent logic doesn't have to check
+    // deleted flags.
+    if (item.deleted) {
+      // If the item doesn't exist locally, there is nothing for us to do. We
+      // can't check for duplicates because the incoming record has no data
+      // which can be used for duplicate detection.
+      if (!existsLocally) {
+        this._log.trace("Ignoring incoming item because it was deleted and " +
+                        "the item does not exist locally.");
         return false;
       }
 
-      // Records differ so figure out which to take
-      let recordAge = AsyncResource.serverTime - item.modified;
-      let localAge = Date.now() / 1000 - this._modified[item.id];
-      this._log.trace("Record age vs local age: " + [recordAge, localAge]);
+      // We decide whether to process the deletion by comparing the record
+      // ages. If the item is not modified locally, the remote side wins and
+      // the deletion is processed. If it is modified locally, we take the
+      // newer record.
+      if (!locallyModified) {
+        this._log.trace("Applying incoming delete because the local item " +
+                        "exists and isn't modified.");
+        return true;
+      }
 
-      // Apply the record if the record is newer (server wins)
-      return recordAge < localAge;
+      // TODO As part of bug 720592, determine whether we should do more here.
+      // In the case where the local changes are newer, it is quite possible
+      // that the local client will restore data a remote client had tried to
+      // delete. There might be a good reason for that delete and it might be
+      // enexpected for this client to restore that data.
+      this._log.trace("Incoming record is deleted but we had local changes. " +
+                      "Applying the youngest record.");
+      return remoteIsNewer;
     }
 
-    this._log.trace("Reconcile step 2: Check for updates");
-    if (this._store.itemExists(item.id))
-      return !this._isEqual(item);
+    // At this point the incoming record is not for a deletion and must have
+    // data. If the incoming record does not exist locally, we check for a local
+    // duplicate existing under a different ID. The default implementation of
+    // _findDupe() is empty, so engines have to opt in to this functionality.
+    //
+    // If we find a duplicate, we change the local ID to the incoming ID and we
+    // refresh the metadata collected above. See bug 710448 for the history
+    // of this logic.
+    if (!existsLocally) {
+      let dupeID = this._findDupe(item);
+      if (dupeID) {
+        this._log.trace("Local item " + dupeID + " is a duplicate for " +
+                        "incoming item " + item.id);
 
-    this._log.trace("Reconcile step 2.5: Don't dupe deletes");
-    if (item.deleted)
+        // The local, duplicate ID is always deleted on the server.
+        this._deleteId(dupeID);
+
+        // The current API contract does not mandate that the ID returned by
+        // _findDupe() actually exists. Therefore, we have to perform this
+        // check.
+        existsLocally = this._store.itemExists(dupeID);
+
+        // We unconditionally change the item's ID in case the engine knows of
+        // an item but doesn't expose it through itemExists. If the API
+        // contract were stronger, this could be changed.
+        this._log.debug("Switching local ID to incoming: " + dupeID + " -> " +
+                        item.id);
+        this._store.changeItemID(dupeID, item.id);
+
+        // If the local item was modified, we carry its metadata forward so
+        // appropriate reconciling can be performed.
+        if (dupeID in this._modified) {
+          locallyModified = true;
+          localAge = Date.now() / 1000 - this._modified[dupeID];
+          remoteIsNewer = remoteAge < localAge;
+
+          this._modified[item.id] = this._modified[dupeID];
+          delete this._modified[dupeID];
+        } else {
+          locallyModified = false;
+          localAge = null;
+        }
+
+        this._log.debug("Local item after duplication: age=" + localAge +
+                        "; modified=" + locallyModified + "; exists=" +
+                        existsLocally);
+      } else {
+        this._log.trace("No duplicate found for incoming item: " + item.id);
+      }
+    }
+
+    // At this point we've performed duplicate detection. But, nothing here
+    // should depend on duplicate detection as the above should have updated
+    // state seamlessly.
+
+    if (!existsLocally) {
+      // If the item doesn't exist locally and we have no local modifications
+      // to the item (implying that it was not deleted), always apply the remote
+      // item.
+      if (!locallyModified) {
+        this._log.trace("Applying incoming because local item does not exist " +
+                        "and was not deleted.");
+        return true;
+      }
+
+      // If the item was modified locally but isn't present, it must have
+      // been deleted. If the incoming record is younger, we restore from
+      // that record.
+      if (remoteIsNewer) {
+        this._log.trace("Applying incoming because local item was deleted " +
+                        "before the incoming item was changed.");
+        delete this._modified[item.id];
+        return true;
+      }
+
+      this._log.trace("Ignoring incoming item because the local item's " +
+                      "deletion is newer.");
+      return false;
+    }
+
+    // If the remote and local records are the same, there is nothing to be
+    // done, so we don't do anything. In the ideal world, this logic wouldn't
+    // be here and the engine would take a record and apply it. The reason we
+    // want to defer this logic is because it would avoid a redundant and
+    // possibly expensive dip into the storage layer to query item state.
+    // This should get addressed in the async rewrite, so we ignore it for now.
+    let localRecord = this._createRecord(item.id);
+    let recordsEqual = Utils.deepEquals(item.cleartext,
+                                        localRecord.cleartext);
+
+    // If the records are the same, we don't need to do anything. This does
+    // potentially throw away a local modification time. But, if the records
+    // are the same, does it matter?
+    if (recordsEqual) {
+      this._log.trace("Ignoring incoming item because the local item is " +
+                      "identical.");
+
+      delete this._modified[item.id];
+      return false;
+    }
+
+    // At this point the records are different.
+
+    // If we have no local modifications, always take the server record.
+    if (!locallyModified) {
+      this._log.trace("Applying incoming record because no local conflicts.");
       return true;
+    }
 
-    this._log.trace("Reconcile step 3: Find dupes");
-    let dupeId = this._findDupe(item);
-    if (dupeId)
-      this._handleDupe(item, dupeId);
-
-    // Apply the incoming item (now that the dupe is the right id)
-    return true;
+    // At this point, records are different and the local record is modified.
+    // We resolve conflicts by record age, where the newest one wins. This does
+    // result in data loss and should be handled by giving the engine an
+    // opportunity to merge the records. Bug 720592 tracks this feature.
+    this._log.warn("DATA LOSS: Both local and remote changes to record: " +
+                   item.id);
+    return remoteIsNewer;
   },
 
   // Upload outgoing records
   _uploadOutgoing: function SyncEngine__uploadOutgoing() {
     this._log.trace("Uploading local changes to server.");
-    if (this._modifiedIDs.length) {
-      this._log.trace("Preparing " + this._modifiedIDs.length +
+
+    let modifiedIDs = Object.keys(this._modified);
+    if (modifiedIDs.length) {
+      this._log.trace("Preparing " + modifiedIDs.length +
                       " outgoing records");
 
       // collection we'll upload
@@ -988,8 +1183,8 @@ SyncEngine.prototype = {
 
       // Upload what we've got so far in the collection
       let doUpload = Utils.bind2(this, function(desc) {
-        this._log.info("Uploading " + desc + " of " +
-                       this._modifiedIDs.length + " records");
+        this._log.info("Uploading " + desc + " of " + modifiedIDs.length +
+                       " records");
         let resp = up.post();
         if (!resp.success) {
           this._log.debug("Uploading records failed: " + resp);
@@ -1002,7 +1197,7 @@ SyncEngine.prototype = {
         if (modified > this.lastSync)
           this.lastSync = modified;
 
-        let failed_ids = [id for (id in resp.obj.failed)];
+        let failed_ids = Object.keys(resp.obj.failed);
         if (failed_ids.length)
           this._log.debug("Records that will be uploaded again because "
                           + "the server couldn't store them: "
@@ -1016,7 +1211,7 @@ SyncEngine.prototype = {
         up.clearRecords();
       });
 
-      for each (let id in this._modifiedIDs) {
+      for each (let id in modifiedIDs) {
         try {
           let out = this._createRecord(id);
           if (this._log.level <= Log4Moz.Level.Trace)
@@ -1079,8 +1274,7 @@ SyncEngine.prototype = {
     for (let [id, when] in Iterator(this._modified)) {
       this._tracker.addChangedID(id, when);
     }
-    delete this._modified;
-    delete this._modifiedIDs;
+    this._modified = {};
   },
 
   _sync: function SyncEngine__sync() {
@@ -1129,7 +1323,10 @@ SyncEngine.prototype = {
   },
 
   wipeServer: function wipeServer() {
-    new Resource(this.engineURL).delete();
+    let response = new Resource(this.engineURL).delete();
+    if (response.status != 200 && response.status != 404) {
+      throw response;
+    }
     this._resetClient();
   },
 

@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   David Bienvenu <bienvenu@mozilla.org>
- *   Karsten Düsterloh <mnyromyr@tprac.de>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"
 #include "nsMsgTagService.h"
@@ -61,7 +27,7 @@
 #define TAG_CMP_EQUAL           0
 #define TAG_CMP_GREATER         1
 
-static PRBool gMigratingKeys = PR_FALSE;
+static bool gMigratingKeys = false;
 
 // comparison functions for nsQuickSort
 static int
@@ -157,7 +123,7 @@ NS_IMPL_ISUPPORTS1(nsMsgTagService, nsIMsgTagService)
 
 nsMsgTagService::nsMsgTagService()
 {
-  m_tagPrefBranch = nsnull;
+  m_tagPrefBranch = nullptr;
   nsCOMPtr<nsIPrefService> prefService(do_GetService(NS_PREFSERVICE_CONTRACTID));
   if (prefService)
     prefService->GetBranch("mailnews.tags.", getter_AddRefs(m_tagPrefBranch));
@@ -193,12 +159,12 @@ NS_IMETHODIMP nsMsgTagService::SetTagForKey(const nsACString &key, const nsAStri
 /* void getKeyForTag (in wstring tag); */
 NS_IMETHODIMP nsMsgTagService::GetKeyForTag(const nsAString &aTag, nsACString &aKey)
 {
-  PRUint32 count;
+  uint32_t count;
   char **prefList;
   nsresult rv = m_tagPrefBranch->GetChildList("", &count, &prefList);
   NS_ENSURE_SUCCESS(rv, rv);
   // traverse the list, and look for a pref with the desired tag value.
-  for (PRUint32 i = count; i--;)
+  for (uint32_t i = count; i--;)
   {
     // We are returned the tag prefs in the form "<key>.<tag_data_type>", but
     // since we only want the tags, just check that the string ends with "tag".
@@ -226,9 +192,9 @@ NS_IMETHODIMP nsMsgTagService::GetTopKey(const nsACString & keyList, nsACString 
   // find the most important key
   nsTArray<nsCString> keyArray;
   ParseString(keyList, ' ', keyArray);
-  PRUint32 keyCount = keyArray.Length();
-  nsCString *topKey = nsnull, *key, topOrdinal, ordinal;
-  for (PRUint32 i = 0; i < keyCount; ++i)
+  uint32_t keyCount = keyArray.Length();
+  nsCString *topKey = nullptr, *key, topOrdinal, ordinal;
+  for (uint32_t i = 0; i < keyCount; ++i)
   {
     key = &keyArray[i];
     if (key->IsEmpty())
@@ -292,7 +258,7 @@ NS_IMETHODIMP nsMsgTagService::AddTag(const nsAString  &tag,
   // to normalize all keys to lower case (upper case looks ugly in prefs.js)
   ToLowerCase(key);
   nsCAutoString prefName(key);
-  while (PR_TRUE)
+  while (true)
   {
     nsAutoString tagValue;
     nsresult rv = GetTagForKey(prefName, tagValue);
@@ -300,7 +266,7 @@ NS_IMETHODIMP nsMsgTagService::AddTag(const nsAString  &tag,
       return AddTagForKey(prefName, tag, color, ordinal);
     prefName.Append('A');
   }
-  NS_ASSERTION(PR_FALSE, "can't get here");
+  NS_ASSERTION(false, "can't get here");
   return NS_ERROR_FAILURE;
 }
 
@@ -372,23 +338,23 @@ NS_IMETHODIMP nsMsgTagService::DeleteKey(const nsACString &key)
 }
 
 /* void getAllTags (out unsigned long count, [array, size_is (count), retval] out nsIMsgTag tagArray); */
-NS_IMETHODIMP nsMsgTagService::GetAllTags(PRUint32 *aCount, nsIMsgTag ***aTagArray)
+NS_IMETHODIMP nsMsgTagService::GetAllTags(uint32_t *aCount, nsIMsgTag ***aTagArray)
 {
   NS_ENSURE_ARG_POINTER(aCount);
   NS_ENSURE_ARG_POINTER(aTagArray);
 
   // preset harmless default values
   *aCount = 0;
-  *aTagArray = nsnull;
+  *aTagArray = nullptr;
 
   // get the actual tag definitions
   nsresult rv;
-  PRUint32 prefCount;
+  uint32_t prefCount;
   char **prefList;
   rv = m_tagPrefBranch->GetChildList("", &prefCount, &prefList);
   NS_ENSURE_SUCCESS(rv, rv);
   // sort them by key for ease of processing
-  NS_QuickSort(prefList, prefCount, sizeof(char*), CompareMsgTagKeys, nsnull);
+  NS_QuickSort(prefList, prefCount, sizeof(char*), CompareMsgTagKeys, nullptr);
 
   // build an array of nsIMsgTag elements from the orderered list
   // it's at max the same size as the preflist, but usually only about half
@@ -399,11 +365,11 @@ NS_IMETHODIMP nsMsgTagService::GetAllTags(PRUint32 *aCount, nsIMsgTag ***aTagArr
     NS_FREE_XPCOM_ALLOCATED_POINTER_ARRAY(prefCount, prefList);
     return NS_ERROR_OUT_OF_MEMORY;
   }
-  PRUint32 currentTagIndex = 0;
+  uint32_t currentTagIndex = 0;
   nsMsgTag *newMsgTag;
   nsString tag;
   nsCString lastKey, color, ordinal;
-  for (PRUint32 i = prefCount; i--;)
+  for (uint32_t i = prefCount; i--;)
   {
     // extract just the key from <key>.<info=tag|color|ordinal>
     char *info = strrchr(prefList[i], '.');
@@ -444,7 +410,7 @@ NS_IMETHODIMP nsMsgTagService::GetAllTags(PRUint32 *aCount, nsIMsgTag ***aTagArr
 
   // sort the non-null entries by ordinal
   NS_QuickSort(tagArray, currentTagIndex, sizeof(nsMsgTag*), CompareMsgTags,
-               nsnull);
+               nullptr);
 
   // All done, now return the values (the idl's size_is(count) parameter
   // ensures that the array is cut accordingly).
@@ -501,18 +467,18 @@ nsresult nsMsgTagService::MigrateLabelsToTags()
 {
   nsCString prefString;
 
-  PRInt32 prefVersion = 0;
+  int32_t prefVersion = 0;
   nsresult rv = m_tagPrefBranch->GetIntPref(TAG_PREF_VERSION, &prefVersion);
   if (NS_SUCCEEDED(rv) && prefVersion > 1)
     return rv;
   else if (prefVersion == 1)
   {
-    gMigratingKeys = PR_TRUE;
+    gMigratingKeys = true;
   // need to convert the keys to lower case
     nsIMsgTag **tagArray;
-    PRUint32 numTags;
+    uint32_t numTags;
     GetAllTags(&numTags, &tagArray);
-    for (PRUint32 tagIndex = 0; tagIndex < numTags; tagIndex++)
+    for (uint32_t tagIndex = 0; tagIndex < numTags; tagIndex++)
     {
       nsCAutoString key, color, ordinal;
       nsAutoString tagStr;
@@ -526,7 +492,7 @@ nsresult nsMsgTagService::MigrateLabelsToTags()
       AddTagForKey(key, tagStr, color, ordinal);
     }
     NS_FREE_XPCOM_ISUPPORTS_POINTER_ARRAY(numTags, tagArray);
-    gMigratingKeys = PR_FALSE;
+    gMigratingKeys = false;
   }
   else 
   {
@@ -534,7 +500,7 @@ nsresult nsMsgTagService::MigrateLabelsToTags()
     nsCOMPtr<nsIPrefLocalizedString> pls;
     nsString ucsval;
     nsCAutoString labelKey("$label1");
-    for(PRInt32 i = 0; i < PREF_LABELS_MAX; )
+    for(int32_t i = 0; i < PREF_LABELS_MAX; )
     {
       prefString.Assign(PREF_LABELS_DESCRIPTION);
       prefString.AppendInt(i + 1);
@@ -559,7 +525,7 @@ nsresult nsMsgTagService::MigrateLabelsToTags()
   return rv;
 }
 
-NS_IMETHODIMP nsMsgTagService::IsValidKey(const nsACString &aKey, PRBool *aResult)
+NS_IMETHODIMP nsMsgTagService::IsValidKey(const nsACString &aKey, bool *aResult)
 {
   NS_ENSURE_ARG_POINTER(aResult);
   *aResult = m_keys.Contains(aKey);
@@ -570,12 +536,12 @@ NS_IMETHODIMP nsMsgTagService::IsValidKey(const nsACString &aKey, PRBool *aResul
 nsresult nsMsgTagService::RefreshKeyCache()
 {
   nsIMsgTag **tagArray;
-  PRUint32 numTags;
+  uint32_t numTags;
   nsresult rv = GetAllTags(&numTags, &tagArray);
   NS_ENSURE_SUCCESS(rv, rv);
   m_keys.Clear();
 
-  for (PRUint32 tagIndex = 0; tagIndex < numTags; tagIndex++)
+  for (uint32_t tagIndex = 0; tagIndex < numTags; tagIndex++)
   {
     nsIMsgTag *tag = tagArray[tagIndex];
     if (!tag) {

@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Howard Chu <hyc@symas.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"
 #include "nsTextFormatter.h"
@@ -128,7 +95,7 @@ NS_IMETHODIMP nsMsgSearchAdapter::ClearScope()
   if (m_scope)
   {
     m_scope->CloseInputStream();
-    m_scope = nsnull;
+    m_scope = nullptr;
   }
   return NS_OK;
 }
@@ -144,7 +111,7 @@ NS_IMETHODIMP nsMsgSearchAdapter::Abort ()
   return NS_ERROR_NOT_IMPLEMENTED;
 
 }
-NS_IMETHODIMP nsMsgSearchAdapter::Search (PRBool *aDone)
+NS_IMETHODIMP nsMsgSearchAdapter::Search (bool *aDone)
 {
   return NS_OK;
 }
@@ -155,7 +122,7 @@ NS_IMETHODIMP nsMsgSearchAdapter::SendUrl ()
 }
 
 /* void CurrentUrlDone (in long exitCode); */
-NS_IMETHODIMP nsMsgSearchAdapter::CurrentUrlDone(PRInt32 exitCode)
+NS_IMETHODIMP nsMsgSearchAdapter::CurrentUrlDone(int32_t exitCode)
 {
   // base implementation doesn't need to do anything.
   return NS_OK;
@@ -168,14 +135,14 @@ NS_IMETHODIMP nsMsgSearchAdapter::GetEncoding (char **encoding)
 
 NS_IMETHODIMP nsMsgSearchAdapter::AddResultElement (nsIMsgDBHdr *pHeaders)
 {
-    NS_ASSERTION(PR_FALSE, "shouldn't call this base class impl");
+    NS_ASSERTION(false, "shouldn't call this base class impl");
     return NS_ERROR_FAILURE;
 }
 
 
 NS_IMETHODIMP nsMsgSearchAdapter::AddHit(nsMsgKey key)
 {
-  NS_ASSERTION(PR_FALSE, "shouldn't call this base class impl");
+  NS_ASSERTION(false, "shouldn't call this base class impl");
   return NS_ERROR_FAILURE;
 }
 
@@ -183,7 +150,7 @@ NS_IMETHODIMP nsMsgSearchAdapter::AddHit(nsMsgKey key)
 char *
 nsMsgSearchAdapter::GetImapCharsetParam(const PRUnichar *destCharset)
 {
-  char *result = nsnull;
+  char *result = nullptr;
 
   // Specify a character set unless we happen to be US-ASCII.
   if (NS_strcmp(destCharset, NS_LITERAL_STRING("us-ascii").get()))
@@ -200,7 +167,7 @@ nsMsgSearchAdapter::GetImapCharsetParam(const PRUnichar *destCharset)
 */
 PRUnichar *nsMsgSearchAdapter::EscapeSearchUrl (const PRUnichar *nntpCommand)
 {
-  return nntpCommand ? NS_strdup(nntpCommand) : nsnull;
+  return nntpCommand ? NS_strdup(nntpCommand) : nullptr;
 }
 
 /*
@@ -212,7 +179,7 @@ PRUnichar *nsMsgSearchAdapter::EscapeSearchUrl (const PRUnichar *nntpCommand)
 PRUnichar *
 nsMsgSearchAdapter::EscapeImapSearchProtocol(const PRUnichar *imapCommand)
 {
-  return imapCommand ? NS_strdup(imapCommand) : nsnull;
+  return imapCommand ? NS_strdup(imapCommand) : nullptr;
 }
 
 /*
@@ -224,7 +191,7 @@ nsMsgSearchAdapter::EscapeImapSearchProtocol(const PRUnichar *imapCommand)
 PRUnichar *
 nsMsgSearchAdapter::EscapeQuoteImapSearchProtocol(const PRUnichar *imapCommand)
 {
-  return imapCommand ? NS_strdup(imapCommand) : nsnull;
+  return imapCommand ? NS_strdup(imapCommand) : nullptr;
 }
 
 char *nsMsgSearchAdapter::UnEscapeSearchUrl (const char *commandSpecificData)
@@ -264,7 +231,7 @@ nsMsgSearchAdapter::GetSearchCharsets(nsAString &srcCharset, nsAString &dstChars
 
   if (m_defaultCharset.IsEmpty())
   {
-    m_forceAsciiSearch = PR_FALSE;  // set the default value in case of error
+    m_forceAsciiSearch = false;  // set the default value in case of error
     nsCOMPtr<nsIPrefBranch> prefs(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
     if (NS_SUCCEEDED(rv))
     {
@@ -323,29 +290,31 @@ nsMsgSearchAdapter::GetSearchCharsets(nsAString &srcCharset, nsAString &dstChars
   return NS_OK;
 }
 
-nsresult nsMsgSearchAdapter::EncodeImapTerm (nsIMsgSearchTerm *term, PRBool reallyDredd, const PRUnichar *srcCharset, const PRUnichar *destCharset, char **ppOutTerm)
+nsresult nsMsgSearchAdapter::EncodeImapTerm (nsIMsgSearchTerm *term, bool reallyDredd, const PRUnichar *srcCharset, const PRUnichar *destCharset, char **ppOutTerm)
 {
-  nsresult err = NS_OK;
-  PRBool useNot = PR_FALSE;
-  PRBool useQuotes = PR_FALSE;
-  PRBool ignoreValue = PR_FALSE;
-  nsCAutoString arbitraryHeader;
-  const char *whichMnemonic = nsnull;
-  const char *orHeaderMnemonic = nsnull;
+  NS_ENSURE_ARG_POINTER(term);
+  NS_ENSURE_ARG_POINTER(ppOutTerm);
 
-  *ppOutTerm = nsnull;
+  nsresult err = NS_OK;
+  bool useNot = false;
+  bool useQuotes = false;
+  bool ignoreValue = false;
+  nsCAutoString arbitraryHeader;
+  const char *whichMnemonic = nullptr;
+  const char *orHeaderMnemonic = nullptr;
+
+  *ppOutTerm = nullptr;
 
   nsCOMPtr <nsIMsgSearchValue> searchValue;
   nsresult rv = term->GetValue(getter_AddRefs(searchValue));
 
-  if (NS_FAILED(rv))
-    return rv;
+  NS_ENSURE_SUCCESS(rv,rv);
 
   nsMsgSearchOpValue op;
   term->GetOp(&op);
 
   if (op == nsMsgSearchOp::DoesntContain || op == nsMsgSearchOp::Isnt)
-    useNot = PR_TRUE;
+    useNot = true;
 
   nsMsgSearchAttribValue attrib;
   term->GetAttrib(&attrib);
@@ -377,9 +346,9 @@ nsresult nsMsgSearchAdapter::EncodeImapTerm (nsIMsgSearchTerm *term, PRBool real
       // If we have a future date, the > and < are reversed.
       // e.g. ageInDays > 2 means more than 2 days old ("date before X") whereas
       //      ageInDays > -2 should be more than 2 days in the future ("date after X")
-      PRInt32 ageInDays;
+      int32_t ageInDays;
       searchValue->GetAge(&ageInDays);
-      PRBool dateInFuture = (ageInDays < 0);
+      bool dateInFuture = (ageInDays < 0);
       switch (op)
       {
       case nsMsgSearchOp::IsGreaterThan:
@@ -392,7 +361,7 @@ nsresult nsMsgSearchAdapter::EncodeImapTerm (nsIMsgSearchTerm *term, PRBool real
         whichMnemonic = m_kImapSentOn;
         break;
       default:
-        NS_ASSERTION(PR_FALSE, "invalid search operator");
+        NS_ASSERTION(false, "invalid search operator");
         return NS_ERROR_INVALID_ARG;
       }
     }
@@ -407,7 +376,7 @@ nsresult nsMsgSearchAdapter::EncodeImapTerm (nsIMsgSearchTerm *term, PRBool real
       whichMnemonic = m_kImapSizeSmaller;
       break;
     default:
-      NS_ASSERTION(PR_FALSE, "invalid search operator");
+      NS_ASSERTION(false, "invalid search operator");
       return NS_ERROR_INVALID_ARG;
     }
     break;
@@ -425,7 +394,7 @@ nsresult nsMsgSearchAdapter::EncodeImapTerm (nsIMsgSearchTerm *term, PRBool real
         whichMnemonic = m_kImapSentOn;
         break;
       default:
-        NS_ASSERTION(PR_FALSE, "invalid search operator");
+        NS_ASSERTION(false, "invalid search operator");
         return NS_ERROR_INVALID_ARG;
       }
       break;
@@ -436,9 +405,9 @@ nsresult nsMsgSearchAdapter::EncodeImapTerm (nsIMsgSearchTerm *term, PRBool real
       whichMnemonic = m_kImapKeyword;
       break;
     case nsMsgSearchAttrib::MsgStatus:
-      useNot = PR_FALSE; // bizarrely, NOT SEEN is wrong, but UNSEEN is right.
-      ignoreValue = PR_TRUE; // the mnemonic is all we need
-      PRUint32 status;
+      useNot = false; // bizarrely, NOT SEEN is wrong, but UNSEEN is right.
+      ignoreValue = true; // the mnemonic is all we need
+      uint32_t status;
       searchValue->GetStatus(&status);
 
       switch (status)
@@ -456,7 +425,7 @@ nsresult nsMsgSearchAdapter::EncodeImapTerm (nsIMsgSearchTerm *term, PRBool real
         whichMnemonic = op == nsMsgSearchOp::Is ? m_kImapFlagged : m_kImapNotFlagged;
         break;
       default:
-        NS_ASSERTION(PR_FALSE, "invalid search operator");
+        NS_ASSERTION(false, "invalid search operator");
         return NS_ERROR_INVALID_ARG;
       }
       break;
@@ -477,16 +446,16 @@ nsresult nsMsgSearchAdapter::EncodeImapTerm (nsIMsgSearchTerm *term, PRBool real
       }
       else
       {
-        NS_ASSERTION(PR_FALSE, "invalid search operator");
+        NS_ASSERTION(false, "invalid search operator");
         return NS_ERROR_INVALID_ARG;
       }
     }
 
-    char *value = nsnull;
+    char *value = nullptr;
     char dateBuf[100];
     dateBuf[0] = '\0';
 
-    PRBool valueWasAllocated = PR_FALSE;
+    bool valueWasAllocated = false;
     if (attrib == nsMsgSearchAttrib::Date)
     {
       // note that there used to be code here that encoded an RFC822 date for imap searches.
@@ -503,13 +472,7 @@ nsresult nsMsgSearchAdapter::EncodeImapTerm (nsIMsgSearchTerm *term, PRBool real
         // we need to adjust the date so we get greater than and not greater than or equal to which
         // is what the IMAP server wants to search on
         // won't work on Mac.
-        // ack, is this right? is PRTime seconds or microseconds?
-        PRInt64 microSecondsPerSecond, secondsInDay, microSecondsInDay;
-
-        LL_I2L(microSecondsPerSecond, PR_USEC_PER_SEC);
-        LL_UI2L(secondsInDay, 60 * 60 * 24);
-        LL_MUL(microSecondsInDay, secondsInDay, microSecondsPerSecond);
-        LL_ADD(adjustedDate, adjustedDate, microSecondsInDay); // bump up to the day after this one...
+        adjustedDate += PR_USEC_PER_DAY;
       }
 
       PRExplodedTime exploded;
@@ -524,20 +487,13 @@ nsresult nsMsgSearchAdapter::EncodeImapTerm (nsIMsgSearchTerm *term, PRBool real
       {
         // okay, take the current date, subtract off the age in days, then do an appropriate Date search on
         // the resulting day.
-        PRInt32 ageInDays;
+        int32_t ageInDays;
 
         searchValue->GetAge(&ageInDays);
 
         PRTime now = PR_Now();
-        PRTime matchDay;
+        PRTime matchDay = now - ageInDays * PR_USEC_PER_DAY;
 
-        PRInt64 microSecondsPerSecond, secondsInDays, microSecondsInDay;
-
-        LL_I2L(microSecondsPerSecond, PR_USEC_PER_SEC);
-        LL_I2L(secondsInDays, 60 * 60 * 24 * ageInDays);
-        LL_MUL(microSecondsInDay, secondsInDays, microSecondsPerSecond);
-
-        LL_SUB(matchDay, now, microSecondsInDay); // = now - term->m_value.u.age * 60 * 60 * 24;
         PRExplodedTime exploded;
         PR_ExplodeTime(matchDay, PR_LocalTimeParameters, &exploded);
         PR_FormatTimeUSEnglish(dateBuf, sizeof(dateBuf), "%d-%b-%Y", &exploded);
@@ -546,7 +502,7 @@ nsresult nsMsgSearchAdapter::EncodeImapTerm (nsIMsgSearchTerm *term, PRBool real
       }
       else if (attrib == nsMsgSearchAttrib::Size)
       {
-        PRUint32 sizeValue;
+        uint32_t sizeValue;
         nsCAutoString searchTermValue;
         searchValue->GetSize(&sizeValue);
 
@@ -561,7 +517,7 @@ nsresult nsMsgSearchAdapter::EncodeImapTerm (nsIMsgSearchTerm *term, PRBool real
         searchTermValue.AppendInt(sizeValue);
 
         value = ToNewCString(searchTermValue);
-        valueWasAllocated = PR_TRUE;
+        valueWasAllocated = true;
       }
       else
 
@@ -614,7 +570,7 @@ nsresult nsMsgSearchAdapter::EncodeImapTerm (nsIMsgSearchTerm *term, PRBool real
         else
           value = strdup("");
         NS_Free(convertedValue);
-        valueWasAllocated = PR_TRUE;
+        valueWasAllocated = true;
 
       }
     }
@@ -670,7 +626,7 @@ nsresult nsMsgSearchAdapter::EncodeImapTerm (nsIMsgSearchTerm *term, PRBool real
     return err;
 }
 
-nsresult nsMsgSearchAdapter::EncodeImapValue(char *encoding, const char *value, PRBool useQuotes, PRBool reallyDredd)
+nsresult nsMsgSearchAdapter::EncodeImapValue(char *encoding, const char *value, bool useQuotes, bool reallyDredd)
 {
   // By NNTP RFC, SEARCH HEADER SUBJECT "" is legal and means 'find messages without a subject header'
   if (!reallyDredd)
@@ -684,9 +640,9 @@ nsresult nsMsgSearchAdapter::EncodeImapValue(char *encoding, const char *value, 
   {
     nsCAutoString lengthStr;
     PL_strcat(encoding, "{");
-    lengthStr.AppendInt((PRInt32) strlen(value));
+    lengthStr.AppendInt((int32_t) strlen(value));
     PL_strcat(encoding, lengthStr.get());
-    PL_strcat(encoding, "}"CRLF);
+    PL_strcat(encoding, "}" CRLF);
     PL_strcat(encoding, value);
     return NS_OK;
   }
@@ -700,17 +656,17 @@ nsresult nsMsgSearchAdapter::EncodeImapValue(char *encoding, const char *value, 
 }
 
 
-nsresult nsMsgSearchAdapter::EncodeImap (char **ppOutEncoding, nsISupportsArray *searchTerms, const PRUnichar *srcCharset, const PRUnichar *destCharset, PRBool reallyDredd)
+nsresult nsMsgSearchAdapter::EncodeImap (char **ppOutEncoding, nsISupportsArray *searchTerms, const PRUnichar *srcCharset, const PRUnichar *destCharset, bool reallyDredd)
 {
   // i've left the old code (before using CBoolExpression for debugging purposes to make sure that
   // the new code generates the same encoding string as the old code.....
 
   nsresult err = NS_OK;
-  *ppOutEncoding = nsnull;
+  *ppOutEncoding = nullptr;
 
-  PRUint32 termCount;
+  uint32_t termCount;
   searchTerms->Count(&termCount);
-  PRUint32 i = 0;
+  uint32_t i = 0;
 
   // create our expression
   nsMsgSearchBoolExpression * expression = new nsMsgSearchBoolExpression();
@@ -720,7 +676,7 @@ nsresult nsMsgSearchAdapter::EncodeImap (char **ppOutEncoding, nsISupportsArray 
   for (i = 0; i < termCount && NS_SUCCEEDED(err); i++)
   {
     char *termEncoding;
-    PRBool matchAll;
+    bool matchAll;
     nsCOMPtr<nsIMsgSearchTerm> pTerm;
     searchTerms->QueryElementAt(i, NS_GET_IID(nsIMsgSearchTerm),
       (void **)getter_AddRefs(pTerm));
@@ -728,7 +684,7 @@ nsresult nsMsgSearchAdapter::EncodeImap (char **ppOutEncoding, nsISupportsArray 
     if (matchAll)
       continue;
     err = EncodeImapTerm (pTerm, reallyDredd, srcCharset, destCharset, &termEncoding);
-    if (NS_SUCCEEDED(err) && nsnull != termEncoding)
+    if (NS_SUCCEEDED(err) && nullptr != termEncoding)
     {
       expression = nsMsgSearchBoolExpression::AddSearchTerm(expression, pTerm, termEncoding);
       delete [] termEncoding;
@@ -759,10 +715,10 @@ char *nsMsgSearchAdapter::TransformSpacesToStars (const char *spaceString, msg_T
 
   if (transformType == kOverwrite)
   {
-    if ((starString = strdup(spaceString)) != nsnull)
+    if ((starString = strdup(spaceString)) != nullptr)
     {
       char *star = starString;
-      while ((star = PL_strchr(star, ' ')) != nsnull)
+      while ((star = PL_strchr(star, ' ')) != nullptr)
         *star = '*';
     }
   }
@@ -784,7 +740,7 @@ char *nsMsgSearchAdapter::TransformSpacesToStars (const char *spaceString, msg_T
 
     if (count > 0)
     {
-      if ((starString = (char *)PR_Malloc(i + count + 1)) != nsnull)
+      if ((starString = (char *)PR_Malloc(i + count + 1)) != nullptr)
       {
         int j;
 
@@ -824,9 +780,9 @@ nsMsgSearchValidityTable::nsMsgSearchValidityTable ()
   for (int i = 0; i < nsMsgSearchAttrib::kNumMsgSearchAttributes; i++)
     for (int j = 0; j < nsMsgSearchOp::kNumMsgSearchOperators; j++)
     {
-      SetAvailable (i, j, PR_FALSE);
-      SetEnabled (i, j, PR_FALSE);
-      SetValidButNotShown (i,j, PR_FALSE);
+      SetAvailable (i, j, false);
+      SetEnabled (i, j, false);
+      SetValidButNotShown (i,j, false);
     }
   m_numAvailAttribs = 0;   // # of attributes marked with at least one available operator
   // assume default is Subject, which it is for mail and news search
@@ -838,12 +794,12 @@ NS_IMPL_ISUPPORTS1(nsMsgSearchValidityTable, nsIMsgSearchValidityTable)
 
 
 nsresult
-nsMsgSearchValidityTable::GetNumAvailAttribs(PRInt32 *aResult)
+nsMsgSearchValidityTable::GetNumAvailAttribs(int32_t *aResult)
 {
   m_numAvailAttribs = 0;
   for (int i = 0; i < nsMsgSearchAttrib::kNumMsgSearchAttributes; i++)
     for (int j = 0; j < nsMsgSearchOp::kNumMsgSearchOperators; j++) {
-            PRBool available;
+            bool available;
             GetAvailable(i, j, &available);
       if (available)
       {
@@ -859,12 +815,12 @@ nsresult
 nsMsgSearchValidityTable::ValidateTerms (nsISupportsArray *searchTerms)
 {
   nsresult err = NS_OK;
-  PRUint32 count;
+  uint32_t count;
 
   NS_ENSURE_ARG(searchTerms);
 
   searchTerms->Count(&count);
-  for (PRUint32 i = 0; i < count; i++)
+  for (uint32_t i = 0; i < count; i++)
   {
     nsCOMPtr<nsIMsgSearchTerm> pTerm;
     searchTerms->QueryElementAt(i, NS_GET_IID(nsIMsgSearchTerm),
@@ -873,13 +829,13 @@ nsMsgSearchValidityTable::ValidateTerms (nsISupportsArray *searchTerms)
     nsIMsgSearchTerm *iTerm = pTerm;
     nsMsgSearchTerm *term = static_cast<nsMsgSearchTerm *>(iTerm);
 //    XP_ASSERT(term->IsValid());
-        PRBool enabled;
-        PRBool available;
+        bool enabled;
+        bool available;
         GetEnabled(term->m_attribute, term->m_operator, &enabled);
         GetAvailable(term->m_attribute, term->m_operator, &available);
     if (!enabled || !available)
     {
-            PRBool validNotShown;
+            bool validNotShown;
             GetValidButNotShown(term->m_attribute, term->m_operator,
                                 &validNotShown);
             if (!validNotShown)
@@ -891,12 +847,15 @@ nsMsgSearchValidityTable::ValidateTerms (nsISupportsArray *searchTerms)
 }
 
 nsresult
-nsMsgSearchValidityTable::GetAvailableAttributes(PRUint32 *length,
+nsMsgSearchValidityTable::GetAvailableAttributes(uint32_t *length,
                                                  nsMsgSearchAttribValue **aResult)
 {
+    NS_ENSURE_ARG_POINTER(length);
+    NS_ENSURE_ARG_POINTER(aResult);
+
     // count first
-    PRUint32 totalAttributes=0;
-    PRInt32 i, j;
+    uint32_t totalAttributes=0;
+    int32_t i, j;
     for (i = 0; i< nsMsgSearchAttrib::kNumMsgSearchAttributes; i++) {
         for (j=0; j< nsMsgSearchOp::kNumMsgSearchOperators; j++) {
             if (m_table[i][j].bitAvailable) {
@@ -910,7 +869,7 @@ nsMsgSearchValidityTable::GetAvailableAttributes(PRUint32 *length,
         nsMemory::Alloc(sizeof(nsMsgSearchAttribValue) * totalAttributes);
     NS_ENSURE_TRUE(array, NS_ERROR_OUT_OF_MEMORY);
 
-    PRUint32 numStored=0;
+    uint32_t numStored=0;
     for (i = 0; i< nsMsgSearchAttrib::kNumMsgSearchAttributes; i++) {
         for (j=0; j< nsMsgSearchOp::kNumMsgSearchOperators; j++) {
             if (m_table[i][j].bitAvailable) {
@@ -929,9 +888,12 @@ nsMsgSearchValidityTable::GetAvailableAttributes(PRUint32 *length,
 
 nsresult
 nsMsgSearchValidityTable::GetAvailableOperators(nsMsgSearchAttribValue aAttribute,
-                                                PRUint32 *aLength,
+                                                uint32_t *aLength,
                                                 nsMsgSearchOpValue **aResult)
 {
+    NS_ENSURE_ARG_POINTER(aLength);
+    NS_ENSURE_ARG_POINTER(aResult);
+
     nsMsgSearchAttribValue attr;
     if (aAttribute == nsMsgSearchAttrib::Default)
       attr = m_defaultAttrib;
@@ -939,8 +901,8 @@ nsMsgSearchValidityTable::GetAvailableOperators(nsMsgSearchAttribValue aAttribut
       attr = NS_MIN(aAttribute,
                     (nsMsgSearchAttribValue)nsMsgSearchAttrib::OtherHeader);
 
-    PRUint32 totalOperators=0;
-    PRInt32 i;
+    uint32_t totalOperators=0;
+    int32_t i;
     for (i=0; i<nsMsgSearchOp::kNumMsgSearchOperators; i++) {
         if (m_table[attr][i].bitAvailable)
             totalOperators++;
@@ -950,7 +912,7 @@ nsMsgSearchValidityTable::GetAvailableOperators(nsMsgSearchAttribValue aAttribut
         nsMemory::Alloc(sizeof(nsMsgSearchOpValue) * totalOperators);
     NS_ENSURE_TRUE(array, NS_ERROR_OUT_OF_MEMORY);
 
-    PRUint32 numStored = 0;
+    uint32_t numStored = 0;
     for (i=0; i<nsMsgSearchOp::kNumMsgSearchOperators;i++) {
         if (m_table[attr][i].bitAvailable)
             array[numStored++] = i;
@@ -993,7 +955,7 @@ NS_IMETHODIMP nsMsgSearchValidityManager::GetTable (int whichTable, nsIMsgSearch
   NS_ENSURE_ARG_POINTER(ppOutTable);
 
   nsresult rv;
-  *ppOutTable = nsnull;
+  *ppOutTable = nullptr;
 
   nsCOMPtr<nsIPrefBranch> pref(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
   nsCString customHeaders;
@@ -1101,7 +1063,7 @@ NS_IMETHODIMP nsMsgSearchValidityManager::GetTable (int whichTable, nsIMsgSearch
     *ppOutTable = m_localABAndTable;
     break;
   default:
-    NS_ASSERTION(PR_FALSE, "invalid table type");
+    NS_ASSERTION(false, "invalid table type");
     rv = NS_MSG_ERROR_INVALID_SEARCH_TERM;
   }
 
@@ -1111,7 +1073,7 @@ NS_IMETHODIMP nsMsgSearchValidityManager::GetTable (int whichTable, nsIMsgSearch
 
 // mapping between ordered attribute values, and property strings
 // see search-attributes.properties
-struct
+static struct
 {
   nsMsgSearchAttribValue id;
   const char* property;
@@ -1162,7 +1124,7 @@ NS_IMETHODIMP
 nsMsgSearchValidityManager::GetAttributeProperty(nsMsgSearchAttribValue aSearchAttribute,
                                                  nsAString& aProperty)
 {
-  for (PRInt32 i = 0; nsMsgSearchAttribMap[i].id >= 0; ++i)
+  for (int32_t i = 0; nsMsgSearchAttribMap[i].id >= 0; ++i)
   {
     if (nsMsgSearchAttribMap[i].id == aSearchAttribute)
     {
@@ -1187,8 +1149,8 @@ nsMsgSearchValidityManager::NewTable(nsIMsgSearchValidityTable **aTable)
 nsresult
 nsMsgSearchValidityManager::SetOtherHeadersInTable (nsIMsgSearchValidityTable *aTable, const char *customHeaders)
 {
-  PRUint32 customHeadersLength = strlen(customHeaders);
-  PRUint32 numHeaders=0;
+  uint32_t customHeadersLength = strlen(customHeaders);
+  uint32_t numHeaders=0;
   if (customHeadersLength)
   {
     nsCAutoString hdrStr(customHeaders);
@@ -1204,9 +1166,9 @@ nsMsgSearchValidityManager::SetOtherHeadersInTable (nsIMsgSearchValidityTable *a
 
   NS_ASSERTION(nsMsgSearchAttrib::OtherHeader + numHeaders < nsMsgSearchAttrib::kNumMsgSearchAttributes, "more headers than the table can hold");
 
-  PRUint32 maxHdrs = NS_MIN(nsMsgSearchAttrib::OtherHeader + numHeaders + 1,
-                            (PRUint32)nsMsgSearchAttrib::kNumMsgSearchAttributes);
-  for (PRUint32 i=nsMsgSearchAttrib::OtherHeader+1;i< maxHdrs;i++)
+  uint32_t maxHdrs = NS_MIN(nsMsgSearchAttrib::OtherHeader + numHeaders + 1,
+                            (uint32_t)nsMsgSearchAttrib::kNumMsgSearchAttributes);
+  for (uint32_t i=nsMsgSearchAttrib::OtherHeader+1;i< maxHdrs;i++)
   {
     aTable->SetAvailable (i, nsMsgSearchOp::Contains, 1);   // added for arbitrary headers
     aTable->SetEnabled   (i, nsMsgSearchOp::Contains, 1);
@@ -1218,9 +1180,9 @@ nsMsgSearchValidityManager::SetOtherHeadersInTable (nsIMsgSearchValidityTable *a
     aTable->SetEnabled   (i, nsMsgSearchOp::Isnt, 1);
   }
    //because custom headers can change; so reset the table for those which are no longer used.
-  for (PRUint32 j=maxHdrs; j < nsMsgSearchAttrib::kNumMsgSearchAttributes; j++)
+  for (uint32_t j=maxHdrs; j < nsMsgSearchAttrib::kNumMsgSearchAttributes; j++)
   {
-    for (PRUint32 k=0; k < nsMsgSearchOp::kNumMsgSearchOperators; k++)
+    for (uint32_t k=0; k < nsMsgSearchOp::kNumMsgSearchOperators; k++)
     {
       aTable->SetAvailable(j,k,0);
       aTable->SetEnabled(j,k,0);
@@ -1255,7 +1217,7 @@ nsresult nsMsgSearchValidityManager::InitLdapTable()
   nsresult rv = NewTable(getter_AddRefs(m_ldapTable));
   NS_ENSURE_SUCCESS(rv,rv);
 
-  rv = SetUpABTable(m_ldapTable, PR_TRUE);
+  rv = SetUpABTable(m_ldapTable, true);
   NS_ENSURE_SUCCESS(rv,rv);
   return rv;
 }
@@ -1267,7 +1229,7 @@ nsresult nsMsgSearchValidityManager::InitLdapAndTable()
   nsresult rv = NewTable(getter_AddRefs(m_ldapAndTable));
   NS_ENSURE_SUCCESS(rv,rv);
 
-  rv = SetUpABTable(m_ldapAndTable, PR_FALSE);
+  rv = SetUpABTable(m_ldapAndTable, false);
   NS_ENSURE_SUCCESS(rv,rv);
   return rv;
 }
@@ -1279,7 +1241,7 @@ nsresult nsMsgSearchValidityManager::InitLocalABTable()
   nsresult rv = NewTable(getter_AddRefs(m_localABTable));
   NS_ENSURE_SUCCESS(rv,rv);
 
-  rv = SetUpABTable(m_localABTable, PR_TRUE);
+  rv = SetUpABTable(m_localABTable, true);
   NS_ENSURE_SUCCESS(rv,rv);
   return rv;
 }
@@ -1291,13 +1253,13 @@ nsresult nsMsgSearchValidityManager::InitLocalABAndTable()
   nsresult rv = NewTable(getter_AddRefs(m_localABAndTable));
   NS_ENSURE_SUCCESS(rv,rv);
 
-  rv = SetUpABTable(m_localABAndTable, PR_FALSE);
+  rv = SetUpABTable(m_localABAndTable, false);
   NS_ENSURE_SUCCESS(rv,rv);
   return rv;
 }
 
 nsresult
-nsMsgSearchValidityManager::SetUpABTable(nsIMsgSearchValidityTable *aTable, PRBool isOrTable)
+nsMsgSearchValidityManager::SetUpABTable(nsIMsgSearchValidityTable *aTable, bool isOrTable)
 {
   nsresult rv = aTable->SetDefaultAttrib(isOrTable ? nsMsgSearchAttrib::Name : nsMsgSearchAttrib::DisplayName);
   NS_ENSURE_SUCCESS(rv,rv);

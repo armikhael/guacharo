@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Mats Palmgren <mats.palmgren@bredband.net>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* base class for DOM objects for element.style and cssStyleRule.style */
 
@@ -51,8 +18,7 @@
 #include "nsIURL.h"
 #include "nsReadableUtils.h"
 #include "nsIPrincipal.h"
-
-#include "nsContentUtils.h"
+#include "nsDOMClassInfoID.h"
 #include "mozAutoDocUpdate.h"
 
 namespace css = mozilla::css;
@@ -79,7 +45,7 @@ nsDOMCSSDeclaration::GetPropertyValue(const nsCSSProperty aPropID,
   NS_PRECONDITION(aPropID != eCSSProperty_UNKNOWN,
                   "Should never pass eCSSProperty_UNKNOWN around");
 
-  css::Declaration* decl = GetCSSDeclaration(PR_FALSE);
+  css::Declaration* decl = GetCSSDeclaration(false);
 
   aValue.Truncate();
   if (decl) {
@@ -98,14 +64,14 @@ nsDOMCSSDeclaration::SetPropertyValue(const nsCSSProperty aPropID,
     return RemoveProperty(aPropID);
   }
 
-  return ParsePropertyValue(aPropID, aValue, PR_FALSE);
+  return ParsePropertyValue(aPropID, aValue, false);
 }
 
 
 NS_IMETHODIMP
 nsDOMCSSDeclaration::GetCssText(nsAString& aCssText)
 {
-  css::Declaration* decl = GetCSSDeclaration(PR_FALSE);
+  css::Declaration* decl = GetCSSDeclaration(false);
   aCssText.Truncate();
 
   if (decl) {
@@ -120,7 +86,7 @@ nsDOMCSSDeclaration::SetCssText(const nsAString& aCssText)
 {
   // We don't need to *do* anything with the old declaration, but we need
   // to ensure that it exists, or else SetCSSDeclaration may crash.
-  css::Declaration* olddecl = GetCSSDeclaration(PR_TRUE);
+  css::Declaration* olddecl = GetCSSDeclaration(true);
   if (!olddecl) {
     return NS_ERROR_FAILURE;
   }
@@ -136,12 +102,12 @@ nsDOMCSSDeclaration::SetCssText(const nsAString& aCssText)
   // need to start the update now so that the old rule doesn't get used
   // between when we mutate the declaration and when we set the new
   // rule (see stack in bug 209575).
-  mozAutoDocConditionalContentUpdateBatch autoUpdate(DocToUpdate(), PR_TRUE);
+  mozAutoDocConditionalContentUpdateBatch autoUpdate(DocToUpdate(), true);
 
   nsAutoPtr<css::Declaration> decl(new css::Declaration());
   decl->InitializeEmpty();
   nsCSSParser cssParser(env.mCSSLoader);
-  PRBool changed;
+  bool changed;
   nsresult result = cssParser.ParseDeclarations(aCssText, env.mSheetURI,
                                                 env.mBaseURI,
                                                 env.mPrincipal, decl, &changed);
@@ -153,9 +119,9 @@ nsDOMCSSDeclaration::SetCssText(const nsAString& aCssText)
 }
 
 NS_IMETHODIMP
-nsDOMCSSDeclaration::GetLength(PRUint32* aLength)
+nsDOMCSSDeclaration::GetLength(uint32_t* aLength)
 {
-  css::Declaration* decl = GetCSSDeclaration(PR_FALSE);
+  css::Declaration* decl = GetCSSDeclaration(false);
 
   if (decl) {
     *aLength = decl->Count();
@@ -173,29 +139,24 @@ nsDOMCSSDeclaration::GetPropertyCSSValue(const nsAString& aPropertyName,
   NS_ENSURE_ARG_POINTER(aReturn);
 
   // We don't support CSSValue yet so we'll just return null...
-  *aReturn = nsnull;
+  *aReturn = nullptr;
 
   return NS_OK;
 }
 
-NS_IMETHODIMP
-nsDOMCSSDeclaration::Item(PRUint32 aIndex, nsAString& aReturn)
+void
+nsDOMCSSDeclaration::IndexedGetter(uint32_t aIndex, bool& aFound, nsAString& aPropName)
 {
-  css::Declaration* decl = GetCSSDeclaration(PR_FALSE);
-
-  aReturn.SetLength(0);
-  if (decl) {
-    decl->GetNthProperty(aIndex, aReturn);
-  }
-
-  return NS_OK;
+  css::Declaration* decl = GetCSSDeclaration(false);
+  aFound = decl && decl->GetNthProperty(aIndex, aPropName);
 }
 
 NS_IMETHODIMP
 nsDOMCSSDeclaration::GetPropertyValue(const nsAString& aPropertyName,
                                       nsAString& aReturn)
 {
-  const nsCSSProperty propID = nsCSSProps::LookupProperty(aPropertyName);
+  const nsCSSProperty propID = nsCSSProps::LookupProperty(aPropertyName,
+                                                          nsCSSProps::eEnabled);
   if (propID == eCSSProperty_UNKNOWN) {
     aReturn.Truncate();
     return NS_OK;
@@ -208,7 +169,7 @@ NS_IMETHODIMP
 nsDOMCSSDeclaration::GetPropertyPriority(const nsAString& aPropertyName,
                                          nsAString& aReturn)
 {
-  css::Declaration* decl = GetCSSDeclaration(PR_FALSE);
+  css::Declaration* decl = GetCSSDeclaration(false);
 
   aReturn.Truncate();
   if (decl && decl->GetValueIsImportant(aPropertyName)) {
@@ -224,7 +185,8 @@ nsDOMCSSDeclaration::SetProperty(const nsAString& aPropertyName,
                                  const nsAString& aPriority)
 {
   // In the common (and fast) cases we can use the property id
-  nsCSSProperty propID = nsCSSProps::LookupProperty(aPropertyName);
+  nsCSSProperty propID = nsCSSProps::LookupProperty(aPropertyName,
+                                                    nsCSSProps::eEnabled);
   if (propID == eCSSProperty_UNKNOWN) {
     return NS_OK;
   }
@@ -237,11 +199,11 @@ nsDOMCSSDeclaration::SetProperty(const nsAString& aPropertyName,
   }
 
   if (aPriority.IsEmpty()) {
-    return ParsePropertyValue(propID, aValue, PR_FALSE);
+    return ParsePropertyValue(propID, aValue, false);
   }
 
   if (aPriority.EqualsLiteral("important")) {
-    return ParsePropertyValue(propID, aValue, PR_TRUE);
+    return ParsePropertyValue(propID, aValue, true);
   }
 
   // XXX silent failure?
@@ -252,7 +214,8 @@ NS_IMETHODIMP
 nsDOMCSSDeclaration::RemoveProperty(const nsAString& aPropertyName,
                                     nsAString& aReturn)
 {
-  const nsCSSProperty propID = nsCSSProps::LookupProperty(aPropertyName);
+  const nsCSSProperty propID = nsCSSProps::LookupProperty(aPropertyName,
+                                                          nsCSSProps::eEnabled);
   if (propID == eCSSProperty_UNKNOWN) {
     aReturn.Truncate();
     return NS_OK;
@@ -268,10 +231,10 @@ nsDOMCSSDeclaration::RemoveProperty(const nsAString& aPropertyName,
 nsDOMCSSDeclaration::GetCSSParsingEnvironmentForRule(css::Rule* aRule,
                                                      CSSParsingEnvironment& aCSSParseEnv)
 {
-  nsIStyleSheet* sheet = aRule ? aRule->GetStyleSheet() : nsnull;
+  nsIStyleSheet* sheet = aRule ? aRule->GetStyleSheet() : nullptr;
   nsRefPtr<nsCSSStyleSheet> cssSheet(do_QueryObject(sheet));
   if (!cssSheet) {
-    aCSSParseEnv.mPrincipal = nsnull;
+    aCSSParseEnv.mPrincipal = nullptr;
     return;
   }
 
@@ -279,15 +242,15 @@ nsDOMCSSDeclaration::GetCSSParsingEnvironmentForRule(css::Rule* aRule,
   aCSSParseEnv.mSheetURI = sheet->GetSheetURI();
   aCSSParseEnv.mBaseURI = sheet->GetBaseURI();
   aCSSParseEnv.mPrincipal = cssSheet->Principal();
-  aCSSParseEnv.mCSSLoader = document ? document->CSSLoader() : nsnull;
+  aCSSParseEnv.mCSSLoader = document ? document->CSSLoader() : nullptr;
 }
 
 nsresult
 nsDOMCSSDeclaration::ParsePropertyValue(const nsCSSProperty aPropID,
                                         const nsAString& aPropValue,
-                                        PRBool aIsImportant)
+                                        bool aIsImportant)
 {
-  css::Declaration* olddecl = GetCSSDeclaration(PR_TRUE);
+  css::Declaration* olddecl = GetCSSDeclaration(true);
   if (!olddecl) {
     return NS_ERROR_FAILURE;
   }
@@ -303,11 +266,11 @@ nsDOMCSSDeclaration::ParsePropertyValue(const nsCSSProperty aPropID,
   // need to start the update now so that the old rule doesn't get used
   // between when we mutate the declaration and when we set the new
   // rule (see stack in bug 209575).
-  mozAutoDocConditionalContentUpdateBatch autoUpdate(DocToUpdate(), PR_TRUE);
+  mozAutoDocConditionalContentUpdateBatch autoUpdate(DocToUpdate(), true);
   css::Declaration* decl = olddecl->EnsureMutable();
 
   nsCSSParser cssParser(env.mCSSLoader);
-  PRBool changed;
+  bool changed;
   nsresult result = cssParser.ParseProperty(aPropID, aPropValue, env.mSheetURI,
                                             env.mBaseURI, env.mPrincipal, decl,
                                             &changed, aIsImportant);
@@ -321,10 +284,25 @@ nsDOMCSSDeclaration::ParsePropertyValue(const nsCSSProperty aPropID,
   return SetCSSDeclaration(decl);
 }
 
+// Hacky fix for Bug 813264 - MozColumnFill was backed out of 17 by Bug 810726,
+// but we want to stub just the nsIDOMCSS2Properties IDL functions to avoid
+// changing the IID.
+NS_IMETHODIMP
+nsDOMCSSDeclaration::GetMozColumnFill(nsAString& value)
+{
+  return NS_ERROR_NOT_IMPLEMENTED;
+}
+
+NS_IMETHODIMP
+nsDOMCSSDeclaration::SetMozColumnFill(const nsAString& value)
+{
+  return NS_ERROR_NOT_IMPLEMENTED;
+}
+
 nsresult
 nsDOMCSSDeclaration::RemoveProperty(const nsCSSProperty aPropID)
 {
-  css::Declaration* decl = GetCSSDeclaration(PR_FALSE);
+  css::Declaration* decl = GetCSSDeclaration(false);
   if (!decl) {
     return NS_OK; // no decl, so nothing to remove
   }
@@ -334,7 +312,7 @@ nsDOMCSSDeclaration::RemoveProperty(const nsCSSProperty aPropID)
   // need to start the update now so that the old rule doesn't get used
   // between when we mutate the declaration and when we set the new
   // rule (see stack in bug 209575).
-  mozAutoDocConditionalContentUpdateBatch autoUpdate(DocToUpdate(), PR_TRUE);
+  mozAutoDocConditionalContentUpdateBatch autoUpdate(DocToUpdate(), true);
 
   decl = decl->EnsureMutable();
   decl->RemoveProperty(aPropID);
@@ -344,8 +322,8 @@ nsDOMCSSDeclaration::RemoveProperty(const nsCSSProperty aPropID)
 // nsIDOMCSS2Properties
 
 #define CSS_PROP_DOMPROP_PREFIXED(prop_) Moz ## prop_
-#define CSS_PROP(name_, id_, method_, flags_, parsevariant_, kwtable_,       \
-                 stylestruct_, stylestructoffset_, animtype_)                \
+#define CSS_PROP(name_, id_, method_, flags_, pref_, parsevariant_,          \
+                 kwtable_, stylestruct_, stylestructoffset_, animtype_)      \
   NS_IMETHODIMP                                                              \
   nsDOMCSSDeclaration::Get##method_(nsAString& aValue)                       \
   {                                                                          \
@@ -359,17 +337,14 @@ nsDOMCSSDeclaration::RemoveProperty(const nsCSSProperty aPropID)
   }
 
 #define CSS_PROP_LIST_EXCLUDE_INTERNAL
-#define CSS_PROP_SHORTHAND(name_, id_, method_, flags_) \
-  CSS_PROP(name_, id_, method_, flags_, X, X, X, X, X)
+#define CSS_PROP_SHORTHAND(name_, id_, method_, flags_, pref_)  \
+  CSS_PROP(name_, id_, method_, flags_, pref_, X, X, X, X, X)
 #include "nsCSSPropList.h"
 
-// Aliases
-CSS_PROP(X, opacity, MozOpacity, X, X, X, X, X, X)
-CSS_PROP(X, outline, MozOutline, X, X, X, X, X, X)
-CSS_PROP(X, outline_color, MozOutlineColor, X, X, X, X, X, X)
-CSS_PROP(X, outline_style, MozOutlineStyle, X, X, X, X, X, X)
-CSS_PROP(X, outline_width, MozOutlineWidth, X, X, X, X, X, X)
-CSS_PROP(X, outline_offset, MozOutlineOffset, X, X, X, X, X, X)
+#define CSS_PROP_ALIAS(aliasname_, propid_, aliasmethod_, pref_)  \
+  CSS_PROP(X, propid_, aliasmethod_, X, pref_, X, X, X, X, X)
+#include "nsCSSPropAliasList.h"
+#undef CSS_PROP_ALIAS
 
 #undef CSS_PROP_SHORTHAND
 #undef CSS_PROP_LIST_EXCLUDE_INTERNAL

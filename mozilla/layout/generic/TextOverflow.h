@@ -1,40 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set shiftwidth=2 tabstop=8 autoindent cindent expandtab: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is an implementation of CSS3 text-overflow.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Mats Palmgren <matspal@gmail.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef TextOverflow_h_
 #define TextOverflow_h_
@@ -43,6 +11,7 @@
 #include "nsLineBox.h"
 #include "nsStyleStruct.h"
 #include "nsTHashtable.h"
+class nsIScrollableFrame;
 
 namespace mozilla {
 namespace css {
@@ -52,16 +21,14 @@ namespace css {
  * Usage:
  *  1. allocate an object using WillProcessLines
  *  2. then call ProcessLine for each line you are building display lists for
- *  3. finally call DidProcessLines
  */
 class TextOverflow {
  public:
   /**
    * Allocate an object for text-overflow processing.
-   * @return nsnull if no processing is necessary.  The caller owns the object.
+   * @return nullptr if no processing is necessary.  The caller owns the object.
    */
   static TextOverflow* WillProcessLines(nsDisplayListBuilder*   aBuilder,
-                                        const nsDisplayListSet& aLists,
                                         nsIFrame*               aBlockFrame);
   /**
    * Analyze the display lists for text overflow and what kind of item is at
@@ -71,10 +38,10 @@ class TextOverflow {
   void ProcessLine(const nsDisplayListSet& aLists, nsLineBox* aLine);
 
   /**
-   * Do final processing, currently just adds a dummy item for scroll frames
-   * to make IsVaryingRelativeToMovingFrame() true for the entire area.
+   * Get the resulting text-overflow markers (the list may be empty).
+   * @return a DisplayList containing any text-overflow markers.
    */
-  void DidProcessLines();
+  nsDisplayList& GetMarkers() { return mMarkerList; }
 
   /**
    * @return true if aBlockFrame needs analysis for text overflow.
@@ -86,6 +53,8 @@ class TextOverflow {
 
  protected:
   TextOverflow() {}
+  void Init(nsDisplayListBuilder*   aBuilder,
+            nsIFrame*               aBlockFrame);
 
   struct AlignmentEdges {
     AlignmentEdges() : mAssigned(false) {}
@@ -103,6 +72,30 @@ class TextOverflow {
     nscoord x;
     nscoord xmost;
     bool mAssigned;
+  };
+
+  struct InnerClipEdges {
+    InnerClipEdges() : mAssignedLeft(false), mAssignedRight(false) {}
+    void AccumulateLeft(const nsRect& aRect) {
+      if (NS_LIKELY(mAssignedLeft)) {
+        mLeft = NS_MAX(mLeft, aRect.X());
+      } else {
+        mLeft = aRect.X();
+        mAssignedLeft = true;
+      }
+    }
+    void AccumulateRight(const nsRect& aRect) {
+      if (NS_LIKELY(mAssignedRight)) {
+        mRight = NS_MIN(mRight, aRect.XMost());
+      } else {
+        mRight = aRect.XMost();
+        mAssignedRight = true;
+      }
+    }
+    nscoord mLeft;
+    nscoord mRight;
+    bool mAssignedLeft;
+    bool mAssignedRight;
   };
 
   /**
@@ -127,12 +120,18 @@ class TextOverflow {
    * @param aFramesToHide frames that should have their display items removed
    * @param aAlignmentEdges the outermost edges of all text and atomic
    *   inline-level frames that are inside the area between the markers
+   * @param aFoundVisibleTextOrAtomic is set to true if a text or atomic
+   *   inline-level frame is visible between the marker edges
+   * @param aClippedMarkerEdges the innermost edges of all text and atomic
+   *   inline-level frames that are clipped by the current marker width
    */
   void ExamineFrameSubtree(nsIFrame*       aFrame,
                            const nsRect&   aContentArea,
                            const nsRect&   aInsideMarkersArea,
                            FrameHashtable* aFramesToHide,
-                           AlignmentEdges* aAlignmentEdges);
+                           AlignmentEdges* aAlignmentEdges,
+                           bool*           aFoundVisibleTextOrAtomic,
+                           InnerClipEdges* aClippedMarkerEdges);
 
   /**
    * ExamineFrameSubtree calls this to analyze a frame against the hypothetical
@@ -148,12 +147,18 @@ class TextOverflow {
    * @param aAlignmentEdges the outermost edges of all text and atomic
    *   inline-level frames that are inside the area between the markers
    *                       inside aInsideMarkersArea
+   * @param aFoundVisibleTextOrAtomic is set to true if a text or atomic
+   *   inline-level frame is visible between the marker edges
+   * @param aClippedMarkerEdges the innermost edges of all text and atomic
+   *   inline-level frames that are clipped by the current marker width
    */
   void AnalyzeMarkerEdges(nsIFrame*       aFrame,
                           const nsIAtom*  aFrameType,
                           const nsRect&   aInsideMarkersArea,
                           FrameHashtable* aFramesToHide,
-                          AlignmentEdges* aAlignmentEdges);
+                          AlignmentEdges* aAlignmentEdges,
+                          bool*           aFoundVisibleTextOrAtomic,
+                          InnerClipEdges* aClippedMarkerEdges);
 
   /**
    * Clip or remove items given the final marker edges. ("clip" here just means
@@ -168,7 +173,7 @@ class TextOverflow {
 
   /**
    * ProcessLine calls this to create display items for the markers and insert
-   * them into a display list for the block.
+   * them into mMarkerList.
    * @param aLine the line we're processing
    * @param aCreateLeft if true, create a marker on the left side
    * @param aCreateRight if true, create a marker on the right side
@@ -177,18 +182,20 @@ class TextOverflow {
   void CreateMarkers(const nsLineBox* aLine,
                      bool             aCreateLeft,
                      bool             aCreateRight,
-                     const nsRect&    aInsideMarkersArea) const;
+                     const nsRect&    aInsideMarkersArea);
 
   nsRect                 mContentArea;
   nsDisplayListBuilder*  mBuilder;
   nsIFrame*              mBlock;
-  nsDisplayList*         mMarkerList;
+  nsIScrollableFrame*    mScrollableFrame;
+  nsDisplayList          mMarkerList;
   bool                   mBlockIsRTL;
   bool                   mCanHaveHorizontalScrollbar;
+  bool                   mAdjustForPixelSnapping;
 
   class Marker {
   public:
-    void Init(const nsStyleTextOverflow& aStyle) {
+    void Init(const nsStyleTextOverflowSide& aStyle) {
       mInitialized = false;
       mWidth = 0;
       mStyle = &aStyle;
@@ -206,16 +213,21 @@ class TextOverflow {
       mHasOverflow = false;
     }
 
-    // The intrinsic width of the marker string.
+    // The current width of the marker, the range is [0 .. mIntrinsicWidth].
     nscoord                        mWidth;
+    // The intrinsic width of the marker string.
+    nscoord                        mIntrinsicWidth;
     // The marker text.
     nsString                       mMarkerString;
     // The style for this side.
-    const nsStyleTextOverflow*     mStyle;
+    const nsStyleTextOverflowSide* mStyle;
     // True if there is visible overflowing inline content on this side.
     bool                           mHasOverflow;
     // True if mMarkerString and mWidth have been setup from style.
     bool                           mInitialized;
+    // True if the style is text-overflow:clip on this side and the marker
+    // won't cause the line to become empty.
+    bool                           mActive;
   };
 
   Marker mLeft;  // the horizontal left marker

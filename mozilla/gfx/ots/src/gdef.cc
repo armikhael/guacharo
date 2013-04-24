@@ -15,6 +15,8 @@
 // GDEF - The Glyph Definition Table
 // http://www.microsoft.com/typography/otspec/gdef.htm
 
+#define TABLE_NAME "GDEF"
+
 namespace {
 
 // The maximum class value in class definition tables.
@@ -42,7 +44,8 @@ bool ParseAttachListTable(ots::OpenTypeFile *file, const uint8_t *data,
       !subtable.ReadU16(&glyph_count)) {
     return OTS_FAILURE();
   }
-  const unsigned attach_points_end = static_cast<unsigned>(4) + 2*glyph_count;
+  const unsigned attach_points_end =
+      2 * static_cast<unsigned>(glyph_count) + 4;
   if (attach_points_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }
@@ -110,7 +113,8 @@ bool ParseLigCaretListTable(ots::OpenTypeFile *file, const uint8_t *data,
       !subtable.ReadU16(&lig_glyph_count)) {
     return OTS_FAILURE();
   }
-  const unsigned lig_glyphs_end = static_cast<unsigned>(4) + 2*lig_glyph_count;
+  const unsigned lig_glyphs_end =
+      2 * static_cast<unsigned>(lig_glyph_count) + 4;
   if (lig_glyphs_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }
@@ -155,7 +159,7 @@ bool ParseLigCaretListTable(ots::OpenTypeFile *file, const uint8_t *data,
     std::vector<uint16_t> caret_values;
     caret_values.resize(caret_count);
     uint16_t last_offset_caret = 0;
-    unsigned caret_values_end = static_cast<unsigned>(2) + 2*caret_count;
+    unsigned caret_values_end = 2 * static_cast<unsigned>(caret_count) + 2;
     for (unsigned j = 0; j < caret_count; ++j) {
       if (!subtable.ReadU16(&caret_values[j])) {
         return OTS_FAILURE();
@@ -215,7 +219,7 @@ bool ParseMarkGlyphSetsDefTable(ots::OpenTypeFile *file, const uint8_t *data,
     return OTS_FAILURE();
   }
 
-  const unsigned mark_sets_end = static_cast<unsigned>(4) + 2*mark_set_count;
+  const unsigned mark_sets_end = 2 * static_cast<unsigned>(mark_set_count) + 4;
   if (mark_sets_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }
@@ -240,7 +244,11 @@ bool ParseMarkGlyphSetsDefTable(ots::OpenTypeFile *file, const uint8_t *data,
 }  // namespace
 
 #define DROP_THIS_TABLE \
-  do { file->gdef->data = 0; file->gdef->length = 0; } while (0)
+  do { \
+    file->gdef->data = 0; \
+    file->gdef->length = 0; \
+    OTS_FAILURE_MSG("OpenType layout data discarded"); \
+  } while (0)
 
 namespace ots {
 
@@ -259,7 +267,9 @@ bool ots_gdef_parse(OpenTypeFile *file, const uint8_t *data, size_t length) {
 
   uint32_t version = 0;
   if (!table.ReadU32(&version)) {
-    return OTS_FAILURE();
+    OTS_WARNING("incomplete GDEF table");
+    DROP_THIS_TABLE;
+    return true;
   }
   if (version < 0x00010000 || version == 0x00010001) {
     OTS_WARNING("bad GDEF version");
@@ -279,30 +289,35 @@ bool ots_gdef_parse(OpenTypeFile *file, const uint8_t *data, size_t length) {
       !table.ReadU16(&offset_attach_list) ||
       !table.ReadU16(&offset_lig_caret_list) ||
       !table.ReadU16(&offset_mark_attach_class_def)) {
-    return OTS_FAILURE();
+    OTS_WARNING("incomplete GDEF table");
+    DROP_THIS_TABLE;
+    return true;
   }
   uint16_t offset_mark_glyph_sets_def = 0;
   if (gdef->version_2) {
     if (!table.ReadU16(&offset_mark_glyph_sets_def)) {
-      return OTS_FAILURE();
+      OTS_WARNING("incomplete GDEF table");
+      DROP_THIS_TABLE;
+      return true;
     }
   }
 
-  const unsigned gdef_header_end = static_cast<unsigned>(8) +
-      gdef->version_2 ? static_cast<unsigned>(2) : static_cast<unsigned>(0);
-  if (gdef_header_end > std::numeric_limits<uint16_t>::max()) {
-    return OTS_FAILURE();
-  }
+  unsigned gdef_header_end = 8;
+  if (gdef->version_2)
+    gdef_header_end += 2;
 
   // Parse subtables
   if (offset_glyph_class_def) {
     if (offset_glyph_class_def >= length ||
         offset_glyph_class_def < gdef_header_end) {
-      return OTS_FAILURE();
+      OTS_WARNING("invalid offset to glyph classes");
+      DROP_THIS_TABLE;
+      return true;
     }
     if (!ParseGlyphClassDefTable(file, data + offset_glyph_class_def,
                                  length - offset_glyph_class_def,
                                  num_glyphs)) {
+      OTS_WARNING("invalid glyph classes");
       DROP_THIS_TABLE;
       return true;
     }
@@ -312,11 +327,14 @@ bool ots_gdef_parse(OpenTypeFile *file, const uint8_t *data, size_t length) {
   if (offset_attach_list) {
     if (offset_attach_list >= length ||
         offset_attach_list < gdef_header_end) {
-      return OTS_FAILURE();
+      OTS_WARNING("invalid offset to attachment list");
+      DROP_THIS_TABLE;
+      return true;
     }
     if (!ParseAttachListTable(file, data + offset_attach_list,
                               length - offset_attach_list,
                               num_glyphs)) {
+      OTS_WARNING("invalid attachment list");
       DROP_THIS_TABLE;
       return true;
     }
@@ -325,11 +343,14 @@ bool ots_gdef_parse(OpenTypeFile *file, const uint8_t *data, size_t length) {
   if (offset_lig_caret_list) {
     if (offset_lig_caret_list >= length ||
         offset_lig_caret_list < gdef_header_end) {
-      return OTS_FAILURE();
+      OTS_WARNING("invalid offset to lig-caret list");
+      DROP_THIS_TABLE;
+      return true;
     }
     if (!ParseLigCaretListTable(file, data + offset_lig_caret_list,
                               length - offset_lig_caret_list,
                               num_glyphs)) {
+      OTS_WARNING("invalid ligature caret list");
       DROP_THIS_TABLE;
       return true;
     }
@@ -338,12 +359,14 @@ bool ots_gdef_parse(OpenTypeFile *file, const uint8_t *data, size_t length) {
   if (offset_mark_attach_class_def) {
     if (offset_mark_attach_class_def >= length ||
         offset_mark_attach_class_def < gdef_header_end) {
+      OTS_WARNING("invalid offset to mark attachment list");
       return OTS_FAILURE();
     }
     if (!ParseMarkAttachClassDefTable(file,
                                       data + offset_mark_attach_class_def,
                                       length - offset_mark_attach_class_def,
                                       num_glyphs)) {
+      OTS_WARNING("invalid mark attachment list");
       DROP_THIS_TABLE;
       return true;
     }
@@ -353,12 +376,14 @@ bool ots_gdef_parse(OpenTypeFile *file, const uint8_t *data, size_t length) {
   if (offset_mark_glyph_sets_def) {
     if (offset_mark_glyph_sets_def >= length ||
         offset_mark_glyph_sets_def < gdef_header_end) {
+      OTS_WARNING("invalid offset to mark glyph sets");
       return OTS_FAILURE();
     }
     if (!ParseMarkGlyphSetsDefTable(file,
                                     data + offset_mark_glyph_sets_def,
                                     length - offset_mark_glyph_sets_def,
                                     num_glyphs)) {
+      OTS_WARNING("invalid mark glyph sets");
       DROP_THIS_TABLE;
       return true;
     }

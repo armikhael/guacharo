@@ -1,40 +1,8 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK *****
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  * This Original Code has been modified by IBM Corporation. Modifications made by IBM
  * described herein are Copyright (c) International Business Machines Corporation, 2000.
  * Modifications to Mozilla code or documentation identified per MPL Section 3.3
@@ -65,15 +33,15 @@ MimeDefClass (MimeObject, MimeObjectClass, mimeObjectClass, NULL);
 static int MimeObject_initialize (MimeObject *);
 static void MimeObject_finalize (MimeObject *);
 static int MimeObject_parse_begin (MimeObject *);
-static int MimeObject_parse_buffer (const char *, PRInt32, MimeObject *);
-static int MimeObject_parse_line (const char *, PRInt32, MimeObject *);
-static int MimeObject_parse_eof (MimeObject *, PRBool);
-static int MimeObject_parse_end (MimeObject *, PRBool);
-static PRBool MimeObject_displayable_inline_p (MimeObjectClass *clazz,
+static int MimeObject_parse_buffer (const char *, int32_t, MimeObject *);
+static int MimeObject_parse_line (const char *, int32_t, MimeObject *);
+static int MimeObject_parse_eof (MimeObject *, bool);
+static int MimeObject_parse_end (MimeObject *, bool);
+static bool MimeObject_displayable_inline_p (MimeObjectClass *clazz,
                         MimeHeaders *hdrs);
 
 #if defined(DEBUG) && defined(XP_UNIX)
-static int MimeObject_debug_print (MimeObject *, PRFileDesc *, PRInt32 depth);
+static int MimeObject_debug_print (MimeObject *, PRFileDesc *, int32_t depth);
 #endif
 
 static int
@@ -104,11 +72,11 @@ MimeObject_initialize (MimeObject *obj)
   /* Set up the content-type and encoding. */
   if (!obj->content_type && obj->headers)
   obj->content_type = MimeHeaders_get (obj->headers, HEADER_CONTENT_TYPE,
-                     PR_TRUE, PR_FALSE);
+                     true, false);
   if (!obj->encoding && obj->headers)
   obj->encoding = MimeHeaders_get (obj->headers,
                    HEADER_CONTENT_TRANSFER_ENCODING,
-                   PR_TRUE, PR_FALSE);
+                   true, false);
 
   /* Special case to normalize some types and encodings to a canonical form.
    (These are nonstandard types/encodings which have been seen to appear in
@@ -166,8 +134,8 @@ MimeObject_initialize (MimeObject *obj)
 static void
 MimeObject_finalize (MimeObject *obj)
 {
-  obj->clazz->parse_eof (obj, PR_FALSE);
-  obj->clazz->parse_end (obj, PR_FALSE);
+  obj->clazz->parse_eof (obj, false);
+  obj->clazz->parse_end (obj, false);
 
   if (obj->headers)
   {
@@ -187,7 +155,7 @@ MimeObject_finalize (MimeObject *obj)
   if (obj->options && obj->options->state)
   {
     delete obj->options->state;
-    obj->options->state = nsnull;
+    obj->options->state = nullptr;
   }
 }
 
@@ -205,7 +173,7 @@ MimeObject_parse_begin (MimeObject *obj)
     obj->options->state = new MimeParseStateObject;
     if (!obj->options->state) return MIME_OUT_OF_MEMORY;
     obj->options->state->root = obj;
-    obj->options->state->separator_suppressed_p = PR_TRUE; /* no first sep */
+    obj->options->state->separator_suppressed_p = true; /* no first sep */
     const char *delParts = PL_strcasestr(obj->options->url, "&del=");
     const char *detachLocations = PL_strcasestr(obj->options->url, "&detachTo=");
     if (delParts)
@@ -229,61 +197,64 @@ MimeObject_parse_begin (MimeObject *obj)
      || (obj->options->decompose_file_p && obj->options->decompose_file_output_fn &&
       mime_typep(obj, (MimeObjectClass*) &mimeMultipartClass))
     )
-    obj->output_p = PR_FALSE;
+    obj->output_p = false;
   else if (!obj->options->part_to_load)
-    obj->output_p = PR_TRUE;
+    obj->output_p = true;
   else
   {
     char *id = mime_part_address(obj);
     if (!id) return MIME_OUT_OF_MEMORY;
 
-      // We need to check if a part is the subpart of the part to load.
-      // If so and this is a raw or body display output operation, then
-      // we should mark the part for subsequent output.
-      //
+    // We need to check if a part is the subpart of the part to load.
+    // If so and this is a raw or body display output operation, then
+    // we should mark the part for subsequent output.
 
-      // First, check for an exact match
-      obj->output_p = !strcmp(id, obj->options->part_to_load);
-      if (!obj->output_p && (obj->options->format_out == nsMimeOutput::nsMimeMessageRaw ||
-             obj->options->format_out == nsMimeOutput::nsMimeMessageBodyDisplay
-             || obj->options->format_out == nsMimeOutput::nsMimeMessageAttach))
+    // First, check for an exact match
+    obj->output_p = !strcmp(id, obj->options->part_to_load);
+    if (!obj->output_p && (obj->options->format_out == nsMimeOutput::nsMimeMessageRaw ||
+                           obj->options->format_out == nsMimeOutput::nsMimeMessageBodyDisplay ||
+                           obj->options->format_out == nsMimeOutput::nsMimeMessageAttach))
     {
-        // Then, check for subpart
-        unsigned int partlen = strlen(obj->options->part_to_load);
-        obj->output_p = (strlen(id) >= partlen + 2) && (id[partlen] == '.') &&
-            !strncmp(id, obj->options->part_to_load, partlen);
-      }
+      // Then, check for subpart
+      unsigned int partlen = strlen(obj->options->part_to_load);
+      obj->output_p = (strlen(id) >= partlen + 2) && (id[partlen] == '.') &&
+        !strncmp(id, obj->options->part_to_load, partlen);
+    }
 
     PR_Free(id);
   }
+
+  // If we've decided not to output this part, we also shouldn't be showing it
+  // as an attachment.
+  obj->dontShowAsAttachment = !obj->output_p;
 
   return 0;
 }
 
 static int
-MimeObject_parse_buffer (const char *buffer, PRInt32 size, MimeObject *obj)
+MimeObject_parse_buffer (const char *buffer, int32_t size, MimeObject *obj)
 {
   NS_ASSERTION(!obj->closed_p, "object shouldn't be closed");
   if (obj->closed_p) return -1;
 
   return mime_LineBuffer (buffer, size,
              &obj->ibuffer, &obj->ibuffer_size, &obj->ibuffer_fp,
-             PR_TRUE,
-             ((int (*) (char *, PRInt32, void *))
+             true,
+             ((int (*) (char *, int32_t, void *))
               /* This cast is to turn void into MimeObject */
               obj->clazz->parse_line),
              obj);
 }
 
 static int
-MimeObject_parse_line (const char *line, PRInt32 length, MimeObject *obj)
+MimeObject_parse_line (const char *line, int32_t length, MimeObject *obj)
 {
   NS_ERROR("shouldn't call this method");
   return -1;
 }
 
 static int
-MimeObject_parse_eof (MimeObject *obj, PRBool abort_p)
+MimeObject_parse_eof (MimeObject *obj, bool abort_p)
 {
   if (obj->closed_p) return 0;
   NS_ASSERTION(!obj->parsed_p, "obj already parsed");
@@ -300,17 +271,17 @@ MimeObject_parse_eof (MimeObject *obj, PRBool abort_p)
     obj->ibuffer_fp = 0;
     if (status < 0)
     {
-      obj->closed_p = PR_TRUE;
+      obj->closed_p = true;
       return status;
     }
   }
 
-  obj->closed_p = PR_TRUE;
+  obj->closed_p = true;
   return 0;
 }
 
 static int
-MimeObject_parse_end (MimeObject *obj, PRBool abort_p)
+MimeObject_parse_end (MimeObject *obj, bool abort_p)
 {
   if (obj->parsed_p)
   {
@@ -326,20 +297,20 @@ MimeObject_parse_end (MimeObject *obj, PRBool abort_p)
   obj->obuffer_fp = 0;
   obj->obuffer_size = 0;
 
-  obj->parsed_p = PR_TRUE;
+  obj->parsed_p = true;
   return 0;
 }
 
-static PRBool
+static bool
 MimeObject_displayable_inline_p (MimeObjectClass *clazz, MimeHeaders *hdrs)
 {
   NS_ERROR("shouldn't call this method");
-  return PR_FALSE;
+  return false;
 }
 
 #if defined(DEBUG) && defined(XP_UNIX)
 static int
-MimeObject_debug_print (MimeObject *obj, PRFileDesc *stream, PRInt32 depth)
+MimeObject_debug_print (MimeObject *obj, PRFileDesc *stream, int32_t depth)
 {
   int i;
   char *addr = mime_part_address(obj);
@@ -348,7 +319,7 @@ MimeObject_debug_print (MimeObject *obj, PRFileDesc *stream, PRInt32 depth)
 /*
   fprintf(stream, "<%s %s 0x%08X>\n", obj->clazz->class_name,
       addr ? addr : "???",
-      (PRUint32) obj);
+      (uint32_t) obj);
 */
   PR_FREEIF(addr);
   return 0;

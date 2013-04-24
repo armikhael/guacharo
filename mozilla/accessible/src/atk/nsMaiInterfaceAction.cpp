@@ -1,114 +1,71 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set ts=2 et sw=2 tw=80: */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Sun Microsystems, Inc.
- * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Bolian Yin (bolian.yin@sun.com)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include "nsMaiInterfaceAction.h"
+#include "InterfaceInitFuncs.h"
 
-#include "nsAccUtils.h"
-#include "nsRoleMap.h"
+#include "Accessible-inl.h"
+#include "nsMai.h"
+#include "Role.h"
+
 #include "nsString.h"
 
-#include "nsIDOMDOMStringList.h"
+using namespace mozilla::a11y;
 
-void
-actionInterfaceInitCB(AtkActionIface *aIface)
-{
-    NS_ASSERTION(aIface, "Invalid aIface");
-    if (!aIface)
-        return;
+extern "C" {
 
-    aIface->do_action = doActionCB;
-    aIface->get_n_actions = getActionCountCB;
-    aIface->get_description = getActionDescriptionCB;
-    aIface->get_keybinding = getKeyBindingCB;
-    aIface->get_name = getActionNameCB;
-}
-
-gboolean
+static gboolean
 doActionCB(AtkAction *aAction, gint aActionIndex)
 {
-    nsAccessibleWrap *accWrap = GetAccessibleWrap(ATK_OBJECT(aAction));
-    if (!accWrap)
-        return FALSE;
+  AccessibleWrap* accWrap = GetAccessibleWrap(ATK_OBJECT(aAction));
+  if (!accWrap)
+    return FALSE;
  
-    nsresult rv = accWrap->DoAction(aActionIndex);
-    return (NS_FAILED(rv)) ? FALSE : TRUE;
+  nsresult rv = accWrap->DoAction(aActionIndex);
+  return (NS_FAILED(rv)) ? FALSE : TRUE;
 }
 
-gint
+static gint
 getActionCountCB(AtkAction *aAction)
 {
-  nsAccessibleWrap* accWrap = GetAccessibleWrap(ATK_OBJECT(aAction));
+  AccessibleWrap* accWrap = GetAccessibleWrap(ATK_OBJECT(aAction));
   return accWrap ? accWrap->ActionCount() : 0;
 }
 
-const gchar *
+static const gchar*
 getActionDescriptionCB(AtkAction *aAction, gint aActionIndex)
 {
-    nsAccessibleWrap *accWrap = GetAccessibleWrap(ATK_OBJECT(aAction));
-    if (!accWrap)
-        return nsnull;
+  AccessibleWrap* accWrap = GetAccessibleWrap(ATK_OBJECT(aAction));
+  if (!accWrap)
+    return nullptr;
 
-    nsAutoString description;
-    nsresult rv = accWrap->GetActionDescription(aActionIndex, description);
-    NS_ENSURE_SUCCESS(rv, nsnull);
-    return nsAccessibleWrap::ReturnString(description);
+  nsAutoString description;
+  nsresult rv = accWrap->GetActionDescription(aActionIndex, description);
+  NS_ENSURE_SUCCESS(rv, nullptr);
+  return AccessibleWrap::ReturnString(description);
 }
 
-const gchar *
+static const gchar*
 getActionNameCB(AtkAction *aAction, gint aActionIndex)
 {
-    nsAccessibleWrap *accWrap = GetAccessibleWrap(ATK_OBJECT(aAction));
+    AccessibleWrap* accWrap = GetAccessibleWrap(ATK_OBJECT(aAction));
     if (!accWrap)
-        return nsnull;
+        return nullptr;
 
     nsAutoString autoStr;
     nsresult rv = accWrap->GetActionName(aActionIndex, autoStr);
-    NS_ENSURE_SUCCESS(rv, nsnull);
-    return nsAccessibleWrap::ReturnString(autoStr);
+    NS_ENSURE_SUCCESS(rv, nullptr);
+    return AccessibleWrap::ReturnString(autoStr);
 }
 
-const gchar *
+static const gchar*
 getKeyBindingCB(AtkAction *aAction, gint aActionIndex)
 {
-  nsAccessibleWrap* acc = GetAccessibleWrap(ATK_OBJECT(aAction));
+  AccessibleWrap* acc = GetAccessibleWrap(ATK_OBJECT(aAction));
   if (!acc)
-    return nsnull;
+    return nullptr;
 
   // Return all key bindings including access key and keyboard shortcut.
   nsAutoString keyBindingsStr;
@@ -118,12 +75,10 @@ getKeyBindingCB(AtkAction *aAction, gint aActionIndex)
   if (!keyBinding.IsEmpty()) {
     keyBinding.AppendToString(keyBindingsStr, KeyBinding::eAtkFormat);
 
-    nsAccessible* parent = acc->Parent();
-    PRUint32 role = parent ? parent->Role() : 0;
-    if (role == nsIAccessibleRole::ROLE_PARENT_MENUITEM ||
-        role == nsIAccessibleRole::ROLE_MENUITEM ||
-        role == nsIAccessibleRole::ROLE_RADIO_MENU_ITEM ||
-        role == nsIAccessibleRole::ROLE_CHECK_MENU_ITEM) {
+    Accessible* parent = acc->Parent();
+    roles::Role role = parent ? parent->Role() : roles::NOTHING;
+    if (role == roles::PARENT_MENUITEM || role == roles::MENUITEM ||
+        role == roles::RADIO_MENU_ITEM || role == roles::CHECK_MENU_ITEM) {
       // It is submenu, expose keyboard shortcuts from menu hierarchy like
       // "s;<Alt>f:s"
       nsAutoString keysInHierarchyStr = keyBindingsStr;
@@ -136,8 +91,7 @@ getKeyBindingCB(AtkAction *aAction, gint aActionIndex)
 
           keysInHierarchyStr.Insert(str, 0);
         }
-      } while ((parent = parent->Parent()) &&
-               parent->Role() != nsIAccessibleRole::ROLE_MENUBAR);
+      } while ((parent = parent->Parent()) && parent->Role() != roles::MENUBAR);
 
       keyBindingsStr.Append(';');
       keyBindingsStr.Append(keysInHierarchyStr);
@@ -154,5 +108,20 @@ getKeyBindingCB(AtkAction *aAction, gint aActionIndex)
     keyBinding.AppendToString(keyBindingsStr, KeyBinding::eAtkFormat);
   }
 
-  return nsAccessibleWrap::ReturnString(keyBindingsStr);
+  return AccessibleWrap::ReturnString(keyBindingsStr);
+}
+}
+
+void
+actionInterfaceInitCB(AtkActionIface* aIface)
+{
+  NS_ASSERTION(aIface, "Invalid aIface");
+  if (NS_UNLIKELY(!aIface))
+    return;
+
+  aIface->do_action = doActionCB;
+  aIface->get_n_actions = getActionCountCB;
+  aIface->get_description = getActionDescriptionCB;
+  aIface->get_keybinding = getKeyBindingCB;
+  aIface->get_name = getActionNameCB;
 }

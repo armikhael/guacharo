@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 /* ::::: Folder Pane ::::: */
 .tabmail-tab[type="folder"] {
   list-style-image: url("chrome://messenger/skin/icons/folder-closed.png");
@@ -164,11 +168,6 @@ treechildren::-moz-tree-cell-text(folderNameCol, specialFolder-Inbox, newMessage
   color: blue;
 }
 
-treechildren::-moz-tree-cell(folderNameCol, newMessages-true),
-treechildren::-moz-tree-cell(folderNameCol, specialFolder-Inbox, newMessages-true) {
-
-}
-
 treechildren::-moz-tree-cell-text(subfoldersHaveUnreadMessages-true) {
   font-weight: bold;
 }
@@ -200,5 +199,5 @@ treechildren::-moz-tree-cell-text(folderNameCol, noSelect-true) {
 }
 
 .folderSummary-previewText {
-  color: grey; 
+  color: gray; 
 }

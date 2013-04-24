@@ -1,47 +1,19 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Varada Parthasarathi <varada@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+/* Prerequisites:
+   gServer - server.incomingServer defined in the calling page
+ */
 
-const nsIFilePicker = Components.interfaces.nsIFilePicker;
-const nsILocalFile = Components.interfaces.nsILocalFile;
-const LOCALFILE_CTRID = "@mozilla.org/file/local;1";
+Components.utils.import("resource://gre/modules/Services.jsm");
+Components.utils.import("resource:///modules/mailServices.js");
 
 function BrowseForLocalFolders()
 {
+  const nsIFilePicker = Components.interfaces.nsIFilePicker;
+  const nsILocalFile = Components.interfaces.nsILocalFile;
+
   var currentFolderTextBox = document.getElementById("server.localPath");
   var fp = Components.classes["@mozilla.org/filepicker;1"]
                      .createInstance(nsIFilePicker);
@@ -51,38 +23,34 @@ function BrowseForLocalFolders()
                   .getAttribute("filepickertitle"),
           nsIFilePicker.modeGetFolder);
 
-  var currentFolder = Components.classes[LOCALFILE_CTRID]
+  var currentFolder = Components.classes["@mozilla.org/file/local;1"]
                                 .createInstance(nsILocalFile);
   currentFolder.initWithPath(currentFolderTextBox.value);
   fp.displayDirectory = currentFolder;
 
-  if (fp.show() == nsIFilePicker.returnOK)
-  {
-    // Retrieve the selected folder.
-    var selectedFolder = fp.file;
+  if (fp.show() != nsIFilePicker.returnOK)
+    return;
 
-    // check that no other account/server has this same local directory
-    var allServers = Components.classes["@mozilla.org/messenger/account-manager;1"]
-                               .getService(Components.interfaces.nsIMsgAccountManager)
-                               .allServers;
-    for (var i = allServers.Count(); --i >= 0;)
-    {
-      var currentServer = allServers.QueryElementAt(i, Components.interfaces.nsIMsgIncomingServer);
-      if (currentServer.key != gServer.key &&
-          currentServer.localPath.equals(selectedFolder))
-      {
-        var directoryAlreadyUsed =
-          top.gPrefsBundle.getFormattedString(
-            "directoryUsedByOtherAccount", [ currentServer.prettyName ]);
-        Components.classes["@mozilla.org/embedcomp/prompt-service;1"]
-                  .getService(Components.interfaces.nsIPromptService)
-                  .alert(window, null, directoryAlreadyUsed);
-        return;
-      }
+  // Retrieve the selected folder.
+  let selectedFolder = fp.file;
+
+  // check that no other account/server has this same local directory
+  let allServers = MailServices.accounts.allServers;
+  for (let i = allServers.Count(); --i >= 0;) {
+    let currentServer = allServers
+      .QueryElementAt(i, Components.interfaces.nsIMsgIncomingServer);
+    if (currentServer.key == gServer.key)
+      continue;
+
+    if (currentServer.localPath.equals(selectedFolder)) {
+      let dirAlreadyUsed = top.document.getElementById("bundle_prefs")
+                              .getFormattedString("directoryUsedByOtherAccount",
+                                                  [currentServer.prettyName]);
+      Services.prompt.alert(window, null, dirAlreadyUsed);
+      return;
     }
-
-    currentFolderTextBox.value = selectedFolder.path;
   }
+  currentFolderTextBox.value = selectedFolder.path;
 }
 
 function hostnameIsIllegal(hostname)
@@ -102,4 +70,96 @@ function hostnameIsIllegal(hostname)
 function trim(string)
 {
   return string.trim();
+}
+
+/**
+ * Return server/folder name formatted with server name if needed.
+ *
+ * @param aTargetFolder  nsIMsgFolder to format name for
+ *                       If target.isServer then only its name is returned.
+ *                       Otherwise return the name as "<foldername> on <servername>".
+ */
+function prettyFolderName(aTargetFolder)
+{
+  if (aTargetFolder.isServer)
+    return aTargetFolder.prettyName;
+
+  return document.getElementById("bundle_messenger")
+                 .getFormattedString("verboseFolderFormat",
+                                     [aTargetFolder.prettyName,
+                                      aTargetFolder.server.prettyName]);
+}
+
+/**
+ * Checks validity of junk target server name and folder.
+ *
+ * @param aTargetURI  the URI specification to check
+ * @param aIsServer   true if the URI specifies only a server (without folder)
+ *
+ * @return  the value of aTargetURI if it is valid (usable), otherwise null
+ */
+function checkJunkTargetFolder(aTargetURI, aIsServer)
+{
+  try {
+    // Does the target account exist?
+    let targetServer = GetMsgFolderFromUri(aTargetURI + (aIsServer ? "/Junk" : ""),
+                                           !aIsServer).server;
+
+    // If the target server has deferred storage, Junk can't be stored into it.
+    if (targetServer.rootFolder != targetServer.rootMsgFolder)
+      return null;
+  } catch (e) {
+    return null;
+  }
+
+  return aTargetURI;
+}
+
+/**
+ * Finds a usable target for storing Junk mail.
+ * If the passed in server URI is not usable, choose Local Folders.
+ *
+ * @param aTargetURI  the URI of a server or folder to try first
+ * @param aIsServer   true if the URI specifies only a server (without folder)
+ *
+ * @return  the server/folder URI of a usable target for storing Junk
+ */
+function chooseJunkTargetFolder(aTargetURI, aIsServer)
+{
+  let server = null;
+
+  if (aTargetURI) {
+    server = GetMsgFolderFromUri(aTargetURI, false).server;
+    if (!server.canCreateFoldersOnServer || !server.canSearchMessages ||
+        (server.rootFolder != server.rootMsgFolder))
+      server = null;
+  }
+  if (!server)
+    server = MailServices.accounts.localFoldersServer;
+
+  return server.serverURI + (!aIsServer ? "/Junk" : "");
+}
+
+/**
+ * Opens Preferences (Options) dialog on the Advanced pane, General tab
+ * so that the user sees where the global receipts settings can be found.
+ *
+ * @param aTBPaneId     Thunderbird pref paneID to open.
+ * @param aTBTabId      Thunderbird tabID to open.
+ * @param aTBOtherArgs  Other arguments to send to the pref tab.
+ * @param aSMPaneId     Seamonkey pref pane to open.
+ */
+function openPrefsFromAccountManager(aTBPaneId, aTBTabId, aTBOtherArgs, aSMPaneId) {
+  let win = Services.wm.getMostRecentWindow("mail:3pane") ||
+            Services.wm.getMostRecentWindow("mail:messageWindow") ||
+            Services.wm.getMostRecentWindow("msgcompose");
+  if (!win)
+    return;
+
+  // If openOptionsDialog() exists, we are in Thunderbird.
+  if (typeof win.openOptionsDialog == "function")
+    win.openOptionsDialog(aTBPaneId, aTBTabId, aTBOtherArgs);
+  // If goPreferences() exists, we are in Seamonkey.
+  if (typeof win.goPreferences == "function")
+    win.goPreferences(aSMPaneId);
 }

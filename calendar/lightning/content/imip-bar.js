@@ -1,43 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Lightning code.
- *
- * The Initial Developer of the Original Code is Simdesk Technologies Inc.
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Clint Talbert <ctalbert.moz@gmail.com>
- *   Matthew Willis <lilmatt@mozilla.com>
- *   Philipp Kewisch <mozilla@kewis.ch>
- *   Daniel Boelzle <daniel.boelzle@sun.com>
- *   Martin Schroeder <mschroeder@mozilla.x-home.org>
- *   Simon Vaillancourt <simon.at.orcl@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://calendar/modules/calUtils.jsm");
 Components.utils.import("resource://calendar/modules/calItipUtils.jsm");
@@ -68,6 +31,7 @@ var ltnImipBar = {
 
     /**
      * Load Handler called to initialize the imip bar
+     * NOTE: This function is called without a valid this-context!
      */
     load: function ltnImipOnLoad() {
         // Add a listener to gMessageListeners defined in msgHdrViewOverlay.js
@@ -88,12 +52,13 @@ var ltnImipBar = {
 
     /**
      * Unload handler to clean up after the imip bar
+     * NOTE: This function is called without a valid this-context!
      */
     unload: function ltnImipOnUnload() {
         removeEventListener("messagepane-loaded", ltnImipBar.load, true);
         removeEventListener("messagepane-unloaded", ltnImipBar.unload, true);
 
-        ltnImipBar.itipItem = null;
+        ltnImipBar.hideBar();
         Services.obs.removeObserver(ltnImipBar, "onItipItemCreation");
     },
 
@@ -135,10 +100,22 @@ var ltnImipBar = {
         hideElement("imip-button1");
         hideElement("imip-button2");
         hideElement("imip-button3");
+
         // Clear our iMIP/iTIP stuff so it doesn't contain stale information.
+        cal.itip.cleanupItipItem(ltnImipBar.itipItem);
         ltnImipBar.itipItem = null;
     },
 
+    /**
+     * This is our callback function that is called each time the itip bar UI needs updating.
+     * NOTE: This function is called without a valid this-context!
+     *
+     * @param itipItem      The iTIP item to set up for
+     * @param rc            The status code from processing
+     * @param actionFunc    The action function called for execution
+     * @param foundItems    An array of items found while searching for the item
+     *                        in subscribed calendars
+     */
     setupOptions: function setupOptions(itipItem, rc, actionFunc, foundItems) {
         let imipBar =  document.getElementById("imip-bar");
         let data = cal.itip.getOptionsText(itipItem, rc, actionFunc);
@@ -169,42 +146,56 @@ var ltnImipBar = {
                 let item = items[0].isMutable ? items[0] : items[0].clone();
                 modifyEventWithDialog(item);
             }
-        } else if (cal.itip.promptCalendar(ltnImipBar.actionFunc.method, ltnImipBar.itipItem, window)) {
-            // hide the buttons now, to disable pressing them twice...
-            hideElement("imip-button1");
-            hideElement("imip-button2");
-            hideElement("imip-button3");
-
-            let opListener = {
-                onOperationComplete: function ltnItipActionListener_onOperationComplete(aCalendar,
-                                                                                        aStatus,
-                                                                                        aOperationType,
-                                                                                        aId,
-                                                                                        aDetail) {
-                    // For now, we just state the status for the user something very simple
-                    let imipBar = document.getElementById("imip-bar");
-                    let label = cal.itip.getCompleteText(aStatus, aOperationType);
-                    imipBar.setAttribute("label", label);
-
-                    if (!Components.isSuccessCode(aStatus)) {
-                        showError(label);
-                    }
-                },
-                onGetResult: function ltnItipActionListener_onGetResult(aCalendar,
-                                                                        aStatus,
-                                                                        aItemType,
-                                                                        aDetail,
-                                                                        aCount,
-                                                                        aItems) {
+        } else {
+            let delmgr = Components.classes["@mozilla.org/calendar/deleted-items-manager;1"]
+                                   .getService(Components.interfaces.calIDeletedItems);
+            let items = ltnImipBar.itipItem.getItemList({});
+            if (items && items.length) {
+                let delTime = delmgr.getDeletedDate(items[0].id);
+                let dialogText = ltnGetString("lightning", "confirmProcessInvitation");
+                let dialogTitle = ltnGetString("lightning", "confirmProcessInvitationTitle");
+                if (delTime && !Services.prompt.confirm(window, dialogTitle, dialogText)) {
+                    return false;
                 }
-            };
-
-            try {
-                ltnImipBar.actionFunc(opListener, partStat);
-            } catch (exc) {
-                Components.utils.reportError(exc);
             }
-            return true;
+
+            if (cal.itip.promptCalendar(ltnImipBar.actionFunc.method, ltnImipBar.itipItem, window)) {
+                // hide the buttons now, to disable pressing them twice...
+                hideElement("imip-button1");
+                hideElement("imip-button2");
+                hideElement("imip-button3");
+
+                let opListener = {
+                    onOperationComplete: function ltnItipActionListener_onOperationComplete(aCalendar,
+                                                                                            aStatus,
+                                                                                            aOperationType,
+                                                                                            aId,
+                                                                                            aDetail) {
+                        // For now, we just state the status for the user something very simple
+                        let imipBar = document.getElementById("imip-bar");
+                        let label = cal.itip.getCompleteText(aStatus, aOperationType);
+                        imipBar.setAttribute("label", label);
+
+                        if (!Components.isSuccessCode(aStatus)) {
+                            showError(label);
+                        }
+                    },
+                    onGetResult: function ltnItipActionListener_onGetResult(aCalendar,
+                                                                            aStatus,
+                                                                            aItemType,
+                                                                            aDetail,
+                                                                            aCount,
+                                                                            aItems) {
+                    }
+                };
+
+                try {
+                    ltnImipBar.actionFunc(opListener, partStat);
+                } catch (exc) {
+                    Components.utils.reportError(exc);
+                }
+                return true;
+            }
         }
         return false;
     }

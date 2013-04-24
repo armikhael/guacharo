@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"
 #include "nsDBFolderInfo.h"
@@ -42,7 +9,6 @@
 #include "nsMsgFolderFlags.h"
 #include "nsIPrefService.h"
 #include "nsIPrefBranch.h"
-#include "nsIPrefBranch2.h"
 #include "nsIPrefLocalizedString.h"
 #include "nsIObserver.h"
 #include "nsIObserverService.h"
@@ -50,6 +16,7 @@
 #include "nsISupportsObsolete.h"
 #include "nsServiceManagerUtils.h"
 #include "nsImapCore.h"
+#include "mozilla/Services.h"
 
 static const char *kDBFolderInfoScope = "ns:msg:db:row:scope:dbfolderinfo:all";
 static const char *kDBFolderInfoTableKind = "ns:msg:db:table:kind:dbfolderinfo";
@@ -79,9 +46,9 @@ static const char * kLocaleColumnName = "locale";
 
 #define kMAILNEWS_VIEW_DEFAULT_CHARSET        "mailnews.view_default_charset"
 #define kMAILNEWS_DEFAULT_CHARSET_OVERRIDE    "mailnews.force_charset_override"
-static nsCString* gDefaultCharacterSet = nsnull;
-static PRBool     gDefaultCharacterOverride;
-static nsIObserver *gFolderCharsetObserver = nsnull;
+static nsCString* gDefaultCharacterSet = nullptr;
+static bool       gDefaultCharacterOverride;
+static nsIObserver *gFolderCharsetObserver = nullptr;
 
 // observer for charset related preference notification
 class nsFolderCharsetObserver : public nsIObserver {
@@ -104,7 +71,7 @@ NS_IMETHODIMP nsFolderCharsetObserver::Observe(nsISupports *aSubject, const char
   if (NS_FAILED(rv)) return rv;
 
   nsCOMPtr<nsIPrefBranch> prefBranch;
-  rv = prefs->GetBranch(nsnull, getter_AddRefs(prefBranch));
+  rv = prefs->GetBranch(nullptr, getter_AddRefs(prefBranch));
   NS_ENSURE_SUCCESS(rv, rv);
 
   if (!strcmp(aTopic, NS_PREFBRANCH_PREFCHANGE_TOPIC_ID))
@@ -134,15 +101,11 @@ NS_IMETHODIMP nsFolderCharsetObserver::Observe(nsISupports *aSubject, const char
   }
   else if (!strcmp(aTopic, NS_XPCOM_SHUTDOWN_OBSERVER_ID))
   {
-    nsCOMPtr<nsIPrefBranch2> pbi = do_QueryInterface(prefBranch);
-    if (pbi)
-    {
-      rv = pbi->RemoveObserver(kMAILNEWS_VIEW_DEFAULT_CHARSET, this);
-      rv = pbi->RemoveObserver(kMAILNEWS_DEFAULT_CHARSET_OVERRIDE, this);
-    }
+    rv = prefBranch->RemoveObserver(kMAILNEWS_VIEW_DEFAULT_CHARSET, this);
+    rv = prefBranch->RemoveObserver(kMAILNEWS_DEFAULT_CHARSET_OVERRIDE, this);
     NS_IF_RELEASE(gFolderCharsetObserver);
     delete gDefaultCharacterSet;
-    gDefaultCharacterSet = nsnull;
+    gDefaultCharacterSet = nullptr;
   }
   return rv;
 }
@@ -157,7 +120,7 @@ nsDBFolderInfo::QueryInterface(REFNSIID iid, void** result)
   if (! result)
     return NS_ERROR_NULL_POINTER;
 
-  *result = nsnull;
+  *result = nullptr;
   if(iid.Equals(NS_GET_IID(nsIDBFolderInfo)) ||
     iid.Equals(NS_GET_IID(nsISupports)))
   {
@@ -191,8 +154,8 @@ nsDBFolderInfo::nsDBFolderInfo(nsMsgDatabase *mdb)
   m_totalPendingMessages =0;
   m_unreadPendingMessages = 0;
 
-  m_mdbTokensInitialized = PR_FALSE;
-  m_charSetOverride = PR_FALSE;
+  m_mdbTokensInitialized = false;
+  m_charSetOverride = false;
 
   if (!gFolderCharsetObserver)
   {
@@ -201,7 +164,7 @@ nsDBFolderInfo::nsDBFolderInfo(nsMsgDatabase *mdb)
     nsCOMPtr<nsIPrefBranch> prefBranch;
     if (NS_SUCCEEDED(rv))
     {
-      rv = prefs->GetBranch(nsnull, getter_AddRefs(prefBranch));
+      rv = prefs->GetBranch(nullptr, getter_AddRefs(prefBranch));
     }
     if (NS_SUCCEEDED(rv))
     {
@@ -230,17 +193,15 @@ nsDBFolderInfo::nsDBFolderInfo(nsMsgDatabase *mdb)
       if (gFolderCharsetObserver)
       {
         NS_ADDREF(gFolderCharsetObserver);
-        nsCOMPtr<nsIPrefBranch2> pbi = do_QueryInterface(prefBranch);
-        if (pbi) {
-          rv = pbi->AddObserver(kMAILNEWS_VIEW_DEFAULT_CHARSET, gFolderCharsetObserver, PR_FALSE);
-          rv = pbi->AddObserver(kMAILNEWS_DEFAULT_CHARSET_OVERRIDE, gFolderCharsetObserver, PR_FALSE);
-        }
+        rv = prefBranch->AddObserver(kMAILNEWS_VIEW_DEFAULT_CHARSET, gFolderCharsetObserver, false);
+        rv = prefBranch->AddObserver(kMAILNEWS_DEFAULT_CHARSET_OVERRIDE, gFolderCharsetObserver, false);
 
         // also register for shutdown
-        nsCOMPtr<nsIObserverService> observerService = do_GetService("@mozilla.org/observer-service;1", &rv);
-        if (NS_SUCCEEDED(rv))
+        nsCOMPtr<nsIObserverService> observerService =
+          mozilla::services::GetObserverService();
+        if (observerService)
         {
-          rv = observerService->AddObserver(gFolderCharsetObserver, NS_XPCOM_SHUTDOWN_OBSERVER_ID, PR_FALSE);
+          rv = observerService->AddObserver(gFolderCharsetObserver, NS_XPCOM_SHUTDOWN_OBSERVER_ID, false);
         }
       }
     }
@@ -281,14 +242,14 @@ void nsDBFolderInfo::ReleaseExternalReferences()
     if (m_mdbTable)
     {
       NS_RELEASE(m_mdbTable);
-      m_mdbTable = nsnull;
+      m_mdbTable = nullptr;
     }
     if (m_mdbRow)
     {
       NS_RELEASE(m_mdbRow);
-      m_mdbRow = nsnull;
+      m_mdbRow = nullptr;
     }
-    m_mdb = nsnull;
+    m_mdb = nullptr;
   }
 }
 
@@ -301,14 +262,12 @@ nsresult nsDBFolderInfo::AddToNewMDB()
     nsIMdbStore *store = m_mdb->GetStore();
     // create the unique table for the dbFolderInfo.
     mdb_err err = store->NewTable(m_mdb->GetEnv(), m_rowScopeToken,
-      m_tableKindToken, PR_TRUE, nsnull, &m_mdbTable);
+      m_tableKindToken, true, nullptr, &m_mdbTable);
 
     // make sure the oid of the table is 1.
     struct mdbOid folderInfoTableOID;
     folderInfoTableOID.mOid_Id = 1;
     folderInfoTableOID.mOid_Scope = m_rowScopeToken;
-
-    //		m_mdbTable->BecomeContent(m_mdb->GetEnv(), &folderInfoTableOID);
 
     // create the singleton row for the dbFolderInfo.
     err  = store->NewRowWithOid(m_mdb->GetEnv(),
@@ -316,9 +275,7 @@ nsresult nsDBFolderInfo::AddToNewMDB()
 
     // add the row to the singleton table.
     if (m_mdbRow && NS_SUCCEEDED(err))
-    {
       err = m_mdbTable->AddRow(m_mdb->GetEnv(), m_mdbRow);
-    }
 
     ret = err;	// what are we going to do about mdb_err's?
   }
@@ -391,7 +348,7 @@ nsresult nsDBFolderInfo::InitMDBInfo()
     store->StringToToken(env,  kUnreadPendingMessagesColumnName, &m_unreadPendingMessagesColumnToken);
     store->StringToToken(env,  kExpiredMarkColumnName, &m_expiredMarkColumnToken);
     store->StringToToken(env,  kVersionColumnName, &m_versionColumnToken);
-    m_mdbTokensInitialized  = PR_TRUE;
+    m_mdbTokensInitialized  = true;
   }
 
   return ret;
@@ -404,17 +361,17 @@ nsresult nsDBFolderInfo::LoadMemberVariables()
   GetInt32PropertyWithToken(m_numUnreadMessagesColumnToken, m_numUnreadMessages);
   GetInt32PropertyWithToken(m_flagsColumnToken, m_flags);
   GetUint64PropertyWithToken(m_folderSizeColumnToken, &m_folderSize);
-  GetInt32PropertyWithToken(m_folderDateColumnToken, (PRInt32 &) m_folderDate);
+  GetInt32PropertyWithToken(m_folderDateColumnToken, (int32_t &) m_folderDate);
   GetInt32PropertyWithToken(m_imapUidValidityColumnToken, m_ImapUidValidity, kUidUnknown);
-  GetInt32PropertyWithToken(m_expiredMarkColumnToken, (PRInt32 &) m_expiredMark);
-  GetInt32PropertyWithToken(m_expungedBytesColumnToken, (PRInt32 &) m_expungedBytes);
-  GetInt32PropertyWithToken(m_highWaterMessageKeyColumnToken, (PRInt32 &) m_highWaterMessageKey);
-  PRInt32 version;
+  GetInt32PropertyWithToken(m_expiredMarkColumnToken, (int32_t &) m_expiredMark);
+  GetInt32PropertyWithToken(m_expungedBytesColumnToken, (int32_t &) m_expungedBytes);
+  GetInt32PropertyWithToken(m_highWaterMessageKeyColumnToken, (int32_t &) m_highWaterMessageKey);
+  int32_t version;
 
   GetInt32PropertyWithToken(m_versionColumnToken, version);
-  m_version = (PRUint16) version;
+  m_version = (uint16_t) version;
   m_charSetOverride = gDefaultCharacterOverride;
-  PRUint32 propertyValue;
+  uint32_t propertyValue;
   nsresult rv = GetUint32Property(kCharacterSetOverrideColumnName, gDefaultCharacterOverride, &propertyValue);
   if (NS_SUCCEEDED(rv))
     m_charSetOverride = propertyValue;
@@ -423,20 +380,20 @@ nsresult nsDBFolderInfo::LoadMemberVariables()
   return NS_OK;
 }
 
-NS_IMETHODIMP nsDBFolderInfo::SetVersion(PRUint32 version)
+NS_IMETHODIMP nsDBFolderInfo::SetVersion(uint32_t version)
 {
   m_version = version;
-  return SetUint32PropertyWithToken(m_versionColumnToken, (PRUint32) m_version);
+  return SetUint32PropertyWithToken(m_versionColumnToken, (uint32_t) m_version);
 }
 
-NS_IMETHODIMP nsDBFolderInfo::GetVersion(PRUint32 *version)
+NS_IMETHODIMP nsDBFolderInfo::GetVersion(uint32_t *version)
 {
   *version = m_version;
   return NS_OK;
 }
 
 
-nsresult nsDBFolderInfo::AdjustHighWater(nsMsgKey highWater, PRBool force)
+nsresult nsDBFolderInfo::AdjustHighWater(nsMsgKey highWater, bool force)
 {
   if (force || m_highWaterMessageKey < highWater)
   {
@@ -449,37 +406,37 @@ nsresult nsDBFolderInfo::AdjustHighWater(nsMsgKey highWater, PRBool force)
 
 NS_IMETHODIMP nsDBFolderInfo::SetHighWater(nsMsgKey highWater)
 {
-  return AdjustHighWater(highWater, PR_TRUE);
+  return AdjustHighWater(highWater, true);
 }
 
 NS_IMETHODIMP nsDBFolderInfo::OnKeyAdded(nsMsgKey aNewKey)
 {
-  return AdjustHighWater(aNewKey, PR_FALSE);
+  return AdjustHighWater(aNewKey, false);
 }
 
 NS_IMETHODIMP
-nsDBFolderInfo::GetFolderSize(PRUint64 *size)
+nsDBFolderInfo::GetFolderSize(uint64_t *size)
 {
   NS_ENSURE_ARG_POINTER(size);
   *size = m_folderSize;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsDBFolderInfo::SetFolderSize(PRUint64 size)
+NS_IMETHODIMP nsDBFolderInfo::SetFolderSize(uint64_t size)
 {
   m_folderSize = size;
   return SetUint64Property(kFolderSizeColumnName, m_folderSize);
 }
 
 NS_IMETHODIMP
-nsDBFolderInfo::GetFolderDate(PRUint32 *folderDate)
+nsDBFolderInfo::GetFolderDate(uint32_t *folderDate)
 {
   NS_ENSURE_ARG_POINTER(folderDate);
   *folderDate = m_folderDate;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsDBFolderInfo::SetFolderDate(PRUint32 folderDate)
+NS_IMETHODIMP nsDBFolderInfo::SetFolderDate(uint32_t folderDate)
 {
   m_folderDate = folderDate;
   return SetUint32PropertyWithToken(m_folderDateColumnToken, folderDate);
@@ -497,10 +454,10 @@ NS_IMETHODIMP nsDBFolderInfo::GetHighWater(nsMsgKey *result)
     nsresult rv = m_mdb->ReverseEnumerateMessages(getter_AddRefs(hdrs));
     if (NS_FAILED(rv))
       return rv;
-    PRBool hasMore = PR_FALSE;
+    bool hasMore = false;
     nsCOMPtr<nsIMsgDBHdr> pHeader;
     nsMsgKey recalculatedHighWater = 1;
-    PRInt32 i = 0;
+    int32_t i = 0;
     while(i++ < 100 && NS_SUCCEEDED(rv = hdrs->HasMoreElements(&hasMore))
               && hasMore)
     {
@@ -534,7 +491,7 @@ NS_IMETHODIMP nsDBFolderInfo::GetExpiredMark(nsMsgKey *result)
 }
 
 NS_IMETHODIMP
-nsDBFolderInfo::ChangeExpungedBytes(PRInt32 delta)
+nsDBFolderInfo::ChangeExpungedBytes(int32_t delta)
 {
     return SetExpungedBytes(m_expungedBytes + delta);
 }
@@ -549,28 +506,28 @@ NS_IMETHODIMP nsDBFolderInfo::GetMailboxName(nsAString &boxName)
   return GetPropertyWithToken(m_mailboxNameColumnToken, boxName);
 }
 
-NS_IMETHODIMP nsDBFolderInfo::ChangeNumUnreadMessages(PRInt32 delta)
+NS_IMETHODIMP nsDBFolderInfo::ChangeNumUnreadMessages(int32_t delta)
 {
   m_numUnreadMessages += delta;
   // m_numUnreadMessages can never be set to negative.
   if (m_numUnreadMessages < 0)
   {
 #ifdef DEBUG_bienvenu1
-     NS_ASSERTION(PR_FALSE, "Hardcoded assertion");
+     NS_ASSERTION(false, "Hardcoded assertion");
 #endif
       m_numUnreadMessages = 0;
   }
   return SetUint32PropertyWithToken(m_numUnreadMessagesColumnToken, m_numUnreadMessages);
 }
 
-NS_IMETHODIMP nsDBFolderInfo::ChangeNumMessages(PRInt32 delta)
+NS_IMETHODIMP nsDBFolderInfo::ChangeNumMessages(int32_t delta)
 {
   m_numMessages += delta;
   // m_numMessages can never be set to negative.
   if (m_numMessages < 0)
   {
 #ifdef DEBUG_bienvenu
-    NS_ASSERTION(PR_FALSE, "num messages can't be < 0");
+    NS_ASSERTION(false, "num messages can't be < 0");
 #endif
     m_numMessages = 0;
   }
@@ -578,50 +535,50 @@ NS_IMETHODIMP nsDBFolderInfo::ChangeNumMessages(PRInt32 delta)
 }
 
 
-NS_IMETHODIMP nsDBFolderInfo::GetNumUnreadMessages(PRInt32 *result)
+NS_IMETHODIMP nsDBFolderInfo::GetNumUnreadMessages(int32_t *result)
 {
   *result = m_numUnreadMessages;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsDBFolderInfo::SetNumUnreadMessages(PRInt32 numUnreadMessages)
+NS_IMETHODIMP nsDBFolderInfo::SetNumUnreadMessages(int32_t numUnreadMessages)
 {
   m_numUnreadMessages = numUnreadMessages;
   return SetUint32PropertyWithToken(m_numUnreadMessagesColumnToken, m_numUnreadMessages);
 }
 
-NS_IMETHODIMP nsDBFolderInfo::GetNumMessages(PRInt32 *result)
+NS_IMETHODIMP nsDBFolderInfo::GetNumMessages(int32_t *result)
 {
   *result = m_numMessages;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsDBFolderInfo::SetNumMessages(PRInt32 numMessages)
+NS_IMETHODIMP nsDBFolderInfo::SetNumMessages(int32_t numMessages)
 {
   m_numMessages = numMessages;
   return SetUint32PropertyWithToken(m_numMessagesColumnToken, m_numMessages);
 }
 
-NS_IMETHODIMP nsDBFolderInfo::GetExpungedBytes(PRInt32 *result)
+NS_IMETHODIMP nsDBFolderInfo::GetExpungedBytes(int32_t *result)
 {
   *result = m_expungedBytes;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsDBFolderInfo::SetExpungedBytes(PRInt32 expungedBytes)
+NS_IMETHODIMP nsDBFolderInfo::SetExpungedBytes(int32_t expungedBytes)
 {
   m_expungedBytes = expungedBytes;
   return SetUint32PropertyWithToken(m_expungedBytesColumnToken, m_expungedBytes);
 }
 
 
-NS_IMETHODIMP nsDBFolderInfo::GetFlags(PRInt32 *result)
+NS_IMETHODIMP nsDBFolderInfo::GetFlags(int32_t *result)
 {
   *result = m_flags;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsDBFolderInfo::SetFlags(PRInt32 flags)
+NS_IMETHODIMP nsDBFolderInfo::SetFlags(int32_t flags)
 {
   nsresult ret = NS_OK;
 
@@ -634,33 +591,33 @@ NS_IMETHODIMP nsDBFolderInfo::SetFlags(PRInt32 flags)
   return ret;
 }
 
-NS_IMETHODIMP nsDBFolderInfo::OrFlags(PRInt32 flags, PRInt32 *result)
+NS_IMETHODIMP nsDBFolderInfo::OrFlags(int32_t flags, int32_t *result)
 {
   m_flags |= flags;
   *result = m_flags;
   return SetInt32PropertyWithToken(m_flagsColumnToken, m_flags);
 }
 
-NS_IMETHODIMP nsDBFolderInfo::AndFlags(PRInt32 flags, PRInt32 *result)
+NS_IMETHODIMP nsDBFolderInfo::AndFlags(int32_t flags, int32_t *result)
 {
   m_flags &= flags;
   *result = m_flags;
   return SetInt32PropertyWithToken(m_flagsColumnToken, m_flags);
 }
 
-NS_IMETHODIMP	nsDBFolderInfo::GetImapUidValidity(PRInt32 *result)
+NS_IMETHODIMP	nsDBFolderInfo::GetImapUidValidity(int32_t *result)
 {
   *result = m_ImapUidValidity;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsDBFolderInfo::SetImapUidValidity(PRInt32 uidValidity)
+NS_IMETHODIMP nsDBFolderInfo::SetImapUidValidity(int32_t uidValidity)
 {
   m_ImapUidValidity = uidValidity;
   return SetUint32PropertyWithToken(m_imapUidValidityColumnToken, m_ImapUidValidity);
 }
 
-PRBool nsDBFolderInfo::TestFlag(PRInt32 flags)
+bool nsDBFolderInfo::TestFlag(int32_t flags)
 {
   return (m_flags & flags) != 0;
 }
@@ -695,14 +652,14 @@ NS_IMETHODIMP nsDBFolderInfo::SetCharacterSet(const nsACString &charSet)
   return SetCharProperty(kCharacterSetColumnName, charSet);
 }
 
-NS_IMETHODIMP nsDBFolderInfo::GetCharacterSetOverride(PRBool *characterSetOverride)
+NS_IMETHODIMP nsDBFolderInfo::GetCharacterSetOverride(bool *characterSetOverride)
 {
   NS_ENSURE_ARG_POINTER(characterSetOverride);
   *characterSetOverride = m_charSetOverride;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsDBFolderInfo::SetCharacterSetOverride(PRBool characterSetOverride)
+NS_IMETHODIMP nsDBFolderInfo::SetCharacterSetOverride(bool characterSetOverride)
 {
   m_charSetOverride = characterSetOverride;
   return SetUint32Property(kCharacterSetOverrideColumnName, characterSetOverride);
@@ -721,40 +678,40 @@ NS_IMETHODIMP nsDBFolderInfo::SetLocale(const nsAString &locale)
 }
 
 NS_IMETHODIMP
-nsDBFolderInfo::GetImapTotalPendingMessages(PRInt32 *result)
+nsDBFolderInfo::GetImapTotalPendingMessages(int32_t *result)
 {
   NS_ENSURE_ARG_POINTER(result);
   *result = m_totalPendingMessages;
   return NS_OK;
 }
 
-void nsDBFolderInfo::ChangeImapTotalPendingMessages(PRInt32 delta)
+void nsDBFolderInfo::ChangeImapTotalPendingMessages(int32_t delta)
 {
   m_totalPendingMessages+=delta;
   SetInt32PropertyWithToken(m_totalPendingMessagesColumnToken, m_totalPendingMessages);
 }
 
 NS_IMETHODIMP
-nsDBFolderInfo::GetImapUnreadPendingMessages(PRInt32 *result)
+nsDBFolderInfo::GetImapUnreadPendingMessages(int32_t *result)
 {
   NS_ENSURE_ARG_POINTER(result);
   *result = m_unreadPendingMessages;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsDBFolderInfo::SetImapUnreadPendingMessages(PRInt32 numUnreadPendingMessages)
+NS_IMETHODIMP nsDBFolderInfo::SetImapUnreadPendingMessages(int32_t numUnreadPendingMessages)
 {
   m_unreadPendingMessages = numUnreadPendingMessages;
   return SetUint32PropertyWithToken(m_unreadPendingMessagesColumnToken, m_unreadPendingMessages);
 }
 
-NS_IMETHODIMP nsDBFolderInfo::SetImapTotalPendingMessages(PRInt32 numTotalPendingMessages)
+NS_IMETHODIMP nsDBFolderInfo::SetImapTotalPendingMessages(int32_t numTotalPendingMessages)
 {
   m_totalPendingMessages = numTotalPendingMessages;
   return SetUint32PropertyWithToken(m_totalPendingMessagesColumnToken, m_totalPendingMessages);
 }
 
-void nsDBFolderInfo::ChangeImapUnreadPendingMessages(PRInt32 delta)
+void nsDBFolderInfo::ChangeImapUnreadPendingMessages(int32_t delta)
 {
   m_unreadPendingMessages+=delta;
   SetInt32PropertyWithToken(m_unreadPendingMessagesColumnToken, m_unreadPendingMessages);
@@ -763,7 +720,7 @@ void nsDBFolderInfo::ChangeImapUnreadPendingMessages(PRInt32 delta)
 /* attribute nsMsgViewTypeValue viewType; */
 NS_IMETHODIMP nsDBFolderInfo::GetViewType(nsMsgViewTypeValue *aViewType)
 {
-  PRUint32 viewTypeValue;
+  uint32_t viewTypeValue;
   nsresult rv = GetUint32Property("viewType", nsMsgViewType::eShowAllThreads, &viewTypeValue);
   *aViewType = viewTypeValue;
   return rv;
@@ -780,7 +737,7 @@ NS_IMETHODIMP nsDBFolderInfo::GetViewFlags(nsMsgViewFlagsTypeValue *aViewFlags)
   nsresult rv = m_mdb->GetDefaultViewFlags(&defaultViewFlags);
   NS_ENSURE_SUCCESS(rv,rv);
 
-  PRUint32 viewFlagsValue;
+  uint32_t viewFlagsValue;
   rv = GetUint32Property("viewFlags", defaultViewFlags, &viewFlagsValue);
   *aViewFlags = viewFlagsValue;
   return rv;
@@ -797,7 +754,7 @@ NS_IMETHODIMP nsDBFolderInfo::GetSortType(nsMsgViewSortTypeValue *aSortType)
   nsresult rv = m_mdb->GetDefaultSortType(&defaultSortType);
   NS_ENSURE_SUCCESS(rv,rv);
 
-  PRUint32 sortTypeValue;
+  uint32_t sortTypeValue;
   rv = GetUint32Property("sortType", defaultSortType, &sortTypeValue);
   *aSortType = sortTypeValue;
   return rv;
@@ -814,7 +771,7 @@ NS_IMETHODIMP nsDBFolderInfo::GetSortOrder(nsMsgViewSortOrderValue *aSortOrder)
   nsresult rv = m_mdb->GetDefaultSortOrder(&defaultSortOrder);
   NS_ENSURE_SUCCESS(rv,rv);
 
-  PRUint32 sortOrderValue;
+  uint32_t sortOrderValue;
   rv = GetUint32Property("sortOrder", defaultSortOrder, &sortOrderValue);
   *aSortOrder = sortOrderValue;
   return rv;
@@ -858,7 +815,7 @@ NS_IMETHODIMP nsDBFolderInfo::GetCharProperty(const char *propertyName,
   return rv;
 }
 
-NS_IMETHODIMP nsDBFolderInfo::SetUint32Property(const char *propertyName, PRUint32 propertyValue)
+NS_IMETHODIMP nsDBFolderInfo::SetUint32Property(const char *propertyName, uint32_t propertyValue)
 {
   return m_mdb->SetUint32Property(m_mdbRow, propertyName, propertyValue);
 }
@@ -873,18 +830,18 @@ nsresult nsDBFolderInfo::SetPropertyWithToken(mdb_token aProperty, const nsAStri
   return m_mdb->SetNSStringPropertyWithToken(m_mdbRow, aProperty, propertyStr);
 }
 
-nsresult  nsDBFolderInfo::SetUint32PropertyWithToken(mdb_token aProperty, PRUint32 propertyValue)
+nsresult  nsDBFolderInfo::SetUint32PropertyWithToken(mdb_token aProperty, uint32_t propertyValue)
 {
   return m_mdb->UInt32ToRowCellColumn(m_mdbRow, aProperty, propertyValue);
 }
 
 nsresult  nsDBFolderInfo::SetUint64Property(const char *aProperty,
-                                            PRUint64 propertyValue)
+                                            uint64_t propertyValue)
 {
   return m_mdb->SetUint64Property(m_mdbRow, aProperty, propertyValue);
 }
 
-nsresult  nsDBFolderInfo::SetInt32PropertyWithToken(mdb_token aProperty, PRInt32 propertyValue)
+nsresult  nsDBFolderInfo::SetInt32PropertyWithToken(mdb_token aProperty, int32_t propertyValue)
 {
   nsAutoString propertyStr;
   propertyStr.AppendInt(propertyValue, 16);
@@ -896,36 +853,36 @@ nsresult nsDBFolderInfo::GetPropertyWithToken(mdb_token aProperty, nsAString &re
   return m_mdb->RowCellColumnTonsString(m_mdbRow, aProperty, resultProperty);
 }
 
-nsresult nsDBFolderInfo::GetUint32PropertyWithToken(mdb_token aProperty, PRUint32 &propertyValue, PRUint32 defaultValue)
+nsresult nsDBFolderInfo::GetUint32PropertyWithToken(mdb_token aProperty, uint32_t &propertyValue, uint32_t defaultValue)
 {
   return m_mdb->RowCellColumnToUInt32(m_mdbRow, aProperty, propertyValue, defaultValue);
 }
 
-nsresult nsDBFolderInfo::GetInt32PropertyWithToken(mdb_token aProperty, PRInt32 &propertyValue, PRInt32 defaultValue)
+nsresult nsDBFolderInfo::GetInt32PropertyWithToken(mdb_token aProperty, int32_t &propertyValue, int32_t defaultValue)
 {
-  return m_mdb->RowCellColumnToUInt32(m_mdbRow, aProperty, (PRUint32 &) propertyValue, defaultValue);
+  return m_mdb->RowCellColumnToUInt32(m_mdbRow, aProperty, (uint32_t &) propertyValue, defaultValue);
 }
 
-NS_IMETHODIMP nsDBFolderInfo::GetUint32Property(const char *propertyName, PRUint32 defaultValue, PRUint32 *propertyValue)
+NS_IMETHODIMP nsDBFolderInfo::GetUint32Property(const char *propertyName, uint32_t defaultValue, uint32_t *propertyValue)
 {
   return m_mdb->GetUint32Property(m_mdbRow, propertyName, propertyValue, defaultValue);
 }
 
 nsresult nsDBFolderInfo::GetUint64PropertyWithToken(mdb_token columnToken,
-                                                    PRUint64 *propertyValue)
+                                                    uint64_t *propertyValue)
 {
   return m_mdb->RowCellColumnToUInt64(m_mdbRow, columnToken, propertyValue, 0);
 }
 
-NS_IMETHODIMP nsDBFolderInfo::GetBooleanProperty(const char *propertyName, PRBool defaultValue, PRBool *propertyValue)
+NS_IMETHODIMP nsDBFolderInfo::GetBooleanProperty(const char *propertyName, bool defaultValue, bool *propertyValue)
 {
-  PRUint32 defaultUint32Value = (defaultValue) ? 1 : 0;
-  PRUint32 returnValue;
+  uint32_t defaultUint32Value = (defaultValue) ? 1 : 0;
+  uint32_t returnValue;
   nsresult rv = m_mdb->GetUint32Property(m_mdbRow, propertyName, &returnValue, defaultUint32Value);
   *propertyValue = (returnValue != 0);
   return rv;
 }
-NS_IMETHODIMP	nsDBFolderInfo::SetBooleanProperty(const char *propertyName, PRBool propertyValue)
+NS_IMETHODIMP	nsDBFolderInfo::SetBooleanProperty(const char *propertyName, bool propertyValue)
 {
   return m_mdb->SetUint32Property(m_mdbRow, propertyName, propertyValue ? 1 : 0);
 }
@@ -946,11 +903,11 @@ public:
   nsTransferDBFolderInfo();
   virtual ~nsTransferDBFolderInfo();
   // parallel arrays of properties and values
-  nsCStringArray m_properties;
-  nsCStringArray m_values;
+  nsTArray<nsCString> m_properties;
+  nsTArray<nsCString> m_values;
 };
 
-nsTransferDBFolderInfo::nsTransferDBFolderInfo() : nsDBFolderInfo(nsnull)
+nsTransferDBFolderInfo::nsTransferDBFolderInfo() : nsDBFolderInfo(nullptr)
 {
 }
 
@@ -971,24 +928,24 @@ NS_IMETHODIMP nsDBFolderInfo::GetTransferInfo(nsIDBFolderInfo **transferInfo)
   mdbYarn cellYarn;
   mdb_column cellColumn;
   char columnName[100];
-  mdbYarn cellName = { columnName, 0, sizeof(columnName), 0, 0, nsnull };
+  mdbYarn cellName = { columnName, 0, sizeof(columnName), 0, 0, nullptr };
 
   NS_ASSERTION(m_mdbRow, "null row in getTransferInfo");
   m_mdbRow->GetCount(m_mdb->GetEnv(), &numCells);
   // iterate over the cells in the dbfolderinfo remembering attribute names and values.
   for (mdb_count cellIndex = 0; cellIndex < numCells; cellIndex++)
   {
-    mdb_err err = m_mdbRow->SeekCellYarn(m_mdb->GetEnv(), cellIndex, &cellColumn, nsnull);
+    mdb_err err = m_mdbRow->SeekCellYarn(m_mdb->GetEnv(), cellIndex, &cellColumn, nullptr);
     if (!err)
     {
       err = m_mdbRow->AliasCellYarn(m_mdb->GetEnv(), cellColumn, &cellYarn);
       if (!err)
       {
         m_mdb->GetStore()->TokenToString(m_mdb->GetEnv(), cellColumn, &cellName);
-        newInfo->m_values.AppendCString(Substring((const char *)cellYarn.mYarn_Buf,
-                                          (const char *) cellYarn.mYarn_Buf + cellYarn.mYarn_Fill));
-        newInfo->m_properties.AppendCString(Substring((const char *) cellName.mYarn_Buf,
-                                          (const char *) cellName.mYarn_Buf + cellName.mYarn_Fill));
+        newInfo->m_values.AppendElement(Substring((const char *)cellYarn.mYarn_Buf,
+                                        (const char *) cellYarn.mYarn_Buf + cellYarn.mYarn_Fill));
+        newInfo->m_properties.AppendElement(Substring((const char *) cellName.mYarn_Buf,
+                                            (const char *) cellName.mYarn_Buf + cellName.mYarn_Fill));
       }
     }
   }
@@ -1004,8 +961,8 @@ NS_IMETHODIMP nsDBFolderInfo::InitFromTransferInfo(nsIDBFolderInfo *aTransferInf
 
   nsTransferDBFolderInfo *transferInfo = static_cast<nsTransferDBFolderInfo *>(aTransferInfo);
 
-  for (PRInt32 i = 0; i < transferInfo->m_values.Count(); i++)
-    SetCharProperty(transferInfo->m_properties[i]->get(), *transferInfo->m_values[i]);
+  for (uint32_t i = 0; i < transferInfo->m_values.Length(); i++)
+    SetCharProperty(transferInfo->m_properties[i].get(), transferInfo->m_values[i]);
 
   LoadMemberVariables();
   return NS_OK;

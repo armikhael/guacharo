@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #include "msgCore.h"
 #include "nsMsgSearchAdapter.h"
 #include "nsUnicharUtils.h"
@@ -87,7 +55,7 @@ nsresult nsMsgSearchNews::ValidateTerms ()
 }
 
 
-nsresult nsMsgSearchNews::Search (PRBool *aDone)
+nsresult nsMsgSearchNews::Search (bool *aDone)
 {
   // the state machine runs in the news: handler
   nsresult err = NS_ERROR_NOT_IMPLEMENTED;
@@ -129,10 +97,10 @@ char *nsMsgSearchNews::EncodeTerm (nsIMsgSearchTerm *term)
 
   NS_ASSERTION(term, "null term");
   if (!term)
-    return nsnull;
+    return nullptr;
 
   // Find a string to represent the attribute
-  const char *attribEncoding = nsnull;
+  const char *attribEncoding = nullptr;
   nsMsgSearchAttribValue attrib;
 
   term->GetAttrib(&attrib);
@@ -150,15 +118,15 @@ char *nsMsgSearchNews::EncodeTerm (nsIMsgSearchTerm *term)
     term->GetArbitraryHeader(header);
     if (header.IsEmpty())
     {
-      NS_ASSERTION(PR_FALSE,"malformed search"); // malformed search term?
-      return nsnull;
+      NS_ASSERTION(false,"malformed search"); // malformed search term?
+      return nullptr;
     }
     attribEncoding = header.get();
   }
 
   // Build a string to represent the string pattern
-  PRBool leadingStar = PR_FALSE;
-  PRBool trailingStar = PR_FALSE;
+  bool leadingStar = false;
+  bool trailingStar = false;
   int overhead = 1; // null terminator
   nsMsgSearchOpValue op;
   term->GetOp(&op);
@@ -166,23 +134,23 @@ char *nsMsgSearchNews::EncodeTerm (nsIMsgSearchTerm *term)
   switch (op)
   {
   case nsMsgSearchOp::Contains:
-    leadingStar = PR_TRUE;
-    trailingStar = PR_TRUE;
+    leadingStar = true;
+    trailingStar = true;
     overhead += 2;
     break;
   case nsMsgSearchOp::Is:
     break;
   case nsMsgSearchOp::BeginsWith:
-    trailingStar = PR_TRUE;
+    trailingStar = true;
     overhead++;
     break;
   case nsMsgSearchOp::EndsWith:
-    leadingStar = PR_TRUE;
+    leadingStar = true;
     overhead++;
     break;
   default:
-    NS_ASSERTION(PR_FALSE,"malformed search"); // malformed search term?
-    return nsnull;
+    NS_ASSERTION(false,"malformed search"); // malformed search term?
+    return nullptr;
   }
 
     // ### i18N problem Get the csid from FE, which is the correct csid for term
@@ -194,17 +162,17 @@ char *nsMsgSearchNews::EncodeTerm (nsIMsgSearchTerm *term)
 
   nsresult rv = term->GetValue(getter_AddRefs(searchValue));
   if (NS_FAILED(rv) || !searchValue)
-    return nsnull;
+    return nullptr;
 
 
   nsString intlNonRFC1522Value;
   rv = searchValue->GetStr(intlNonRFC1522Value);
   if (NS_FAILED(rv) || intlNonRFC1522Value.IsEmpty())
-    return nsnull;
+    return nullptr;
 
   PRUnichar *caseInsensitiveValue = EncodeToWildmat (intlNonRFC1522Value.get());
   if (!caseInsensitiveValue)
-    return nsnull;
+    return nullptr;
 
   // TO DO: Do INTL_FormatNNTPXPATInRFC1522Format trick for non-ASCII string
   // Unfortunately, we currently do not handle xxx or xxx search in XPAT
@@ -214,7 +182,7 @@ char *nsMsgSearchNews::EncodeTerm (nsIMsgSearchTerm *term)
   PRUnichar *escapedValue = EscapeSearchUrl (caseInsensitiveValue);
   nsMemory::Free(caseInsensitiveValue);
   if (!escapedValue)
-    return nsnull;
+    return nullptr;
 
 #if 0
   // We also need to apply NET_Escape to it since we have to pass 8-bits data
@@ -224,11 +192,11 @@ char *nsMsgSearchNews::EncodeTerm (nsIMsgSearchTerm *term)
   NS_Free(escapedValue);
 
   if (! urlEncoded)
-    return nsnull;
+    return nullptr;
 
   char *pattern = new char [NS_strlen(urlEncoded) + overhead];
   if (!pattern)
-    return nsnull;
+    return nullptr;
   else
     pattern[0] = '\0';
 #else
@@ -268,7 +236,7 @@ nsresult nsMsgSearchNews::Encode (nsCString *outEncoding)
 
   nsresult err = NS_OK;
 
-  PRUint32 numTerms;
+  uint32_t numTerms;
 
   m_searchTerms->Count(&numTerms);
   char **intermediateEncodings = new char * [numTerms];
@@ -276,7 +244,7 @@ nsresult nsMsgSearchNews::Encode (nsCString *outEncoding)
   {
     // Build an XPAT command for each term
     int encodingLength = 0;
-    PRUint32 i;
+    uint32_t i;
     for (i = 0; i < numTerms; i++)
     {
       nsCOMPtr<nsIMsgSearchTerm> pTerm;
@@ -284,7 +252,7 @@ nsresult nsMsgSearchNews::Encode (nsCString *outEncoding)
                                (void **)getter_AddRefs(pTerm));
       // set boolean OR term if any of the search terms are an OR...this only works if we are using
       // homogeneous boolean operators.
-      PRBool isBooleanOpAnd;
+      bool isBooleanOpAnd;
       pTerm->GetBooleanAnd(&isBooleanOpAnd);
       m_ORSearch = !isBooleanOpAnd;
 
@@ -329,7 +297,7 @@ NS_IMETHODIMP nsMsgSearchNews::AddHit(nsMsgKey key)
 }
 
 /* void CurrentUrlDone (in long exitCode); */
-NS_IMETHODIMP nsMsgSearchNews::CurrentUrlDone(PRInt32 exitCode)
+NS_IMETHODIMP nsMsgSearchNews::CurrentUrlDone(int32_t exitCode)
 {
   CollateHits();
   ReportHits();
@@ -365,7 +333,7 @@ void nsMsgSearchNews::CollateHits()
   // entire query is the intersection of results for each XPAT command if an AND search,
   // otherwise we want the union of all the search hits (minus the duplicates of course).
 
-  PRUint32 size = m_candidateHits.Length();
+  uint32_t size = m_candidateHits.Length();
   if (!size)
     return;
 
@@ -374,7 +342,7 @@ void nsMsgSearchNews::CollateHits()
   m_candidateHits.Sort();
 
   // For an OR search we only need to count the first occurrence of a candidate.
-  PRUint32 termCount = 1;
+  uint32_t termCount = 1;
   if (!m_ORSearch)
   {
     // We have a traditional AND search which must be collated. In order to
@@ -384,11 +352,11 @@ void nsMsgSearchNews::CollateHits()
     // fewer than 3 times, it matched some search terms, but not all.
     m_searchTerms->Count(&termCount);
   }
-  PRUint32 candidateCount = 0;
-  PRUint32 candidate = m_candidateHits[0];
-  for (PRUint32 index = 0; index < size; ++index)   
+  uint32_t candidateCount = 0;
+  uint32_t candidate = m_candidateHits[0];
+  for (uint32_t index = 0; index < size; ++index)   
   {
-    PRUint32 possibleCandidate = m_candidateHits[index];
+    uint32_t possibleCandidate = m_candidateHits[index];
     if (candidate == possibleCandidate)
     {
       ++candidateCount;
@@ -417,8 +385,8 @@ void nsMsgSearchNews::ReportHits ()
 
   if (db)
   {
-    PRUint32 size = m_hits.Length();
-    for (PRUint32 i = 0; i < size; ++i)
+    uint32_t size = m_hits.Length();
+    for (uint32_t i = 0; i < size; ++i)
     {
       nsCOMPtr <nsIMsgDBHdr> header;
 
@@ -446,7 +414,7 @@ void nsMsgSearchNews::ReportHit (nsIMsgDBHdr *pHeaders, nsIMsgFolder *folder)
 
 nsresult nsMsgSearchValidityManager::InitNewsTable()
 {
-  NS_ASSERTION (nsnull == m_newsTable,"don't call this twice!");
+  NS_ASSERTION (nullptr == m_newsTable,"don't call this twice!");
   nsresult rv = NewTable (getter_AddRefs(m_newsTable));
 
   if (NS_SUCCEEDED(rv))
@@ -492,7 +460,7 @@ nsresult nsMsgSearchValidityManager::InitNewsTable()
 
 nsresult nsMsgSearchValidityManager::InitNewsFilterTable()
 {
-  NS_ASSERTION (nsnull == m_newsFilterTable, "news filter table already initted");
+  NS_ASSERTION (nullptr == m_newsFilterTable, "news filter table already initted");
   nsresult rv = NewTable (getter_AddRefs(m_newsFilterTable));
 
   if (NS_SUCCEEDED(rv))
@@ -536,7 +504,7 @@ nsresult nsMsgSearchValidityManager::InitNewsFilterTable()
     m_newsFilterTable->SetEnabled   (nsMsgSearchAttrib::Date, nsMsgSearchOp::Is, 1);
     m_newsFilterTable->SetAvailable (nsMsgSearchAttrib::Date, nsMsgSearchOp::Isnt, 1);
     m_newsFilterTable->SetEnabled   (nsMsgSearchAttrib::Date, nsMsgSearchOp::Isnt, 1);
-  
+
     m_newsFilterTable->SetAvailable (nsMsgSearchAttrib::Size, nsMsgSearchOp::IsGreaterThan, 1);
     m_newsFilterTable->SetEnabled   (nsMsgSearchAttrib::Size, nsMsgSearchOp::IsGreaterThan, 1);
     m_newsFilterTable->SetAvailable (nsMsgSearchAttrib::Size, nsMsgSearchOp::IsLessThan, 1);
@@ -544,8 +512,12 @@ nsresult nsMsgSearchValidityManager::InitNewsFilterTable()
 
     m_newsFilterTable->SetAvailable (nsMsgSearchAttrib::OtherHeader, nsMsgSearchOp::Contains, 1);
     m_newsFilterTable->SetEnabled   (nsMsgSearchAttrib::OtherHeader, nsMsgSearchOp::Contains, 1);
+    m_newsFilterTable->SetAvailable (nsMsgSearchAttrib::OtherHeader, nsMsgSearchOp::DoesntContain, 1);
+    m_newsFilterTable->SetEnabled   (nsMsgSearchAttrib::OtherHeader, nsMsgSearchOp::DoesntContain, 1);
     m_newsFilterTable->SetAvailable (nsMsgSearchAttrib::OtherHeader, nsMsgSearchOp::Is, 1);
     m_newsFilterTable->SetEnabled   (nsMsgSearchAttrib::OtherHeader, nsMsgSearchOp::Is, 1);
+    m_newsFilterTable->SetAvailable (nsMsgSearchAttrib::OtherHeader, nsMsgSearchOp::Isnt, 1);
+    m_newsFilterTable->SetEnabled   (nsMsgSearchAttrib::OtherHeader, nsMsgSearchOp::Isnt, 1);
     m_newsFilterTable->SetAvailable (nsMsgSearchAttrib::OtherHeader, nsMsgSearchOp::BeginsWith, 1);
     m_newsFilterTable->SetEnabled   (nsMsgSearchAttrib::OtherHeader, nsMsgSearchOp::BeginsWith, 1);
     m_newsFilterTable->SetAvailable (nsMsgSearchAttrib::OtherHeader, nsMsgSearchOp::EndsWith, 1);

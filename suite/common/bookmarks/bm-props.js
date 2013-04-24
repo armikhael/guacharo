@@ -1,42 +1,7 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Places Bookmark Properties dialog.
- *
- * The Initial Developer of the Original Code is Google Inc.
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Joe Hughes <jhughes@google.com>
- *   Dietrich Ayala <dietrich@mozilla.com>
- *   Asaf Romano <mano@mozilla.com>
- *   Marco Bonardo <mak77@bonardo.net>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
  * The panel is initialized based on data given in the js object passed
@@ -283,14 +248,8 @@ var BookmarkPropertiesPanel = {
           break;
 
         case "folder":
-          if (PlacesUtils.itemIsLivemark(this._itemId)) {
-            this._itemType = LIVEMARK_CONTAINER;
-            this._feedURI = PlacesUtils.livemarks.getFeedURI(this._itemId);
-            this._siteURI = PlacesUtils.livemarks.getSiteURI(this._itemId);
-          }
-          else
-            this._itemType = BOOKMARK_FOLDER;
-          break;
+          this._itemType = BOOKMARK_FOLDER;
+          PlacesUtils.livemarks.getLivemark({ id: this._itemId }, this);
       }
 
       // Description
@@ -343,22 +302,24 @@ var BookmarkPropertiesPanel = {
         this._fillAddProperties();
         // if this is an uri related dialog disable accept button until
         // the user fills an uri value.
-        if (this._itemType == BOOKMARK_ITEM ||
-            this._itemType == LIVEMARK_CONTAINER)
+        if (this._itemType == BOOKMARK_ITEM)
           acceptButton.disabled = !this._inputIsValid();
         break;
     }
 
     // When collapsible elements change their collapsed attribute we must
     // resize the dialog.
-    // sizeToContent is not usable due to bug 90276, so we'll use resizeTo
-    // instead and cache the element size. See WSucks in the legacy
-    // UI code (addBookmark2.js).
+    var prefs = Components.classes["@mozilla.org/preferences-service;1"]
+                          .getService(Components.interfaces.nsIPrefBranch);
     if (!this._element("tagsRow").collapsed) {
+      if (prefs.getBoolPref("browser.bookmarks.editDialog.expandTags"))
+        gEditItemOverlay.toggleTagsSelector();
       this._element("tagsSelectorRow")
           .addEventListener("DOMAttrModified", this, false);
     }
     if (!this._element("folderRow").collapsed) {
+      if (prefs.getBoolPref("browser.bookmarks.editDialog.expandFolders"))
+        gEditItemOverlay.toggleFolderTreeVisibility();
       this._element("folderTreeRow")
           .addEventListener("DOMAttrModified", this, false);
     }
@@ -382,6 +343,7 @@ var BookmarkPropertiesPanel = {
     }
 
     window.sizeToContent();
+    window.addEventListener("resize", this, false);
   },
 
   // nsIDOMEventListener
@@ -400,6 +362,14 @@ var BookmarkPropertiesPanel = {
         }
         break;
 
+      case "resize":
+        ["folderTree", "tagsSelector", "description"].forEach(function(e) {
+          var el = document.getElementById("editBMPanel_" + e + "Row");
+          if (el.boxObject.height)
+            el.height = el.boxObject.height;
+        });
+        break;
+
       case "DOMAttrModified":
         // this is called when collapsing a node, but also its direct children,
         // we only need to resize when the original node changes.
@@ -407,18 +377,26 @@ var BookmarkPropertiesPanel = {
              target.id == "editBMPanel_folderTreeRow") &&
             aEvent.attrName == "collapsed" &&
             target == aEvent.originalTarget) {
-          var id = target.id;
-          var newHeight = window.outerHeight;
-          if (aEvent.newValue) // is collapsed
-            newHeight -= this._elementsHeight[id];
-          else {
-            this._elementsHeight[id] = target.boxObject.height;
-            newHeight += this._elementsHeight[id];
-          }
-
-          window.resizeTo(window.outerWidth, newHeight);
+          var el = document.getElementById("editBookmarkPanelContent");
+          var width = el.boxObject.width;
+          window.sizeToContent();
+          window.outerWidth -= el.boxObject.width - width;
         }
         break;
+    }
+  },
+
+  // mozILivemarkCallback
+  onCompletion: function BPP_onCompletion(aStatus, aLivemark) {
+    if (Components.isSuccessCode(aStatus)) {
+      this._itemType = LIVEMARK_CONTAINER;
+      this._feedURI = aLivemark.feedURI;
+      this._siteURI = aLivemark.siteURI;
+      this._fillEditProperties();
+
+      document.documentElement
+              .getButton("accept").disabled = !this._inputIsValid();
+      window.outerHeight += this._element("nameRow").boxObject.height * 2;
     }
   },
 
@@ -426,7 +404,7 @@ var BookmarkPropertiesPanel = {
     if (this._batching)
       return;
 
-    PlacesUIUtils.ptm.beginBatch();
+    PlacesUtils.transactionManager.beginBatch();
     this._batching = true;
   },
 
@@ -434,7 +412,7 @@ var BookmarkPropertiesPanel = {
     if (!this._batching)
       return;
 
-    PlacesUIUtils.ptm.endBatch();
+    PlacesUtils.transactionManager.endBatch();
     this._batching = false;
   },
 
@@ -460,6 +438,7 @@ var BookmarkPropertiesPanel = {
   // nsISupports
   QueryInterface: function BPP_QueryInterface(aIID) {
     if (aIID.equals(Components.interfaces.nsIDOMEventListener) ||
+        aIID.equals(Components.interfaces.mozILivemarkCallback) ||
         aIID.equals(Components.interfaces.nsISupports))
       return this;
 
@@ -471,6 +450,7 @@ var BookmarkPropertiesPanel = {
   },
 
   onDialogUnload: function BPP_onDialogUnload() {
+    window.removeEventListener("resize", this, false);
     // gEditItemOverlay does not exist anymore here, so don't rely on it.
     // Calling removeEventListener with arguments which do not identify any
     // currently registered EventListener on the EventTarget has no effect.
@@ -484,6 +464,15 @@ var BookmarkPropertiesPanel = {
         .removeEventListener("input", this, false);
     this._element("siteLocationField")
         .removeEventListener("input", this, false);
+
+    var prefs = Components.classes["@mozilla.org/preferences-service;1"]
+                          .getService(Components.interfaces.nsIPrefBranch);
+    if (!this._element("tagsRow").collapsed)
+      prefs.setBoolPref("browser.bookmarks.editDialog.expandTags",
+                        !this._element("tagsSelectorRow").collapsed);
+    if (!this._element("folderRow").collapsed)
+      prefs.setBoolPref("browser.bookmarks.editDialog.expandFolders",
+                        !this._element("folderTreeRow").collapsed);
   },
 
   onDialogAccept: function BPP_onDialogAccept() {
@@ -491,7 +480,7 @@ var BookmarkPropertiesPanel = {
     document.commandDispatcher.focusedElement.blur();
     // The order here is important! We have to uninit the panel first, otherwise
     // late changes could force it to commit more transactions.
-    gEditItemOverlay.uninitPanel(true);
+    gEditItemOverlay.uninitPanel(false);
     gEditItemOverlay = null;
     this._endBatch();
     window.arguments[0].performed = true;
@@ -501,10 +490,10 @@ var BookmarkPropertiesPanel = {
     // The order here is important! We have to uninit the panel first, otherwise
     // changes done as part of Undo may change the panel contents and by
     // that force it to commit more transactions.
-    gEditItemOverlay.uninitPanel(true);
+    gEditItemOverlay.uninitPanel(false);
     gEditItemOverlay = null;
     this._endBatch();
-    PlacesUIUtils.ptm.undoTransaction();
+    PlacesUtils.transactionManager.undoTransaction();
     window.arguments[0].performed = false;
   },
 
@@ -519,16 +508,6 @@ var BookmarkPropertiesPanel = {
       return false;
     if (this._isAddKeywordDialog && !this._element("keywordField").value.length)
       return false;
-
-    // Feed Location has to be a valid URI;
-    // Site Location has to be a valid URI or empty
-    if (this._itemType == LIVEMARK_CONTAINER) {
-      if (!this._containsValidURI("feedLocationField"))
-        return false;
-      if (!this._containsValidURI("siteLocationField") &&
-          (this._element("siteLocationField").value.length > 0))
-        return false;
-    }
 
     return true;
   },
@@ -573,36 +552,49 @@ var BookmarkPropertiesPanel = {
    */
   _getCreateNewBookmarkTransaction:
   function BPP__getCreateNewBookmarkTransaction(aContainer, aIndex) {
+    const nsIAnnotationService = Components.interfaces.nsIAnnotationService;
     var annotations = [];
     var childTransactions = [];
 
     if (this._description) {
-      childTransactions.push(
-        PlacesUIUtils.ptm.editItemDescription(-1, this._description));
+      let annoObj = { name   : PlacesUIUtils.DESCRIPTION_ANNO,
+                      type   : nsIAnnotationService.TYPE_STRING,
+                      flags  : 0,
+                      value  : this._description,
+                      expires: nsIAnnotationService.EXPIRE_NEVER };
+      let editItemTxn = new PlacesSetItemAnnotationTransaction(-1, annoObj);
+      childTransactions.push(editItemTxn);
     }
 
     if (this._loadInSidebar) {
-      childTransactions.push(
-        PlacesUIUtils.ptm.setLoadInSidebar(-1, this._loadInSidebar));
+      let annoObj = { name   : PlacesUIUtils.LOAD_IN_SIDEBAR_ANNO,
+                      type   : nsIAnnotationService.TYPE_INT32,
+                      flags  : 0,
+                      value  : this._loadInSidebar,
+                      expires: nsIAnnotationService.EXPIRE_NEVER };
+      let setLoadTxn = new PlacesSetItemAnnotationTransaction(-1, annoObj);
+      childTransactions.push(setLoadTxn);
     }
 
     if (this._postData) {
-      childTransactions.push(
-        PlacesUIUtils.ptm.editBookmarkPostData(-1, this._postData));
+     let postDataTxn = new PlacesEditBookmarkPostDataTransaction(-1, this._postData);
+     childTransactions.push(postDataTxn);
     }
 
     //XXX TODO: this should be in a transaction!
     if (this._charSet)
       PlacesUtils.history.setCharsetForURI(this._uri, this._charSet);
 
-    var transactions = [PlacesUIUtils.ptm.createItem(this._uri,
-                                                     aContainer, aIndex,
-                                                     this._title, this._keyword,
-                                                     annotations,
-                                                     childTransactions)];
+    let createTxn = new PlacesCreateBookmarkTransaction(this._uri,
+                                                        aContainer,
+                                                        aIndex,
+                                                        this._title,
+                                                        this._keyword,
+                                                        annotations,
+                                                        childTransactions);
 
-    return PlacesUIUtils.ptm.aggregateTransactions(this._getDialogTitle(),
-                                                   transactions);
+    return new PlacesAggregatedTransaction(this._getDialogTitle(),
+                                           [createTxn]);
   },
 
   /**
@@ -614,7 +606,10 @@ var BookmarkPropertiesPanel = {
     for (var i = 0; i < this._URIs.length; ++i) {
       var uri = this._URIs[i];
       var title = this._getURITitleFromHistory(uri);
-      transactions.push(PlacesUIUtils.ptm.createItem(uri, -1, -1, title));
+      var createTxn = new PlacesCreateBookmarkTransaction(uri, -1,
+                                                          PlacesUtils.bookmarks.DEFAULT_INDEX,
+                                                          title);
+      transactions.push(createTxn);
     }
     return transactions; 
   },
@@ -633,8 +628,9 @@ var BookmarkPropertiesPanel = {
     if (this._description)
       annotations.push(this._getDescriptionAnnotation(this._description));
 
-    return PlacesUIUtils.ptm.createFolder(this._title, aContainer, aIndex,
-                                          annotations, childItemsTransactions);
+    return new PlacesCreateFolderTransaction(this._title, aContainer,
+                                             aIndex, annotations,
+                                             childItemsTransactions);
   },
 
   /**
@@ -643,9 +639,9 @@ var BookmarkPropertiesPanel = {
    */
   _getCreateNewLivemarkTransaction:
   function BPP__getCreateNewLivemarkTransaction(aContainer, aIndex) {
-    return PlacesUIUtils.ptm.createLivemark(this._feedURI, this._siteURI,
-                                            this._title,
-                                            aContainer, aIndex);
+    return new PlacesCreateLivemarkTransaction(this._feedURI, this._siteURI,
+                                               this._title,
+                                               aContainer, aIndex);
   },
 
   /**
@@ -666,7 +662,7 @@ var BookmarkPropertiesPanel = {
         txn = this._getCreateNewBookmarkTransaction(container, index);
     }
 
-    PlacesUIUtils.ptm.doTransaction(txn);
+    PlacesUtils.transactionManager.doTransaction(txn);
     this._itemId = PlacesUtils.bookmarks.getIdForItemAt(container, index);
   }
 };

@@ -1,44 +1,11 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Alexander Surkov <surkov.alexander@gmail.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsAccEvent.h"
 #include "nsAccUtils.h"
-#include "nsDocAccessible.h"
+#include "DocAccessible.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 // nsAccEvent
@@ -47,14 +14,14 @@
 NS_IMPL_ISUPPORTS1(nsAccEvent, nsIAccessibleEvent)
 
 NS_IMETHODIMP
-nsAccEvent::GetIsFromUserInput(PRBool* aIsFromUserInput)
+nsAccEvent::GetIsFromUserInput(bool* aIsFromUserInput)
 {
   *aIsFromUserInput = mEvent->IsFromUserInput();
   return NS_OK;
 }
 
 NS_IMETHODIMP
-nsAccEvent::GetEventType(PRUint32* aEventType)
+nsAccEvent::GetEventType(uint32_t* aEventType)
 {
   *aEventType = mEvent->GetEventType();
   return NS_OK;
@@ -64,7 +31,7 @@ NS_IMETHODIMP
 nsAccEvent::GetAccessible(nsIAccessible** aAccessible)
 {
   NS_ENSURE_ARG_POINTER(aAccessible);
-  *aAccessible = nsnull;
+  *aAccessible = nullptr;
 
   NS_IF_ADDREF(*aAccessible = mEvent->GetAccessible());
   return NS_OK;
@@ -74,7 +41,7 @@ NS_IMETHODIMP
 nsAccEvent::GetDOMNode(nsIDOMNode** aDOMNode)
 {
   NS_ENSURE_ARG_POINTER(aDOMNode);
-  *aDOMNode = nsnull;
+  *aDOMNode = nullptr;
 
   nsINode* node = mEvent->GetNode();
   if (node)
@@ -101,12 +68,12 @@ NS_IMPL_ISUPPORTS_INHERITED1(nsAccStateChangeEvent, nsAccEvent,
                              nsIAccessibleStateChangeEvent)
 
 NS_IMETHODIMP
-nsAccStateChangeEvent::GetState(PRUint32* aState)
+nsAccStateChangeEvent::GetState(uint32_t* aState)
 {
   NS_ENSURE_ARG_POINTER(aState);
 
-  PRUint32 state1 = 0, state2 = 0;
-  PRUint64 state = static_cast<AccStateChangeEvent*>(mEvent.get())->GetState();
+  uint32_t state1 = 0, state2 = 0;
+  uint64_t state = static_cast<AccStateChangeEvent*>(mEvent.get())->GetState();
   nsAccUtils::To32States(state, &state1, &state2);
 
   *aState = state1 | state2; // only one state is not 0
@@ -114,12 +81,12 @@ nsAccStateChangeEvent::GetState(PRUint32* aState)
 }
 
 NS_IMETHODIMP
-nsAccStateChangeEvent::IsExtraState(PRBool* aIsExtraState)
+nsAccStateChangeEvent::IsExtraState(bool* aIsExtraState)
 {
   NS_ENSURE_ARG_POINTER(aIsExtraState);
 
-  PRUint32 state1 = 0, state2 = 0;
-  PRUint64 state = static_cast<AccStateChangeEvent*>(mEvent.get())->GetState();
+  uint32_t state1 = 0, state2 = 0;
+  uint64_t state = static_cast<AccStateChangeEvent*>(mEvent.get())->GetState();
   nsAccUtils::To32States(state, &state1, &state2);
 
   *aIsExtraState = (state2 != 0);
@@ -127,7 +94,7 @@ nsAccStateChangeEvent::IsExtraState(PRBool* aIsExtraState)
 }
 
 NS_IMETHODIMP
-nsAccStateChangeEvent::IsEnabled(PRBool* aIsEnabled)
+nsAccStateChangeEvent::IsEnabled(bool* aIsEnabled)
 {
   NS_ENSURE_ARG_POINTER(aIsEnabled);
   *aIsEnabled = static_cast<AccStateChangeEvent*>(mEvent.get())->IsStateEnabled();
@@ -142,7 +109,7 @@ NS_IMPL_ISUPPORTS_INHERITED1(nsAccTextChangeEvent, nsAccEvent,
                              nsIAccessibleTextChangeEvent)
 
 NS_IMETHODIMP
-nsAccTextChangeEvent::GetStart(PRInt32* aStart)
+nsAccTextChangeEvent::GetStart(int32_t* aStart)
 {
   NS_ENSURE_ARG_POINTER(aStart);
   *aStart = static_cast<AccTextChangeEvent*>(mEvent.get())->GetStartOffset();
@@ -150,7 +117,7 @@ nsAccTextChangeEvent::GetStart(PRInt32* aStart)
 }
 
 NS_IMETHODIMP
-nsAccTextChangeEvent::GetLength(PRUint32* aLength)
+nsAccTextChangeEvent::GetLength(uint32_t* aLength)
 {
   NS_ENSURE_ARG_POINTER(aLength);
   *aLength = static_cast<AccTextChangeEvent*>(mEvent.get())->GetLength();
@@ -158,7 +125,7 @@ nsAccTextChangeEvent::GetLength(PRUint32* aLength)
 }
 
 NS_IMETHODIMP
-nsAccTextChangeEvent::IsInserted(PRBool* aIsInserted)
+nsAccTextChangeEvent::IsInserted(bool* aIsInserted)
 {
   NS_ENSURE_ARG_POINTER(aIsInserted);
   *aIsInserted = static_cast<AccTextChangeEvent*>(mEvent.get())->IsTextInserted();
@@ -174,6 +141,44 @@ nsAccTextChangeEvent::GetModifiedText(nsAString& aModifiedText)
 
 
 ////////////////////////////////////////////////////////////////////////////////
+// nsAccHideEvent
+////////////////////////////////////////////////////////////////////////////////
+
+NS_IMPL_ISUPPORTS_INHERITED1(nsAccHideEvent, nsAccEvent,
+                             nsIAccessibleHideEvent)
+
+NS_IMETHODIMP
+nsAccHideEvent::GetTargetParent(nsIAccessible** aAccessible)
+{
+  NS_ENSURE_ARG_POINTER(aAccessible);
+
+  NS_IF_ADDREF(*aAccessible =
+    static_cast<AccHideEvent*>(mEvent.get())->TargetParent());
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsAccHideEvent::GetTargetNextSibling(nsIAccessible** aAccessible)
+{
+  NS_ENSURE_ARG_POINTER(aAccessible);
+
+  NS_IF_ADDREF(*aAccessible =
+    static_cast<AccHideEvent*>(mEvent.get())->TargetNextSibling());
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsAccHideEvent::GetTargetPrevSibling(nsIAccessible** aAccessible)
+{
+  NS_ENSURE_ARG_POINTER(aAccessible);
+
+  NS_IF_ADDREF(*aAccessible =
+    static_cast<AccHideEvent*>(mEvent.get())->TargetPrevSibling());
+  return NS_OK;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
 // nsAccCaretMoveEvent
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -181,7 +186,7 @@ NS_IMPL_ISUPPORTS_INHERITED1(nsAccCaretMoveEvent, nsAccEvent,
                              nsIAccessibleCaretMoveEvent)
 
 NS_IMETHODIMP
-nsAccCaretMoveEvent::GetCaretOffset(PRInt32 *aCaretOffset)
+nsAccCaretMoveEvent::GetCaretOffset(int32_t *aCaretOffset)
 {
   NS_ENSURE_ARG_POINTER(aCaretOffset);
 
@@ -197,7 +202,7 @@ NS_IMPL_ISUPPORTS_INHERITED1(nsAccTableChangeEvent, nsAccEvent,
                              nsIAccessibleTableChangeEvent)
 
 NS_IMETHODIMP
-nsAccTableChangeEvent::GetRowOrColIndex(PRInt32 *aRowOrColIndex)
+nsAccTableChangeEvent::GetRowOrColIndex(int32_t *aRowOrColIndex)
 {
   NS_ENSURE_ARG_POINTER(aRowOrColIndex);
 
@@ -207,7 +212,7 @@ nsAccTableChangeEvent::GetRowOrColIndex(PRInt32 *aRowOrColIndex)
 }
 
 NS_IMETHODIMP
-nsAccTableChangeEvent::GetNumRowsOrCols(PRInt32* aNumRowsOrCols)
+nsAccTableChangeEvent::GetNumRowsOrCols(int32_t* aNumRowsOrCols)
 {
   NS_ENSURE_ARG_POINTER(aNumRowsOrCols);
 
@@ -215,3 +220,49 @@ nsAccTableChangeEvent::GetNumRowsOrCols(PRInt32* aNumRowsOrCols)
   return NS_OK;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// nsAccVirtualCursorChangeEvent
+////////////////////////////////////////////////////////////////////////////////
+
+NS_IMPL_ISUPPORTS_INHERITED1(nsAccVirtualCursorChangeEvent, nsAccEvent,
+                             nsIAccessibleVirtualCursorChangeEvent)
+
+NS_IMETHODIMP
+nsAccVirtualCursorChangeEvent::GetOldAccessible(nsIAccessible** aOldAccessible)
+{
+  NS_ENSURE_ARG_POINTER(aOldAccessible);
+
+  *aOldAccessible =
+    static_cast<AccVCChangeEvent*>(mEvent.get())->OldAccessible();
+  NS_IF_ADDREF(*aOldAccessible);
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsAccVirtualCursorChangeEvent::GetOldStartOffset(int32_t* aOldStartOffset)
+{
+  NS_ENSURE_ARG_POINTER(aOldStartOffset);
+
+  *aOldStartOffset =
+    static_cast<AccVCChangeEvent*>(mEvent.get())->OldStartOffset();
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsAccVirtualCursorChangeEvent::GetOldEndOffset(int32_t* aOldEndOffset)
+{
+  NS_ENSURE_ARG_POINTER(aOldEndOffset);
+
+  *aOldEndOffset =
+    static_cast<AccVCChangeEvent*>(mEvent.get())->OldEndOffset();
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsAccVirtualCursorChangeEvent::GetReason(int16_t* aReason)
+{
+  NS_ENSURE_ARG_POINTER(aReason);
+
+  *aReason = static_cast<AccVCChangeEvent*>(mEvent.get())->Reason();
+  return NS_OK;
+}

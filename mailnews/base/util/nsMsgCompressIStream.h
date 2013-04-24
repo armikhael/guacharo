@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 #include "msgCore.h"
 #include "nsIAsyncInputStream.h"
 #include "nsIInputStream.h"
@@ -24,8 +28,8 @@ protected:
   nsAutoArrayPtr<char> m_zbuf;
   nsAutoArrayPtr<char> m_databuf;
   char *m_dataptr;
-  PRUint32 m_dataleft;
-  PRBool m_inflateAgain;
+  uint32_t m_dataleft;
+  bool m_inflateAgain;
   z_stream m_zstream;
 };
 

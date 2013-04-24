@@ -1,41 +1,9 @@
 /* -*- Mode: javascript; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Håkan Waara <hwaara@chello.se>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+Components.utils.import("resource://gre/modules/PluralForm.jsm");
 
 var searchSessionContractID = "@mozilla.org/messenger/searchSession;1";
 var gDBView;
@@ -69,14 +37,16 @@ var nsSearchResultsController =
     supportsCommand: function(command)
     {
         switch(command) {
+        case "cmd_openMessage":
         case "cmd_delete":
         case "cmd_shiftDelete":
         case "button_delete":
-        case "cmd_open":
         case "file_message_button":
         case "goto_folder_button":
         case "saveas_vf_button":
         case "cmd_selectAll":
+        case "cmd_markAsRead":
+        case "cmd_markAsFlagged":
             return true;
         default:
             return false;
@@ -119,7 +89,7 @@ var nsSearchResultsController =
     doCommand: function(command)
     {
         switch(command) {
-        case "cmd_open":
+        case "cmd_openMessage":
             MsgOpenSelectedMessages();
             return true;
 
@@ -144,7 +114,15 @@ var nsSearchResultsController =
             GetThreadTree().focus();
             GetDBView().doCommand(nsMsgViewCommandType.selectAll)
             return true;
-                            
+
+        case "cmd_markAsRead":
+            MsgMarkMsgAsRead(null);
+            return true;
+
+        case "cmd_markAsFlagged":
+            MsgMarkAsFlagged(null);
+            return true;
+
         default:
             return false;
         }
@@ -167,15 +145,15 @@ function SetAdvancedSearchStatusText(aNumHits)
   var statusMsg;
   // if there are no hits, it means no matches were found in the search.
   if (aNumHits == 0)
-    statusMsg = gSearchBundle.getString("searchFailureMessage");
-  else 
   {
-    if (aNumHits == 1) 
-      statusMsg = gSearchBundle.getString("searchSuccessMessage");
-    else
-      statusMsg = gSearchBundle.getFormattedString("searchSuccessMessages", [aNumHits]);
+    statusMsg = gSearchBundle.getString("noMatchesFound");
   }
-
+  else
+  {
+    statusMsg = PluralForm.get(aNumHits,
+                               gSearchBundle.getString("matchesFound"));
+    statusMsg = statusMsg.replace("#1", aNumHits);
+  }
   gStatusFeedback.showStatusString(statusMsg);
 }
 
@@ -267,7 +245,11 @@ function searchOnLoad()
   setupSearchListener();
 
   if (window.arguments && window.arguments[0])
-      selectFolder(window.arguments[0].folder);
+  {
+    var winArgFolder = window.arguments[0].folder;
+    selectFolder(winArgFolder);
+    UpdateSubFolder(winArgFolder);
+  }
 
   onMore(null);
   UpdateMailSearch("onload");
@@ -277,8 +259,6 @@ function searchOnLoad()
   HideSearchColumn("totalCol"); // since you can't thread search results
   HideSearchColumn("unreadCol"); // since you can't thread search results
   HideSearchColumn("unreadButtonColHeader");
-  HideSearchColumn("statusCol");
-  HideSearchColumn("flaggedCol");
   HideSearchColumn("idCol");
   HideSearchColumn("junkStatusCol");
   HideSearchColumn("accountCol");
@@ -359,7 +339,7 @@ function selectFolder(folder)
 function updateSearchFolderPicker(folderURI) 
 { 
     SetFolderPicker(folderURI, gFolderPicker.id);
-
+    UpdateSubFolder(folderURI);
     // use the URI to get the real folder
     gMsgFolderSelected = GetMsgFolderFromUri(folderURI);
 
@@ -772,4 +752,15 @@ function saveAsVirtualFolder()
                                  {folder:window.arguments[0].folder,
                                   searchTerms:gSearchSession.searchTerms,
                                   searchFolderURIs: searchFolderURIs});
+}
+
+function OnTagsChange()
+{
+  // Dummy, called by RemoveAllMessageTags and ToggleMessageTag
+}
+
+function UpdateSubFolder(aFolderSelect)
+{
+  var folder = GetMsgFolderFromUri(aFolderSelect, true);
+  document.getElementById("checkSearchSubFolders").disabled = (!folder || !folder.hasSubFolders);
 }

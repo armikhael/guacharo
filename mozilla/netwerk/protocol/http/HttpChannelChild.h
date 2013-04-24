@@ -1,44 +1,9 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set sw=2 ts=8 et tw=80 : */
 
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- *  The Mozilla Foundation
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jason Duell <jduell.mcbugs@gmail.com>
- *   Daniel Witte <dwitte@mozilla.com>
- *   Honza Bambas <honzab@firemni.cz>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef mozilla_net_HttpChannelChild_h
 #define mozilla_net_HttpChannelChild_h
@@ -103,17 +68,17 @@ public:
   // HttpBaseChannel::nsIHttpChannel
   NS_IMETHOD SetRequestHeader(const nsACString& aHeader, 
                               const nsACString& aValue, 
-                              PRBool aMerge);
+                              bool aMerge);
   // nsIHttpChannelInternal
   NS_IMETHOD SetupFallbackChannel(const char *aFallbackKey);
   NS_IMETHOD GetLocalAddress(nsACString& addr);
-  NS_IMETHOD GetLocalPort(PRInt32* port);
+  NS_IMETHOD GetLocalPort(int32_t* port);
   NS_IMETHOD GetRemoteAddress(nsACString& addr);
-  NS_IMETHOD GetRemotePort(PRInt32* port);
+  NS_IMETHOD GetRemotePort(int32_t* port);
   // nsISupportsPriority
-  NS_IMETHOD SetPriority(PRInt32 value);
+  NS_IMETHOD SetPriority(int32_t value);
   // nsIResumableChannel
-  NS_IMETHOD ResumeAt(PRUint64 startPos, const nsACString& entityID);
+  NS_IMETHOD ResumeAt(uint64_t startPos, const nsACString& entityID);
 
   // IPDL holds a reference while the PHttpChannel protocol is live (starting at
   // AsyncOpen, and ending at either OnStopRequest or any IPDL error, either of
@@ -125,78 +90,83 @@ public:
 
 protected:
   bool RecvOnStartRequest(const nsHttpResponseHead& responseHead,
-                          const PRBool& useResponseHead,
-                          const RequestHeaderTuples& requestHeaders,
-                          const PRBool& isFromCache,
-                          const PRBool& cacheEntryAvailable,
-                          const PRUint32& cacheExpirationTime,
+                          const bool& useResponseHead,
+                          const nsHttpHeaderArray& requestHeaders,
+                          const bool& isFromCache,
+                          const bool& cacheEntryAvailable,
+                          const uint32_t& cacheExpirationTime,
                           const nsCString& cachedCharset,
                           const nsCString& securityInfoSerialization,
                           const PRNetAddr& selfAddr,
                           const PRNetAddr& peerAddr);
   bool RecvOnTransportAndData(const nsresult& status,
-                              const PRUint64& progress,
-                              const PRUint64& progressMax,
+                              const uint64_t& progress,
+                              const uint64_t& progressMax,
                               const nsCString& data,
-                              const PRUint32& offset,
-                              const PRUint32& count);
+                              const uint32_t& offset,
+                              const uint32_t& count);
   bool RecvOnStopRequest(const nsresult& statusCode);
-  bool RecvOnProgress(const PRUint64& progress, const PRUint64& progressMax);
+  bool RecvOnProgress(const uint64_t& progress, const uint64_t& progressMax);
   bool RecvOnStatus(const nsresult& status);
   bool RecvFailedAsyncOpen(const nsresult& status);
-  bool RecvRedirect1Begin(const PRUint32& newChannel,
-                          const URI& newURI,
-                          const PRUint32& redirectFlags,
+  bool RecvRedirect1Begin(const uint32_t& newChannel,
+                          const URIParams& newURI,
+                          const uint32_t& redirectFlags,
                           const nsHttpResponseHead& responseHead);
   bool RecvRedirect3Complete();
   bool RecvAssociateApplicationCache(const nsCString& groupID,
                                      const nsCString& clientID);
   bool RecvDeleteSelf();
 
-  bool GetAssociatedContentSecurity(nsIAssociatedContentSecurity** res = nsnull);
+  bool GetAssociatedContentSecurity(nsIAssociatedContentSecurity** res = nullptr);
   virtual void DoNotifyListenerCleanup();
 
 private:
-  RequestHeaderTuples mRequestHeaders;
+  RequestHeaderTuples mClientSetRequestHeaders;
   nsCOMPtr<nsIChildChannel> mRedirectChannelChild;
   nsCOMPtr<nsISupports> mSecurityInfo;
 
-  PRPackedBool mIsFromCache;
-  PRPackedBool mCacheEntryAvailable;
-  PRUint32     mCacheExpirationTime;
+  bool mIsFromCache;
+  bool mCacheEntryAvailable;
+  uint32_t     mCacheExpirationTime;
   nsCString    mCachedCharset;
 
   // If ResumeAt is called before AsyncOpen, we need to send extra data upstream
   bool mSendResumeAt;
 
   bool mIPCOpen;
-  bool mKeptAlive;
+  bool mKeptAlive;            // IPC kept open, but only for security info
   ChannelEventQueue mEventQ;
 
+  // true after successful AsyncOpen until OnStopRequest completes.
+  bool RemoteChannelExists() { return mIPCOpen && !mKeptAlive; }
+
+  void AssociateApplicationCache(const nsCString &groupID,
+                                 const nsCString &clientID);
   void OnStartRequest(const nsHttpResponseHead& responseHead,
-                      const PRBool& useResponseHead,
-                      const RequestHeaderTuples& requestHeaders,
-                      const PRBool& isFromCache,
-                      const PRBool& cacheEntryAvailable,
-                      const PRUint32& cacheExpirationTime,
+                      const bool& useResponseHead,
+                      const nsHttpHeaderArray& requestHeaders,
+                      const bool& isFromCache,
+                      const bool& cacheEntryAvailable,
+                      const uint32_t& cacheExpirationTime,
                       const nsCString& cachedCharset,
                       const nsCString& securityInfoSerialization,
                       const PRNetAddr& selfAddr,
                       const PRNetAddr& peerAddr);
   void OnTransportAndData(const nsresult& status,
-                          const PRUint64 progress,
-                          const PRUint64& progressMax,
+                          const uint64_t progress,
+                          const uint64_t& progressMax,
                           const nsCString& data,
-                          const PRUint32& offset,
-                          const PRUint32& count);
+                          const uint32_t& offset,
+                          const uint32_t& count);
   void OnStopRequest(const nsresult& statusCode);
-  void OnProgress(const PRUint64& progress, const PRUint64& progressMax);
+  void OnProgress(const uint64_t& progress, const uint64_t& progressMax);
   void OnStatus(const nsresult& status);
   void FailedAsyncOpen(const nsresult& status);
   void HandleAsyncAbort();
-  void Redirect1Begin(const PRUint32& newChannelId,
-                      const URI& newUri,
-                      const PRUint32& redirectFlags,
+  void Redirect1Begin(const uint32_t& newChannelId,
+                      const URIParams& newUri,
+                      const uint32_t& redirectFlags,
                       const nsHttpResponseHead& responseHead);
   void Redirect3Complete();
   void DeleteSelf();
@@ -204,6 +174,7 @@ private:
   // Called asynchronously from Resume: continues any pending calls into client.
   void CompleteResume();
 
+  friend class AssociateApplicationCacheEvent;
   friend class StartRequestEvent;
   friend class StopRequestEvent;
   friend class TransportAndDataEvent;

@@ -1,45 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Sun Microsystems, Inc.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Seth Spitzer <sspitzer@netscape.com>
- *   Dan Mosedale <dmose@netscape.com>
- *   Paul Sandoz <paul.sandoz@sun.com>
- *   Mark Banner <bugzilla@standard8.plus.com>
- *   Jeremy Laine <jeremy.laine@m4x.org>
- *   Simon Wilkinson <simon@sxw.org.uk>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsAbLDAPDirectoryQuery.h"
 #include "nsAbBoolExprToLDAPFilter.h"
@@ -51,7 +13,6 @@
 #include "nsAbUtils.h"
 #include "nsAbBaseCID.h"
 #include "nsStringGlue.h"
-#include "nsIProxyObjectManager.h"
 #include "prprf.h"
 #include "nsServiceManagerUtils.h"
 #include "nsComponentManagerUtils.h"
@@ -81,8 +42,8 @@ public:
                                nsIMutableArray* clientSearchControls,
                                const nsACString &login,
                                const nsACString &mechanism,
-                               const PRInt32 resultLimit = -1,
-                               const PRInt32 timeOut = 0);
+                               const int32_t resultLimit = -1,
+                               const int32_t timeOut = 0);
   virtual ~nsAbQueryLDAPMessageListener ();
 
   // nsILDAPMessageListener
@@ -96,17 +57,17 @@ protected:
 
   nsresult Cancel();
   virtual nsresult DoTask();
-  virtual void InitFailed(PRBool aCancelled = PR_FALSE);
+  virtual void InitFailed(bool aCancelled = false);
 
   nsCOMPtr<nsILDAPURL> mSearchUrl;
   nsIAbDirectoryQueryResultListener *mResultListener;
-  PRInt32 mContextID;
+  int32_t mContextID;
   nsCOMPtr<nsIAbDirectoryQueryArguments> mQueryArguments;
-  PRInt32 mResultLimit;
+  int32_t mResultLimit;
 
-  PRBool mFinished;
-  PRBool mCanceled;
-  PRBool mWaitingForPrevQueryToFinish;
+  bool mFinished;
+  bool mCanceled;
+  bool mWaitingForPrevQueryToFinish;
 
   nsCOMPtr<nsIMutableArray> mServerSearchControls;
   nsCOMPtr<nsIMutableArray> mClientSearchControls;
@@ -125,16 +86,16 @@ nsAbQueryLDAPMessageListener::nsAbQueryLDAPMessageListener(
         nsIMutableArray* clientSearchControls,
         const nsACString &login,
         const nsACString &mechanism,
-        const PRInt32 resultLimit,
-        const PRInt32 timeOut) :
+        const int32_t resultLimit,
+        const int32_t timeOut) :
   nsAbLDAPListenerBase(directoryUrl, connection, login, timeOut),
   mSearchUrl(searchUrl),
   mResultListener(resultListener),
   mQueryArguments(queryArguments),
   mResultLimit(resultLimit),
-  mFinished(PR_FALSE),
-  mCanceled(PR_FALSE),
-  mWaitingForPrevQueryToFinish(PR_FALSE),
+  mFinished(false),
+  mCanceled(false),
+  mWaitingForPrevQueryToFinish(false),
   mServerSearchControls(serverSearchControls),
   mClientSearchControls(clientSearchControls)
 {
@@ -155,9 +116,9 @@ nsresult nsAbQueryLDAPMessageListener::Cancel ()
     if (mFinished || mCanceled)
         return NS_OK;
 
-    mCanceled = PR_TRUE;
+    mCanceled = true;
     if (!mFinished)
-      mWaitingForPrevQueryToFinish = PR_TRUE;
+      mWaitingForPrevQueryToFinish = true;
 
     return NS_OK;
 }
@@ -167,11 +128,11 @@ NS_IMETHODIMP nsAbQueryLDAPMessageListener::OnLDAPMessage(nsILDAPMessage *aMessa
   nsresult rv = Initiate();
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRInt32 messageType;
+  int32_t messageType;
   rv = aMessage->GetType(&messageType);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool cancelOperation = PR_FALSE;
+  bool cancelOperation = false;
 
   // Enter lock
   {
@@ -181,11 +142,11 @@ NS_IMETHODIMP nsAbQueryLDAPMessageListener::OnLDAPMessage(nsILDAPMessage *aMessa
       return NS_OK;
 
     if (messageType == nsILDAPMessage::RES_SEARCH_RESULT)
-      mFinished = PR_TRUE;
+      mFinished = true;
     else if (mCanceled)
     {
-      mFinished = PR_TRUE;
-      cancelOperation = PR_TRUE;
+      mFinished = true;
+      cancelOperation = true;
     }
   }
   // Leave lock
@@ -210,7 +171,7 @@ NS_IMETHODIMP nsAbQueryLDAPMessageListener::OnLDAPMessage(nsILDAPMessage *aMessa
         rv = OnLDAPMessageSearchEntry(aMessage);
       break;
     case nsILDAPMessage::RES_SEARCH_RESULT:
-      mWaitingForPrevQueryToFinish = PR_FALSE;
+      mWaitingForPrevQueryToFinish = false;
       rv = OnLDAPMessageSearchResult(aMessage);
       NS_ENSURE_SUCCESS(rv, rv);
     default:
@@ -229,7 +190,7 @@ NS_IMETHODIMP nsAbQueryLDAPMessageListener::OnLDAPMessage(nsILDAPMessage *aMessa
     // until the search is done, so we'll ignore results from a previous
     // search.
     if (messageType == nsILDAPMessage::RES_SEARCH_RESULT)
-      mCanceled = mFinished = PR_FALSE;
+      mCanceled = mFinished = false;
   }
 
   return rv;
@@ -238,29 +199,19 @@ NS_IMETHODIMP nsAbQueryLDAPMessageListener::OnLDAPMessage(nsILDAPMessage *aMessa
 nsresult nsAbQueryLDAPMessageListener::DoTask()
 {
   nsresult rv;
-  mCanceled = mFinished = PR_FALSE;
+  mCanceled = mFinished = false;
 
   mOperation = do_CreateInstance(NS_LDAPOPERATION_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  nsCOMPtr<nsIProxyObjectManager> proxyObjMgr = do_GetService(NS_XPCOMPROXY_CONTRACTID, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  nsCOMPtr<nsILDAPMessageListener> proxyListener;
-  rv = proxyObjMgr->GetProxyForObject(NS_PROXY_TO_MAIN_THREAD,
-                            NS_GET_IID(nsILDAPMessageListener),
-                            this, NS_PROXY_SYNC | NS_PROXY_ALWAYS,
-                            getter_AddRefs(proxyListener));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  rv = mOperation->Init(mConnection, proxyListener, nsnull);
+  rv = mOperation->Init(mConnection, this, nullptr);
   NS_ENSURE_SUCCESS(rv, rv);
 
   nsCAutoString dn;
   rv = mSearchUrl->GetDn(dn);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRInt32 scope;
+  int32_t scope;
   rv = mSearchUrl->GetScope(&scope);
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -282,7 +233,7 @@ nsresult nsAbQueryLDAPMessageListener::DoTask()
                                mResultLimit);
 }
 
-void nsAbQueryLDAPMessageListener::InitFailed(PRBool aCancelled)
+void nsAbQueryLDAPMessageListener::InitFailed(bool aCancelled)
 {
   if (!mResultListener)
     return;
@@ -326,7 +277,7 @@ nsresult nsAbQueryLDAPMessageListener::OnLDAPMessageSearchEntry(nsILDAPMessage *
 
 nsresult nsAbQueryLDAPMessageListener::OnLDAPMessageSearchResult(nsILDAPMessage *aMessage)
 {
-  PRInt32 errorCode;
+  int32_t errorCode;
   nsresult rv = aMessage->GetErrorCode(&errorCode);
   NS_ENSURE_SUCCESS(rv, rv);
     
@@ -344,7 +295,7 @@ NS_IMPL_THREADSAFE_ISUPPORTS2(nsAbLDAPDirectoryQuery, nsIAbDirectoryQuery,
                               nsIAbDirectoryQueryResultListener)
 
 nsAbLDAPDirectoryQuery::nsAbLDAPDirectoryQuery() :
-    mInitialized(PR_FALSE)
+    mInitialized(false)
 {
 }
 
@@ -355,9 +306,9 @@ nsAbLDAPDirectoryQuery::~nsAbLDAPDirectoryQuery()
 NS_IMETHODIMP nsAbLDAPDirectoryQuery::DoQuery(nsIAbDirectory *aDirectory,
   nsIAbDirectoryQueryArguments* aArguments,
   nsIAbDirSearchListener* aListener,
-  PRInt32 aResultLimit,
-  PRInt32 aTimeOut,
-  PRInt32* _retval)
+  int32_t aResultLimit,
+  int32_t aTimeOut,
+  int32_t* _retval)
 {
   NS_ENSURE_ARG_POINTER(aListener);
   NS_ENSURE_ARG_POINTER(aArguments);
@@ -368,7 +319,7 @@ NS_IMETHODIMP nsAbLDAPDirectoryQuery::DoQuery(nsIAbDirectory *aDirectory,
   nsresult rv = StopQuery(0);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  mInitialized = PR_TRUE;
+  mInitialized = true;
 
   // Get the current directory as LDAP specific
   nsCOMPtr<nsIAbLDAPDirectory> directory(do_QueryInterface(aDirectory, &rv));
@@ -387,7 +338,7 @@ NS_IMETHODIMP nsAbLDAPDirectoryQuery::DoQuery(nsIAbDirectory *aDirectory,
   rv = directory->GetSaslMechanism(saslMechanism);
   NS_ENSURE_SUCCESS(rv, rv);
   
-  PRUint32 protocolVersion;
+  uint32_t protocolVersion;
   rv = directory->GetProtocolVersion(&protocolVersion);
   NS_ENSURE_SUCCESS(rv, rv);
   
@@ -396,7 +347,7 @@ NS_IMETHODIMP nsAbLDAPDirectoryQuery::DoQuery(nsIAbDirectory *aDirectory,
   // If connection params have changed re-create connection
   // else reuse existing connection
   
-  PRBool redoConnection = PR_FALSE;
+  bool redoConnection = false;
   
   if (!mConnection || !mDirectoryUrl)
   {
@@ -405,11 +356,11 @@ NS_IMETHODIMP nsAbLDAPDirectoryQuery::DoQuery(nsIAbDirectory *aDirectory,
     mCurrentLogin = login;
     mCurrentMechanism = saslMechanism;
     mCurrentProtocolVersion = protocolVersion;
-    redoConnection = PR_TRUE;
+    redoConnection = true;
   }
   else
   {
-    PRBool equal;
+    bool equal;
     rv = mDirectoryUrl->Equals(currentUrl, &equal);
       NS_ENSURE_SUCCESS(rv, rv);
   
@@ -424,7 +375,7 @@ NS_IMETHODIMP nsAbLDAPDirectoryQuery::DoQuery(nsIAbDirectory *aDirectory,
       mCurrentLogin = login;
       mCurrentMechanism = saslMechanism;
       mCurrentProtocolVersion = protocolVersion;
-      redoConnection = PR_TRUE;
+      redoConnection = true;
     }
     else
     {
@@ -433,7 +384,7 @@ NS_IMETHODIMP nsAbLDAPDirectoryQuery::DoQuery(nsIAbDirectory *aDirectory,
           saslMechanism != mCurrentMechanism ||
           protocolVersion != mCurrentProtocolVersion)
       {
-        redoConnection = PR_TRUE;
+        redoConnection = true;
         mCurrentLogin = login;
         mCurrentMechanism = saslMechanism;
         mCurrentProtocolVersion = protocolVersion;
@@ -509,7 +460,7 @@ NS_IMETHODIMP nsAbLDAPDirectoryQuery::DoQuery(nsIAbDirectory *aDirectory,
   // no need to AND in an empty search term, so leave prefix and suffix empty
   
   nsCAutoString searchFilter;
-  if (urlFilter.Length() && !urlFilter.Equals(NS_LITERAL_CSTRING("(objectclass=*)"))) 
+  if (urlFilter.Length() && !urlFilter.EqualsLiteral("(objectclass=*)"))
   {
     // if urlFilter isn't parenthesized, we need to add in parens so that
     // the filter works as a term to &
@@ -538,8 +489,8 @@ NS_IMETHODIMP nsAbLDAPDirectoryQuery::DoQuery(nsIAbDirectory *aDirectory,
   // Now formulate the search string
   
   // Get the scope
-  PRInt32 scope;
-  PRBool doSubDirectories;
+  int32_t scope;
+  bool doSubDirectories;
   rv = aArguments->GetQuerySubDirectories (&doSubDirectories);
   NS_ENSURE_SUCCESS(rv, rv);
   scope = doSubDirectories ? nsILDAPURL::SCOPE_SUBTREE :
@@ -601,16 +552,16 @@ NS_IMETHODIMP nsAbLDAPDirectoryQuery::DoQuery(nsIAbDirectory *aDirectory,
   // Now lets initialize the LDAP connection properly. We'll kick
   // off the bind operation in the callback function, |OnLDAPInit()|.
   rv = mConnection->Init(mDirectoryUrl, mCurrentLogin,
-                         mListener, nsnull, mCurrentProtocolVersion);
+                         mListener, nullptr, mCurrentProtocolVersion);
   NS_ENSURE_SUCCESS(rv, rv);
 
   return rv;
 }
 
 /* void stopQuery (in long contextID); */
-NS_IMETHODIMP nsAbLDAPDirectoryQuery::StopQuery(PRInt32 contextID)
+NS_IMETHODIMP nsAbLDAPDirectoryQuery::StopQuery(int32_t contextID)
 {
-  mInitialized = PR_TRUE;
+  mInitialized = true;
 
   if (!mListener)
     return NS_OK;
@@ -627,23 +578,23 @@ NS_IMETHODIMP nsAbLDAPDirectoryQuery::OnQueryFoundCard(nsIAbCard *aCard)
 {
   aCard->SetDirectoryId(mDirectoryId);
 
-  for (PRInt32 i = 0; i < mListeners.Count(); ++i)
+  for (int32_t i = 0; i < mListeners.Count(); ++i)
     mListeners[i]->OnSearchFoundCard(aCard);
 
   return NS_OK;
 }
 
-NS_IMETHODIMP nsAbLDAPDirectoryQuery::OnQueryResult(PRInt32 aResult,
-                                                    PRInt32 aErrorCode)
+NS_IMETHODIMP nsAbLDAPDirectoryQuery::OnQueryResult(int32_t aResult,
+                                                    int32_t aErrorCode)
 {
-  PRUint32 count = mListeners.Count();
+  uint32_t count = mListeners.Count();
 
   // XXX: Temporary fix for crasher needs reviewing as part of bug 135231.
   // Temporarily add a reference to ourselves, in case the only thing
   // keeping us alive is the link with the listener.
   NS_ADDREF_THIS();
 
-  for (PRInt32 i = count - 1; i >= 0; --i)
+  for (int32_t i = count - 1; i >= 0; --i)
   {
     mListeners[i]->OnSearchFinished(aResult, EmptyString());
     mListeners.RemoveObjectAt(i);

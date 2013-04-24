@@ -1,38 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Justin Dolske <dolske@mozilla.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 
 const Cc = Components.classes;
@@ -355,22 +323,17 @@ let PromptUtils = {
     getTabModalPrompt : function (domWin) {
         var promptBox = null;
 
-        // Given a content DOM window, returns the chrome window it's in.
-        function getChromeWindow(aWindow) {
-            var chromeWin = aWindow.QueryInterface(Ci.nsIInterfaceRequestor)
-                                   .getInterface(Ci.nsIWebNavigation)
-                                   .QueryInterface(Ci.nsIDocShell)
-                                   .chromeEventHandler.ownerDocument.defaultView;
-            return chromeWin;
-        }
-
         try {
             // Get the topmost window, in case we're in a frame.
             var promptWin = domWin.top;
 
             // Get the chrome window for the content window we're using.
             // (Unwrap because we need a non-IDL property below.)
-            var chromeWin = getChromeWindow(promptWin).wrappedJSObject;
+            var chromeWin = promptWin.QueryInterface(Ci.nsIInterfaceRequestor)
+                                     .getInterface(Ci.nsIWebNavigation)
+                                     .QueryInterface(Ci.nsIDocShell)
+                                     .chromeEventHandler.ownerDocument
+                                     .defaultView.wrappedJSObject;
 
             if (chromeWin.getTabModalPromptBox)
                 promptBox = chromeWin.getTabModalPromptBox(promptWin);
@@ -410,7 +373,7 @@ function openModalWindow(domWin, uri, args) {
     // domWin may still be null here if there are _no_ windows open.
 
     // Note that we don't need to fire DOMWillOpenModalDialog and
-    // DOMModalDialogClosed events here, wwatcher's OpenWindowJSInternal
+    // DOMModalDialogClosed events here, wwatcher's OpenWindowInternal
     // will do that. Similarly for enterModalState / leaveModalState.
 
     Services.ww.openWindow(domWin, uri, "_blank", "centerscreen,chrome,modal,titlebar", args);
@@ -450,7 +413,7 @@ function openTabPrompt(domWin, tabPrompt, args) {
         newPrompt = tabPrompt.appendPrompt(args, onPromptClose);
 
         // TODO since we don't actually open a window, need to check if
-        // there's other stuff in nsWindowWatcher::OpenWindowJSInternal
+        // there's other stuff in nsWindowWatcher::OpenWindowInternal
         // that we might need to do here as well.
 
         let thread = Services.tm.currentThread;

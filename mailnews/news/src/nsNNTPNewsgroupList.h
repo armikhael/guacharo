@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Seth Spitzer <sspitzer@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 /*
  * formerly listngst.h
  * This class should ultimately be part of a news group listing
@@ -70,10 +37,10 @@ typedef struct MSG_NewsKnown {
                        marked read and we're only viewing
                        unread messages. */
 
-  PRInt32 first_possible; /* The oldest article in this group. */
-  PRInt32 last_possible; /* The newest article in this group. */
+  int32_t first_possible; /* The oldest article in this group. */
+  int32_t last_possible; /* The newest article in this group. */
 
-  PRBool shouldGetOldest;
+  bool shouldGetOldest;
 } MSG_NewsKnown;
 
 // This class should ultimately be part of a news group listing
@@ -95,25 +62,25 @@ public:
 private:
   NS_METHOD CleanUp();
      
-  PRBool  m_finishingXover;
+  bool    m_finishingXover;
 
 #ifdef HAVE_CHANGELISTENER
   virtual void OnAnnouncerGoingAway (ChangeAnnouncer *instigator);
 #endif
-  nsresult ParseLine(char *line, PRUint32 *message_number);
+  nsresult ParseLine(char *line, uint32_t *message_number);
   nsresult GetDatabase(const char *uri, nsIMsgDatabase **db);
-  void SetProgressBarPercent(PRInt32 percent);
+  void SetProgressBarPercent(int32_t percent);
   void SetProgressStatus(const PRUnichar *message);
 
-  void UpdateStatus(PRBool filtering, PRInt32 numDled, PRInt32 totToDL);
+  void UpdateStatus(bool filtering, int32_t numDled, int32_t totToDL);
 
   nsresult AddHeader(const char * header, const char * value);
 protected:
-  PRBool m_getOldMessages;
-  PRBool m_promptedAlready;
-  PRBool m_downloadAll;
-  PRInt32 m_maxArticles;
-  PRInt32 m_lastPercent;
+  bool m_getOldMessages;
+  bool m_promptedAlready;
+  bool m_downloadAll;
+  int32_t m_maxArticles;
+  int32_t m_lastPercent;
   PRTime m_lastStatusUpdate;
 
   nsCOMPtr <nsIMsgNewsFolder> m_newsFolder;
@@ -131,13 +98,13 @@ protected:
   /**
    * The endpoints of the message chunk we are capable of downloading.
    */
-  PRInt32 m_firstMsgToDownload, m_lastMsgToDownload;
+  int32_t m_firstMsgToDownload, m_lastMsgToDownload;
   
   struct MSG_NewsKnown m_knownArts;
   nsMsgKeySet *m_set;
 
   nsTArray<nsCString> m_filterHeaders;
-  PRUint32 m_currentXHDRIndex;
+  uint32_t m_currentXHDRIndex;
   nsCString m_lastHeader;
   nsCString m_thisLine;
 
@@ -148,7 +115,7 @@ private:
   nsCOMPtr <nsIMsgDBHdr> m_newMsgHdr; // current message header we're building
   nsCOMArray<nsIMsgDBHdr> m_newHeaders;
 
-  PRBool m_addHdrToDB;
+  bool m_addHdrToDB;
 
 };
     

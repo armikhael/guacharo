@@ -1,40 +1,8 @@
 /*
 #ifdef 0
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Tab Previews.
- *
- * The Initial Developer of the Original Code is Mozilla.
- * Portions created by the Initial Developer are Copyright (C) 2008
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Dão Gottwald <dao@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK *****
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #endif
  */
 
@@ -87,10 +55,12 @@ var tabPreviews = {
     ctx.drawWindow(win, win.scrollX, win.scrollY,
                    snippetWidth, snippetWidth * this.aspectRatio, "rgb(255,255,255)");
 
-    if (aStore) {
+    if (aStore &&
+        aTab.linkedBrowser /* bug 795608: the tab may got removed while drawing the thumbnail */) {
       aTab.__thumbnail = thumbnail;
       aTab.__thumbnail_lastURI = aTab.linkedBrowser.currentURI.spec;
     }
+
     return thumbnail;
   },
   handleEvent: function tabPreviews_handleEvent(event) {
@@ -129,7 +99,6 @@ var tabPreviewPanelHelper = {
     var handler = this._generateHandler(host);
     host.panel.addEventListener("popupshown", handler, false);
     host.panel.addEventListener("popuphiding", handler, false);
-    host.panel.addEventListener("popuphidden", handler, false);
 
     host._prevFocus = document.commandDispatcher.focusedElement;
   },
@@ -162,11 +131,6 @@ var tabPreviewPanelHelper = {
       gBrowser.selectedTab = host.tabToSelect;
       host.tabToSelect = null;
     }
-  },
-  _popuphidden: function (host) {
-    // Destroy the widget in order to prevent outdated content
-    // when re-opening the panel.
-    host.panel.hidden = true;
   }
 };
 
@@ -227,9 +191,14 @@ var ctrlTab = {
     list = list.filter(function (tab) !tab.closing);
 
     if (this.recentlyUsedLimit != 0) {
-      let recentlyUsedTabs = this._recentlyUsedTabs;
-      if (this.recentlyUsedLimit > 0)
-        recentlyUsedTabs = this._recentlyUsedTabs.slice(0, this.recentlyUsedLimit);
+      let recentlyUsedTabs = [];
+      for (let tab of this._recentlyUsedTabs) {
+        if (!tab.hidden && !tab.closing) {
+          recentlyUsedTabs.push(tab);
+          if (this.recentlyUsedLimit > 0 && recentlyUsedTabs.length >= this.recentlyUsedLimit)
+            break;
+        }
+      }
       for (let i = recentlyUsedTabs.length - 1; i >= 0; i--) {
         list.splice(list.indexOf(recentlyUsedTabs[i]), 1);
         list.unshift(recentlyUsedTabs[i]);

@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsContentCID_h__
 #define nsContentCID_h__
@@ -45,7 +13,7 @@
 "@mozilla.org/layout/htmlCopyEncoder;1"
 
 // {972D8D8F-F0DA-11d4-9885-00C04FA0CF4B}
-#define NS_DOCUMENT_VIEWER_CID \
+#define NS_CONTENT_VIEWER_CID \
 { 0x972d8d8f, 0xf0da, 0x11d4, { 0x98, 0x85, 0x0, 0xc0, 0x4f, 0xa0, 0xcf, 0x4b } }
 
 // {FC886801-E768-11d4-9885-00C04FA0CF4B}
@@ -97,10 +65,6 @@
  0xd9783472, 0x8fe9, 0x11d2,                      \
  {0x9d, 0x3c, 0x00, 0x60, 0x08, 0x8f, 0x9f, 0xf7}}
 
-#define NS_RANGE_CID \
-{/* {56AD2981-8A87-11d2-918C-0080C8E44DB5}*/ \
- 0x56ad2981, 0x8a87, 0x11d2, { 0x91, 0x8c, 0x0, 0x80, 0xc8, 0xe4, 0x4d, 0xb5 } }
-
 #define NS_CONTENTITERATOR_CID \
 {/* {a6cf90e3-15b3-11d2-932e-00805f8add32}*/ \
  0xa6cf90e3, 0x15b3, 0x11d2, {0x93, 0x2e, 0x00, 0x80, 0x5f, 0x8a, 0xdd, 0x32 } }
@@ -120,10 +84,6 @@
 // {64F300A1-C88C-11d3-97FB-00400553EEF0}
 #define NS_XBLSERVICE_CID \
 { 0x64f300a1, 0xc88c, 0x11d3, { 0x97, 0xfb, 0x0, 0x40, 0x5, 0x53, 0xee, 0xf0 } }
-
-// 3a9cd622-264d-11d4-ba06-0060b0fc76dd
-#define NS_DOM_IMPLEMENTATION_CID \
-{ 0x3a9cd622, 0x264d, 0x11d4, {0xba, 0x06, 0x00, 0x60, 0xb0, 0xfc, 0x76, 0xdd } }
 
 // {4aef38b7-6364-4e23-a5e7-12f837fbbd9c}
 #define NS_XMLCONTENTSERIALIZER_CID \
@@ -185,14 +145,6 @@
 // {541AFCB2-A9A3-11d2-8EC5-00805F29F370}
 #define NS_XULDOCUMENT_CID \
 { 0x541afcb2, 0xa9a3, 0x11d2, { 0x8e, 0xc5, 0x0, 0x80, 0x5f, 0x29, 0xf3, 0x70 } }
-
-// {3A0A0FC1-8349-11d3-BE47-00104BDE6048}
-#define NS_XULPROTOTYPECACHE_CID \
-{ 0x3a0a0fc1, 0x8349, 0x11d3, { 0xbe, 0x47, 0x0, 0x10, 0x4b, 0xde, 0x60, 0x48 } }
-
-// {a6cf9126-15b3-11d2-932e-00805f8add32}
-#define NS_RANGEUTILS_CID \
-{ 0xa6cf9126, 0x15b3, 0x11d2, {0x93, 0x2e, 0x00, 0x80, 0x5f, 0x8a, 0xdd, 0x32 } }
 
 #define NS_SVGDOCUMENT_CID                        \
 { /* b7f44954-1dd1-11b2-8c2e-c2feab4186bc */      \

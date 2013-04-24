@@ -1,46 +1,16 @@
 #filter substitution
 <?xml version="1.0"?>
 
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
-# The Original Code is Mozilla Communicator client code, released
-# March 31, 1998.
-#
-# The Initial Developer of the Original Code is
-# Netscape Communications Corporation.
-# Portions created by the Initial Developer are Copyright (C) 1998-1999
-# the Initial Developer. All Rights Reserved.
-#
-# Contributor(s):
-#   Mark Banner <bugzilla@standard8.plus.com>
-#
-# Alternatively, the contents of this file may be used under the terms of
-# either the GNU General Public License Version 2 or later (the "GPL"), or
-# the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 <?xml-stylesheet href="chrome://messenger/skin/mailWindow1.css" type="text/css"?>
 <?xml-stylesheet href="chrome://gloda/content/glodacomplete.css" type="text/css"?>
+<?xml-stylesheet href="chrome://messenger/content/tabmail.css" type="text/css"?>
+<?xml-stylesheet href="chrome://messenger/skin/tabmail.css" type="text/css"?>
+
+
 
 
 <?xul-overlay href="chrome://communicator/content/utilityOverlay.xul"?>
@@ -50,6 +20,7 @@
 <?xul-overlay href="chrome://messenger/content/mailOverlay.xul"?>
 <?xul-overlay href="chrome://messenger/content/editContactOverlay.xul"?>
 <?xul-overlay href="chrome://messenger/content/specialTabs.xul"?>
+<?xul-overlay href="chrome://messenger/content/webSearchTab.xul"?>
 <?xul-overlay href="chrome://messenger/content/quickFilterBar.xul"?>
 
 <!DOCTYPE window [
@@ -61,6 +32,8 @@
 %customizeToolbarDTD;
 <!ENTITY % textcontextDTD SYSTEM "chrome://global/locale/textcontext.dtd">
 %textcontextDTD;
+<!ENTITY % tabMailDTD SYSTEM "chrome://messenger/locale/tabmail.dtd" >
+%tabMailDTD;
 ]>
 
 <!--
@@ -68,6 +41,7 @@
   -  3-pane view inside of tabs.
   -->
 <window id="messengerWindow"
+        xmlns:svg="http://www.w3.org/2000/svg"
         xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
         title="&titledefault.label;@PRE_RELEASE_SUFFIX@"
         titlemodifier="&titledefault.label;@PRE_RELEASE_SUFFIX@"
@@ -78,22 +52,10 @@
         persist="width height screenX screenY sizemode"
         toggletoolbar="true"
         windowtype="mail:3pane"
+        macanimationtype="document"
         lightweightthemes="true"
+        fullscreenbutton="true"
         lightweightthemesfooter="status-bar">
-
-
-<!--This (strange!) element is here to support recovering customized toolbars in
-    the featureConfigurator code.  We just want to access the persisted data.
-
-    If this not an upgrade from 2 to 3, then there won't be any persisted
-    currentset, and we want the original defaultset -->
-<data id="mail-bar2" persist="currentset iconsize labelalign"
-#ifdef XP_MACOSX
-  defaultset="button-getmsg,button-newmsg,button-address,spacer,button-reply,button-replyall,button-replylist,button-forward,spacer,button-tag,button-delete,button-junk,button-print,spacer,button-goback,button-goforward,spring,gloda-search,throbber-box"
-#else
-  defaultset="button-getmsg,button-newmsg,button-address,separator,button-reply,button-replyall,button-replylist,button-forward,separator,button-tag,button-delete,button-junk,button-print,separator,button-goback,button-goforward,spring,gloda-search"
-#endif
-/>
 
 <stringbundleset id="stringbundleset">
   <stringbundle id="bundle_brand" src="chrome://branding/locale/brand.properties"/>
@@ -110,6 +72,8 @@
 <script type="application/javascript" src="chrome://messenger/content/selectionsummaries.js"/>
 <script type="application/javascript" src="chrome://messenger/content/msgMail3PaneWindow.js"/>
 <script type="application/javascript" src="chrome://messenger/content/specialTabs.js"/>
+<!-- accountProvisionerTab.js relies on code from specialTabs.js, and so much be loaded after it. -->
+<script type="application/javascript" src="chrome://messenger/content/newmailaccount/accountProvisionerTab.js"/>
 <script type="application/javascript" src="chrome://messenger/content/glodaFacetTab.js"/>
 <script type="application/javascript" src="chrome://messenger/content/searchBar.js"/>
 <script type="application/javascript" src="chrome://messenger/content/mail3PaneWindowCommands.js"/>
@@ -137,11 +101,13 @@
   <commandset id="mailMessageMenuItems"/>
   <commandset id="mailToolbarItems"/>
   <commandset id="mailGetMsgMenuItems"/>
+  <commandset id="mailTagMenuItems"/>
   <commandset id="mailMarkMenuItems"/>
   <commandset id="mailToolsMenuItems"/>
   <commandset id="globalEditMenuItems"/>
   <commandset id="selectEditMenuItems"/>
   <commandset id="clipboardEditMenuItems"/>
+  <commandset id="webSearchItems"/>
   <commandset id="FocusRingUpdate_Mail"
         commandupdater="true"
         events="focus"
@@ -234,26 +200,131 @@
               oncommand="SubscribeToNewsgroup(findEmailNodeFromPopupNode(document.popupNode, 'newsgroupPopup'))"/>
 </menupopup>
 
+<menupopup id="pageContextMenu"
+           pagemenu="end"
+           onpopupshowing="InitPageMenu(this, event);">
+</menupopup>
+
 <menupopup id="messageIdContext"/>
 
+<!-- We want to be able to do the following:
+
+     1)  Open the tabContextMenu by right-clicking on individual tab selectors
+     2)  Open the mail-toolbox customize context menu when right-clicking on
+         the empty space of the tab selector.
+
+     In order to do that, we make the tabContextMenu available in the main
+     document, and refer to it via the context attributes of each newly spawned
+     tab selector.  We also make the context attribute of the tab strip default
+     to the mail-toolbox customization popup.
+
+     So, when right-clicking on a tab, the tabContextMenu opens up, and stops
+     the click event from propagating - but when the strip is right-clicked
+     outside of any tabs, the mail-toolbox context menu opens, as desired.
+-->
+
+<menupopup id="tabContextMenu"
+               onpopupshowing="return document.getElementById('tabmail').onTabContextMenuShowing(document.popupNode);">
+  <menuitem label="&moveToNewWindow.label;"
+                accesskey="&moveToNewWindow.accesskey;"
+                anonid="openTabInWindow"
+                oncommand="document.getElementById('tabmail').replaceTabWithWindow(document.popupNode);"/>
+  <menuseparator />
+  <menuitem label="&closeOtherTabsCmd2.label;"
+                accesskey="&closeOtherTabsCmd2.accesskey;"
+                anonid="closeOtherTabs"
+                oncommand="document.getElementById('tabmail').closeOtherTabs(document.popupNode);"/>
+  <menuseparator />
+  <menu label="&recentlyClosedTabsCmd.label;"
+            accesskey="&recentlyClosedTabsCmd.accesskey;"
+            anonid="recentlyClosedTabs" >
+    <menupopup onpopupshowing="return InitRecentlyClosedTabsPopup(this);" />
+  </menu>
+  <menuitem label="&closeTabCmd2.label;"
+                accesskey="&closeTabCmd2.accesskey;"
+                anonid="closeTab"
+                oncommand="document.getElementById('tabmail').closeTab(document.popupNode);"/>
+</menupopup>
+
+<tooltip id="tabmail-tabs-tooltip" onpopupshowing="document.getElementById('tabmail').createTooltip(event);"/>
 <tooltip id="folderpopup" class="folderSummaryPopup"/>
 
 <tooltip id="aHTMLTooltip" onpopupshowing="return FillInHTMLTooltip(document.tooltipNode);"/>
+<tooltip id="tabmail-tabs-tooltip" onpopupshowing="document.getElementById('tabmail').createTooltip(event);"/>
 
-  <toolbox id="mail-toolbox" class="toolbox-top">
+#ifdef CAN_DRAW_IN_TITLEBAR
+<vbox id="titlebar">
+  <hbox id="titlebar-content">
+    <spacer id="titlebar-spacer" flex="1"/>
+    <hbox id="titlebar-buttonbox-container" align="start">
+      <hbox id="titlebar-buttonbox">
+        <toolbarbutton class="titlebar-button" id="titlebar-min" oncommand="window.minimize();"/>
+        <toolbarbutton class="titlebar-button" id="titlebar-max" oncommand="onTitlebarMaxClick();"/>
+        <toolbarbutton class="titlebar-button" id="titlebar-close" oncommand="window.close()"/>
+      </hbox>
+    </hbox>
+  </hbox>
+</vbox>
+#endif
+
+  <!-- navigation-toolbox is augmented by mailWindowOverlay.xul -->
+  <toolbox id="navigation-toolbox" class="toolbox-top">
+
+    <toolbar id="tabs-toolbar" class="toolbar-primary">
+
+      <tabs flex="1"
+            id="tabcontainer"
+            align="end"
+            setfocus="false"
+            onclick="document.getElementById('tabmail').onTabClick(event);"
+            class="tabmail-tabs"
+            tooltip="tabmail-tabs-tooltip"
+            alltabsbutton="alltabs-button"
+            collapsetoolbar="tabs-toolbar"
+            tabtoolbar="tabbar-toolbar">
+            <tab selected="true" validate="never" type="folder"
+                 maxwidth="250" width="0" minwidth="100" flex="100"
+                 class="tabmail-tab" crop="end"/>
+      </tabs>
+
+      <!-- Use of this element for extensions is deprecated! Current
+           extensions should add to #mail-toolbox and add a toolbar item to
+           #tabbar-toolbar below. -->
+      <hbox id="tabmail-buttons"/>
+
+      <toolbar id="tabbar-toolbar" toolboxid="mail-toolbox"
+               context="toolbar-context-menu"
+               customizable="true"
+               mode="icons" defaultmode="icons" lockmode="true"
+               iconsize="small" defaulticonsize="small" lockiconsize="true"
+               defaultset=""/>
+
+      <toolbarbutton class="tabs-alltabs-button"
+                     id="alltabs-button"
+                     type="menu"
+                     tooltiptext="&listAllTabs.label;">
+        <menupopup class="tabs-alltabs-popup"
+                   id="alltabs-popup" position="after_end"
+                   tabcontainer="tabcontainer"/>
+      </toolbarbutton>
+#ifdef CAN_DRAW_IN_TITLEBAR
+      <hbox class="titlebar-placeholder" type="caption-buttons" ordinal="1000"/>
+#endif
+    </toolbar>
+
   </toolbox>
+
   <!-- XXX This extension point (tabmail-container) is only temporary!
        Horizontal space shouldn't be wasted if it isn't absolutely critical.
        A mechanism for adding sidebar panes will be added in bug 476154. -->
   <hbox id="tabmail-container" flex="1">
-    <tabmail id="tabmail" flex="1" panelcontainer="tabpanelcontainer">
-      <hbox>
-        <!-- extensions can put stuff in here -->
-        <hbox id="tabmail-buttons"/>
-        <!-- extensions must not put stuff in here -->
-        <hbox id="thunderbird-private-tabmail-buttons"/>
-      </hbox>
+    <!-- Beware!  Do NOT use overlays to append nodes directly to tabmail (children
+         of tabmail is OK though).  This will break Ctrl-tab switching because
+         the XBL binding will choke when it finds a child of tabmail that is
+         not a tabpanels node. -->
+    <tabmail id="tabmail" flex="1" panelcontainer="tabpanelcontainer" tabcontainer="tabcontainer">
       <tabpanels id="tabpanelcontainer" flex="1" class="plain" selectedIndex="0">
+
         <!-- mailContent is the container used for the "wide" layout. Normally,
              all it contains is the "messengerBox" box.  However, in "wide" mode
              the message pane and its splitter transplant themselves into the box
@@ -261,6 +332,9 @@
              the folder pane next to the thread view, with the message pane/reader
              beneath both of them. -->
         <box id="mailContent" orient="vertical" flex="1">
+          <!-- mail-toolbox is provided by mailWindowOverlay.xul -->
+          <toolbox id="mail-toolbox" />
+
           <box id="messengerBox" orient="horizontal" flex="1" minheight="100" height="100" persist="height">
             <vbox id="folderPaneBox" minwidth="125" width="200" persist="width">
               <label id="folderColumnLabel" hidden="true" value="&folderColumn.label;"/>
@@ -311,7 +385,9 @@
                       >
                   <!-- first panel in displayDeck is Account Central -->
                   <vbox id="accountCentralBox" flex="1">
-                    <iframe name="accountCentralPane" width="150" flex="1" src="about:blank"/>
+                    <iframe name="accountCentralPane"
+                            contextmenu="pageContextMenu"
+                            width="150" flex="1" src="about:blank"/>
                   </vbox>
                   <!-- The threadPaneBox is the basis for the vertical view and you
                        should not put anything in it, because the messagepane will
@@ -421,42 +497,47 @@
                           collapsed="true"
                           onmouseup="OnMouseUpThreadAndMessagePaneSplitter()"/>
 
-                <vbox id="messagepanebox" flex="2" minheight="100" height="200"
-                      minwidth="100" width="200" persist="height width">
-                  
-                  <!-- This next iframe is used to display summaries of -->
-                  <!-- multiple selected messages or collapsed threads -->
-                  <browser id="multimessage"
-                           style="height: 0px; min-height: 1px"
-                           flex="1" name="multimessage"
-                           hidden="true"
-                           disablesecurity="true" disablehistory="true"
-                           tooltip="aHTMLTooltip"
-                           src="chrome://messenger/content/multimessageview.xhtml"
-                           autofind="false"/>
-                  <vbox id="singlemessage" flex="1">
-                    <hbox id="msgHeaderView"/>
-                    <hbox id="editMessageBox"/>
-                    <deck id="msgNotificationBar"/>
-                    <!-- The messagepanewrapper hbox exists to allow
-                         extensions to add sidebars to the message. -->
-                    <hbox id="messagepanewrapper" flex="1">
-                      <browser id="messagepane" context="mailContext"
-                               autofind="false" minheight="1" flex="1"
-                               name="messagepane" tooltip="aHTMLTooltip"
-                               disablehistory="true" type="content-primary"
-                               src="about:blank"
-                               onresize="return messagePaneOnResize(event);"
-                               disablesecurity="true"
-                               onclick="return contentAreaClick(event);"/>
-                    </hbox>
-                    <splitter id="attachment-splitter" collapse="after"
-                              resizebefore="closest" resizeafter="closest"
-                              collapsed="true"/>
-                    <vbox id="attachmentView"/>
-                    <findbar id="FindToolbar" browserid="messagepane"/>
+                <!-- a convenience box for ease of extension overlaying -->
+                <hbox id="messagepaneboxwrapper"
+                      flex="1"
+                      minheight="100" height="200"
+                      minwidth="100" width="200" persist="collapsed height width">
+                  <vbox id="messagepanebox" flex="2">
+                    <!-- This next iframe is used to display summaries of -->
+                    <!-- multiple selected messages or collapsed threads -->
+                    <browser id="multimessage"
+                             contextmenu="pageContextMenu"
+                             style="height: 0px; min-height: 1px"
+                             flex="1" name="multimessage"
+                             hidden="true"
+                             disablesecurity="true" disablehistory="true"
+                             tooltip="aHTMLTooltip"
+                             src="chrome://messenger/content/multimessageview.xhtml"
+                             autofind="false"/>
+                    <vbox id="singlemessage" flex="1">
+                      <hbox id="msgHeaderView"/>
+                      <hbox id="editMessageBox"/>
+                      <deck id="msgNotificationBar"/>
+                      <!-- The messagepanewrapper hbox exists to allow
+                           extensions to add sidebars to the message. -->
+                      <hbox id="messagepanewrapper" flex="1">
+                        <browser id="messagepane" context="mailContext"
+                                 autofind="false" minheight="1" flex="1"
+                                 name="messagepane" tooltip="aHTMLTooltip"
+                                 disablehistory="true" type="content-primary"
+                                 src="about:blank"
+                                 onresize="return messagePaneOnResize(event);"
+                                 disablesecurity="true"
+                                 onclick="return contentAreaClick(event);"/>
+                      </hbox>
+                      <splitter id="attachment-splitter" collapse="after"
+                                resizebefore="closest" resizeafter="closest"
+                                collapsed="true"/>
+                      <vbox id="attachmentView"/>
+                      <findbar id="FindToolbar" browserid="messagepane"/>
+                    </vbox>
                   </vbox>
-                </vbox>
+                </hbox>
               </box>
             </vbox>
           </box>
@@ -465,10 +546,11 @@
     </tabmail>
     <vbox id="contentTab"/>
     <vbox id="chromeTab"/>
+    <vbox id="glodaTab"/>
   </hbox>
   <panel id="customizeToolbarSheetPopup" noautohide="true">
     <iframe id="customizeToolbarSheetIFrame"
-            style="&dialog.style;"
+            style="&dialog.dimensions;"
             hidden="true"/>
   </panel>
 
@@ -477,5 +559,12 @@
     <statusbarpanel id="unreadMessageCount"/>
     <statusbarpanel id="totalMessageCount"/>
   </statusbar>
+
+  <svg:svg height="0">
+    <svg:clipPath id="tab-curve-clip-path" clipPathUnits="userSpaceOnUse">
+      <svg:path d="m 0,28 5,0 4,-3 3,-4 1,-5 1,-5 3,-5 4,-4 4,-2 5,0 0,31 -30,0 z"/>
+    </svg:clipPath>
+  </svg:svg>
+
 </window>
 

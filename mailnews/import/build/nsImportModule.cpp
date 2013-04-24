@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 ////////////////////////////////////////////////////////////////////////////////
 // Core Module Include Files
@@ -64,16 +32,6 @@ NS_DEFINE_NAMED_CID(NS_TEXTIMPORT_CID);
 
 NS_DEFINE_NAMED_CID(NS_VCARDIMPORT_CID);
 
-////////////////////////////////////////////////////////////////////////////////
-// nsComm4x import Include Files
-////////////////////////////////////////////////////////////////////////////////
-#include "nsComm4xProfile.h"
-#include "nsComm4xMailStringBundle.h"
-#include "nsComm4xMailImport.h"
-
-NS_DEFINE_NAMED_CID(NS_COMM4XMAILIMPORT_CID);
-NS_DEFINE_NAMED_CID(NS_ICOMM4XPROFILE_CID);
-NS_DEFINE_NAMED_CID(NS_COMM4XMAILIMPL_CID);
 ////////////////////////////////////////////////////////////////////////////////
 // eudora import Include Files
 ////////////////////////////////////////////////////////////////////////////////
@@ -127,13 +85,6 @@ NS_GENERIC_FACTORY_CONSTRUCTOR(nsTextImport)
 NS_GENERIC_FACTORY_CONSTRUCTOR(nsVCardImport)
 
 ////////////////////////////////////////////////////////////////////////////////
-// nsComm4x import factories
-////////////////////////////////////////////////////////////////////////////////
-NS_GENERIC_FACTORY_CONSTRUCTOR(nsComm4xMailImport)
-NS_GENERIC_FACTORY_CONSTRUCTOR_INIT(ImportComm4xMailImpl, Initialize)
-NS_GENERIC_FACTORY_CONSTRUCTOR(nsComm4xProfile)
-
-////////////////////////////////////////////////////////////////////////////////
 // eudora import factories
 ////////////////////////////////////////////////////////////////////////////////
 #if defined(XP_WIN) || defined(XP_MACOSX)
@@ -159,10 +110,9 @@ NS_GENERIC_FACTORY_CONSTRUCTOR(nsWMImport)
 
 static const mozilla::Module::CategoryEntry kMailNewsImportCategories[] = {
   // XXX These CIDs should match the explicit CIDs defined in the header files,
-  // or be changed so that they are contract IDs (with appropraite code updates)
+  // or be changed so that they are contract IDs (with appropriate code updates)
   { "mailnewsimport", "{A5991D01-ADA7-11d3-A9C2-00A0CC26DA63}", NS_IMPORT_ADDRESS_STR },
   { "mailnewsimport", "{0eb034a3-964a-4e2f-92eb-cc55d9ae9dd2}", NS_IMPORT_ADDRESS_STR },
-  { "mailnewsimport", "{647cc990-2bdb-11d6-92a0-0010a4b26cda}", kComm4xMailSupportsString},
 #if defined(XP_WIN) || defined(XP_MACOSX)
   { "mailnewsimport", "{c8448da0-8f83-11d3-a206-00a0cc26da63}", kEudoraSupportsString },
 #endif
@@ -182,9 +132,6 @@ const mozilla::Module::CIDEntry kMailNewsImportCIDs[] = {
   { &kNS_IMPORTMIMEENCODE_CID, false, NULL, nsIImportMimeEncodeImplConstructor },
   { &kNS_TEXTIMPORT_CID, false, NULL, nsTextImportConstructor },
   { &kNS_VCARDIMPORT_CID, false, NULL, nsVCardImportConstructor },
-  { &kNS_COMM4XMAILIMPORT_CID, false, NULL, nsComm4xMailImportConstructor },
-  { &kNS_COMM4XMAILIMPL_CID, false, NULL, ImportComm4xMailImplConstructor },
-  { &kNS_ICOMM4XPROFILE_CID, false, NULL, nsComm4xProfileConstructor },
 #if defined(XP_WIN) || defined(XP_MACOSX)
   { &kNS_EUDORAIMPORT_CID, false, NULL, nsEudoraImportConstructor },
 #endif
@@ -206,9 +153,6 @@ const mozilla::Module::ContractIDEntry kMailNewsImportContracts[] = {
   { "@mozilla.org/import/import-mimeencode;1", &kNS_IMPORTMIMEENCODE_CID },
   { "@mozilla.org/import/import-text;1", &kNS_TEXTIMPORT_CID },
   { "@mozilla.org/import/import-vcard;1", &kNS_VCARDIMPORT_CID },
-  { "@mozilla.org/import/import-comm4xMail;1", &kNS_COMM4XMAILIMPORT_CID },
-  { NS_COMM4XMAILIMPL_CONTRACTID, &kNS_COMM4XMAILIMPL_CID },
-  { NS_ICOMM4XPROFILE_CONTRACTID, &kNS_ICOMM4XPROFILE_CID },
 #if defined(XP_WIN) || defined(XP_MACOSX)
   { "@mozilla.org/import/import-eudora;1", &kNS_EUDORAIMPORT_CID },
 #endif

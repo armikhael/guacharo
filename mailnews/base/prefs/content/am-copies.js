@@ -1,40 +1,7 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var gFccRadioElemChoice, gDraftsRadioElemChoice, gArchivesRadioElemChoice, gTmplRadioElemChoice;
 var gFccRadioElemChoiceLocked, gDraftsRadioElemChoiceLocked, gArchivesRadioElemChoiceLocked, gTmplRadioElemChoiceLocked;
@@ -54,7 +21,7 @@ function onPreInit(account, accountValues)
 
 /*
  * Set the global radio element choices and initialize folder/account pickers.
- * Also, initialize other UI elements (bcc self, fcc picker controller checkboxes).
+ * Also, initialize other UI elements (cc, bcc, fcc picker controller checkboxes).
  */
 function onInit(aPageId, aServerId)
 {
@@ -72,17 +39,17 @@ function onInitCopiesAndFolders()
                      "identity.fccFolder",
                      "msgFccFolderPicker");
 
-    SetFolderDisplay(gDraftsRadioElemChoice, gDraftsRadioElemChoiceLocked,
-                     "draft",
-                     "msgDraftsAccountPicker",
-                     "identity.draftFolder",
-                     "msgDraftsFolderPicker");
-
     SetFolderDisplay(gArchivesRadioElemChoice, gArchivesRadioElemChoiceLocked,
                      "archive",
                      "msgArchivesAccountPicker",
                      "identity.archiveFolder",
                      "msgArchivesFolderPicker");
+
+    SetFolderDisplay(gDraftsRadioElemChoice, gDraftsRadioElemChoiceLocked,
+                     "draft",
+                     "msgDraftsAccountPicker",
+                     "identity.draftFolder",
+                     "msgDraftsFolderPicker");
 
     SetFolderDisplay(gTmplRadioElemChoice, gTmplRadioElemChoiceLocked,
                      "tmpl",
@@ -90,8 +57,8 @@ function onInitCopiesAndFolders()
                      "identity.stationeryFolder",
                      "msgStationeryFolderPicker");
 
-    setupCcTextbox();
-    setupBccTextbox();
+    setupCcTextbox(true);
+    setupBccTextbox(true);
     setupFccItems();
     setupArchiveItems();
 
@@ -106,15 +73,15 @@ function SetGlobalRadioElemChoices()
     gFccRadioElemChoiceLocked = pickerModeElement.getAttribute("disabled");
     if (!gFccRadioElemChoice) gFccRadioElemChoice = gDefaultPickerMode;
 
-    pickerModeElement = document.getElementById("identity.draftsFolderPickerMode");
-    gDraftsRadioElemChoice = pickerModeElement.getAttribute("value");
-    gDraftsRadioElemChoiceLocked = pickerModeElement.getAttribute("disabled");
-    if (!gDraftsRadioElemChoice) gDraftsRadioElemChoice = gDefaultPickerMode;
-
     pickerModeElement = document.getElementById("identity.archivesFolderPickerMode");
     gArchivesRadioElemChoice = pickerModeElement.getAttribute("value");
     gArchivesRadioElemChoiceLocked = pickerModeElement.getAttribute("disabled");
     if (!gArchivesRadioElemChoice) gArchivesRadioElemChoice = gDefaultPickerMode;
+
+    pickerModeElement = document.getElementById("identity.draftsFolderPickerMode");
+    gDraftsRadioElemChoice = pickerModeElement.getAttribute("value");
+    gDraftsRadioElemChoiceLocked = pickerModeElement.getAttribute("disabled");
+    if (!gDraftsRadioElemChoice) gDraftsRadioElemChoice = gDefaultPickerMode;
 
     pickerModeElement = document.getElementById("identity.tmplFolderPickerMode");
     gTmplRadioElemChoice = pickerModeElement.getAttribute("value");
@@ -146,7 +113,7 @@ function SetFolderDisplay(pickerMode, disableMode,
     var rg = selectAccountRadioElem.radioGroup;
     var folderPickedElement = document.getElementById(folderPickedField);
     var uri = folderPickedElement.getAttribute("value");
-    // Get message folder from the given uri. Second argument (false) siginifies
+    // Get message folder from the given uri. Second argument (false) signifies
     // that there is no need to check for the existence of special folders as
     // these folders are created on demand at runtime in case of imap accounts.
     // For POP3 accounts, special folders are created at the account creation time.
@@ -184,10 +151,9 @@ function SetFolderDisplay(pickerMode, disableMode,
 // Initialize the folder display based on prefs values
 function InitFolderDisplay(folder, folderPicker) {
     try {
-      folderPicker.firstChild.selectFolder(folder);
-    } catch(ex) {
-      folderPicker.setAttribute("label", folder.prettyName);
-    }
+        folderPicker.firstChild.selectFolder(folder);
+    } catch (ex) {}
+    folderPicker.setAttribute("label", prettyFolderName(folder));
     folderPicker.folder = folder;
 }
 
@@ -213,15 +179,15 @@ function noteSelectionChange(aGroup, aType, aEvent)
       picker = document.getElementById("msgFcc"+aType+"Picker");
       break;
 
-    case "messageDrafts" :
-      gDraftsRadioElemChoice = modeValue;
-      picker = document.getElementById("msgDrafts"+aType+"Picker");
-      break;
-
     case "messageArchives" :
       gArchivesRadioElemChoice = modeValue;
       picker = document.getElementById("msgArchives"+aType+"Picker");
       updateArchiveHierarchyButton(folder);
+      break;
+
+    case "messageDrafts" :
+      gDraftsRadioElemChoice = modeValue;
+      picker = document.getElementById("msgDrafts"+aType+"Picker");
       break;
 
     case "messageTemplates" :
@@ -231,7 +197,7 @@ function noteSelectionChange(aGroup, aType, aEvent)
   }
 
   picker.folder = folder;
-  picker.setAttribute("label", folder.prettyName);
+  picker.setAttribute("label", prettyFolderName(folder));
 }
 
 // Need to append special folders when account picker is selected.
@@ -243,8 +209,8 @@ function SetSpecialFolderNamesWithDelims()
     /* we use internal names known to everyone like "Sent", "Templates" and "Drafts" */
 
     gFccFolderWithDelim = folderDelim + "Sent";
-    gDraftsFolderWithDelim = folderDelim + "Drafts";
     gArchivesFolderWithDelim = folderDelim + "Archives";
+    gDraftsFolderWithDelim = folderDelim + "Drafts";
     gTemplatesFolderWithDelim = folderDelim + "Templates";
 }
 
@@ -264,6 +230,14 @@ function onSaveCopiesAndFolders()
                         "identity.fccFolder",
                         "identity.fccFolderPickerMode" );
 
+    SaveFolderSettings( gArchivesRadioElemChoice,
+                        "messageArchives",
+                        gArchivesFolderWithDelim,
+                        "msgArchivesAccountPicker",
+                        "msgArchivesFolderPicker",
+                        "identity.archiveFolder",
+                        "identity.archivesFolderPickerMode" );
+
     SaveFolderSettings( gDraftsRadioElemChoice,
                         "messageDrafts",
                         gDraftsFolderWithDelim,
@@ -271,14 +245,6 @@ function onSaveCopiesAndFolders()
                         "msgDraftsFolderPicker",
                         "identity.draftFolder",
                         "identity.draftsFolderPickerMode" );
-
-    SaveFolderSettings(gArchivesRadioElemChoice,
-                        "messageArchives",
-                        gArchivesFolderWithDelim,
-                        "msgArchivesAccountPicker",
-                        "msgArchivesFolderPicker",
-                        "identity.archiveFolder",
-                        "identity.archivesFolderPickerMode");
 
     SaveFolderSettings( gTmplRadioElemChoice,
                         "messageTemplates",
@@ -356,21 +322,41 @@ function setupFccItems()
 }
 
 // Disable CC textbox if CC checkbox is not checked
-function setupCcTextbox()
+function setupCcTextbox(init)
 {
     var ccChecked = document.getElementById("identity.doCc").checked;
     var ccTextbox = document.getElementById("identity.doCcList");
 
     ccTextbox.disabled = !ccChecked;
+
+    if (ccChecked) {
+        if (ccTextbox.value == "") {
+            ccTextbox.value = document.getElementById("identity.email").value;
+            if (!init)
+                ccTextbox.select();
+        }
+    } else if ((ccTextbox.value == document.getElementById("identity.email").value) ||
+               (init && ccTextbox.getAttribute("value") == ""))
+        ccTextbox.value = "";
 }
 
 // Disable BCC textbox if BCC checkbox is not checked
-function setupBccTextbox()
+function setupBccTextbox(init)
 {
     var bccChecked = document.getElementById("identity.doBcc").checked;
     var bccTextbox = document.getElementById("identity.doBccList");
 
     bccTextbox.disabled = !bccChecked;
+
+    if (bccChecked) {
+        if (bccTextbox.value == "") {
+            bccTextbox.value = document.getElementById("identity.email").value;
+            if (!init)
+                bccTextbox.select();
+        }
+    } else if ((bccTextbox.value == document.getElementById("identity.email").value) ||
+               (init && bccTextbox.getAttribute("value") == ""))
+        bccTextbox.value = "";
 }
 
 // Enable and disable pickers based on the radio element clicked
@@ -395,15 +381,15 @@ function setPickersState(enablePickerId, disablePickerId, event)
     case "fcc_selectFolder":
       gFccRadioElemChoice = radioElemValue;
       break;
-    case "draft_selectAccount":
-    case "draft_selectFolder":
-      gDraftsRadioElemChoice = radioElemValue;
-      break;
     case "archive_selectAccount":
     case "archive_selectFolder":
       gArchivesRadioElemChoice = radioElemValue;
       updateArchiveHierarchyButton(document.getElementById(enablePickerId)
                                            .folder);
+      break;
+    case "draft_selectAccount":
+    case "draft_selectFolder":
+      gDraftsRadioElemChoice = radioElemValue;
       break;
     case "tmpl_selectAccount":
     case "tmpl_selectFolder":

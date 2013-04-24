@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Jeff Walden <jwalden+code@mit.edu>.
- * Portions created by the Initial Developer are Copyright (C) 2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * Test harness for XPCOM objects, providing a scoped XPCOM initializer,
@@ -43,6 +11,16 @@
 
 #ifndef TestHarness_h__
 #define TestHarness_h__
+
+#if defined(_MSC_VER) && defined(MOZ_STATIC_JS)
+/*
+ * Including jsdbgapi.h may cause build break with --disable-shared-js
+ * This is a workaround for bug 673616.
+ */
+#define STATIC_JS_API
+#endif
+
+#include "mozilla/Util.h"
 
 #include "nsComponentManagerUtils.h"
 #include "nsServiceManagerUtils.h"
@@ -55,13 +33,14 @@
 #include "nsIDirectoryService.h"
 #include "nsIFile.h"
 #include "nsIProperties.h"
+#include "nsIObserverService.h"
 #include "nsXULAppAPI.h"
 #include "jsdbgapi.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
 
-static PRUint32 gFailCount = 0;
+static uint32_t gFailCount = 0;
 
 /**
  * Prints the given failure message and arguments using printf, prepending
@@ -83,13 +62,21 @@ void fail(const char* msg, ...)
 }
 
 /**
- * Prints the given string prepending "TEST-PASS | " for the benefit of
- * the test harness and with "\n" at the end, to be used at the end of a
- * successful test function.
+ * Prints the given success message and arguments using printf, prepending
+ * "TEST-PASS " for the benefit of the test harness and
+ * appending "\n" to eliminate having to type it at each call site.
  */
-void passed(const char* test)
+void passed(const char* msg, ...)
 {
-  printf("TEST-PASS | %s\n", test);
+  va_list ap;
+
+  printf("TEST-PASS | ");
+
+  va_start(ap, msg);
+  vprintf(msg, ap);
+  va_end(ap);
+
+  putchar('\n');
 }
 
 //-----------------------------------------------------------------------------
@@ -108,10 +95,10 @@ static const char* gCurrentProfile;
  *                    attempt is made to name the profile data according
  *                    to this name, but check your platform's profiler
  *                    documentation for what this means.
- * @return PR_TRUE if profiling was available and successfully started.
+ * @return true if profiling was available and successfully started.
  * @see StopProfiling
  */
-inline PRBool
+inline bool
 StartProfiling(const char* profileName)
 {
     NS_ASSERTION(profileName, "need a name for this profile");
@@ -119,7 +106,7 @@ StartProfiling(const char* profileName)
 
     JSBool ok = JS_StartProfiling(profileName);
     gCurrentProfile = profileName;
-    return ok ? PR_TRUE : PR_FALSE;
+    return ok ? true : false;
 }
 
 /**
@@ -130,17 +117,17 @@ StartProfiling(const char* profileName)
  * This is NOT thread safe.
  *
  * @precondition Profiling was started
- * @return PR_TRUE if profiling was successfully stopped.
+ * @return true if profiling was successfully stopped.
  * @see StartProfiling
  */
-inline PRBool
+inline bool
 StopProfiling()
 {
     NS_PRECONDITION(gCurrentProfile, "tried to stop profile before starting one");
 
     const char* profileName = gCurrentProfile;
     gCurrentProfile = 0;
-    return JS_StopProfiling(profileName) ? PR_TRUE : PR_FALSE;
+    return JS_StopProfiling(profileName) ? true : false;
 }
 
 //-----------------------------------------------------------------------------
@@ -184,10 +171,20 @@ class ScopedXPCOM : public nsIDirectoryServiceProvider2
     {
       // If we created a profile directory, we need to remove it.
       if (mProfD) {
-        if (NS_FAILED(mProfD->Remove(PR_TRUE)))
-          NS_WARNING("Problem removing profile direrctory");
+        nsCOMPtr<nsIObserverService> os =
+          do_GetService(NS_OBSERVERSERVICE_CONTRACTID);
+        MOZ_ASSERT(os);
+        if (os) {
+          MOZ_ALWAYS_TRUE(NS_SUCCEEDED(os->NotifyObservers(nullptr, "profile-change-net-teardown", nullptr)));
+          MOZ_ALWAYS_TRUE(NS_SUCCEEDED(os->NotifyObservers(nullptr, "profile-change-teardown", nullptr)));
+          MOZ_ALWAYS_TRUE(NS_SUCCEEDED(os->NotifyObservers(nullptr, "profile-before-change", nullptr)));
+        }
 
-        mProfD = nsnull;
+        if (NS_FAILED(mProfD->Remove(true))) {
+          NS_WARNING("Problem removing profile directory");
+        }
+
+        mProfD = nullptr;
       }
 
       if (mServMgr)
@@ -204,7 +201,7 @@ class ScopedXPCOM : public nsIDirectoryServiceProvider2
       printf("Finished running %s tests.\n", mTestName);
     }
 
-    PRBool failed()
+    bool failed()
     {
       return mServMgr == NULL;
     }
@@ -212,21 +209,21 @@ class ScopedXPCOM : public nsIDirectoryServiceProvider2
     already_AddRefed<nsIFile> GetProfileDirectory()
     {
       if (mProfD) {
-        NS_ADDREF(mProfD);
-        return mProfD.get();
+        nsCOMPtr<nsIFile> copy = mProfD;
+        return copy.forget();
       }
 
       // Create a unique temporary folder to use for this test.
       nsCOMPtr<nsIFile> profD;
       nsresult rv = NS_GetSpecialDirectory(NS_OS_TEMP_DIR,
                                            getter_AddRefs(profD));
-      NS_ENSURE_SUCCESS(rv, nsnull);
+      NS_ENSURE_SUCCESS(rv, nullptr);
 
       rv = profD->Append(NS_LITERAL_STRING("cpp-unit-profd"));
-      NS_ENSURE_SUCCESS(rv, nsnull);
+      NS_ENSURE_SUCCESS(rv, nullptr);
 
       rv = profD->CreateUnique(nsIFile::DIRECTORY_TYPE, 0755);
-      NS_ENSURE_SUCCESS(rv, nsnull);
+      NS_ENSURE_SUCCESS(rv, nullptr);
 
       mProfD = profD;
       return profD.forget();
@@ -235,7 +232,7 @@ class ScopedXPCOM : public nsIDirectoryServiceProvider2
     ////////////////////////////////////////////////////////////////////////////
     //// nsIDirectoryServiceProvider
 
-    NS_IMETHODIMP GetFile(const char *aProperty, PRBool *_persistent,
+    NS_IMETHODIMP GetFile(const char *aProperty, bool *_persistent,
                           nsIFile **_result)
     {
       // If we were supplied a directory service provider, ask it first.
@@ -256,7 +253,7 @@ class ScopedXPCOM : public nsIDirectoryServiceProvider2
         nsresult rv = profD->Clone(getter_AddRefs(clone));
         NS_ENSURE_SUCCESS(rv, rv);
 
-        *_persistent = PR_TRUE;
+        *_persistent = true;
         clone.forget(_result);
         return NS_OK;
       }

@@ -1,44 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the nsSessionStore component.
- *
- * The Initial Developer of the Original Code is
- * Simon Bünzli <zeniko@gmail.com>
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Dietrich Ayala <dietrich@mozilla.com>
- *   Ehsan Akhgari <ehsan.akhgari@gmail.com>
- *   Paul O’Shannessy <paul@oshannessy.com>
- *   Nils Maier <maierman@web.de>
- *   Michael Kraft <morac99-firefox@yahoo.com>
- *   Misak Khachatryan <misak.bugzilla@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
  * Session Storage and Restoration
@@ -110,13 +72,13 @@ XXX keep these in sync with all the attributes starting
 */
 const CAPABILITIES = [
   "Subframes", "Plugins", "Javascript", "MetaRedirects", "Images",
-  "DNSPrefetch", "Auth"
+  "DNSPrefetch", "Auth", "WindowControl"
 ];
 
 // These keys are for internal use only - they shouldn't be part of the JSON
 // that gets saved to disk nor part of the strings returned by the API.
 const INTERNAL_KEYS = ["_tabStillLoading", "_hosts", "_formDataSaved",
-                       "_tab", "_browser", "_history"];
+                       "_tab", "_browser", "_history", "_host", "_scheme"];
 
 // These are tab events that we listen to.
 const TAB_EVENTS = ["TabOpen", "TabClose", "TabSelect", "TabShow", "TabHide"];
@@ -147,7 +109,7 @@ function debug(aMsg) {
 
 function SessionStoreService() {
   XPCOMUtils.defineLazyGetter(this, "_prefBranch", function () {
-    return Services.prefs.getBranch("browser.").QueryInterface(Components.interfaces.nsIPrefBranch2);
+    return Services.prefs.getBranch("browser.");
   });
 
   // minimal interval between two save operations (in milliseconds)
@@ -174,7 +136,7 @@ SessionStoreService.prototype = {
 
   // xul:tab attributes to (re)store (extensions might want to hook in here);
   // the favicon is always saved for the about:sessionrestore page
-  xulAttributes: ["image"],
+  xulAttributes: {"image": true},
 
   // set default load state
   _loadState: STATE_STOPPED,
@@ -187,6 +149,10 @@ SessionStoreService.prototype = {
 
   // time in milliseconds (Date.now()) when the session was last written to file
   _lastSaveTime: 0,
+
+  // time in milliseconds when the session was started (saved across sessions),
+  // defaults to now if no session was restored or timestamp doesn't exist
+  _sessionStartTime: Date.now(),
 
   // states for all currently opened windows
   _windows: {},
@@ -306,6 +272,11 @@ SessionStoreService.prototype = {
             }
           }
 
+          // Load the session start time from the previous state
+          this._sessionStartTime = this._initialState.session &&
+                                   this._initialState.session.startTime ||
+                                   this._sessionStartTime;
+
           // make sure that at least the first window doesn't have anything hidden
           delete this._initialState.windows[0].hidden;
           // Since nothing is hidden in the first window, it cannot be a popup
@@ -395,8 +366,8 @@ SessionStoreService.prototype = {
 
     switch (aTopic) {
     case "domwindowopened": // catch new windows
-      aSubject.addEventListener("load", function(aEvent) {
-        aEvent.currentTarget.removeEventListener("load", arguments.callee, false);
+      aSubject.addEventListener("load", function aSubjectLoad(aEvent) {
+        aEvent.currentTarget.removeEventListener("load", aSubjectLoad, false);
         _this.onLoad(aEvent.currentTarget);
       }, false);
       break;
@@ -442,8 +413,13 @@ SessionStoreService.prototype = {
       // quit-application notification so the browser is about to exit.
       if (this._loadState == STATE_QUITTING)
         return;
+      this._lastSessionState = null;
       let openWindows = {};
       this._forEachBrowserWindow(function(aWindow) {
+        //Hide "Restore Last Session" menu item
+        let restoreItem = aWindow.document.getElementById("historyRestoreLastSession");
+        restoreItem.setAttribute("disabled", "true");
+
         Array.forEach(aWindow.getBrowser().tabs, function(aTab) {
           delete aTab.linkedBrowser.__SS_data;
           if (aTab.linkedBrowser.__SS_restoreState)
@@ -473,7 +449,7 @@ SessionStoreService.prototype = {
       // preserved update our internal states to match that max
       case "sessionstore.max_tabs_undo":
         for (let ix in this._windows) {
-          this._windows[ix]._closedTabs.splice(this._prefBranch.getIntPref("sessionstore.max_tabs_undo"));
+          this._windows[ix]._closedTabs.splice(this._prefBranch.getIntPref("sessionstore.max_tabs_undo"), this._windows[ix]._closedTabs.length);
         }
         break;
       case "sessionstore.max_windows_undo":
@@ -1092,25 +1068,24 @@ SessionStoreService.prototype = {
     let closedTab = closedTabs[aIndex];
     if (aIndex in this._windows[aWindow.__SSi]._closedTabs)
       this._windows[aWindow.__SSi]._closedTabs.splice(aIndex, 1);
-    var browser = aWindow.getBrowser();
-    var index = browser.savedBrowsers.indexOf(closedTab);
+    var tabbrowser = aWindow.getBrowser();
+    var index = tabbrowser.savedBrowsers.indexOf(closedTab);
     this._sendWindowStateEvent(aWindow, "Busy");
     if (index != -1)
       // SeaMonkey has its own undoclosetab functionality
-      return browser.restoreTab(index);
+      return tabbrowser.restoreTab(index);
 
     // create a new tab
-    var tab = browser.addTab();
+    var tab = tabbrowser.addTab();
 
     // restore the tab's position
-    browser.moveTabTo(tab, closedTab.pos);
+    tabbrowser.moveTabTo(tab, closedTab.pos);
 
     // restore tab content
     this.restoreHistoryPrecursor(aWindow, [tab], [closedTab.state], 1, 0, 0);
 
-    // focus the tab's content area
-    var content = browser.getBrowserForTab(tab).contentWindow;
-    aWindow.setTimeout(function() { content.focus(); }, 0);
+    // focus the tab's content area (bug 342432)
+    tab.linkedBrowser.focus();
 
     return tab;
   },
@@ -1127,10 +1102,10 @@ SessionStoreService.prototype = {
     var closedTab = closedTabs[aIndex];
     if (aIndex in this._windows[aWindow.__SSi]._closedTabs)
       this._windows[aWindow.__SSi]._closedTabs.splice(aIndex, 1);
-    var browser = aWindow.getBrowser();
-    var index = browser.savedBrowsers.indexOf(closedTab);
+    var tabbrowser = aWindow.getBrowser();
+    var index = tabbrowser.savedBrowsers.indexOf(closedTab);
     if (index != -1)
-      browser.forgetSavedBrowser(aIndex);
+      tabbrowser.forgetSavedBrowser(aIndex);
   },
 
   getClosedWindowCount: function sss_getClosedWindowCount() {
@@ -1181,8 +1156,6 @@ SessionStoreService.prototype = {
     if (aWindow.__SSi && this._windows[aWindow.__SSi].extData &&
         this._windows[aWindow.__SSi].extData[aKey])
       delete this._windows[aWindow.__SSi].extData[aKey];
-    else
-      throw (Components.returnCode = Components.results.NS_ERROR_INVALID_ARG);
   },
 
   getTabValue: function sss_getTabValue(aTab, aKey) {
@@ -1229,15 +1202,13 @@ SessionStoreService.prototype = {
 
     if (deleteFrom && deleteFrom[aKey])
       delete deleteFrom[aKey];
-    else
-      throw (Components.returnCode = Components.results.NS_ERROR_INVALID_ARG);
   },
 
   persistTabAttribute: function sss_persistTabAttribute(aName) {
-    if (this.xulAttributes.indexOf(aName) != -1)
+    if (aName in this.xulAttributes)
       return; // this attribute is already being tracked
 
-    this.xulAttributes.push(aName);
+    this.xulAttributes[aName] = true;
     this.saveStateDelayed();
   },
 
@@ -1315,7 +1286,7 @@ SessionStoreService.prototype = {
         if (winState._closedTabs && winState._closedTabs.length) {
           let curWinState = this._windows[windowToUse.__SSi];
           curWinState._closedTabs = curWinState._closedTabs.concat(winState._closedTabs);
-          curWinState._closedTabs.splice(this._prefBranch.getIntPref("sessionstore.max_tabs_undo"));
+          curWinState._closedTabs.splice(this._prefBranch.getIntPref("sessionstore.max_tabs_undo"), curWinState._closedTabs.length);
         }
 
         // Restore into that window - pretend it's a followup since we'll already
@@ -1337,9 +1308,13 @@ SessionStoreService.prototype = {
       this._closedWindows = this._closedWindows.concat(lastSessionState._closedWindows);
       this._capClosedWindows();
     }
-    // Set recent crashes
+
+    // Set data that persists between sessions
     this._recentCrashes = lastSessionState.session &&
                           lastSessionState.session.recentCrashes || 0;
+    this._sessionStartTime = lastSessionState.session &&
+                             lastSessionState.session.startTime ||
+                             this._sessionStartTime;
 
     this._lastSessionState = null;
   },
@@ -1544,12 +1519,10 @@ SessionStoreService.prototype = {
     else if (tabData.disallow)
       delete tabData.disallow;
 
-    if (this.xulAttributes.length > 0) {
-      tabData.attributes = {};
-      Array.forEach(aTab.attributes, function(aAttr) {
-        if (this.xulAttributes.indexOf(aAttr.name) > -1)
-          tabData.attributes[aAttr.name] = aAttr.value;
-      }, this);
+    tabData.attributes = {};
+    for (let name in this.xulAttributes) {
+      if (aTab.hasAttribute(name))
+        tabData.attributes[name] = aTab.getAttribute(name);
     }
 
     if (aTab.__SS_extdata)
@@ -1578,6 +1551,14 @@ SessionStoreService.prototype = {
   _serializeHistoryEntry:
     function sss_serializeHistoryEntry(aEntry, aFullData, aIsPinned) {
     var entry = { url: aEntry.URI.spec };
+
+    try {
+      entry._scheme = aEntry.URI.scheme;
+      entry._host = aEntry.URI.host;
+    }
+    catch (ex) {
+      // We just won't attempt to get cookies for this entry.
+    }
 
     if (aEntry.title && aEntry.title != entry.url) {
       entry.title = aEntry.title;
@@ -1710,9 +1691,10 @@ SessionStoreService.prototype = {
     let hasContent = false;
 
     for (let i = 0; i < aHistory.count; i++) {
-      let uri;
+      let principal;
       try {
-        uri = aHistory.getEntryAtIndex(i, false).URI;
+        let uri = aHistory.getEntryAtIndex(i, false).URI;
+        principal = SecMan.getDocShellCodebasePrincipal(uri, aDocShell);
       }
       catch (ex) {
         // Chances are that this is getEntryAtIndex throwing, as seen in bug 669196.
@@ -1720,25 +1702,16 @@ SessionStoreService.prototype = {
         continue;
       }
       // sessionStorage is saved per origin (cf. nsDocShell::GetSessionStorageForURI)
-      let domain = uri.spec;
-      try {
-        if (uri.host)
-          domain = uri.prePath;
-      }
-      catch (ex) { /* this throws for host-less URIs (such as about: or jar:) */ }
-      if (storageData[domain] ||
-          !(aFullData || this._checkPrivacyLevel(uri.schemeIs("https"), aIsPinned)))
+      let origin = principal.extendedOrigin;
+      if (storageData[origin])
+        continue;
+
+      let isHTTPS = principal.uri && principal.url.schemeIs("https");
+      if (!(aFullData || this._checkPrivacyLevel(isHTTPS, aIsPinned)))
         continue;
 
       let storage, storageItemCount = 0;
       try {
-        var principal = SecMan.getCodebasePrincipal(uri);
-
-        // Using getSessionStorageForPrincipal instead of getSessionStorageForURI
-        // just to be able to pass aCreate = false, that avoids creation of the
-        // sessionStorage object for the page earlier than the page really
-        // requires it. It was causing problems while accessing a storage when
-        // a page later changed its domain.
         storage = aDocShell.getSessionStorageForPrincipal(principal, "", false);
         if (storage)
           storageItemCount = storage.length;
@@ -1747,7 +1720,7 @@ SessionStoreService.prototype = {
       if (storageItemCount == 0)
         continue;
 
-      let data = storageData[domain] = {};
+      let data = storageData[origin] = {};
       for (let j = 0; j < storageItemCount; j++) {
         try {
           let key = storage.key(j);
@@ -1992,21 +1965,20 @@ SessionStoreService.prototype = {
    */
   _extractHostsForCookies:
     function sss_extractHostsForCookies(aEntry, aHosts, aCheckPrivacy, aIsPinned) {
-    let match;
 
-    if ((match = /^https?:\/\/(?:[^@\/\s]+@)?([\w.-]+)/.exec(aEntry.url)) != null) {
-      if (!aHosts[match[1]] &&
-          (!aCheckPrivacy ||
-           this._checkPrivacyLevel(this._getURIFromString(aEntry.url).schemeIs("https"),
-                                   aIsPinned))) {
-        // By setting this to true or false, we can determine when looking at
-        // the host in _updateCookies if we should check for privacy.
-        aHosts[match[1]] = aIsPinned;
-      }
+    // _host and _scheme may not be set (for about: urls for example), in which
+    // case testing _scheme will be sufficient.
+    if (/https?/.test(aEntry._scheme) && !aHosts[aEntry._host] &&
+        (!aCheckPrivacy ||
+         this._checkPrivacyLevel(aEntry._scheme == "https", aIsPinned))) {
+      // By setting this to true or false, we can determine when looking at
+      // the host in _updateCookies if we should check for privacy.
+      aHosts[aEntry._host] = aIsPinned;
     }
-    else if ((match = /^file:\/\/([^\/]*)/.exec(aEntry.url)) != null) {
-      aHosts[match[1]] = true;
+    else if (aEntry._scheme == "file") {
+      aHosts[aEntry._host] = true;
     }
+
     if (aEntry.children) {
       aEntry.children.forEach(function(entry) {
         this._extractHostsForCookies(entry, aHosts, aCheckPrivacy, aIsPinned);
@@ -2194,7 +2166,19 @@ SessionStoreService.prototype = {
     if (ix != -1 && total[ix].sizemode == "minimized")
       ix = -1;
 
-    return { windows: total, selectedWindow: ix + 1, _closedWindows: lastClosedWindowsCopy };
+    let session = {
+      state: this._loadState == STATE_RUNNING ? STATE_RUNNING_STR : STATE_STOPPED_STR,
+      lastUpdate: Date.now(),
+      startTime: this._sessionStartTime,
+      recentCrashes: this._recentCrashes
+    };
+
+    return {
+      windows: total,
+      selectedWindow: ix + 1,
+      _closedWindows: lastClosedWindowsCopy,
+      session: session
+    };
   },
 
   /**
@@ -2278,7 +2262,7 @@ SessionStoreService.prototype = {
       this._closedWindows = root._closedWindows;
 
     var winData;
-    if (!aState.selectedWindow) {
+    if (!aState.selectedWindow || aState.selectedWindow > aState.windows.length) {
       aState.selectedWindow = 0;
     }
     // open new windows for all further window entries of a multi-window session
@@ -2385,12 +2369,6 @@ SessionStoreService.prototype = {
 
     this.restoreHistoryPrecursor(aWindow, tabs, winData.tabs,
       (aOverwriteTabs ? (parseInt(winData.selected) || 1) : 0), 0, 0);
-
-    // This will force the keypress listener that Panorama has to attach if it
-    // isn't already. This will be the case if tab view wasn't entered or there
-    // were only visible tabs when TabView.init was first called.
-    // Misak:uncomment after we actially get Panorama
-    //aWindow.TabView.init();
 
     // set smoothScroll back to the original value
     tabstrip.smoothScroll = smoothScroll;
@@ -2502,6 +2480,9 @@ SessionStoreService.prototype = {
       let tabData = aTabData[t];
 
       tab.hidden = tabData.hidden;
+
+      for (let name in tabData.attributes)
+        this.xulAttributes[name] = true;
 
       tabData._tabStillLoading = true;
 
@@ -2618,9 +2599,8 @@ SessionStoreService.prototype = {
     CAPABILITIES.forEach(function(aCapability) {
       browser.docShell["allow" + aCapability] = disallow.indexOf(aCapability) == -1;
     });
-    Array.filter(tab.attributes, function(aAttr) {
-      return (_this.xulAttributes.indexOf(aAttr.name) > -1);
-    }).forEach(tab.removeAttribute, tab);
+    for (let name in this.xulAttributes)
+      tab.removeAttribute(name);
     for (let name in tabData.attributes)
       tab.setAttribute(name, tabData.attributes[name]);
 
@@ -2861,6 +2841,7 @@ SessionStoreService.prototype = {
       shEntry.postData = stream;
     }
 
+    let childDocIdents = {};
     if (aEntry.docIdentifier) {
       // If we have a serialized document identifier, try to find an SHEntry
       // which matches that doc identifier and adopt that SHEntry's
@@ -2868,10 +2849,12 @@ SessionStoreService.prototype = {
       // for the document identifier.
       let matchingEntry = aDocIdentMap[aEntry.docIdentifier];
       if (!matchingEntry) {
-        aDocIdentMap[aEntry.docIdentifier] = shEntry;
+        matchingEntry = {shEntry: shEntry, childDocIdents: childDocIdents};
+        aDocIdentMap[aEntry.docIdentifier] = matchingEntry;
       }
       else {
-        shEntry.adoptBFCacheEntry(matchingEntry);
+        shEntry.adoptBFCacheEntry(matchingEntry.shEntry);
+        childDocIdents = matchingEntry.childDocIdents;
       }
     }
 
@@ -2893,8 +2876,24 @@ SessionStoreService.prototype = {
         //XXXzpao Wallpaper patch for bug 509315
         if (!aEntry.children[i].url)
           continue;
+
+        // We're mysteriously getting sessionrestore.js files with a cycle in
+        // the doc-identifier graph.  (That is, we have an entry where doc
+        // identifier A is an ancestor of doc identifier B, and another entry
+        // where doc identifier B is an ancestor of A.)
+        //
+        // If we were to respect these doc identifiers, we'd create a cycle in
+        // the SHEntries themselves, which causes the docshell to loop forever
+        // when it looks for the root SHEntry.
+        //
+        // So as a hack to fix this, we restrict the scope of a doc identifier
+        // to be a node's siblings and cousins, and pass childDocIdents, not
+        // aDocIdents, to _deserializeHistoryEntry.  That is, we say that two
+        // SHEntries with the same doc identifier have the same document iff
+        // they have the same parent or their parents have the same document.
+
         shEntry.AddChild(this._deserializeHistoryEntry(aEntry.children[i], aIdMap,
-                                                       aDocIdentMap), i);
+                                                       childDocIdents), i);
       }
     }
 
@@ -2911,7 +2910,8 @@ SessionStoreService.prototype = {
   _deserializeSessionStorage: function sss_deserializeSessionStorage(aStorageData, aDocShell) {
     for (let url in aStorageData) {
       let uri = this._getURIFromString(url);
-      let storage = aDocShell.getSessionStorageForURI(uri, "");
+      let principal = SecMan.getDocShellCodebasePrincipal(uri, aDocShell);
+      let storage = aDocShell.getSessionStorageForPrincipal(principal, "", true);
       for (let key in aStorageData[url]) {
         try {
           storage.setItem(key, aStorageData[url][key]);
@@ -2944,31 +2944,53 @@ SessionStoreService.prototype = {
         if (!node)
           continue;
 
+        let eventType;
         let value = aData[key];
         if (typeof value == "string" && node.type != "file") {
           if (node.value == value)
             continue; // don't dispatch an input event for no change
 
           node.value = value;
-
-          let event = aDocument.createEvent("UIEvents");
-          event.initUIEvent("input", true, true, aDocument.defaultView, 0);
-          node.dispatchEvent(event);
+          eventType = "input";
         }
-        else if (typeof value == "boolean")
+        else if (typeof value == "boolean") {
+          if (node.checked == value)
+            continue; // don't dispatch a change event for no change
+
           node.checked = value;
-        else if (typeof value == "number")
+          eventType = "change";
+        }
+        else if (typeof value == "number") {
+          // We saved the value blindly since selects take more work to determine
+          // default values. So now we should check to avoid unnecessary events.
+          if (node.selectedIndex == value)
+            continue;
+
           try {
             node.selectedIndex = value;
+            eventType = "change";
           } catch (ex) { /* throws for invalid indices */ }
-        else if (value && value.fileList && value.type == "file" && node.type == "file")
+        }
+        else if (value && value.fileList && value.type == "file" && node.type == "file") {
           node.mozSetFileNameArray(value.fileList, value.fileList.length);
+          eventType = "input";
+        }
         else if (value && typeof value.indexOf == "function" && node.options) {
           Array.forEach(node.options, function(aOpt, aIx) {
             aOpt.selected = value.indexOf(aIx) > -1;
+
+            // Only fire the event here if this wasn't selected by default
+            if (!aOpt.defaultSelected)
+              eventType = "change";
           });
         }
-        // NB: dispatching "change" events might have unintended side-effects
+
+        // Fire events for this node if applicable
+        if (eventType) {
+          let event = aDocument.createEvent("UIEvents");
+          event.initUIEvent(eventType, true, true, aDocument.defaultView, 0);
+          node.dispatchEvent(event);
+        }
       }
     }
 
@@ -3164,13 +3186,6 @@ SessionStoreService.prototype = {
     if (!oState)
       return;
 
-    oState.session = {
-      state: this._loadState == STATE_RUNNING ? STATE_RUNNING_STR : STATE_STOPPED_STR,
-      lastUpdate: Date.now()
-    };
-    if (this._recentCrashes)
-      oState.session.recentCrashes = this._recentCrashes;
-
     this._saveStateObject(oState);
   },
 
@@ -3289,7 +3304,7 @@ SessionStoreService.prototype = {
                               .createInstance(Components.interfaces.nsISupportsString);
     argString.data = "about:blank";
 
-    var features = "chrome,dialog=no,all";
+    var features = "chrome,dialog=no,macsuppressanimation,all";
     var winState = aState.windows[0];
     for (var aAttr in WINDOW_ATTRIBUTES) {
       // Use !isNaN as an easy way to ignore sizemode and check for numbers
@@ -3718,7 +3733,7 @@ SessionStoreService.prototype = {
     if (normalWindowIndex >= maxWindowsUndo)
       spliceTo = normalWindowIndex + 1;
 #endif
-    this._closedWindows.splice(spliceTo);
+    this._closedWindows.splice(spliceTo, this._closedWindows.length);
   },
 
   /**
@@ -3754,7 +3769,8 @@ SessionStoreService.prototype = {
     this._removeTabsProgressListener(window);
 
     if (previousState == TAB_STATE_RESTORING) {
-      this._tabsRestoringCount--;
+      if (this._tabsRestoringCount)
+        this._tabsRestoringCount--;
     }
     else if (previousState == TAB_STATE_NEEDS_RESTORE) {
       // Make sure the session history listener is removed. This is normally
@@ -3836,7 +3852,7 @@ SessionStoreService.prototype = {
     // Initialize the file output stream.
     var ostream = Components.classes["@mozilla.org/network/safe-file-output-stream;1"]
                             .createInstance(Components.interfaces.nsIFileOutputStream);
-    ostream.init(aFile, 0x02 | 0x08 | 0x20, 0600, ostream.DEFER_OPEN);
+    ostream.init(aFile, 0x02 | 0x08 | 0x20, parseInt("0600", 8), ostream.DEFER_OPEN);
 
     // Obtain a converter to convert our data to a UTF-8 encoded input stream.
     var converter = Components.classes["@mozilla.org/intl/scriptableunicodeconverter"]

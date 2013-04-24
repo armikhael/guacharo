@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsMsgProtocol_h__
 #define nsMsgProtocol_h__
@@ -97,14 +65,14 @@ public:
   // then calls the base class which opens the socket if it needs opened. If the socket is 
   // already opened then we just call ProcessProtocolState to start the churning process.
   // aConsumer is the consumer for the url. It can be null if this argument is not appropriate
-  virtual nsresult LoadUrl(nsIURI * aURL, nsISupports * aConsumer = nsnull);
+  virtual nsresult LoadUrl(nsIURI * aURL, nsISupports * aConsumer = nullptr);
 
   virtual nsresult SetUrl(nsIURI * aURL); // sometimes we want to set the url before we load it
 
   // Flag manipulators
-  virtual PRBool TestFlag  (PRUint32 flag) {return flag & m_flags;}
-  virtual void   SetFlag   (PRUint32 flag) { m_flags |= flag; }
-  virtual void   ClearFlag (PRUint32 flag) { m_flags &= ~flag; }
+  virtual bool TestFlag  (uint32_t flag) {return flag & m_flags;}
+  virtual void   SetFlag   (uint32_t flag) { m_flags |= flag; }
+  virtual void   ClearFlag (uint32_t flag) { m_flags &= ~flag; }
 
 protected:
   // methods for opening and closing a socket with core netlib....
@@ -119,18 +87,18 @@ protected:
   // open a connection with a specific host and port
   // aHostName must be UTF-8 encoded.
   virtual nsresult OpenNetworkSocketWithInfo(const char * aHostName,
-                                             PRInt32 aGetPort,
+                                             int32_t aGetPort,
                                              const char *connectionType,
                                              nsIProxyInfo *aProxyInfo,
                                              nsIInterfaceRequestor* callbacks);
   // helper routine
   nsresult GetFileFromURL(nsIURI * aURL, nsIFile **aResult);
-  virtual nsresult OpenFileSocket(nsIURI * aURL, PRUint32 aStartPosition, PRInt32 aReadCount); // used to open a file socket connection
+  virtual nsresult OpenFileSocket(nsIURI * aURL, uint32_t aStartPosition, int32_t aReadCount); // used to open a file socket connection
 
   nsresult GetTopmostMsgWindow(nsIMsgWindow **aWindow);
 
-  virtual const char* GetType() {return nsnull;}
-  nsresult GetQoSBits(PRUint8 *aQoSBits);
+  virtual const char* GetType() {return nullptr;}
+  nsresult GetQoSBits(uint8_t *aQoSBits);
 
   // a Protocol typically overrides this method. They free any of their own connection state and then
   // they call up into the base class to free the generic connection objects
@@ -142,14 +110,14 @@ protected:
   // As data arrives on the socket, OnDataAvailable calls ProcessProtocolState.
   
   virtual nsresult ProcessProtocolState(nsIURI * url, nsIInputStream * inputStream, 
-                  PRUint32 sourceOffset, PRUint32 length) = 0;
+                  uint32_t sourceOffset, uint32_t length) = 0;
 
   // SendData -- Writes the data contained in dataBuffer into the current output stream. 
   // It also informs the transport layer that this data is now available for transmission.
   // Returns a positive number for success, 0 for failure (not all the bytes were written to the
   // stream, etc). 
     // aSuppressLogging is a hint that sensitive data is being sent and should not be logged
-  virtual PRInt32 SendData(nsIURI * aURL, const char * dataBuffer, PRBool aSuppressLogging = PR_FALSE);
+  virtual nsresult SendData(const char * dataBuffer, bool aSuppressLogging = false);
 
   virtual nsresult PostMessage(nsIURI* url, nsIFile* aPostFile);
 
@@ -168,11 +136,11 @@ protected:
   nsCOMPtr<nsITransport>  m_transport; 
   nsCOMPtr<nsIRequest>    m_request;
 
-  PRBool        m_socketIsOpen; // mscott: we should look into keeping this state in the nsSocketTransport...
+  bool          m_socketIsOpen; // mscott: we should look into keeping this state in the nsSocketTransport...
                                   // I'm using it to make sure I open the socket the first time a URL is loaded into the connection
-  PRUint32      m_flags; // used to store flag information
-  //PRUint32  m_startPosition;
-  PRInt32       m_readCount;
+  uint32_t      m_flags; // used to store flag information
+  //uint32_t  m_startPosition;
+  int32_t       m_readCount;
 
   nsCOMPtr<nsIFile> m_tempMsgFile;  // we currently have a hack where displaying a msg involves writing it to a temp file first
 
@@ -190,7 +158,7 @@ protected:
   nsCOMPtr<nsIInterfaceRequestor> mCallbacks;
   nsCOMPtr<nsISupports>       mOwner;
   nsCString                   m_ContentType;
-  PRInt32                     mContentLength;
+  int32_t                     mContentLength;
 
   nsCString m_lastPasswordSent; // used to prefill the password prompt
 
@@ -200,7 +168,7 @@ protected:
 
   // if a url isn't going to result in any content then we want to suppress calls to
   // OnStartRequest, OnDataAvailable and OnStopRequest
-  PRBool mSuppressListenerNotifications;
+  bool mSuppressListenerNotifications;
 };
 
 
@@ -223,11 +191,11 @@ public:
   
   // over ride the following methods from the base class
   virtual nsresult SetupTransportState();
-  virtual PRInt32 SendData(nsIURI * aURL, const char * dataBuffer, PRBool aSuppressLogging = PR_FALSE);
+  virtual nsresult SendData(const char * dataBuffer, bool aSuppressLogging = false);
   nsCString mAsyncBuffer;
 
   // if we suspended the asynch write while waiting for more data to write then this will be TRUE
-  PRBool mSuspendedWrite;
+  bool mSuspendedWrite;
   nsCOMPtr<nsIRequest>     m_WriteRequest;
   nsCOMPtr<nsIAsyncOutputStream>    mAsyncOutStream;
   nsCOMPtr<nsIOutputStreamCallback> mProvider;
@@ -236,12 +204,12 @@ public:
   // because we are reading the post data in asychronously, it's possible that we aren't sending it 
   // out fast enough and the reading gets blocked. The following set of state variables are used to 
   // track this.
-  PRBool  mSuspendedRead;
-  PRBool  mInsertPeriodRequired; // do we need to insert a '.' as part of the unblocking process
+  bool    mSuspendedRead;
+  bool    mInsertPeriodRequired; // do we need to insert a '.' as part of the unblocking process
    
-  nsresult ProcessIncomingPostData(nsIInputStream *inStr, PRUint32 count);
+  nsresult ProcessIncomingPostData(nsIInputStream *inStr, uint32_t count);
   nsresult UnblockPostReader();
-  nsresult UpdateSuspendedReadBytes(PRUint32 aNewBytes, PRBool aAddToPostPeriodByteCount);
+  nsresult UpdateSuspendedReadBytes(uint32_t aNewBytes, bool aAddToPostPeriodByteCount);
   nsresult PostDataFinished(); // this is so we'll send out a closing '.' and release any state related to the post
 
 
@@ -250,8 +218,8 @@ public:
   // to keep up with the file read. 
   nsresult SuspendPostFileRead();
   nsresult ResumePostFileRead(); 
-  nsresult UpdateSuspendedReadBytes(PRUint32 aNewBytes); 
-  void UpdateProgress(PRUint32 aNewBytes);
+  nsresult UpdateSuspendedReadBytes(uint32_t aNewBytes); 
+  void UpdateProgress(uint32_t aNewBytes);
   nsMsgFilePostHelper * mFilePostHelper; // needs to be a weak reference
 protected:
   // the streams for the pipe used to queue up data for the async write calls to the server.
@@ -259,13 +227,13 @@ protected:
   // stream to the socket channel. So no need for a new variable here.
   nsCOMPtr<nsIInputStream>  mInStream;    
   nsCOMPtr<nsIInputStream>  mPostDataStream;
-  PRUint32                  mSuspendedReadBytes;   // remaining # of bytes we need to read before   
+  uint32_t                  mSuspendedReadBytes;   // remaining # of bytes we need to read before   
                                                    // the input stream becomes unblocked
-  PRUint32                  mSuspendedReadBytesPostPeriod; // # of bytes which need processed after we insert a '.' before 
+  uint32_t                  mSuspendedReadBytesPostPeriod; // # of bytes which need processed after we insert a '.' before 
                                                            // the input stream becomes unblocked.
-  PRInt64  mFilePostSize; // used for determining progress on posting files.
-  PRUint32  mNumBytesPosted; // used for deterimining progress on posting files 
-  PRBool    mGenerateProgressNotifications; // set during a post operation after we've started sending the post data...
+  int64_t  mFilePostSize; // used for determining progress on posting files.
+  uint32_t  mNumBytesPosted; // used for deterimining progress on posting files 
+  bool      mGenerateProgressNotifications; // set during a post operation after we've started sending the post data...
 
   virtual nsresult CloseSocket(); 
 };

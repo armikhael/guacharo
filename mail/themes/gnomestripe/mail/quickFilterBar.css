@@ -1,24 +1,25 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 @import url("chrome://messenger/content/quickFilterBar.css");
 
 /* :::: Filter Tab Bar Button :::: */
 
 #qfb-show-filter-bar {
-  list-style-image: url("chrome://messenger/skin/icons/filter.svg");
-  margin: 0 0 1px;
-  padding: 0 4px;
+  list-style-image: url("moz-icon://stock/gtk-find?size=menu");
 }
 
-#qfb-show-filter-bar:hover,
-#qfb-show-filter-bar[checked] {
-  list-style-image: url("chrome://messenger/skin/icons/filter-hover.svg");
+toolbar[iconsize="large"] #qfb-show-filter-bar {
+  list-style-image: url("moz-icon://stock/gtk-find?size=toolbar");
 }
 
-#qfb-show-filter-bar > .toolbarbutton-icon {
-  padding: 0 3px;
+#qfb-show-filter-bar[disabled="true"] {
+  list-style-image: url("moz-icon://stock/gtk-find?size=menu&state=disabled");
 }
 
-#qfb-show-filter-bar > .toolbarbutton-text {
-  display: none;
+toolbar[iconsize="large"] #qfb-show-filter-bar[disabled="true"] {
+  list-style-image: url("moz-icon://stock/gtk-find?size=toolbar&state=disabled");
 }
 
 /* :::: Filter Bar :::: */

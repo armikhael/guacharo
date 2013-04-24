@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Netscape security libraries.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1994-2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Dr Vipul Gupta <vipul.gupta@sun.com>, Sun Microsystems Laboratories
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 
 #include "nssrenam.h"
@@ -931,7 +898,7 @@ sec_pkcs12_decode_start_asafes_cinfo(SEC_PKCS12DecoderContext *p12dcx)
 	goto loser;
     }
   
-    /* open the temp file for writing, if the filter functions were set */ 
+    /* open the temp file for writing, if the digest functions were set */ 
     if(p12dcx->dOpen && (*p12dcx->dOpen)(p12dcx->dArg, PR_FALSE) 
 				!= SECSuccess) {
 	p12dcx->errorValue = PORT_GetError();
@@ -1907,8 +1874,7 @@ sec_pkcs12_get_key_info(sec_PKCS12SafeBag *key)
  */
 static SECItem *
 sec_pkcs12_get_nickname_for_cert(sec_PKCS12SafeBag *cert,
-				 sec_PKCS12SafeBag *key, 
-				 void *wincx)
+				 sec_PKCS12SafeBag *key)
 {
     SECItem *nickname;
 
@@ -1939,8 +1905,7 @@ sec_pkcs12_get_nickname_for_cert(sec_PKCS12SafeBag *cert,
 static SECStatus
 sec_pkcs12_set_nickname_for_cert(sec_PKCS12SafeBag *cert, 
 				 sec_PKCS12SafeBag *key, 
-				 SECItem *nickname, 
-				 void *wincx)
+				 SECItem *nickname)
 {
     if(!nickname || !cert) {
 	PORT_SetError(SEC_ERROR_INVALID_ARGS);
@@ -2072,7 +2037,7 @@ gatherNicknames(CERTCertificate *cert, void *arg)
  * If so, return it. 
  */
 static SECItem *
-sec_pkcs12_get_existing_nick_for_dn(sec_PKCS12SafeBag *cert, void *wincx)
+sec_pkcs12_get_existing_nick_for_dn(sec_PKCS12SafeBag *cert)
 {
     struct certNickInfo *nickArg = NULL;
     SECItem *derCert, *returnDn = NULL;
@@ -2191,7 +2156,7 @@ static void
 sec_pkcs12_validate_cert_nickname(sec_PKCS12SafeBag *cert,
 				sec_PKCS12SafeBag *key,
 				SEC_PKCS12NicknameCollisionCallback nicknameCb,
-				void *wincx)
+				CERTCertificate *leafCert)
 {
     SECItem *certNickname, *existingDNNick;
     PRBool setNickname = PR_FALSE, cancel = PR_FALSE;
@@ -2216,8 +2181,8 @@ sec_pkcs12_validate_cert_nickname(sec_PKCS12SafeBag *cert,
 	return;
     }
 
-    certNickname = sec_pkcs12_get_nickname_for_cert(cert, key, wincx);
-    existingDNNick = sec_pkcs12_get_existing_nick_for_dn(cert, wincx);
+    certNickname = sec_pkcs12_get_nickname_for_cert(cert, key);
+    existingDNNick = sec_pkcs12_get_existing_nick_for_dn(cert);
 
     /* nickname is already used w/ this dn, so it is safe to return */
     if(certNickname && existingDNNick &&
@@ -2229,7 +2194,7 @@ sec_pkcs12_validate_cert_nickname(sec_PKCS12SafeBag *cert,
      * this dn.  set the nicks in the p12 bags and finish.
      */
     if(existingDNNick) {
-	sec_pkcs12_set_nickname_for_cert(cert, key, existingDNNick, wincx);
+	sec_pkcs12_set_nickname_for_cert(cert, key, existingDNNick);
 	goto loser;
     }
 
@@ -2257,14 +2222,13 @@ sec_pkcs12_validate_cert_nickname(sec_PKCS12SafeBag *cert,
 	if (certNickname && certNickname->data &&
 	    !sec_pkcs12_certs_for_nickname_exist(certNickname, cert->slot)) {
 	    if (setNickname) {
-		sec_pkcs12_set_nickname_for_cert(cert, key, certNickname,
-				    wincx);
+		sec_pkcs12_set_nickname_for_cert(cert, key, certNickname);
 	    }
 	    break;
 	}
 
 	setNickname = PR_FALSE;
-	newNickname = (*nicknameCb)(certNickname, &cancel, wincx);
+	newNickname = (*nicknameCb)(certNickname, &cancel, leafCert);
 	if(cancel) {
 	    cert->problem = PR_TRUE;
 	    cert->error = SEC_ERROR_USER_CANCELLED;
@@ -2304,8 +2268,7 @@ loser:
 static void 
 sec_pkcs12_validate_cert(sec_PKCS12SafeBag *cert,
 			 sec_PKCS12SafeBag *key,
-			 SEC_PKCS12NicknameCollisionCallback nicknameCb,
-			 void *wincx)
+			 SEC_PKCS12NicknameCollisionCallback nicknameCb)
 {
     CERTCertificate *leafCert;
 
@@ -2345,7 +2308,7 @@ sec_pkcs12_validate_cert(sec_PKCS12SafeBag *cert,
 	return;
     }
 
-    sec_pkcs12_validate_cert_nickname(cert, key, nicknameCb, (void *)leafCert);
+    sec_pkcs12_validate_cert_nickname(cert, key, nicknameCb, leafCert);
 
     CERT_DestroyCertificate(leafCert);
 }
@@ -2748,7 +2711,7 @@ sec_pkcs12_validate_bags(sec_PKCS12SafeBag **safeBags,
 			cert->error   = key->error;
 			continue;
 		    } 
-		    sec_pkcs12_validate_cert(cert, key, nicknameCb, wincx);
+		    sec_pkcs12_validate_cert(cert, key, nicknameCb);
 		    if(cert->problem) {
 			key->problem = cert->problem;
 			key->error   = cert->error;
@@ -2769,7 +2732,7 @@ sec_pkcs12_validate_bags(sec_PKCS12SafeBag **safeBags,
 
 	    switch(bagType) {
 	    case SEC_OID_PKCS12_V1_CERT_BAG_ID:
-		sec_pkcs12_validate_cert(bag, NULL, nicknameCb, wincx);
+		sec_pkcs12_validate_cert(bag, NULL, nicknameCb);
 		break;
 	    case SEC_OID_PKCS12_V1_KEY_BAG_ID:
 	    case SEC_OID_PKCS12_V1_PKCS8_SHROUDED_KEY_BAG_ID:
@@ -2936,8 +2899,7 @@ sec_pkcs12_install_bags(sec_PKCS12SafeBag **safeBags, void *wincx)
 		/* use the cert's nickname, if it has one, else use the 
 		 * key's nickname, else fail.
 		 */
-		nickName = sec_pkcs12_get_nickname_for_cert(certList[0], 
-		                                            key, wincx);
+		nickName = sec_pkcs12_get_nickname_for_cert(certList[0], key);
 	    } else {
 		nickName = sec_pkcs12_get_nickname(key);
 	    }

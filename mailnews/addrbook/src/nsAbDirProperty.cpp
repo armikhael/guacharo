@@ -1,41 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *   Seth Spitzer <sspitzer@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsAbDirProperty.h"	 
 #include "nsAbBaseCID.h"
@@ -53,10 +19,10 @@
 
 nsAbDirProperty::nsAbDirProperty(void)
   : m_LastModifiedDate(0),
-    mIsValidURI(PR_FALSE),
-    mIsQueryURI(PR_FALSE)
+    mIsValidURI(false),
+    mIsQueryURI(false)
 {
-	m_IsMailList = PR_FALSE;
+	m_IsMailList = false;
 }
 
 nsAbDirProperty::~nsAbDirProperty(void)
@@ -65,11 +31,11 @@ nsAbDirProperty::~nsAbDirProperty(void)
   // this code causes a regression #138647
   // don't turn it on until you figure it out
   if (m_AddressList) {
-    PRUint32 count;
+    uint32_t count;
     nsresult rv;
     rv = m_AddressList->GetLength(&count);
     NS_ASSERTION(NS_SUCCEEDED(rv), "Count failed");
-    PRInt32 i;
+    int32_t i;
     for (i = count - 1; i >= 0; i--)
       m_AddressList->RemoveElementAt(i);
   }
@@ -91,7 +57,7 @@ NS_IMETHODIMP nsAbDirProperty::GetUuid(nsACString &uuid)
   return rv;
 }
 
-NS_IMETHODIMP nsAbDirProperty::GenerateName(PRInt32 aGenerateFormat,
+NS_IMETHODIMP nsAbDirProperty::GenerateName(int32_t aGenerateFormat,
                                             nsIStringBundle *aBundle,
                                             nsAString &name)
 {
@@ -170,7 +136,7 @@ NS_IMETHODIMP nsAbDirProperty::SetDirName(const nsAString &aDirName)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsAbDirProperty::GetDirType(PRInt32 *aDirType)
+NS_IMETHODIMP nsAbDirProperty::GetDirType(int32_t *aDirType)
 {
   return GetIntValue("dirType", LDAPDirectory, aDirType);
 }
@@ -186,19 +152,19 @@ NS_IMETHODIMP nsAbDirProperty::GetURI(nsACString &aURI)
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
-NS_IMETHODIMP nsAbDirProperty::GetPosition(PRInt32 *aPosition)
+NS_IMETHODIMP nsAbDirProperty::GetPosition(int32_t *aPosition)
 {
   return GetIntValue("position", kDefaultPosition, aPosition);
 }
 
-NS_IMETHODIMP nsAbDirProperty::GetLastModifiedDate(PRUint32 *aLastModifiedDate)
+NS_IMETHODIMP nsAbDirProperty::GetLastModifiedDate(uint32_t *aLastModifiedDate)
 {
   NS_ENSURE_ARG_POINTER(aLastModifiedDate);
   *aLastModifiedDate = m_LastModifiedDate;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsAbDirProperty::SetLastModifiedDate(PRUint32 aLastModifiedDate)
+NS_IMETHODIMP nsAbDirProperty::SetLastModifiedDate(uint32_t aLastModifiedDate)
 {
 	if (aLastModifiedDate)
 	{
@@ -231,13 +197,13 @@ NS_IMETHODIMP nsAbDirProperty::SetDescription(const nsAString &aDescription)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsAbDirProperty::GetIsMailList(PRBool *aIsMailList)
+NS_IMETHODIMP nsAbDirProperty::GetIsMailList(bool *aIsMailList)
 {
 	*aIsMailList = m_IsMailList;
 	return NS_OK;
 }
 
-NS_IMETHODIMP nsAbDirProperty::SetIsMailList(PRBool aIsMailList)
+NS_IMETHODIMP nsAbDirProperty::SetIsMailList(bool aIsMailList)
 {
 	m_IsMailList = aIsMailList;
 	return NS_OK;
@@ -265,7 +231,7 @@ NS_IMETHODIMP nsAbDirProperty::SetAddressLists(nsIMutableArray * aAddressLists)
 
 NS_IMETHODIMP nsAbDirProperty::CopyMailList(nsIAbDirectory* srcList)
 {
-  SetIsMailList(PR_TRUE);
+  SetIsMailList(true);
 
   nsString str;
   srcList->GetDirName(str);
@@ -281,12 +247,12 @@ NS_IMETHODIMP nsAbDirProperty::CopyMailList(nsIAbDirectory* srcList)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsAbDirProperty::GetIsQuery(PRBool *aResult)
+NS_IMETHODIMP nsAbDirProperty::GetIsQuery(bool *aResult)
 {
   NS_ENSURE_ARG_POINTER(aResult);
   // Mailing lists are not queries by default, individual directory types
   // will override this.
-  *aResult = PR_FALSE;
+  *aResult = false;
   return NS_OK;
 }
 
@@ -295,14 +261,14 @@ nsAbDirProperty::Init(const char *aURI)
 {
   mURINoQuery = aURI;
   mURI = aURI;
-  mIsValidURI = PR_TRUE;
+  mIsValidURI = true;
 
-  PRInt32 searchCharLocation = mURINoQuery.FindChar('?');
+  int32_t searchCharLocation = mURINoQuery.FindChar('?');
   if (searchCharLocation >= 0)
   {
     mQueryString = Substring(mURINoQuery, searchCharLocation + 1);
     mURINoQuery.SetLength(searchCharLocation);
-    mIsQueryURI = PR_TRUE;
+    mIsQueryURI = true;
   }
 
   return NS_OK;
@@ -322,17 +288,17 @@ nsAbDirProperty::DeleteDirectory(nsIAbDirectory *directory)
 { return NS_ERROR_NOT_IMPLEMENTED; }
 
 NS_IMETHODIMP
-nsAbDirProperty::HasCard(nsIAbCard *cards, PRBool *hasCard)
+nsAbDirProperty::HasCard(nsIAbCard *cards, bool *hasCard)
 { return NS_ERROR_NOT_IMPLEMENTED; }
 
 NS_IMETHODIMP
-nsAbDirProperty::HasDirectory(nsIAbDirectory *dir, PRBool *hasDir)
+nsAbDirProperty::HasDirectory(nsIAbDirectory *dir, bool *hasDir)
 { return NS_ERROR_NOT_IMPLEMENTED; }
 
 NS_IMETHODIMP
 nsAbDirProperty::CreateNewDirectory(const nsAString &aDirName,
                                     const nsACString &aURI,
-                                    PRUint32 aType,
+                                    uint32_t aType,
                                     const nsACString &aPrefName,
                                     nsACString &aResult)
 { return NS_ERROR_NOT_IMPLEMENTED; }
@@ -357,7 +323,7 @@ NS_IMETHODIMP nsAbDirProperty::ModifyCard(nsIAbCard *aModifiedCard)
 NS_IMETHODIMP nsAbDirProperty::DeleteCards(nsIArray *cards)
 { return NS_ERROR_NOT_IMPLEMENTED; }
 
-NS_IMETHODIMP nsAbDirProperty::DropCard(nsIAbCard *childCard, PRBool needToCopyCard)
+NS_IMETHODIMP nsAbDirProperty::DropCard(nsIAbCard *childCard, bool needToCopyCard)
 { return NS_ERROR_NOT_IMPLEMENTED; }
 
 NS_IMETHODIMP nsAbDirProperty::CardForEmailAddress(const nsACString &aEmailAddress,
@@ -366,18 +332,18 @@ NS_IMETHODIMP nsAbDirProperty::CardForEmailAddress(const nsACString &aEmailAddre
 
 NS_IMETHODIMP nsAbDirProperty::GetCardFromProperty(const char *aProperty,
                                                    const nsACString &aValue,
-                                                   PRBool caseSensitive,
+                                                   bool caseSensitive,
                                                    nsIAbCard **result)
 { return NS_ERROR_NOT_IMPLEMENTED; }
 
 NS_IMETHODIMP nsAbDirProperty::GetCardsFromProperty(const char *aProperty,
                                                     const nsACString &aValue,
-                                                    PRBool caseSensitive,
+                                                    bool caseSensitive,
                                                     nsISimpleEnumerator **result)
 { return NS_ERROR_NOT_IMPLEMENTED; }
 
 
-NS_IMETHODIMP nsAbDirProperty::GetSupportsMailingLists(PRBool *aSupportsMailingsLists)
+NS_IMETHODIMP nsAbDirProperty::GetSupportsMailingLists(bool *aSupportsMailingsLists)
 {
   NS_ENSURE_ARG_POINTER(aSupportsMailingsLists);
   // We don't currently support nested mailing lists, so only return true if
@@ -386,31 +352,31 @@ NS_IMETHODIMP nsAbDirProperty::GetSupportsMailingLists(PRBool *aSupportsMailings
   return NS_OK;
 }
 
-NS_IMETHODIMP nsAbDirProperty::GetReadOnly(PRBool *aReadOnly)
+NS_IMETHODIMP nsAbDirProperty::GetReadOnly(bool *aReadOnly)
 {
   NS_ENSURE_ARG_POINTER(aReadOnly);
   // Default is that we are writable. Any implementation that is read-only must
   // override this method.
-  *aReadOnly = PR_FALSE;
+  *aReadOnly = false;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsAbDirProperty::GetIsRemote(PRBool *aIsRemote)
+NS_IMETHODIMP nsAbDirProperty::GetIsRemote(bool *aIsRemote)
 {
   NS_ENSURE_ARG_POINTER(aIsRemote);
-  *aIsRemote = PR_FALSE;
+  *aIsRemote = false;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsAbDirProperty::GetIsSecure(PRBool *aIsSecure)
+NS_IMETHODIMP nsAbDirProperty::GetIsSecure(bool *aIsSecure)
 {
   NS_ENSURE_ARG_POINTER(aIsSecure);
-  *aIsSecure = PR_FALSE;
+  *aIsSecure = false;
   return NS_OK;
 }
 
 NS_IMETHODIMP nsAbDirProperty::UseForAutocomplete(const nsACString &aIdentityKey,
-                                                  PRBool *aResult)
+                                                  bool *aResult)
 {
   NS_ENSURE_ARG_POINTER(aResult);
 
@@ -436,7 +402,7 @@ NS_IMETHODIMP nsAbDirProperty::SetDirPrefId(const nsACString &aDirPrefId)
     m_DirPrefId.Assign(aDirPrefId);
     // Clear the directory pref branch so that it is re-initialized next
     // time its required.
-    m_DirectoryPrefs = nsnull;
+    m_DirectoryPrefs = nullptr;
   }
   return NS_OK;
 }
@@ -457,8 +423,8 @@ nsresult nsAbDirProperty::InitDirectoryPrefs()
 }
 
 NS_IMETHODIMP nsAbDirProperty::GetIntValue(const char *aName,
-                                          PRInt32 aDefaultValue,
-                                          PRInt32 *aResult)
+                                          int32_t aDefaultValue,
+                                          int32_t *aResult)
 {
   NS_ENSURE_ARG_POINTER(aResult);
 
@@ -472,8 +438,8 @@ NS_IMETHODIMP nsAbDirProperty::GetIntValue(const char *aName,
 }
 
 NS_IMETHODIMP nsAbDirProperty::GetBoolValue(const char *aName,
-                                           PRBool aDefaultValue,
-                                           PRBool *aResult)
+                                           bool aDefaultValue,
+                                           bool *aResult)
 {
   NS_ENSURE_ARG_POINTER(aResult);
 
@@ -539,7 +505,7 @@ NS_IMETHODIMP nsAbDirProperty::GetLocalizedStringValue(const char *aName,
 }
 
 NS_IMETHODIMP nsAbDirProperty::SetIntValue(const char *aName,
-                                          PRInt32 aValue)
+                                          int32_t aValue)
 {
   if (!m_DirectoryPrefs && NS_FAILED(InitDirectoryPrefs()))
     return NS_ERROR_NOT_INITIALIZED;
@@ -548,7 +514,7 @@ NS_IMETHODIMP nsAbDirProperty::SetIntValue(const char *aName,
 }
 
 NS_IMETHODIMP nsAbDirProperty::SetBoolValue(const char *aName,
-                                           PRBool aValue)
+                                           bool aValue)
 {
   if (!m_DirectoryPrefs && NS_FAILED(InitDirectoryPrefs()))
     return NS_ERROR_NOT_INITIALIZED;

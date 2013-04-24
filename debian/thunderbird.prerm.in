@@ -5,7 +5,6 @@ set -e
 LIBDIR=@LIBDIR@
 
 if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ] || [ "$1" = upgrade ]; then
-    update-alternatives --remove sensible-ooomua /usr/bin/guacharo
     rm -f $LIBDIR/.autoreg
 fi
 

@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsUCConstructors.h"
 #include "nsUCS2BEToUnicode.h"
@@ -49,12 +17,12 @@
 #define STATE_ODD_SURROGATE_PAIR 4
 
 static nsresult
-UTF16ConvertToUnicode(PRUint8& aState, PRUint8& aOddByte,
+UTF16ConvertToUnicode(uint8_t& aState, uint8_t& aOddByte,
                       PRUnichar& aOddHighSurrogate, PRUnichar& aOddLowSurrogate,
                       const char * aSrc,
-                      PRInt32 * aSrcLength, PRUnichar * aDest,
-                      PRInt32 * aDestLength,
-                      PRBool aSwapBytes)
+                      int32_t * aSrcLength, PRUnichar * aDest,
+                      int32_t * aDestLength,
+                      bool aSwapBytes)
 {
   const char* src = aSrc;
   const char* srcEnd = aSrc + *aSrcLength;
@@ -202,8 +170,8 @@ nsUTF16ToUnicodeBase::Reset()
 }
 
 NS_IMETHODIMP
-nsUTF16ToUnicodeBase::GetMaxLength(const char * aSrc, PRInt32 aSrcLength, 
-                                   PRInt32 * aDestLength)
+nsUTF16ToUnicodeBase::GetMaxLength(const char * aSrc, int32_t aSrcLength, 
+                                   int32_t * aDestLength)
 {
   // the left-over data of the previous run have to be taken into account.
   *aDestLength = (aSrcLength + ((STATE_HALF_CODE_POINT == mState) ? 1 : 0)) / 2;
@@ -216,8 +184,8 @@ nsUTF16ToUnicodeBase::GetMaxLength(const char * aSrc, PRInt32 aSrcLength,
 
 
 NS_IMETHODIMP
-nsUTF16BEToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLength,
-                            PRUnichar * aDest, PRInt32 * aDestLength)
+nsUTF16BEToUnicode::Convert(const char * aSrc, int32_t * aSrcLength,
+                            PRUnichar * aDest, int32_t * aDestLength)
 {
     if(STATE_FIRST_CALL == mState && *aSrcLength < 2)
     {
@@ -247,17 +215,17 @@ nsUTF16BEToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLength,
                                       mOddLowSurrogate,
                                       aSrc, aSrcLength, aDest, aDestLength,
 #ifdef IS_LITTLE_ENDIAN
-                                      PR_TRUE
+                                      true
 #else
-                                      PR_FALSE
+                                      false
 #endif
                                       );
   return rv;
 }
 
 NS_IMETHODIMP
-nsUTF16LEToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLength,
-                            PRUnichar * aDest, PRInt32 * aDestLength)
+nsUTF16LEToUnicode::Convert(const char * aSrc, int32_t * aSrcLength,
+                            PRUnichar * aDest, int32_t * aDestLength)
 {
     if(STATE_FIRST_CALL == mState && *aSrcLength < 2)
     {
@@ -287,9 +255,9 @@ nsUTF16LEToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLength,
                                       mOddLowSurrogate,
                                       aSrc, aSrcLength, aDest, aDestLength,
 #ifdef IS_BIG_ENDIAN
-                                      PR_TRUE
+                                      true
 #else
-                                      PR_FALSE
+                                      false
 #endif
                                       );
   return rv;
@@ -299,13 +267,13 @@ NS_IMETHODIMP
 nsUTF16ToUnicode::Reset()
 {
   mEndian = kUnknown;
-  mFoundBOM = PR_FALSE;
+  mFoundBOM = false;
   return nsUTF16ToUnicodeBase::Reset();
 }
 
 NS_IMETHODIMP
-nsUTF16ToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLength,
-                          PRUnichar * aDest, PRInt32 * aDestLength)
+nsUTF16ToUnicode::Convert(const char * aSrc, int32_t * aSrcLength,
+                          PRUnichar * aDest, int32_t * aDestLength)
 {
     if(STATE_FIRST_CALL == mState && *aSrcLength < 2)
     {
@@ -319,15 +287,15 @@ nsUTF16ToUnicode::Convert(const char * aSrc, PRInt32 * aSrcLength,
       mState = STATE_NORMAL;
       // check if BOM (0xFEFF) is at the beginning, remove it if found, and
       // set mEndian accordingly.
-      if(0xFF == PRUint8(aSrc[0]) && 0xFE == PRUint8(aSrc[1])) {
+      if(0xFF == uint8_t(aSrc[0]) && 0xFE == uint8_t(aSrc[1])) {
         mState = STATE_FOUND_BOM;
         mEndian = kLittleEndian;
-        mFoundBOM = PR_TRUE;
+        mFoundBOM = true;
       }
-      else if(0xFE == PRUint8(aSrc[0]) && 0xFF == PRUint8(aSrc[1])) {
+      else if(0xFE == uint8_t(aSrc[0]) && 0xFF == uint8_t(aSrc[1])) {
         mState = STATE_FOUND_BOM;
         mEndian = kBigEndian;
-        mFoundBOM = PR_TRUE;
+        mFoundBOM = true;
       }
       // BOM is not found, but we can use a simple heuristic to determine
       // the endianness. Assume the first character is [U+0001, U+00FF].

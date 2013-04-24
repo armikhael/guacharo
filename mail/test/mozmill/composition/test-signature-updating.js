@@ -1,38 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Steffen Wilberg <steffen.wilberg@web.de>
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
  * Tests that the signature updates properly when switching identities.
@@ -95,22 +63,41 @@ function plaintextComposeWindowSwitchSignatures(suppressSigSep) {
   prefBranch.setBoolPref("mail.identity.id2.suppress_signature_separator",
                          suppressSigSep);
 
+  let contentFrame = cwc.e("content-frame");
+  let mailBody = contentFrame.contentDocument.body;
+
+  // The first node in the body should be a BR node, which allows the user
+  // to insert text before / outside of the signature.
+  assert_equals(mailBody.firstChild.localName, "br");
+
   setupComposeWin("", "Plaintext compose window", "Body, first line.");
 
-  let contentFrame = cwc.e("content-frame");
-  let node = contentFrame.contentDocument.body.lastChild;
+  let node = mailBody.lastChild;
 
-  // In plaintext compose, the signature is followed by two <br> elements.
+  // The last node is a BR - this allows users to put text after the
+  // signature without it being styled like the signature.
   assert_equals(node.localName, "br");
   node = node.previousSibling;
-  assert_equals(node.localName, "br");
-  node = node.previousSibling;
-  assert_equals(node.nodeValue, "Tinderbox is soo 90ies");
+
+  // Now we should have the DIV node that contains the signature, with
+  // the class moz-signature.
+  assert_equals(node.localName, "div");
+
+  const kSeparator = "-- ";
+  const kSigClass = "moz-signature";
+  assert_equals(node.className, kSigClass);
+
+  let sigNode = node.firstChild;
+
   if (!suppressSigSep) {
-    // a <br> element, then the next text node
-    node = node.previousSibling.previousSibling;
-    assert_equals(node.nodeValue, "-- ");
+    assert_equals(sigNode.textContent, kSeparator);
+    let brNode = sigNode.nextSibling;
+    assert_equals(brNode.localName, "br");
+    sigNode = brNode.nextSibling;
   }
+
+  let expectedText = "Tinderbox is soo 90ies";
+  assert_equals(sigNode.textContent, expectedText);
 
   // Now switch identities!
   let menuID = cwc.e("msgIdentity");
@@ -119,27 +106,38 @@ function plaintextComposeWindowSwitchSignatures(suppressSigSep) {
 
   node = contentFrame.contentDocument.body.lastChild;
 
-  // In plaintext compose, the signature is followed by two <br> elements.
+  // The last node is a BR - this allows users to put text after the
+  // signature without it being styled like the signature.
   assert_equals(node.localName, "br");
   node = node.previousSibling;
-  assert_equals(node.localName, "br");
-  node = node.previousSibling;
-  assert_equals(node.nodeValue, "Tinderboxpushlog is the new *hotness!*");
+
+  assert_equals(node.localName, "div");
+  assert_equals(node.className, kSigClass);
+
+  sigNode = node.firstChild;
+
   if (!suppressSigSep) {
-    // a <br> element, then the next text node
-    node = node.previousSibling.previousSibling;
-    assert_equals(node.nodeValue, "-- ");
+    expectedText = "-- ";
+    assert_equals(sigNode.textContent, kSeparator);
+    let brNode = sigNode.nextSibling;
+    assert_equals(brNode.localName, "br");
+    sigNode = brNode.nextSibling;
   }
 
-  // Now check that the original signature has been removed!
+  expectedText = "Tinderboxpushlog is the new *hotness!*";
+  assert_equals(sigNode.textContent, expectedText);
+
+  // Now check that the original signature has been removed by ensuring
+  // that there's only one node with class moz-signature.
+  let sigs = contentFrame.contentDocument.querySelectorAll("." + kSigClass);
+  assert_equals(sigs.length, 1);
+
+  // And ensure that the text we wrote wasn't altered
   let bodyFirstChild =  contentFrame.contentDocument.body.firstChild;
-  while (node != bodyFirstChild) {
+
+  while (node != bodyFirstChild)
     node = node.previousSibling;
-    if (node) {
-      assert_not_equals(node.nodeValue, "Tinderbox is soo 90ies");
-      assert_not_equals(node.nodeValue, "-- ");
-    }
-  }
+
   assert_equals(node.nodeValue, "Body, first line.");
 
   composeHelper.close_compose_window(cwc);

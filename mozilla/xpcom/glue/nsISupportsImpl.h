@@ -1,38 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is XPCOM.
- *
- * The Initial Developer of the Original Code is Netscape Communications Corp.
- * Portions created by the Initial Developer are Copyright (C) 2001
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 
 #ifndef nsISupportsImpl_h__
@@ -64,7 +33,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Macros to help detect thread-safety:
 
-#if defined(NS_DEBUG) && !defined(XPCOM_GLUE_AVOID_NSPR)
+#if defined(DEBUG) && !defined(XPCOM_GLUE_AVOID_NSPR)
 
 class nsAutoOwningThread {
 public:
@@ -89,13 +58,13 @@ private:
     } \
   } while (0)
 
-#else // !NS_DEBUG
+#else // !DEBUG
 
 #define NS_DECL_OWNINGTHREAD            /* nothing */
 #define NS_ASSERT_OWNINGTHREAD(_class)  ((void)0)
 #define NS_ASSERT_OWNINGTHREAD_AND_NOT_CCTHREAD(_class)  ((void)0)
 
-#endif // NS_DEBUG
+#endif // DEBUG
 
 #define NS_CCAR_REFCNT_BIT 1
 #define NS_CCAR_REFCNT_TO_TAGGED(rc_) \
@@ -110,21 +79,16 @@ private:
 
 // Support for ISupports classes which interact with cycle collector.
 
-/**
- * This struct (once shipped) will be FROZEN with respect to the
- * NS_CycleCollectorSuspect2 and NS_CycleCollectorForget2 functions.  If
- * we need to change the struct, we'll need Suspect3 and Forget3 for the
- * new versions.
- */
 struct nsPurpleBufferEntry {
   union {
-    nsISupports *mObject;                 // when low bit unset
+    void *mObject;                        // when low bit unset
     nsPurpleBufferEntry *mNextInFreeList; // when low bit set
   };
   // When an object is in the purple buffer, it replaces its reference
   // count with a (tagged) pointer to this entry, so we store the
   // reference count for it.
   nsrefcnt mRefCnt;
+  nsCycleCollectionParticipant *mParticipant; // NULL for nsISupports
 };
 
 class nsCycleCollectingAutoRefCnt {
@@ -139,7 +103,7 @@ public:
   {
   }
 
-  nsrefcnt incr(nsISupports *owner)
+  nsrefcnt incr(void *owner)
   {
     if (NS_UNLIKELY(mTagged == NS_CCAR_TAGGED_STABILIZED_REFCNT)) {
       // The sentinel value "purple bit alone, refcount 0" means
@@ -175,12 +139,17 @@ public:
     return refcount;
   }
 
-  void stabilizeForDeletion(nsISupports *owner)
+  void stabilizeForDeletion()
   {
     mTagged = NS_CCAR_TAGGED_STABILIZED_REFCNT;
   }
 
   nsrefcnt decr(nsISupports *owner)
+  {
+    return decr(owner, nullptr);
+  }
+
+  nsrefcnt decr(void *owner, nsCycleCollectionParticipant *p)
   {
     if (NS_UNLIKELY(mTagged == NS_CCAR_TAGGED_STABILIZED_REFCNT))
       return 1;
@@ -196,7 +165,7 @@ public:
         if (NS_UNLIKELY(!NS_CycleCollectorForget2(e))) {
           NS_NOTREACHED("forget should not fail when reference count hits 0");
           // Clear the entry's pointer to us.
-          e->mObject = nsnull;
+          e->mObject = nullptr;
         }
         mTagged = NS_CCAR_REFCNT_TO_TAGGED(refcount);
       } else {
@@ -208,7 +177,7 @@ public:
 
       nsPurpleBufferEntry *e;
       if (NS_LIKELY(refcount > 0) &&
-          ((e = NS_CycleCollectorSuspect2(owner)))) {
+          ((e = NS_CycleCollectorSuspect2(owner, p)))) {
         e->mRefCnt = refcount;
         mTagged = NS_CCAR_PURPLE_ENTRY_TO_TAGGED(e);
       } else {
@@ -226,7 +195,19 @@ public:
     mTagged = NS_CCAR_REFCNT_TO_TAGGED(refcount);
   }
 
-  PRBool IsPurple() const
+  void RemovePurple()
+  {
+    NS_ASSERTION(IsPurple(), "must be purple");
+#ifdef DEBUG_CC
+    nsCycleCollector_logPurpleRemoval(
+      NS_CCAR_TAGGED_TO_PURPLE_ENTRY(mTagged)->mObject);
+#endif
+    // The entry will be added to the free list later. 
+    NS_CCAR_TAGGED_TO_PURPLE_ENTRY(mTagged)->mObject = nullptr;
+    unmarkPurple();
+  }
+
+  bool IsPurple() const
   {
     NS_ASSERTION(mTagged != NS_CCAR_TAGGED_STABILIZED_REFCNT,
                  "should have checked for stabilization first");
@@ -296,9 +277,65 @@ public:                                                                       \
                             void** aInstancePtr);                             \
   NS_IMETHOD_(nsrefcnt) AddRef(void);                                         \
   NS_IMETHOD_(nsrefcnt) Release(void);                                        \
-  void UnmarkPurple()                                                         \
+  void UnmarkIfPurple()                                                       \
   {                                                                           \
-    mRefCnt.unmarkPurple();                                                   \
+    if (NS_LIKELY(mRefCnt.IsPurple()))                                        \
+      mRefCnt.unmarkPurple();                                                 \
+  }                                                                           \
+protected:                                                                    \
+  nsCycleCollectingAutoRefCnt mRefCnt;                                        \
+  NS_DECL_OWNINGTHREAD                                                        \
+public:
+
+
+///////////////////////////////////////////////////////////////////////////////
+
+/*
+ * Implementation of AddRef and Release for non-nsISupports (ie "native")
+ * cycle-collected classes that use the purple buffer to avoid leaks.
+ */
+
+#define NS_IMPL_CC_NATIVE_ADDREF_BODY(_class)                                 \
+    NS_PRECONDITION(int32_t(mRefCnt) >= 0, "illegal refcnt");                 \
+    NS_ASSERT_OWNINGTHREAD_AND_NOT_CCTHREAD(_class);                          \
+    nsrefcnt count = mRefCnt.incr(this);                                      \
+    NS_LOG_ADDREF(this, count, #_class, sizeof(*this));                       \
+    return count;
+
+#define NS_IMPL_CC_NATIVE_RELEASE_BODY(_class)                                \
+    NS_PRECONDITION(0 != mRefCnt, "dup release");                             \
+    NS_ASSERT_OWNINGTHREAD_AND_NOT_CCTHREAD(_class);                          \
+    nsrefcnt count =                                                          \
+      mRefCnt.decr(static_cast<void*>(this),                                  \
+                   _class::NS_CYCLE_COLLECTION_INNERNAME.GetParticipant());   \
+    NS_LOG_RELEASE(this, count, #_class);                                     \
+    if (count == 0) {                                                         \
+      NS_ASSERT_OWNINGTHREAD(_class);                                         \
+      mRefCnt.stabilizeForDeletion();                                         \
+      delete this;                                                            \
+      return 0;                                                               \
+    }                                                                         \
+    return count;
+
+#define NS_IMPL_CYCLE_COLLECTING_NATIVE_ADDREF(_class)                        \
+NS_METHOD_(nsrefcnt) _class::AddRef(void)                                     \
+{                                                                             \
+  NS_IMPL_CC_NATIVE_ADDREF_BODY(_class)                                       \
+}
+
+#define NS_IMPL_CYCLE_COLLECTING_NATIVE_RELEASE(_class)                       \
+NS_METHOD_(nsrefcnt) _class::Release(void)                                    \
+{                                                                             \
+  NS_IMPL_CC_NATIVE_RELEASE_BODY(_class)                                      \
+}
+
+#define NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(_class)            \
+public:                                                                       \
+  NS_METHOD_(nsrefcnt) AddRef(void) {                                         \
+    NS_IMPL_CC_NATIVE_ADDREF_BODY(_class)                                     \
+  }                                                                           \
+  NS_METHOD_(nsrefcnt) Release(void) {                                        \
+    NS_IMPL_CC_NATIVE_RELEASE_BODY(_class)                                    \
   }                                                                           \
 protected:                                                                    \
   nsCycleCollectingAutoRefCnt mRefCnt;                                        \
@@ -319,20 +356,18 @@ public:
  * Use this macro to declare and implement the AddRef & Release methods for a
  * given non-XPCOM <i>_class</i>.
  *
- * The implementations here should match NS_IMPL_ADDREF/NS_IMPL_RELEASE, minus
- * the nsrefcnt return-value and the NS_ASSERT_OWNINGTHREAD() call.
- *
  * @param _class The name of the class implementing the method
  */
 #define NS_INLINE_DECL_REFCOUNTING(_class)                                    \
 public:                                                                       \
-  void AddRef(void) {                                                         \
-    NS_PRECONDITION(PRInt32(mRefCnt) >= 0, "illegal refcnt");                 \
+  NS_METHOD_(nsrefcnt) AddRef(void) {                                         \
+    NS_PRECONDITION(int32_t(mRefCnt) >= 0, "illegal refcnt");                 \
     NS_ASSERT_OWNINGTHREAD_AND_NOT_CCTHREAD(_class);                          \
     ++mRefCnt;                                                                \
     NS_LOG_ADDREF(this, mRefCnt, #_class, sizeof(*this));                     \
+    return mRefCnt;                                                           \
   }                                                                           \
-  void Release(void) {                                                        \
+  NS_METHOD_(nsrefcnt) Release(void) {                                        \
     NS_PRECONDITION(0 != mRefCnt, "dup release");                             \
     NS_ASSERT_OWNINGTHREAD_AND_NOT_CCTHREAD(_class);                          \
     --mRefCnt;                                                                \
@@ -341,11 +376,43 @@ public:                                                                       \
       NS_ASSERT_OWNINGTHREAD(_class);                                         \
       mRefCnt = 1; /* stabilize */                                            \
       delete this;                                                            \
+      return 0;                                                               \
     }                                                                         \
+    return mRefCnt;                                                           \
   }                                                                           \
 protected:                                                                    \
   nsAutoRefCnt mRefCnt;                                                       \
   NS_DECL_OWNINGTHREAD                                                        \
+public:
+
+/**
+ * Use this macro to declare and implement the AddRef & Release methods for a
+ * given non-XPCOM <i>_class</i> in a threadsafe manner.
+ *
+ * DOES NOT DO REFCOUNT STABILIZATION!
+ *
+ * @param _class The name of the class implementing the method
+ */
+#define NS_INLINE_DECL_THREADSAFE_REFCOUNTING(_class)                         \
+public:                                                                       \
+  NS_METHOD_(nsrefcnt) AddRef(void) {                                         \
+    NS_PRECONDITION(int32_t(mRefCnt) >= 0, "illegal refcnt");                 \
+    nsrefcnt count = NS_AtomicIncrementRefcnt(mRefCnt);                       \
+    NS_LOG_ADDREF(this, count, #_class, sizeof(*this));                       \
+    return (nsrefcnt) count;                                                  \
+  }                                                                           \
+  NS_METHOD_(nsrefcnt) Release(void) {                                        \
+    NS_PRECONDITION(0 != mRefCnt, "dup release");                             \
+    nsrefcnt count = NS_AtomicDecrementRefcnt(mRefCnt);                       \
+    NS_LOG_RELEASE(this, count, #_class);                                     \
+    if (count == 0) {                                                         \
+      delete (this);                                                          \
+      return 0;                                                               \
+    }                                                                         \
+    return count;                                                             \
+  }                                                                           \
+protected:                                                                    \
+  nsAutoRefCnt mRefCnt;                                                       \
 public:
 
 /**
@@ -355,7 +422,7 @@ public:
 #define NS_IMPL_ADDREF(_class)                                                \
 NS_IMETHODIMP_(nsrefcnt) _class::AddRef(void)                                 \
 {                                                                             \
-  NS_PRECONDITION(PRInt32(mRefCnt) >= 0, "illegal refcnt");                   \
+  NS_PRECONDITION(int32_t(mRefCnt) >= 0, "illegal refcnt");                   \
   NS_ASSERT_OWNINGTHREAD_AND_NOT_CCTHREAD(_class);                            \
   ++mRefCnt;                                                                  \
   NS_LOG_ADDREF(this, mRefCnt, #_class, sizeof(*this));                       \
@@ -445,7 +512,7 @@ NS_IMETHODIMP_(nsrefcnt) _class::Release(void)                                \
 #define NS_IMPL_CYCLE_COLLECTING_ADDREF(_class)                               \
 NS_IMETHODIMP_(nsrefcnt) _class::AddRef(void)                                 \
 {                                                                             \
-  NS_PRECONDITION(PRInt32(mRefCnt) >= 0, "illegal refcnt");                   \
+  NS_PRECONDITION(int32_t(mRefCnt) >= 0, "illegal refcnt");                   \
   NS_ASSERT_OWNINGTHREAD_AND_NOT_CCTHREAD(_class);                            \
   nsrefcnt count =                                                            \
     mRefCnt.incr(NS_CYCLE_COLLECTION_CLASSNAME(_class)::Upcast(this));        \
@@ -463,7 +530,7 @@ NS_IMETHODIMP_(nsrefcnt) _class::Release(void)                                \
   NS_LOG_RELEASE(this, count, #_class);                                       \
   if (count == 0) {                                                           \
     NS_ASSERT_OWNINGTHREAD(_class);                                           \
-    mRefCnt.stabilizeForDeletion(base);                                       \
+    mRefCnt.stabilizeForDeletion();                                           \
     _destroy;                                                                 \
     return 0;                                                                 \
   }                                                                           \
@@ -494,7 +561,7 @@ NS_IMETHODIMP_(nsrefcnt) _class::Release(void)                                \
 struct QITableEntry
 {
   const nsIID *iid;     // null indicates end of the QITableEntry array
-  PROffset32   offset;
+  int32_t   offset;
 };
 
 NS_COM_GLUE nsresult NS_FASTCALL
@@ -517,14 +584,14 @@ NS_IMETHODIMP _class::QueryInterface(REFNSIID aIID, void** aInstancePtr)      \
 
 #define NS_INTERFACE_TABLE_ENTRY(_class, _interface)                          \
   { &_interface::COMTypeInfo<int>::kIID,                                      \
-    PROffset32(reinterpret_cast<char*>(                                       \
+    int32_t(reinterpret_cast<char*>(                                       \
                         static_cast<_interface*>((_class*) 0x1000)) -         \
                reinterpret_cast<char*>((_class*) 0x1000))                     \
   },
 
 #define NS_INTERFACE_TABLE_ENTRY_AMBIGUOUS(_class, _interface, _implClass)    \
   { &_interface::COMTypeInfo<int>::kIID,                                      \
-    PROffset32(reinterpret_cast<char*>(                                       \
+    int32_t(reinterpret_cast<char*>(                                       \
                         static_cast<_interface*>(                             \
                                        static_cast<_implClass*>(              \
                                                       (_class*) 0x1000))) -   \
@@ -532,7 +599,7 @@ NS_IMETHODIMP _class::QueryInterface(REFNSIID aIID, void** aInstancePtr)      \
   },
 
 #define NS_INTERFACE_TABLE_END_WITH_PTR(_ptr)                                 \
-  { nsnull, 0 } };                                                            \
+  { nullptr, 0 } };                                                            \
   rv = NS_TableDrivenQI(static_cast<void*>(_ptr),                             \
                         table, aIID, aInstancePtr);
 
@@ -1267,7 +1334,7 @@ NS_IMETHODIMP_(nsrefcnt) Class::Release(void)                                 \
 #define NS_IMPL_THREADSAFE_ADDREF(_class)                                     \
 NS_IMETHODIMP_(nsrefcnt) _class::AddRef(void)                                 \
 {                                                                             \
-  NS_PRECONDITION(PRInt32(mRefCnt) >= 0, "illegal refcnt");                   \
+  NS_PRECONDITION(int32_t(mRefCnt) >= 0, "illegal refcnt");                   \
   nsrefcnt count = NS_AtomicIncrementRefcnt(mRefCnt);                         \
   NS_LOG_ADDREF(this, count, #_class, sizeof(*this));                         \
   return (nsrefcnt) count;                                                    \
@@ -1387,48 +1454,48 @@ NS_IMETHODIMP_(nsrefcnt) _class::Release(void)                                \
  */
 #define NS_IMPL_THREADSAFE_CI(_class)                                         \
 NS_IMETHODIMP                                                                 \
-_class::GetInterfaces(PRUint32* _count, nsIID*** _array)                      \
+_class::GetInterfaces(uint32_t* _count, nsIID*** _array)                      \
 {                                                                             \
   return NS_CI_INTERFACE_GETTER_NAME(_class)(_count, _array);                 \
 }                                                                             \
                                                                               \
 NS_IMETHODIMP                                                                 \
-_class::GetHelperForLanguage(PRUint32 _language, nsISupports** _retval)       \
+_class::GetHelperForLanguage(uint32_t _language, nsISupports** _retval)       \
 {                                                                             \
-  *_retval = nsnull;                                                          \
+  *_retval = nullptr;                                                          \
   return NS_OK;                                                               \
 }                                                                             \
                                                                               \
 NS_IMETHODIMP                                                                 \
 _class::GetContractID(char** _contractID)                                     \
 {                                                                             \
-  *_contractID = nsnull;                                                      \
+  *_contractID = nullptr;                                                      \
   return NS_OK;                                                               \
 }                                                                             \
                                                                               \
 NS_IMETHODIMP                                                                 \
 _class::GetClassDescription(char** _classDescription)                         \
 {                                                                             \
-  *_classDescription = nsnull;                                                \
+  *_classDescription = nullptr;                                                \
   return NS_OK;                                                               \
 }                                                                             \
                                                                               \
 NS_IMETHODIMP                                                                 \
 _class::GetClassID(nsCID** _classID)                                          \
 {                                                                             \
-  *_classID = nsnull;                                                         \
+  *_classID = nullptr;                                                         \
   return NS_OK;                                                               \
 }                                                                             \
                                                                               \
 NS_IMETHODIMP                                                                 \
-_class::GetImplementationLanguage(PRUint32* _language)                        \
+_class::GetImplementationLanguage(uint32_t* _language)                        \
 {                                                                             \
   *_language = nsIProgrammingLanguage::CPLUSPLUS;                             \
   return NS_OK;                                                               \
 }                                                                             \
                                                                               \
 NS_IMETHODIMP                                                                 \
-_class::GetFlags(PRUint32* _flags)                                            \
+_class::GetFlags(uint32_t* _flags)                                            \
 {                                                                             \
   *_flags = nsIClassInfo::THREADSAFE;                                         \
   return NS_OK;                                                               \

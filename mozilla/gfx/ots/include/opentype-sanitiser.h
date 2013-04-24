@@ -5,7 +5,28 @@
 #ifndef OPENTYPE_SANITISER_H_
 #define OPENTYPE_SANITISER_H_
 
+#if defined(_WIN32) || defined(__CYGWIN__)
+  #define OTS_DLL_IMPORT __declspec(dllimport)
+  #define OTS_DLL_EXPORT __declspec(dllexport)
+#else
+  #if __GNUC__ >= 4
+    #define OTS_DLL_IMPORT __attribute__((visibility ("default")))
+    #define OTS_DLL_EXPORT __attribute__((visibility ("default")))
+  #endif
+#endif
+
+#ifdef OTS_DLL
+  #ifdef OTS_DLL_EXPORTS
+    #define OTS_API OTS_DLL_EXPORT
+  #else
+    #define OTS_API OTS_DLL_IMPORT
+  #endif
+#else
+  #define OTS_API
+#endif
+
 #if defined(_WIN32)
+#include <stdlib.h>
 typedef signed char int8_t;
 typedef unsigned char uint8_t;
 typedef short int16_t;
@@ -14,7 +35,10 @@ typedef int int32_t;
 typedef unsigned int uint32_t;
 typedef __int64 int64_t;
 typedef unsigned __int64 uint64_t;
-#include <winsock2.h>  // for htons/ntohs
+#define ntohl(x) _byteswap_ulong (x)
+#define ntohs(x) _byteswap_ushort (x)
+#define htonl(x) _byteswap_ulong (x)
+#define htons(x) _byteswap_ushort (x)
 #else
 #include <arpa/inet.h>
 #include <stdint.h>
@@ -22,6 +46,7 @@ typedef unsigned __int64 uint64_t;
 
 #include <algorithm>  // for std::min
 #include <cassert>
+#include <cstddef>
 #include <cstring>
 
 namespace ots {
@@ -56,8 +81,9 @@ class OTSStream {
     }
 
     if (chksum_buffer_offset_ == 4) {
-      // TODO(yusukes): This cast breaks the strict-aliasing rule.
-      chksum_ += ntohl(*reinterpret_cast<const uint32_t*>(chksum_buffer_));
+      uint32_t chksum;
+      std::memcpy(&chksum, chksum_buffer_, 4);
+      chksum_ += ntohl(chksum);
       chksum_buffer_offset_ = 0;
     }
 
@@ -173,6 +199,13 @@ class OTSStream {
   unsigned chksum_buffer_offset_;
 };
 
+#ifdef MOZ_OTS_REPORT_ERRORS
+// Signature of the function to be provided by the client in order to report errors.
+// The return type is a boolean so that it can be used within an expression,
+// but the actual value is ignored. (Suggested convention is to always return 'false'.)
+typedef bool (*MessageFunc)(void *user_data, const char *format, ...);
+#endif
+
 // -----------------------------------------------------------------------------
 // Process a given OpenType file and write out a sanitised version
 //   output: a pointer to an object implementing the OTSStream interface. The
@@ -180,8 +213,13 @@ class OTSStream {
 //     partial output may have been written.
 //   input: the OpenType file
 //   length: the size, in bytes, of |input|
+//   preserve_graphite_tables: whether to preserve Graphite Layout tables
 // -----------------------------------------------------------------------------
-bool Process(OTSStream *output, const uint8_t *input, size_t length);
+bool OTS_API Process(OTSStream *output, const uint8_t *input, size_t length,
+#ifdef MOZ_OTS_REPORT_ERRORS
+                     MessageFunc message_func, void *user_data,
+#endif
+                     bool preserve_graphite_tables = false);
 
 // Force to disable debug output even when the library is compiled with
 // -DOTS_DEBUG.

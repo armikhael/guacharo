@@ -1,38 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla.
- *
- * The Initial Developer of the Original Code is Darin Fisher.
- * Portions created by the Initial Developer are Copyright (C) 2003
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Darin Fisher <darin@meer.net>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <stdlib.h>
 #include <string.h>
@@ -75,6 +43,7 @@ enum {
 #define BITS_PER_HEX_DIGIT      4
 
 static const char kUserPref[] = "user_pref";
+static const char kLockPref[] = "lockPref";
 static const char kPref[] = "pref";
 static const char kTrue[] = "true";
 static const char kFalse[] = "false";
@@ -97,9 +66,9 @@ static const char kFalse[] = "false";
  * this function updates all pointers that reference an 
  * address within lb since realloc may relocate the buffer.
  *
- * @return PR_FALSE if insufficient memory.
+ * @return false if insufficient memory.
  */
-static PRBool
+static bool
 pref_GrowBuf(PrefParseState *ps)
 {
     int bufLen, curPos, valPos;
@@ -119,13 +88,13 @@ pref_GrowBuf(PrefParseState *ps)
 
     ps->lb = (char*) realloc(ps->lb, bufLen);
     if (!ps->lb)
-        return PR_FALSE;
+        return false;
 
     ps->lbcur = ps->lb + curPos;
     ps->lbend = ps->lb + bufLen;
     ps->vb    = ps->lb + valPos;
 
-    return PR_TRUE;
+    return true;
 }
 
 /**
@@ -137,9 +106,9 @@ pref_GrowBuf(PrefParseState *ps)
  * @param ps
  *        parse state instance
  *
- * @return PR_FALSE to indicate a fatal error.
+ * @return false to indicate a fatal error.
  */
-static PRBool
+static bool
 pref_DoCallback(PrefParseState *ps)
 {
     PrefValue  value;
@@ -151,7 +120,7 @@ pref_DoCallback(PrefParseState *ps)
     case PREF_INT:
         if ((ps->vb[0] == '-' || ps->vb[0] == '+') && ps->vb[1] == '\0') {
             NS_WARNING("malformed integer value");
-            return PR_FALSE;
+            return false;
         }
         value.intVal = atoi(ps->vb);
         break;
@@ -161,8 +130,8 @@ pref_DoCallback(PrefParseState *ps)
     default:
         break;
     }
-    (*ps->reader)(ps->closure, ps->lb, value, ps->vtype, ps->fdefault);
-    return PR_TRUE;
+    (*ps->reader)(ps->closure, ps->lb, value, ps->vtype, ps->fdefault, ps->flock);
+    return true;
 }
 
 void
@@ -201,7 +170,7 @@ PREF_FinalizeParseState(PrefParseState *ps)
  * comment-line  = <C++ style comment line>
  * bcomment-line = <bourne-shell style comment line>
  */
-PRBool
+bool
 PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
 {
     const char *end;
@@ -219,7 +188,8 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
                 ps->lbcur = ps->lb;
                 ps->vb    = NULL;
                 ps->vtype = PREF_INVALID;
-                ps->fdefault = PR_FALSE;
+                ps->fdefault = false;
+                ps->flock = false;
             }
             switch (c) {
             case '/':       /* begin comment block or line? */
@@ -230,7 +200,9 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
                 break;
             case 'u':       /* indicating user_pref */
             case 'p':       /* indicating pref */
-                ps->smatch = (c == 'u' ? kUserPref : kPref);
+            case 'l':       /* indicating lockPref */
+                ps->smatch = (c == 'u' ? kUserPref :
+                                         (c == 'p' ? kPref : kLockPref));
                 ps->sindex = 1;
                 ps->nextstate = PREF_PARSE_UNTIL_OPEN_PAREN;
                 state = PREF_PARSE_MATCH_STRING;
@@ -251,7 +223,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
             }
             else {
                 NS_WARNING("malformed pref file");
-                return PR_FALSE;
+                return false;
             }
             break;
 
@@ -259,7 +231,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
         case PREF_PARSE_QUOTED_STRING:
             /* we assume that the initial quote has already been consumed */
             if (ps->lbcur == ps->lbend && !pref_GrowBuf(ps))
-                return PR_FALSE; /* out of memory */
+                return false; /* out of memory */
             if (c == '\\')
                 state = PREF_PARSE_ESC_SEQUENCE;
             else if (c == ps->quotechar) {
@@ -274,7 +246,8 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
         /* name parsing */
         case PREF_PARSE_UNTIL_NAME:
             if (c == '\"' || c == '\'') {
-                ps->fdefault = (ps->smatch == kPref);
+                ps->fdefault = (ps->smatch != kUserPref);
+                ps->flock = (ps->smatch == kLockPref);
                 ps->quotechar = c;
                 ps->nextstate = PREF_PARSE_UNTIL_COMMA; /* return here when done */
                 state = PREF_PARSE_QUOTED_STRING;
@@ -285,7 +258,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
             }
             else if (!isspace(c)) {
                 NS_WARNING("malformed pref file");
-                return PR_FALSE;
+                return false;
             }
             break;
 
@@ -301,7 +274,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
             }
             else if (!isspace(c)) {
                 NS_WARNING("malformed pref file");
-                return PR_FALSE;
+                return false;
             }
             break;
 
@@ -327,7 +300,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
                 ps->vtype = PREF_INT;
                 /* write c to line buffer... */
                 if (ps->lbcur == ps->lbend && !pref_GrowBuf(ps))
-                    return PR_FALSE; /* out of memory */
+                    return false; /* out of memory */
                 *ps->lbcur++ = c;
                 state = PREF_PARSE_INT_VALUE;
             }
@@ -337,13 +310,13 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
             }
             else if (!isspace(c)) {
                 NS_WARNING("malformed pref file");
-                return PR_FALSE;
+                return false;
             }
             break;
         case PREF_PARSE_INT_VALUE:
             /* grow line buffer if necessary... */
             if (ps->lbcur == ps->lbend && !pref_GrowBuf(ps))
-                return PR_FALSE; /* out of memory */
+                return false; /* out of memory */
             if (isdigit(c))
                 *ps->lbcur++ = c;
             else {
@@ -358,7 +331,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
                     state = PREF_PARSE_UNTIL_CLOSE_PAREN;
                 else {
                     NS_WARNING("malformed pref file");
-                    return PR_FALSE;
+                    return false;
                 }
             }
             break;
@@ -375,7 +348,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
             default:
                 /* pref file is malformed */
                 NS_WARNING("malformed pref file");
-                return PR_FALSE;
+                return false;
             }
             break;
         case PREF_PARSE_COMMENT_BLOCK:
@@ -426,7 +399,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
                 /* Invalid escape sequence so we do have to write more than
                  * one character. Grow line buffer if necessary... */
                 if ((ps->lbcur+1) == ps->lbend && !pref_GrowBuf(ps))
-                    return PR_FALSE; /* out of memory */
+                    return false; /* out of memory */
                 *ps->lbcur++ = '\\'; /* preserve the escape sequence */
                 break;
             }
@@ -447,7 +420,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
                 NS_WARNING("preserving invalid or incomplete hex escape");
                 *ps->lbcur++ = '\\';  /* original escape slash */
                 if ((ps->lbcur + ps->esclen) >= ps->lbend && !pref_GrowBuf(ps))
-                    return PR_FALSE;
+                    return false;
                 for (int i = 0; i < ps->esclen; ++i)
                     *ps->lbcur++ = ps->esctmp[i];
 
@@ -487,7 +460,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
                 /* make sure there's room, 6 bytes is max utf8 len (in */
                 /* theory; 4 bytes covers the actual utf16 range) */
                 if (ps->lbcur+6 >= ps->lbend && !pref_GrowBuf(ps))
-                    return PR_FALSE;
+                    return false;
 
                 ConvertUTF16toUTF8 converter(ps->lbcur);
                 converter.write(ps->utf16, utf16len);
@@ -532,7 +505,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
             }
             else if (!isspace(c)) {
                 NS_WARNING("malformed pref file");
-                return PR_FALSE;
+                return false;
             }
             break;
         case PREF_PARSE_UNTIL_CLOSE_PAREN:
@@ -545,7 +518,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
             }
             else if (!isspace(c)) {
                 NS_WARNING("malformed pref file");
-                return PR_FALSE;
+                return false;
             }
             break;
 
@@ -554,7 +527,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
             /* tolerate only whitespace and embedded comments */
             if (c == ';') {
                 if (!pref_DoCallback(ps))
-                    return PR_FALSE;
+                    return false;
                 state = PREF_PARSE_INIT;
             }
             else if (c == '/') {
@@ -563,7 +536,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
             }
             else if (!isspace(c)) {
                 NS_WARNING("malformed pref file");
-                return PR_FALSE;
+                return false;
             }
             break;
 
@@ -580,7 +553,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
         }
     }
     ps->state = state;
-    return PR_TRUE;
+    return true;
 }
 
 #ifdef TEST_PREFREAD
@@ -590,7 +563,7 @@ pref_reader(void       *closure,
             const char *pref,
             PrefValue   val,
             PrefType    type,
-            PRBool      defPref)
+            bool        defPref)
 {
     printf("%spref(\"%s\", ", defPref ? "" : "user_", pref);
     switch (type) {
@@ -601,7 +574,7 @@ pref_reader(void       *closure,
         printf("%i);\n", val.intVal);
         break;
     case PREF_BOOL:
-        printf("%s);\n", val.boolVal == PR_FALSE ? "false" : "true");
+        printf("%s);\n", val.boolVal == false ? "false" : "true");
         break;
     }
 }

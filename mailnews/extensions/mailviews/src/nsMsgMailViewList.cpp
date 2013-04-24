@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Scott MacGregor <mscott@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsMsgMailViewList.h"
 #include "nsISupportsArray.h"
@@ -44,8 +11,9 @@
 #include "nsMsgBaseCID.h"
 #include "nsAppDirectoryServiceDefs.h"
 #include "nsDirectoryServiceUtils.h"
-#include "nsILocalFile.h"
+#include "nsIFile.h"
 #include "nsComponentManagerUtils.h"
+#include "mozilla/Services.h"
 
 #define kDefaultViewPeopleIKnow "People I Know"
 #define kDefaultViewRecent "Recent Mail"
@@ -70,7 +38,9 @@ nsMsgMailView::~nsMsgMailView()
 
 NS_IMETHODIMP nsMsgMailView::GetMailViewName(PRUnichar ** aMailViewName)
 {
-    *aMailViewName = ToNewUnicode(mName); 
+    NS_ENSURE_ARG_POINTER(aMailViewName);
+
+    *aMailViewName = ToNewUnicode(mName);
     return NS_OK;
 }
 
@@ -82,11 +52,14 @@ NS_IMETHODIMP nsMsgMailView::SetMailViewName(const PRUnichar * aMailViewName)
 
 NS_IMETHODIMP nsMsgMailView::GetPrettyName(PRUnichar ** aMailViewName)
 {
+    NS_ENSURE_ARG_POINTER(aMailViewName);
+
     nsresult rv = NS_OK;
     if (!mBundle)
     {
-        nsCOMPtr<nsIStringBundleService> bundleService = do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-        NS_ENSURE_SUCCESS(rv, rv);
+        nsCOMPtr<nsIStringBundleService> bundleService =
+          mozilla::services::GetStringBundleService();
+        NS_ENSURE_TRUE(bundleService, NS_ERROR_UNEXPECTED);
         bundleService->CreateBundle("chrome://messenger/locale/mailviews.properties",
                                     getter_AddRefs(mBundle));
     }
@@ -96,17 +69,17 @@ NS_IMETHODIMP nsMsgMailView::GetPrettyName(PRUnichar ** aMailViewName)
     // see if mName has an associated pretty name inside our string bundle and if so, use that as the pretty name
     // otherwise just return mName
     if (mName.EqualsLiteral(kDefaultViewPeopleIKnow))
-        rv = mBundle->GetStringFromName(NS_LITERAL_STRING("mailViewPeopleIKnow").get(), aMailViewName);    
+        rv = mBundle->GetStringFromName(NS_LITERAL_STRING("mailViewPeopleIKnow").get(), aMailViewName);
     else if (mName.EqualsLiteral(kDefaultViewRecent))
-        rv = mBundle->GetStringFromName(NS_LITERAL_STRING("mailViewRecentMail").get(), aMailViewName);  
+        rv = mBundle->GetStringFromName(NS_LITERAL_STRING("mailViewRecentMail").get(), aMailViewName);
     else if (mName.EqualsLiteral(kDefaultViewFiveDays))
-        rv = mBundle->GetStringFromName(NS_LITERAL_STRING("mailViewLastFiveDays").get(), aMailViewName);  
+        rv = mBundle->GetStringFromName(NS_LITERAL_STRING("mailViewLastFiveDays").get(), aMailViewName);
     else if (mName.EqualsLiteral(kDefaultViewNotJunk))
-        rv = mBundle->GetStringFromName(NS_LITERAL_STRING("mailViewNotJunk").get(), aMailViewName); 
+        rv = mBundle->GetStringFromName(NS_LITERAL_STRING("mailViewNotJunk").get(), aMailViewName);
     else if (mName.EqualsLiteral(kDefaultViewHasAttachments))
-        rv = mBundle->GetStringFromName(NS_LITERAL_STRING("mailViewHasAttachments").get(), aMailViewName); 
+        rv = mBundle->GetStringFromName(NS_LITERAL_STRING("mailViewHasAttachments").get(), aMailViewName);
     else
-        *aMailViewName = ToNewUnicode(mName); 
+        *aMailViewName = ToNewUnicode(mName);
 
     return rv;
 }
@@ -156,8 +129,10 @@ nsMsgMailViewList::~nsMsgMailViewList()
 
 }
 
-NS_IMETHODIMP nsMsgMailViewList::GetMailViewCount(PRUint32 * aCount)
+NS_IMETHODIMP nsMsgMailViewList::GetMailViewCount(uint32_t * aCount)
 {
+    NS_ENSURE_ARG_POINTER(aCount);
+
     if (m_mailViews)
        m_mailViews->Count(aCount);
     else
@@ -165,12 +140,12 @@ NS_IMETHODIMP nsMsgMailViewList::GetMailViewCount(PRUint32 * aCount)
     return NS_OK;
 }
 
-NS_IMETHODIMP nsMsgMailViewList::GetMailViewAt(PRUint32 aMailViewIndex, nsIMsgMailView ** aMailView)
+NS_IMETHODIMP nsMsgMailViewList::GetMailViewAt(uint32_t aMailViewIndex, nsIMsgMailView ** aMailView)
 {
     NS_ENSURE_ARG_POINTER(aMailView);
     NS_ENSURE_TRUE(m_mailViews, NS_ERROR_FAILURE);
-    
-    PRUint32 mailViewCount;
+
+    uint32_t mailViewCount;
     m_mailViews->Count(&mailViewCount);
     NS_ENSURE_TRUE(mailViewCount >= aMailViewIndex, NS_ERROR_FAILURE);
 
@@ -189,6 +164,9 @@ NS_IMETHODIMP nsMsgMailViewList::AddMailView(nsIMsgMailView * aMailView)
 
 NS_IMETHODIMP nsMsgMailViewList::RemoveMailView(nsIMsgMailView * aMailView)
 {
+    NS_ENSURE_ARG_POINTER(aMailView);
+    NS_ENSURE_TRUE(m_mailViews, NS_ERROR_FAILURE);
+
     m_mailViews->RemoveElement(static_cast<nsISupports*>(aMailView));
     return NS_OK;
 }
@@ -200,7 +178,7 @@ NS_IMETHODIMP nsMsgMailViewList::CreateMailView(nsIMsgMailView ** aMailView)
     nsMsgMailView * mailView = new nsMsgMailView;
     NS_ENSURE_TRUE(mailView, NS_ERROR_OUT_OF_MEMORY);
 
-    NS_IF_ADDREF(*aMailView = mailView);    
+    NS_IF_ADDREF(*aMailView = mailView);
     return NS_OK;
 }
 
@@ -209,8 +187,9 @@ NS_IMETHODIMP nsMsgMailViewList::Save()
     // brute force...remove all the old filters in our filter list, then we'll re-add our current
     // list
     nsCOMPtr<nsIMsgFilter> msgFilter;
-    PRUint32 numFilters;
-    mFilterList->GetFilterCount(&numFilters);
+    uint32_t numFilters = 0;
+    if (mFilterList)
+      mFilterList->GetFilterCount(&numFilters);
     while (numFilters)
     {
         mFilterList->RemoveFilterAt(numFilters - 1);
@@ -221,17 +200,19 @@ NS_IMETHODIMP nsMsgMailViewList::Save()
     ConvertMailViewListToFilterList();
 
     // now save the filters to our file
-    return mFilterList->SaveToDefaultFile();
+    return mFilterList ? mFilterList->SaveToDefaultFile() : NS_ERROR_FAILURE;
 }
 
 nsresult nsMsgMailViewList::ConvertMailViewListToFilterList()
 {
-  PRUint32 mailViewCount = 0;
-  m_mailViews->Count(&mailViewCount);
+  uint32_t mailViewCount = 0;
+
+  if (m_mailViews)
+    m_mailViews->Count(&mailViewCount);
   nsCOMPtr<nsIMsgMailView> mailView;
   nsCOMPtr<nsIMsgFilter> newMailFilter;
   nsString mailViewName;
-  for (PRUint32 index = 0; index < mailViewCount; index++)
+  for (uint32_t index = 0; index < mailViewCount; index++)
   {
       GetMailViewAt(index, getter_AddRefs(mailView));
       if (!mailView)
@@ -259,7 +240,7 @@ nsresult nsMsgMailViewList::LoadMailViews()
     rv = file->AppendNative(nsDependentCString("mailViews.dat"));
 
     // if the file doesn't exist, we should try to get it from the defaults directory and copy it over
-    PRBool exists = PR_FALSE;
+    bool exists = false;
     file->Exists(&exists);
     if (!exists)
     {
@@ -277,15 +258,14 @@ nsresult nsMsgMailViewList::LoadMailViews()
         defaultMessagesFile->CopyToNative(profileDir, EmptyCString());
     }
     // this is kind of a hack but I think it will be an effective hack. The filter service already knows how to 
-    // take a nsILocalFile and parse the contents into filters which are very similar to mail views. Intead of
+    // take a nsIFile and parse the contents into filters which are very similar to mail views. Intead of
     // re-writing all of that dirty parsing code, let's just re-use it then convert the results into a data strcuture
     // we wish to give to our consumers. 
       
     nsCOMPtr<nsIMsgFilterService> filterService = do_GetService(NS_MSGFILTERSERVICE_CONTRACTID, &rv);
     nsCOMPtr<nsIMsgFilterList> mfilterList;
       
-    nsCOMPtr <nsILocalFile> localFile = do_QueryInterface(file);
-    rv = filterService->OpenFilterList(localFile, NULL, NULL, getter_AddRefs(mFilterList));
+    rv = filterService->OpenFilterList(file, NULL, NULL, getter_AddRefs(mFilterList));
     NS_ENSURE_SUCCESS(rv, rv);
 
     // now convert the filter list into our mail view objects, stripping out just the info we need
@@ -304,9 +284,9 @@ nsresult nsMsgMailViewList::ConvertFilterListToMailView(nsIMsgFilterList * aFilt
 
     // iterate over each filter in the list
     nsCOMPtr<nsIMsgFilter> msgFilter;
-    PRUint32 numFilters;
+    uint32_t numFilters;
     aFilterList->GetFilterCount(&numFilters);
-    for (PRUint32 index = 0; index < numFilters; index++)
+    for (uint32_t index = 0; index < numFilters; index++)
     {
         aFilterList->GetFilterAt(index, getter_AddRefs(msgFilter));
         if (!msgFilter)

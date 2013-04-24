@@ -1,38 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Calendar code.
- *
- * The Initial Developer of the Original Code is
- *   Philipp Kewisch <mozilla@kewis.ch>
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
  * Welcome to the storage database migration.
@@ -187,7 +155,7 @@ function getVersion(db) {
         selectSchemaVersion = createStatement(db,
                               "SELECT version FROM " +
                               "cal_calendar_schema_version LIMIT 1");
-        if (selectSchemaVersion.step()) {
+        if (selectSchemaVersion.executeStep()) {
             version = selectSchemaVersion.row.version;
         }
 
@@ -394,9 +362,10 @@ function reportErrorAndRollback(db, e) {
 function ensureUpdatedTimezones(db) {
     // check if timezone version has changed:
     let selectTzVersion = createStatement(db, "SELECT version FROM cal_tz_version LIMIT 1");
+    let tzServiceVersion = cal.getTimezoneService().version;
     let version;
     try {
-        version = (selectTzVersion.step() ? selectTzVersion.row.version : null);
+        version = (selectTzVersion.executeStep() ? selectTzVersion.row.version : null);
     } finally {
         selectTzVersion.reset();
     }
@@ -405,15 +374,11 @@ function ensureUpdatedTimezones(db) {
     if (version) {
         versionComp = Components.classes["@mozilla.org/xpcom/version-comparator;1"]
                                 .getService(Components.interfaces.nsIVersionComparator)
-                                .compare(cal.getTimezoneService().version, version);
+                                .compare(tzServiceVersion, version);
     }
 
-    if (versionComp < 0) {
-        // A timezones downgrade has happened!
-        throw new Components.Exception("Attempt to downgrade timezones",
-                                       Components.interfaces.calIErrors.STORAGE_UNKNOWN_TIMEZONES_ERROR);
-    } else if (versionComp > 0) {
-        cal.LOG("Timezones have been updated, updating calendar data.");
+    if (versionComp != 0) {
+        cal.LOG("[calStorageCalendar] Timezones have been changed from " + version + " to " + tzServiceVersion + ", updating calendar data.");
 
         let zonesToUpdate = [];
         let getZones = createStatement(db,
@@ -431,7 +396,7 @@ function ensureUpdatedTimezones(db) {
             "SELECT recurrence_id_tz AS zone FROM cal_attachments  WHERE recurrence_id_tz IS NOT NULL" +
             ");");
         try {
-            while (getZones.step()) {
+            while (getZones.executeStep()) {
                 let zone = getZones.row.zone;
                 // Send the timezones off to the timezone service to attempt conversion:
                 let tz = getTimezone(zone);
@@ -1000,7 +965,7 @@ upgrade.v13 = function upgrade_v13(db, version) {
                 let stmt = createStatement(db,
                                            "SELECT id, cal_id FROM cal_" + itemTable);
                 try {
-                    while (stmt.step()) {
+                    while (stmt.executeStep()) {
                         calIds[stmt.row.id] = stmt.row.cal_id;
                     }
                 }
@@ -1218,7 +1183,7 @@ upgrade.v17 = function upgrade_v17(db, version) {
                                               "       recurrence_id" +
                                               "  FROM cal_" + tblName +
                                               " LIMIT 1");
-                stmt.step();
+                stmt.executeStep();
             } catch (e) {
                 // An error happened, which means the cols don't exist
                 hasColumns = false;

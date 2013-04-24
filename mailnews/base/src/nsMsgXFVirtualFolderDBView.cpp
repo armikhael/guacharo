@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * David Bienvenu.
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   David Bienvenu <bienvenu@nventure.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "msgCore.h"
 #include "nsMsgXFVirtualFolderDBView.h"
@@ -54,9 +21,9 @@
 
 nsMsgXFVirtualFolderDBView::nsMsgXFVirtualFolderDBView()
 {
-  mSuppressMsgDisplay = PR_FALSE;
-  m_doingSearch = PR_FALSE;
-  m_doingQuickSearch = PR_FALSE;
+  mSuppressMsgDisplay = false;
+  m_doingSearch = false;
+  m_doingQuickSearch = false;
   m_totalMessagesInView = 0;
 }
 
@@ -68,7 +35,7 @@ NS_IMETHODIMP nsMsgXFVirtualFolderDBView::Open(nsIMsgFolder *folder,
                                                nsMsgViewSortTypeValue sortType, 
                                                nsMsgViewSortOrderValue sortOrder, 
                                                nsMsgViewFlagsTypeValue viewFlags, 
-                                               PRInt32 *pCount)
+                                               int32_t *pCount)
 {
   m_viewFolder = folder;
   return nsMsgSearchDBView::Open(folder, sortType, sortOrder, viewFlags, pCount);
@@ -117,7 +84,7 @@ nsMsgXFVirtualFolderDBView::CopyDBView(nsMsgDBView *aNewMsgDBView, nsIMessenger 
   newMsgDBView->m_viewFolder = m_viewFolder;
   newMsgDBView->m_searchSession = m_searchSession;
 
-  PRInt32 scopeCount;
+  int32_t scopeCount;
   nsresult rv;
   nsCOMPtr <nsIMsgSearchSession> searchSession =
     do_QueryReferent(m_searchSession, &rv);
@@ -127,7 +94,7 @@ nsMsgXFVirtualFolderDBView::CopyDBView(nsMsgDBView *aNewMsgDBView, nsIMessenger 
     do_GetService(NS_MSGDB_SERVICE_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
   searchSession->CountSearchScopes(&scopeCount);
-  for (PRInt32 i = 0; i < scopeCount; i++)
+  for (int32_t i = 0; i < scopeCount; i++)
   {
     nsMsgSearchScopeValue scopeId;
     nsCOMPtr<nsIMsgFolder> searchFolder;
@@ -146,11 +113,11 @@ NS_IMETHODIMP nsMsgXFVirtualFolderDBView::GetViewType(nsMsgViewTypeValue *aViewT
     return NS_OK;
 }
 
-nsresult nsMsgXFVirtualFolderDBView::OnNewHeader(nsIMsgDBHdr *newHdr, nsMsgKey aParentKey, PRBool /*ensureListed*/)
+nsresult nsMsgXFVirtualFolderDBView::OnNewHeader(nsIMsgDBHdr *newHdr, nsMsgKey aParentKey, bool /*ensureListed*/)
 {
   if (newHdr)
   {
-    PRBool match = PR_FALSE;
+    bool match = false;
     nsCOMPtr <nsIMsgSearchSession> searchSession = do_QueryReferent(m_searchSession);
     if (searchSession)
       searchSession->MatchHdr(newHdr, m_db, &match);
@@ -160,8 +127,8 @@ nsresult nsMsgXFVirtualFolderDBView::OnNewHeader(nsIMsgDBHdr *newHdr, nsMsgKey a
     {
       nsCOMPtr <nsIMsgFolder> folder;
       newHdr->GetFolder(getter_AddRefs(folder));
-      PRBool saveDoingSearch = m_doingSearch;
-      m_doingSearch = PR_FALSE;
+      bool saveDoingSearch = m_doingSearch;
+      m_doingSearch = false;
       OnSearchHit(newHdr, folder);
       m_doingSearch = saveDoingSearch;
     }
@@ -170,7 +137,7 @@ nsresult nsMsgXFVirtualFolderDBView::OnNewHeader(nsIMsgDBHdr *newHdr, nsMsgKey a
 }
 
 NS_IMETHODIMP nsMsgXFVirtualFolderDBView::OnHdrPropertyChanged(nsIMsgDBHdr *aHdrChanged,
-                PRBool aPreChange, PRUint32 *aStatus, nsIDBChangeListener *aInstigator)
+                bool aPreChange, uint32_t *aStatus, nsIDBChangeListener *aInstigator)
 {
   // If the junk mail plugin just activated on a message, then
   // we'll allow filters to remove from view.
@@ -189,7 +156,7 @@ NS_IMETHODIMP nsMsgXFVirtualFolderDBView::OnHdrPropertyChanged(nsIMsgDBHdr *aHdr
   nsCString originStr;
   (void) aHdrChanged->GetStringProperty("junkscoreorigin", getter_Copies(originStr));
   // check for "plugin" with only first character for performance
-  PRBool plugin = (originStr.get()[0] == 'p');
+  bool plugin = (originStr.get()[0] == 'p');
 
   if (aPreChange)
   {
@@ -199,9 +166,9 @@ NS_IMETHODIMP nsMsgXFVirtualFolderDBView::OnHdrPropertyChanged(nsIMsgDBHdr *aHdr
   }
 
   // second call, done after the change
-  PRBool wasPlugin = *aStatus;
+  bool wasPlugin = *aStatus;
 
-  PRBool match = PR_TRUE;
+  bool match = true;
   nsCOMPtr<nsIMsgSearchSession> searchSession(do_QueryReferent(m_searchSession));
   if (searchSession)
     searchSession->MatchHdr(aHdrChanged, m_db, &match);
@@ -214,7 +181,7 @@ NS_IMETHODIMP nsMsgXFVirtualFolderDBView::OnHdrPropertyChanged(nsIMsgDBHdr *aHdr
   return NS_OK;
 }
 
-void nsMsgXFVirtualFolderDBView::UpdateCacheAndViewForFolder(nsIMsgFolder *folder, nsMsgKey *newHits, PRUint32 numNewHits)
+void nsMsgXFVirtualFolderDBView::UpdateCacheAndViewForFolder(nsIMsgFolder *folder, nsMsgKey *newHits, uint32_t numNewHits)
 {
   nsCOMPtr <nsIMsgDatabase> db;
   nsresult rv = folder->GetMsgDatabase(getter_AddRefs(db));
@@ -222,14 +189,14 @@ void nsMsgXFVirtualFolderDBView::UpdateCacheAndViewForFolder(nsIMsgFolder *folde
   {
     nsCString searchUri;
     m_viewFolder->GetURI(searchUri);
-    PRUint32 numBadHits;
+    uint32_t numBadHits;
     nsMsgKey *badHits;
     rv = db->RefreshCache(searchUri.get(), numNewHits, newHits,
                      &numBadHits, &badHits);
     if (NS_SUCCEEDED(rv))
     {
       nsCOMPtr<nsIMsgDBHdr> badHdr;
-      for (PRUint32 badHitIndex = 0; badHitIndex < numBadHits; badHitIndex++)
+      for (uint32_t badHitIndex = 0; badHitIndex < numBadHits; badHitIndex++)
       {
         // ### of course, this isn't quite right, since we should be 
         // using FindHdr, and we shouldn't be expanding the threads.
@@ -249,10 +216,10 @@ void nsMsgXFVirtualFolderDBView::UpdateCacheAndViewForPrevSearchedFolders(nsIMsg
   // Handle the most recent folder with hits, if any.
   if (m_curFolderGettingHits)
   {
-    PRUint32 count = m_hdrHits.Count();
+    uint32_t count = m_hdrHits.Count();
     nsTArray<nsMsgKey> newHits;
     newHits.SetLength(count);
-    for (PRUint32 i = 0; i < count; i++)
+    for (uint32_t i = 0; i < count; i++)
       m_hdrHits[i]->GetMessageKey(&newHits[i]);
 
     newHits.Sort();
@@ -265,7 +232,7 @@ void nsMsgXFVirtualFolderDBView::UpdateCacheAndViewForPrevSearchedFolders(nsIMsg
     // this new folder has cached hits.
     if (m_foldersSearchingOver[0] == curSearchFolder)
     {
-      m_curFolderHasCachedHits = PR_TRUE;
+      m_curFolderHasCachedHits = true;
       m_foldersSearchingOver.RemoveObjectAt(0);
       break;
     }
@@ -273,7 +240,7 @@ void nsMsgXFVirtualFolderDBView::UpdateCacheAndViewForPrevSearchedFolders(nsIMsg
     {
       // this must be a folder that had no hits with the current search.
       // So all cached hits, if any, need to be removed.
-      UpdateCacheAndViewForFolder(m_foldersSearchingOver[0], 0, nsnull);
+      UpdateCacheAndViewForFolder(m_foldersSearchingOver[0], 0, nullptr);
       m_foldersSearchingOver.RemoveObjectAt(0);
     }
   }
@@ -290,7 +257,7 @@ nsMsgXFVirtualFolderDBView::OnSearchHit(nsIMsgDBHdr* aMsgHdr, nsIMsgFolder *aFol
 
   if (m_curFolderGettingHits != aFolder && m_doingSearch && !m_doingQuickSearch)
   {
-    m_curFolderHasCachedHits = PR_FALSE;
+    m_curFolderHasCachedHits = false;
     // since we've gotten a hit for a new folder, the searches for
     // any previous folders are done, so deal with stale cached hits
     // for those folders now.
@@ -299,7 +266,7 @@ nsMsgXFVirtualFolderDBView::OnSearchHit(nsIMsgDBHdr* aMsgHdr, nsIMsgFolder *aFol
     m_hdrHits.Clear();
     m_curFolderStartKeyIndex = m_keys.Length();
   }
-  PRBool hdrInCache = PR_FALSE;
+  bool hdrInCache = false;
   nsCString searchUri;
   if (!m_doingQuickSearch)
   {
@@ -309,7 +276,7 @@ nsMsgXFVirtualFolderDBView::OnSearchHit(nsIMsgDBHdr* aMsgHdr, nsIMsgFolder *aFol
   if (!m_doingSearch || !m_curFolderHasCachedHits || !hdrInCache)
   {
     if (m_viewFlags & nsMsgViewFlagsType::kGroupBySort)
-      nsMsgGroupView::OnNewHeader(aMsgHdr, nsMsgKey_None, PR_TRUE);
+      nsMsgGroupView::OnNewHeader(aMsgHdr, nsMsgKey_None, true);
     else if (m_sortValid)
       InsertHdrFromFolder(aMsgHdr, aFolder);
     else
@@ -324,11 +291,13 @@ nsMsgXFVirtualFolderDBView::OnSearchHit(nsIMsgDBHdr* aMsgHdr, nsIMsgFolder *aFol
 NS_IMETHODIMP
 nsMsgXFVirtualFolderDBView::OnSearchDone(nsresult status)
 {
+  NS_ENSURE_TRUE(m_viewFolder, NS_ERROR_NOT_INITIALIZED);
+
   // handle any non verified hits we haven't handled yet.
   if (NS_SUCCEEDED(status) && !m_doingQuickSearch && status != NS_MSG_SEARCH_INTERRUPTED)
-    UpdateCacheAndViewForPrevSearchedFolders(nsnull);
+    UpdateCacheAndViewForPrevSearchedFolders(nullptr);
 
-  m_doingSearch = PR_FALSE;
+  m_doingSearch = false;
   //we want to set imap delete model once the search is over because setting next
   //message after deletion will happen before deleting the message and search scope
   //can change with every search.
@@ -344,15 +313,15 @@ nsMsgXFVirtualFolderDBView::OnSearchDone(nsresult status)
   // count up the number of unread and total messages from the view, and set those in the
   // folder - easier than trying to keep the count up to date in the face of
   // search hits coming in while the user is reading/deleting messages.
-  PRUint32 numUnread = 0;
-  for (PRUint32 i = 0; i < m_flags.Length(); i++)
+  uint32_t numUnread = 0;
+  for (uint32_t i = 0; i < m_flags.Length(); i++)
     if (m_flags[i] & nsMsgMessageFlags::Elided)
     {
       nsCOMPtr<nsIMsgThread> thread;
       GetThreadContainingIndex(i, getter_AddRefs(thread));
       if (thread)
       {
-        PRUint32 unreadInThread;
+        uint32_t unreadInThread;
         thread->GetNumUnreadChildren(&unreadInThread);
         numUnread += unreadInThread;
       }
@@ -369,11 +338,11 @@ nsMsgXFVirtualFolderDBView::OnSearchDone(nsresult status)
   if (!m_sortValid && m_sortType != nsMsgViewSortType::byThread && 
       !(m_viewFlags & nsMsgViewFlagsType::kThreadedDisplay))
   {
-    m_sortValid = PR_FALSE;       //sort the results
+    m_sortValid = false;       //sort the results
     Sort(m_sortType, m_sortOrder);
   }
   m_foldersSearchingOver.Clear();
-  m_curFolderGettingHits = nsnull;
+  m_curFolderGettingHits = nullptr;
   return rv;
 }
 
@@ -381,10 +350,10 @@ nsMsgXFVirtualFolderDBView::OnSearchDone(nsresult status)
 NS_IMETHODIMP
 nsMsgXFVirtualFolderDBView::OnNewSearch()
 {
-  PRInt32 oldSize = GetSize();
+  int32_t oldSize = GetSize();
 
   RemovePendingDBListeners();
-  m_doingSearch = PR_TRUE;
+  m_doingSearch = true;
   m_totalMessagesInView = 0;
   m_folders.Clear();
   m_keys.Clear();
@@ -400,10 +369,9 @@ nsMsgXFVirtualFolderDBView::OnNewSearch()
   // and for each folder, then open the db and pull out the cached hits, add them to the view.
   // For each hit in a new folder, we'll then clean up the stale hits from the previous folder(s).
 
-  PRInt32 scopeCount;
+  int32_t scopeCount;
   nsCOMPtr<nsIMsgSearchSession> searchSession = do_QueryReferent(m_searchSession);
-  if (!searchSession)
-    return NS_OK; // just ignore
+  NS_ENSURE_TRUE(searchSession, NS_OK); // just ignore
   nsCOMPtr<nsIMsgDBService> msgDBService = do_GetService(NS_MSGDB_SERVICE_CONTRACTID);
   searchSession->CountSearchScopes(&scopeCount);
 
@@ -435,7 +403,7 @@ nsMsgXFVirtualFolderDBView::OnNewSearch()
   if (mTree && !m_doingQuickSearch)
     mTree->BeginUpdateBatch();
 
-  for (PRInt32 i = 0; i < scopeCount; i++)
+  for (int32_t i = 0; i < scopeCount; i++)
   {
     nsMsgSearchScopeValue scopeId;
     nsCOMPtr<nsIMsgFolder> searchFolder;
@@ -456,7 +424,7 @@ nsMsgXFVirtualFolderDBView::OnNewSearch()
         if (m_doingQuickSearch) // ignore cached hits in quick search case.
           continue;
         searchDB->GetCachedHits(searchUri.get(), getter_AddRefs(cachedHits));
-        PRBool hasMore;
+        bool hasMore;
         if (cachedHits)
         {
           cachedHits->HasMoreElements(&hasMore);
@@ -489,8 +457,8 @@ nsMsgXFVirtualFolderDBView::OnNewSearch()
     mTree->EndUpdateBatch();
 
   m_curFolderStartKeyIndex = 0;
-  m_curFolderGettingHits = nsnull;
-  m_curFolderHasCachedHits = PR_FALSE;
+  m_curFolderGettingHits = nullptr;
+  m_curFolderHasCachedHits = false;
 
   // if we have cached hits, sort them.
   if (GetSize() > 0)
@@ -499,7 +467,7 @@ nsMsgXFVirtualFolderDBView::OnNewSearch()
     if (m_sortType != nsMsgViewSortType::byThread &&
       !(m_viewFlags & nsMsgViewFlagsType::kThreadedDisplay))
     {
-      m_sortValid = PR_FALSE;       //sort the results
+      m_sortValid = false;       //sort the results
       Sort(m_sortType, m_sortOrder);
     }
   }

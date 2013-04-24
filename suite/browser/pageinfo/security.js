@@ -1,42 +1,7 @@
 /* -*- Mode: Javascript; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corp.
- * Portions created by the Initial Developer are Copyright (C) 2001-2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Terry Hayes <thayes@netscape.com>
- *   Florian QUEZE <f.qu@queze.net>
- *   Daniel Brooks <db48x@yahoo.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var security = {
   // Display the server certificate (static)
@@ -137,7 +102,14 @@ var security = {
    */
   viewCookies : function()
   {
-    toDataManager(this._getSecurityInfo().hostName + '|cookies');
+    var hostName = "";
+    try {
+      hostName = gDocument.documentURIObject.asciiHost;
+    }
+    catch (e) {
+    }
+
+    toDataManager(hostName + '|cookies');
   },
 
   /**
@@ -210,10 +182,11 @@ function securityOnLoad() {
   var yesStr = pageInfoBundle.getString("yes");
   var noStr = pageInfoBundle.getString("no");
 
-  var hasCookies = hostHasCookies(info.hostName);
+  var uri = gDocument.documentURIObject;
+  var hasCookies = hostHasCookies(uri);
   setText("security-privacy-cookies-value", hasCookies ? yesStr : noStr);
   document.getElementById("security-view-cookies").disabled = !hasCookies;
-  var hasPasswords = realmHasPasswords(info.fullLocation);
+  var hasPasswords = realmHasPasswords(uri);
   setText("security-privacy-passwords-value", hasPasswords ? yesStr : noStr);
   document.getElementById("security-view-password").disabled = !hasPasswords;
 
@@ -293,9 +266,15 @@ function viewCertHelper(parent, cert)
 }
 
 /**
- * Return true iff we have cookies for hostName
+ * Return true iff we have cookies for uri.
  */
-function hostHasCookies(hostName) {
+function hostHasCookies(aUri) {
+  var hostName;
+  try {
+    hostName = aUri.asciiHost;
+  }
+  catch (e) {
+  }
   if (!hostName)
     return false;
 
@@ -303,14 +282,11 @@ function hostHasCookies(hostName) {
 }
 
 /**
- * Return true iff realm (proto://host:port) (extracted from location) has
+ * Return true iff realm (proto://host:port) (extracted from uri) has
  * saved passwords
  */
-function realmHasPasswords(location) {
-  if (!location) 
-    return false;
-  
-  return Services.logins.countLogins(makeURI(location).prePath, "", "") > 0;
+function realmHasPasswords(aUri) {
+  return Services.logins.countLogins(aUri.prePath, "", "") > 0;
 }
 
 /**
@@ -336,5 +312,7 @@ function previousVisitCount(host, endTimeReference) {
 
   var result = historyService.executeQuery(query, options);
   result.root.containerOpen = true;
-  return result.root.childCount;
+  var cc = result.root.childCount;
+  result.root.containerOpen = false;
+  return cc;
 }

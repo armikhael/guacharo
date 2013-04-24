@@ -1,43 +1,8 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: se cin sw=2 ts=2 et : */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is download manager code.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Corporation
- *
- * Contributor(s):
- *   Rob Arnold <robarnold@mozilla.com> (Original Author)
- *   Masatoshi Kimura <VYV03354@nifty.ne.jp>
- *   Jim Mathies <jmathies@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
-
-#if MOZ_WINSDK_TARGETVER >= MOZ_NTDDI_LONGHORN
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsDownloadScanner.h"
 #include <comcat.h>
@@ -49,7 +14,7 @@
 #include "nsNetUtil.h"
 #include "nsDeque.h"
 #include "nsIFileURL.h"
-#include "nsIPrefBranch2.h"
+#include "nsIPrefBranch.h"
 #include "nsXPCOMCIDInternal.h"
 
 /**
@@ -177,7 +142,7 @@ private:
 };
 
 nsDownloadScanner::nsDownloadScanner() :
-  mAESExists(PR_FALSE)
+  mAESExists(false)
 {
 }
  
@@ -203,14 +168,14 @@ nsDownloadScanner::Init()
     return NS_ERROR_NOT_AVAILABLE;
   }
 
-  mAESExists = PR_TRUE;
+  mAESExists = true;
 
   // Initialize scanning
   mWatchdog = new nsDownloadScannerWatchdog();
   if (mWatchdog) {
     rv = mWatchdog->Init();
     if (FAILED(rv))
-      mWatchdog = nsnull;
+      mWatchdog = nullptr;
   } else {
     rv = NS_ERROR_OUT_OF_MEMORY;
   }
@@ -221,7 +186,7 @@ nsDownloadScanner::Init()
   return rv;
 }
 
-PRBool
+bool
 nsDownloadScanner::IsAESAvailable()
 {
   // Try to instantiate IAE to see if it's available.    
@@ -231,9 +196,9 @@ nsDownloadScanner::IsAESAvailable()
                         IID_IAttachmentExecute, getter_AddRefs(ae));
   if (FAILED(hr)) {
     NS_WARNING("Could not instantiate attachment execution service\n");
-    return PR_FALSE;
+    return false;
   }
-  return PR_TRUE;
+  return true;
 }
 
 // If IAttachementExecute is available, use the CheckPolicy call to find out
@@ -264,7 +229,7 @@ nsDownloadScanner::CheckPolicy(nsIURI *aSource, nsIURI *aTarget)
   // IAttachementExecute prohibits src data: schemes by default but we
   // support them. If this is a data src, skip off doing a policy check.
   // (The file will still be scanned once it lands on the local system.)
-  PRBool isDataScheme(PR_FALSE);
+  bool isDataScheme(false);
   nsCOMPtr<nsIURI> innerURI = NS_GetInnermostURI(aSource);
   if (innerURI)
     (void)innerURI->SchemeIs("data", &isDataScheme);
@@ -342,7 +307,7 @@ nsresult ReleaseDispatcher::Run() {
 nsDownloadScanner::Scan::Scan(nsDownloadScanner *scanner, nsDownload *download)
   : mDLScanner(scanner), mThread(NULL), 
     mDownload(download), mStatus(AVSCAN_NOTSTARTED),
-    mSkipSource(PR_FALSE)
+    mSkipSource(false)
 {
   InitializeCriticalSection(&mStateSync);
 }
@@ -364,7 +329,7 @@ nsDownloadScanner::Scan::Start()
   nsresult rv = NS_OK;
 
   // Get the path to the file on disk
-  nsCOMPtr<nsILocalFile> file;
+  nsCOMPtr<nsIFile> file;
   rv = mDownload->GetTargetFile(getter_AddRefs(file));
   NS_ENSURE_SUCCESS(rv, rv);
   rv = file->GetPath(mPath);
@@ -399,7 +364,7 @@ nsDownloadScanner::Scan::Start()
   CopyUTF8toUTF16(origin, mOrigin);
 
   // We count https/ftp/http as an http download
-  PRBool isHttp(PR_FALSE), isFtp(PR_FALSE), isHttps(PR_FALSE);
+  bool isHttp(false), isFtp(false), isHttps(false);
   nsCOMPtr<nsIURI> innerURI = NS_GetInnermostURI(uri);
   if (!innerURI) innerURI = uri;
   (void)innerURI->SchemeIs("http", &isHttp);
@@ -452,7 +417,7 @@ nsDownloadScanner::Scan::Run()
 
   // Clean up some other variables
   // In the event of a timeout, our destructor won't be called
-  mDownload = nsnull;
+  mDownload = nullptr;
 
   NS_RELEASE_THIS();
   return NS_OK;
@@ -472,7 +437,7 @@ ExceptionFilterFunction(DWORD exceptionCode) {
   }
 }
 
-PRBool
+bool
 nsDownloadScanner::Scan::DoScanAES()
 {
   // This warning is for the destructor of ae which will not be invoked in the
@@ -491,7 +456,7 @@ nsDownloadScanner::Scan::DoScanAES()
   if (CheckAndSetState(AVSCAN_SCANNING, AVSCAN_NOTSTARTED)) {
     AVScanState newState;
     if (SUCCEEDED(hr)) {
-      PRBool gotException = PR_FALSE;
+      bool gotException = false;
       MOZ_SEH_TRY {
         (void)ae->SetClientGuid(GUID_MozillaVirusScannerPromptGeneric);
         (void)ae->SetLocalPath(mPath.BeginWriting());
@@ -502,13 +467,13 @@ nsDownloadScanner::Scan::DoScanAES()
         // Save() will invoke the scanner
         hr = ae->Save();
       } MOZ_SEH_EXCEPT(ExceptionFilterFunction(GetExceptionCode())) {
-        gotException = PR_TRUE;
+        gotException = true;
       }
 
       MOZ_SEH_TRY {
         ae = NULL;
       } MOZ_SEH_EXCEPT(ExceptionFilterFunction(GetExceptionCode())) {
-        gotException = PR_TRUE;
+        gotException = true;
       }
 
       if(gotException) {
@@ -534,7 +499,7 @@ nsDownloadScanner::Scan::DoScanAES()
     }
     return CheckAndSetState(newState, AVSCAN_SCANNING);
   }
-  return PR_FALSE;
+  return false;
 }
 #pragma warning(default: 4509)
 
@@ -574,10 +539,10 @@ nsDownloadScanner::Scan::GetWaitableThreadHandle() const
   return targetHandle;
 }
 
-PRBool
+bool
 nsDownloadScanner::Scan::NotifyTimeout()
 {
-  PRBool didTimeout = CheckAndSetState(AVSCAN_TIMEDOUT, AVSCAN_SCANNING) ||
+  bool didTimeout = CheckAndSetState(AVSCAN_TIMEDOUT, AVSCAN_SCANNING) ||
                       CheckAndSetState(AVSCAN_TIMEDOUT, AVSCAN_NOTSTARTED);
   if (didTimeout) {
     // We need to do a few more things on the main thread
@@ -586,9 +551,9 @@ nsDownloadScanner::Scan::NotifyTimeout()
   return didTimeout;
 }
 
-PRBool
+bool
 nsDownloadScanner::Scan::CheckAndSetState(AVScanState newState, AVScanState expectedState) {
-  PRBool gotExpectedState = PR_FALSE;
+  bool gotExpectedState = false;
   EnterCriticalSection(&mStateSync);
   if(gotExpectedState = (mStatus == expectedState))
     mStatus = newState;
@@ -673,7 +638,7 @@ nsDownloadScannerWatchdog::Shutdown() {
 
 void
 nsDownloadScannerWatchdog::Watch(Scan *scan) {
-  PRBool wasEmpty;
+  bool wasEmpty;
   // Note that there is no release in this method
   // The scan will be released by the watchdog ALWAYS on the main thread
   // when either the watchdog thread processes the scan or the watchdog
@@ -760,5 +725,3 @@ nsDownloadScannerWatchdog::WatchdogThread(void *p) {
   _endthreadex(0);
   return 0;
 }
-
-#endif // MOZ_WINSDK_TARGETVER >= MOZ_NTDDI_LONGHORN

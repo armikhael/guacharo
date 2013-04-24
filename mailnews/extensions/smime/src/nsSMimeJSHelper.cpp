@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2002
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nspr.h"
 #include "nsSMimeJSHelper.h"
@@ -59,13 +27,13 @@ nsSMimeJSHelper::~nsSMimeJSHelper()
 
 NS_IMETHODIMP nsSMimeJSHelper::GetRecipientCertsInfo(
     nsIMsgCompFields *compFields,
-    PRUint32 *count,
+    uint32_t *count,
     PRUnichar ***emailAddresses,
-    PRInt32 **certVerification,
+    int32_t **certVerification,
     PRUnichar ***certIssuedInfos,
     PRUnichar ***certExpiresInfos,
     nsIX509Cert ***certs,
-    PRBool *canEncrypt)
+    bool *canEncrypt)
 {
   NS_ENSURE_ARG_POINTER(count);
   *count = 0;
@@ -79,7 +47,7 @@ NS_IMETHODIMP nsSMimeJSHelper::GetRecipientCertsInfo(
 
   NS_ENSURE_ARG_POINTER(compFields);
 
-  PRUint32 mailbox_count;
+  uint32_t mailbox_count;
   char *mailbox_list;
 
   nsresult rv = getMailboxList(compFields, &mailbox_count, &mailbox_list);
@@ -92,13 +60,13 @@ NS_IMETHODIMP nsSMimeJSHelper::GetRecipientCertsInfo(
   nsCOMPtr<nsIX509CertDB> certdb = do_GetService(NS_X509CERTDB_CONTRACTID);
 
   *count = mailbox_count;
-  *canEncrypt = PR_FALSE;
+  *canEncrypt = false;
   rv = NS_OK;
 
   if (mailbox_count)
   {
     PRUnichar **outEA = static_cast<PRUnichar **>(nsMemory::Alloc(mailbox_count * sizeof(PRUnichar *)));
-    PRInt32 *outCV = static_cast<PRInt32 *>(nsMemory::Alloc(mailbox_count * sizeof(PRInt32)));
+    int32_t *outCV = static_cast<int32_t *>(nsMemory::Alloc(mailbox_count * sizeof(int32_t)));
     PRUnichar **outCII = static_cast<PRUnichar **>(nsMemory::Alloc(mailbox_count * sizeof(PRUnichar *)));
     PRUnichar **outCEI = static_cast<PRUnichar **>(nsMemory::Alloc(mailbox_count * sizeof(PRUnichar *)));
     nsIX509Cert **outCerts = static_cast<nsIX509Cert **>(nsMemory::Alloc(mailbox_count * sizeof(nsIX509Cert *)));
@@ -115,36 +83,36 @@ NS_IMETHODIMP nsSMimeJSHelper::GetRecipientCertsInfo(
     else
     {
       PRUnichar **iEA = outEA;
-      PRInt32 *iCV = outCV;
+      int32_t *iCV = outCV;
       PRUnichar **iCII = outCII;
       PRUnichar **iCEI = outCEI;
       nsIX509Cert **iCert = outCerts;
 
-      PRBool found_blocker = PR_FALSE;
-      PRBool memory_failure = PR_FALSE;
+      bool found_blocker = false;
+      bool memory_failure = false;
 
       const char *walk = mailbox_list;
 
       // To understand this loop, especially the "+= strlen +1", look at the documentation
       // of ParseHeaderAddresses. Basically, it returns a list of zero terminated strings.
-      for (PRUint32 i = 0;
+      for (uint32_t i = 0;
           i < mailbox_count;
           ++i, ++iEA, ++iCV, ++iCII, ++iCEI, ++iCert, walk += strlen(walk) + 1)
       {
-        *iCert = nsnull;
+        *iCert = nullptr;
         *iCV = 0;
-        *iCII = nsnull;
-        *iCEI = nsnull;
+        *iCII = nullptr;
+        *iCEI = nullptr;
 
         if (memory_failure) {
-          *iEA = nsnull;
+          *iEA = nullptr;
           continue;
         }
 
         nsDependentCString email(walk);
         *iEA = ToNewUnicode(NS_ConvertUTF8toUTF16(walk));
         if (!*iEA) {
-          memory_failure = PR_TRUE;
+          memory_failure = true;
           continue;
         }
 
@@ -152,19 +120,19 @@ NS_IMETHODIMP nsSMimeJSHelper::GetRecipientCertsInfo(
         ToLowerCase(email, email_lowercase);
 
         nsCOMPtr<nsIX509Cert> cert;
-        if (NS_SUCCEEDED(certdb->FindCertByEmailAddress(nsnull, email_lowercase.get(), getter_AddRefs(cert)))
+        if (NS_SUCCEEDED(certdb->FindCertByEmailAddress(nullptr, email_lowercase.get(), getter_AddRefs(cert)))
             && cert)
         {
           *iCert = cert;
           NS_ADDREF(*iCert);
 
-          PRUint32 verification_result;
+          uint32_t verification_result;
 
           if (NS_FAILED(
               cert->VerifyForUsage(nsIX509Cert::CERT_USAGE_EmailRecipient, &verification_result)))
           {
             *iCV = nsIX509Cert::NOT_VERIFIED_UNKNOWN;
-            found_blocker = PR_TRUE;
+            found_blocker = true;
           }
           else
           {
@@ -172,7 +140,7 @@ NS_IMETHODIMP nsSMimeJSHelper::GetRecipientCertsInfo(
 
             if (verification_result != nsIX509Cert::VERIFIED_OK)
             {
-              found_blocker = PR_TRUE;
+              found_blocker = true;
             }
           }
 
@@ -186,7 +154,7 @@ NS_IMETHODIMP nsSMimeJSHelper::GetRecipientCertsInfo(
             {
               *iCII = ToNewUnicode(id);
               if (!*iCII) {
-                memory_failure = PR_TRUE;
+                memory_failure = true;
                 continue;
               }
             }
@@ -195,7 +163,7 @@ NS_IMETHODIMP nsSMimeJSHelper::GetRecipientCertsInfo(
             {
               *iCEI = ToNewUnicode(ed);
               if (!*iCEI) {
-                memory_failure = PR_TRUE;
+                memory_failure = true;
                 continue;
               }
             }
@@ -203,7 +171,7 @@ NS_IMETHODIMP nsSMimeJSHelper::GetRecipientCertsInfo(
         }
         else
         {
-          found_blocker = PR_TRUE;
+          found_blocker = true;
         }
       }
 
@@ -218,7 +186,7 @@ NS_IMETHODIMP nsSMimeJSHelper::GetRecipientCertsInfo(
       else {
         if (mailbox_count > 0 && !found_blocker)
         {
-          *canEncrypt = PR_TRUE;
+          *canEncrypt = true;
         }
 
         *emailAddresses = outEA;
@@ -238,7 +206,7 @@ NS_IMETHODIMP nsSMimeJSHelper::GetRecipientCertsInfo(
 
 NS_IMETHODIMP nsSMimeJSHelper::GetNoCertAddresses(
     nsIMsgCompFields *compFields,
-    PRUint32 *count,
+    uint32_t *count,
     PRUnichar ***emailAddresses)
 {
   NS_ENSURE_ARG_POINTER(count);
@@ -248,7 +216,7 @@ NS_IMETHODIMP nsSMimeJSHelper::GetNoCertAddresses(
 
   NS_ENSURE_ARG_POINTER(compFields);
 
-  PRUint32 mailbox_count;
+  uint32_t mailbox_count;
   char *mailbox_list;
 
   nsresult rv = getMailboxList(compFields, &mailbox_count, &mailbox_list);
@@ -261,7 +229,7 @@ NS_IMETHODIMP nsSMimeJSHelper::GetNoCertAddresses(
   if (!mailbox_count)
   {
     *count = 0;
-    *emailAddresses = nsnull;
+    *emailAddresses = nullptr;
     if (mailbox_list) {
       nsMemory::Free(mailbox_list);
     }
@@ -270,8 +238,8 @@ NS_IMETHODIMP nsSMimeJSHelper::GetNoCertAddresses(
 
   nsCOMPtr<nsIX509CertDB> certdb = do_GetService(NS_X509CERTDB_CONTRACTID);
 
-  PRUint32 missing_count = 0;
-  PRBool *haveCert = new PRBool[mailbox_count];
+  uint32_t missing_count = 0;
+  bool *haveCert = new bool[mailbox_count];
   if (!haveCert)
   {
     if (mailbox_list) {
@@ -288,28 +256,28 @@ NS_IMETHODIMP nsSMimeJSHelper::GetNoCertAddresses(
 
     // To understand this loop, especially the "+= strlen +1", look at the documentation
     // of ParseHeaderAddresses. Basically, it returns a list of zero terminated strings.
-    for (PRUint32 i = 0;
+    for (uint32_t i = 0;
         i < mailbox_count;
         ++i, walk += strlen(walk) + 1)
     {
-      haveCert[i] = PR_FALSE;
+      haveCert[i] = false;
 
       nsDependentCString email(walk);
       nsCString email_lowercase;
       ToLowerCase(email, email_lowercase);
 
       nsCOMPtr<nsIX509Cert> cert;
-      if (NS_SUCCEEDED(certdb->FindCertByEmailAddress(nsnull, email_lowercase.get(), getter_AddRefs(cert)))
+      if (NS_SUCCEEDED(certdb->FindCertByEmailAddress(nullptr, email_lowercase.get(), getter_AddRefs(cert)))
           && cert)
       {
-        PRUint32 verification_result;
+        uint32_t verification_result;
 
         if (NS_SUCCEEDED(
               cert->VerifyForUsage(nsIX509Cert::CERT_USAGE_EmailRecipient, &verification_result))
             &&
             nsIX509Cert::VERIFIED_OK == verification_result)
         {
-          haveCert[i] = PR_TRUE;
+          haveCert[i] = true;
         }
       }
 
@@ -332,23 +300,23 @@ NS_IMETHODIMP nsSMimeJSHelper::GetNoCertAddresses(
       PRUnichar **iEA = outEA;
       const char *walk = mailbox_list;
 
-      PRBool memory_failure = PR_FALSE;
+      bool memory_failure = false;
 
       // To understand this loop, especially the "+= strlen +1", look at the documentation
       // of ParseHeaderAddresses. Basically, it returns a list of zero terminated strings.
-      for (PRUint32 i = 0;
+      for (uint32_t i = 0;
           i < mailbox_count;
           ++i, walk += strlen(walk) + 1)
       {
         if (!haveCert[i])
         {
           if (memory_failure) {
-            *iEA = nsnull;
+            *iEA = nullptr;
           }
           else {
             *iEA = ToNewUnicode(NS_ConvertUTF8toUTF16(walk));
             if (!*iEA) {
-              memory_failure = PR_TRUE;
+              memory_failure = true;
             }
           }
           ++iEA;
@@ -366,7 +334,7 @@ NS_IMETHODIMP nsSMimeJSHelper::GetNoCertAddresses(
   }
   else
   {
-    *emailAddresses = nsnull;
+    *emailAddresses = nullptr;
   }
 
   delete [] haveCert;
@@ -376,7 +344,7 @@ NS_IMETHODIMP nsSMimeJSHelper::GetNoCertAddresses(
   return rv;
 }
 
-nsresult nsSMimeJSHelper::getMailboxList(nsIMsgCompFields *compFields, PRUint32 *mailbox_count, char **mailbox_list)
+nsresult nsSMimeJSHelper::getMailboxList(nsIMsgCompFields *compFields, uint32_t *mailbox_count, char **mailbox_list)
 {
   NS_ENSURE_ARG(mailbox_count);
   NS_ENSURE_ARG(mailbox_list);
@@ -407,7 +375,7 @@ nsresult nsSMimeJSHelper::getMailboxList(nsIMsgCompFields *compFields, PRUint32 
   if (NS_FAILED(res))
     return res;
 
-  *mailbox_list = nsnull;
+  *mailbox_list = nullptr;
   *mailbox_count = 0;
 
   {

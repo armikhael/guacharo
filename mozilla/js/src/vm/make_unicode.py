@@ -67,7 +67,7 @@ def read_unicode_data(unicode_file):
           Unicode Standard Annex #44 - Unicode Character Database
           http://www.unicode.org/reports/tr44/
     """
-    
+
     reader = csv.reader(unicode_data, delimiter=';')
 
     while True:
@@ -75,7 +75,7 @@ def read_unicode_data(unicode_file):
         name = row[1]
 
         # We need to expand the UAX #44 4.2.3 Code Point Range
-        if name.startswith('<') and name.endswith('First>'): 
+        if name.startswith('<') and name.endswith('First>'):
             next_row = reader.next()
 
             for i in range(int(row[0], 16), int(next_row[0], 16) + 1):
@@ -267,13 +267,13 @@ if (typeof reportCompare === "function")
     data_file.write('\n')
 
     def dump(data, name, file):
-        file.write('const uint16 ' + name + '[] = {\n')
+        file.write('const uint8_t ' + name + '[] = {\n')
 
         line = pad = ' ' * 4
         lines = []
         for entry in data:
+            assert entry < 256
             s = str(entry)
-            assert len(s) <= 3
             s = s.rjust(3)
 
             if len(line + s) + 5 > 99:

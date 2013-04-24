@@ -1,42 +1,13 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jan Varga <varga@nixcorp.com>
- *   Håkan Waara <hwaara@gmail.com>
- *   Magnus Melin <mkmelin+mozilla@iki.fi>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/**
+ * Functionality for the main application window (aka the 3pane) usually
+ * consisting of folder pane, thread pane and message pane.
+ */
+
+Components.utils.import("resource:///modules/mailServices.js");
 
 // Controller object for folder pane
 var FolderPaneController =
@@ -48,6 +19,7 @@ var FolderPaneController =
       case "cmd_delete":
       case "cmd_shiftDelete":
       case "button_delete":
+      case "button_shiftDelete":
         // Even if the folder pane has focus, don't do a folder delete if
         // we have a selected message, but do a message delete instead.
         // Return false here supportsCommand and let the command fall back
@@ -76,6 +48,7 @@ var FolderPaneController =
       case "cmd_delete":
       case "cmd_shiftDelete":
       case "button_delete":
+      case "button_shiftDelete":
       {
         // Make sure the button doesn't show "Undelete" for folders.
         UpdateDeleteToolbarButton();
@@ -104,6 +77,7 @@ var FolderPaneController =
       case "cmd_delete":
       case "cmd_shiftDelete":
       case "button_delete":
+      case "button_shiftDelete":
       case "cmd_deleteFolder":
         gFolderTreeController.deleteFolder();
         break;
@@ -143,6 +117,7 @@ var DefaultController =
       case "button_reply":
       case "cmd_replySender":
       case "cmd_replyGroup":
+      case "button_followup":
       case "cmd_replyall":
       case "button_replyall":
       case "cmd_replylist":
@@ -158,13 +133,16 @@ var DefaultController =
       case "button_delete":
       case "button_junk":
       case "cmd_shiftDelete":
+      case "button_shiftDelete":
+      case "button_nextMsg":
       case "cmd_nextMsg":
       case "button_next":
-      case "button_previous":
       case "cmd_nextUnreadMsg":
       case "cmd_nextFlaggedMsg":
       case "cmd_nextUnreadThread":
+      case "button_previousMsg":
       case "cmd_previousMsg":
+      case "button_previous":
       case "cmd_previousUnreadMsg":
       case "cmd_previousFlaggedMsg":
       case "button_goForward":
@@ -176,6 +154,7 @@ var DefaultController =
       case "cmd_viewClassicMailLayout":
       case "cmd_viewWideMailLayout":
       case "cmd_viewVerticalMailLayout":
+      case "cmd_toggleFolderPane":
       case "cmd_toggleMessagePane":
       case "cmd_viewAllMsgs":
       case "cmd_viewUnreadMsgs":
@@ -210,6 +189,8 @@ var DefaultController =
       case "cmd_search":
       case "button_mark":
       case "cmd_tag":
+      case "cmd_addTag":
+      case "cmd_manageTags":
       case "cmd_removeTags":
       case "cmd_tag1":
       case "cmd_tag2":
@@ -283,6 +264,7 @@ var DefaultController =
         UpdateDeleteToolbarButton();
         return gFolderDisplay.getCommandStatus(nsMsgViewCommandType.deleteMsg);
       case "cmd_shiftDelete":
+      case "button_shiftDelete":
         return gFolderDisplay.getCommandStatus(nsMsgViewCommandType.deleteNoTrash);
       case "cmd_cancel": {
         let selectedMessages = gFolderDisplay.selectedMessages;
@@ -328,6 +310,7 @@ var DefaultController =
       case "button_reply":
       case "cmd_replySender":
       case "cmd_replyGroup":
+      case "button_followup":
       case "cmd_replyall":
       case "button_replyall":
       case "cmd_replylist":
@@ -410,6 +393,8 @@ var DefaultController =
         return gFolderDisplay.getCommandStatus(nsMsgViewCommandType.deleteJunk);
       case "button_mark":
       case "cmd_tag":
+      case "cmd_addTag":
+      case "cmd_manageTags":
       case "cmd_removeTags":
       case "cmd_tag1":
       case "cmd_tag2":
@@ -427,13 +412,14 @@ var DefaultController =
         return CanMarkMsgAsRead(true);
       case "cmd_markAsUnread":
         return CanMarkMsgAsRead(false);
-      case "button_previous":
-      case "button_next":
-        return IsViewNavigationItemEnabled();
+      case "button_nextMsg":
       case "cmd_nextMsg":
+      case "button_next":
       case "cmd_nextUnreadMsg":
       case "cmd_nextUnreadThread":
+      case "button_previousMsg":
       case "cmd_previousMsg":
+      case "button_previous":
       case "cmd_previousUnreadMsg":
         return IsViewNavigationItemEnabled();
       case "button_goForward":
@@ -465,10 +451,10 @@ var DefaultController =
         // and have more than one message selected.
         return (!IsMessagePaneCollapsed() && (GetNumSelectedMessages() == 1));
       case "cmd_search":
-        return IsCanSearchMessagesEnabled();
+        return (MailServices.accounts.accounts.Count() > 0);
       case "cmd_selectAll":
       case "cmd_selectFlagged":
-        return gDBView != null;
+        return !!gDBView;
       // these are enabled on when we are in threaded mode
       case "cmd_selectThread":
         if (GetNumSelectedMessages() <= 0) return false;
@@ -481,6 +467,7 @@ var DefaultController =
       case "cmd_viewClassicMailLayout":
       case "cmd_viewWideMailLayout":
       case "cmd_viewVerticalMailLayout":
+      case "cmd_toggleFolderPane":
       case "cmd_toggleMessagePane":
         // this is overridden per-mail tab
         return true;
@@ -509,8 +496,7 @@ var DefaultController =
       case "button_getNewMessages":
       case "cmd_getNewMessages":
       case "cmd_getMsgsForAuthAccounts":
-        // GetMsgs should always be enabled, see bugs 89404 and 111102.
-        return true;
+        return IsGetNewMessagesEnabled();
       case "cmd_getNextNMessages":
         return IsGetNextNMessagesEnabled();
       case "cmd_emptyTrash":
@@ -653,6 +639,7 @@ var DefaultController =
         message.folder.QueryInterface(Components.interfaces.nsIMsgNewsFolder)
                       .cancelMessage(message, msgWindow);
         break;
+      case "button_shiftDelete":
       case "cmd_shiftDelete":
         MarkSelectedMessagesRead(true);
         gFolderDisplay.hintAboutToDeleteMessages();
@@ -678,12 +665,14 @@ var DefaultController =
       case "cmd_nextUnreadThread":
         GoNextMessage(nsMsgNavigationType.nextUnreadThread, true);
         break;
+      case "button_nextMsg":
       case "cmd_nextMsg":
         GoNextMessage(nsMsgNavigationType.nextMessage, false);
         break;
       case "cmd_nextFlaggedMsg":
         GoNextMessage(nsMsgNavigationType.nextFlagged, true);
         break;
+      case "button_previousMsg":
       case "cmd_previousMsg":
         GoNextMessage(nsMsgNavigationType.previousMessage, false);
         break;
@@ -713,6 +702,9 @@ var DefaultController =
       case "cmd_viewWideMailLayout":
       case "cmd_viewVerticalMailLayout":
         ChangeMailLayoutForCommand(command);
+        break;
+      case "cmd_toggleFolderPane":
+        MsgToggleFolderPane();
         break;
       case "cmd_toggleMessagePane":
         MsgToggleMessagePane();
@@ -805,6 +797,12 @@ var DefaultController =
         return;
       case "cmd_search":
         MsgSearchMessages();
+        return;
+      case "cmd_addTag":
+        AddTag();
+        return;
+      case "cmd_manageTags":
+        ManageTags();
         return;
       case "cmd_removeTags":
         RemoveAllMessageTags();
@@ -971,14 +969,12 @@ var gLastFocusedElement=null;
 
 function FocusRingUpdate_Mail()
 {
-  // WhichPaneHasFocus() uses on top.document.commandDispatcher.focusedElement
-  // to determine which pane has focus
   // if the focusedElement is null, we're here on a blur.
   // nsFocusController::Blur() calls nsFocusController::SetFocusedElement(null),
   // which will update any commands listening for "focus".
   // we really only care about nsFocusController::Focus() happens,
   // which calls nsFocusController::SetFocusedElement(element)
-  var currentFocusedElement = WhichPaneHasFocus();
+  var currentFocusedElement = gFolderDisplay.focusedPane;
 
   if (currentFocusedElement != gLastFocusedElement) {
     if (currentFocusedElement)
@@ -995,32 +991,6 @@ function FocusRingUpdate_Mail()
     // and just update cmd_delete and button_delete?
     UpdateMailToolbar("focus");
   }
-}
-
-/**
- * Determine which pane currently has focus (one of the folder pane, thread
- * pane, message pane, or multimessage pane).
- *
- * @return the focused pane
- */
-function WhichPaneHasFocus()
-{
-  if (top.document.commandDispatcher.focusedWindow == GetMessagePaneFrame())
-    return GetMessagePane();
-
-  var panes = [document.getElementById(id) for each (id in [
-    "threadTree", "folderTree", "messagepanebox", "multimessage"
-  ])];
-
-  var currentNode = top.document.activeElement;
-
-  while (currentNode) {
-    if (panes.indexOf(currentNode) != -1)
-      return currentNode;
-
-    currentNode = currentNode.parentNode;
-  }
-  return null;
 }
 
 function RestoreFocusAfterHdrButton()
@@ -1078,13 +1048,6 @@ function IsSendUnsentMsgsEnabled(unsentMsgsFolder)
   return msgSendlater.hasUnsentMessages(identity);
 }
 
-function IsCanSearchMessagesEnabled()
-{
-  var folder = GetSelectedMsgFolders()[0];
-  if (!folder)
-    return false;
-  return folder.server.canSearchMessages;
-}
 function IsFolderCharsetEnabled()
 {
   return IsFolderSelected();
@@ -1119,7 +1082,7 @@ function IsFolderSelected()
 
 function SetFocusThreadPaneIfNotOnMessagePane()
 {
-  var focusedElement = WhichPaneHasFocus();
+  var focusedElement = gFolderDisplay.focusedPane;
 
   if((focusedElement != GetThreadTree()) &&
      (focusedElement != GetMessagePane()))
@@ -1142,12 +1105,8 @@ function SwitchPaneFocus(event)
   // This will usually be something like [threadPane, messagePane, folderPane].
   let panes = [GetThreadTree()];
 
-  if (!IsMessagePaneCollapsed()) {
-    if (gMessageDisplay.singleMessageDisplay)
-      panes.push(messagePane);
-    else
-      panes.push(document.getElementById("multimessage"));
-  }
+  if (!IsMessagePaneCollapsed())
+    panes.push(messagePane);
 
   if (gFolderDisplay.folderPaneVisible)
     panes.push(document.getElementById("folderTree"));
@@ -1155,7 +1114,7 @@ function SwitchPaneFocus(event)
   // Find our focused element in the array. If focus is not on one of the main
   // panes (it's probably on the toolbar), then act as if it's on the thread
   // tree.
-  let focusedElement = WhichPaneHasFocus();
+  let focusedElement = gFolderDisplay.focusedPane;
   let focusedElementIndex = panes.indexOf(focusedElement);
   if (focusedElementIndex == -1)
     focusedElementIndex = 0;
@@ -1186,17 +1145,24 @@ function SwitchPaneFocus(event)
 
 function SetFocusThreadPane()
 {
-    var threadTree = GetThreadTree();
-    threadTree.focus();
+  var threadTree = GetThreadTree();
+  threadTree.focus();
 }
 
+/**
+ * Set the focus to the currently-active message pane (either the single- or
+ * multi-message).
+ */
 function SetFocusMessagePane()
 {
   // Calling .focus() on content doesn't blur the previously focused chrome
   // element, so we shift focus to the XUL pane first, to not leave another
   // pane looking like it has focus.
   GetMessagePane().focus();
-  GetMessagePaneFrame().focus();
+  if (gMessageDisplay.singleMessageDisplay)
+    GetMessagePaneFrame().focus();
+  else
+    document.getElementById("multimessage").focus();
 }
 
 //

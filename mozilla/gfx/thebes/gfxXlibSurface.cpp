@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 20; indent-tabs-mode: nil; c-basic-offset: 4 -*-
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Oracle Corporation code.
- *
- * The Initial Developer of the Original Code is Oracle Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Stuart Parmenter <pavlov@pavlov.net>
- *   Vladimir Vukicevic <vladimir@pobox.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "gfxXlibSurface.h"
 
@@ -46,7 +13,6 @@
 #include "nsTArray.h"
 #include "nsAlgorithm.h"
 #include "mozilla/Preferences.h"
-#include "cairo-xlib-xrender.h"
 
 using namespace mozilla;
 
@@ -56,7 +22,7 @@ using namespace mozilla;
 #define XLIB_IMAGE_SIDE_SIZE_LIMIT 0x7fff
 
 gfxXlibSurface::gfxXlibSurface(Display *dpy, Drawable drawable, Visual *visual)
-    : mPixmapTaken(PR_FALSE), mDisplay(dpy), mDrawable(drawable)
+    : mPixmapTaken(false), mDisplay(dpy), mDrawable(drawable)
 #if defined(MOZ_WIDGET_GTK2) && !defined(MOZ_PLATFORM_MAEMO)
     , mGLXPixmap(None)
 #endif
@@ -67,7 +33,7 @@ gfxXlibSurface::gfxXlibSurface(Display *dpy, Drawable drawable, Visual *visual)
 }
 
 gfxXlibSurface::gfxXlibSurface(Display *dpy, Drawable drawable, Visual *visual, const gfxIntSize& size)
-    : mPixmapTaken(PR_FALSE), mDisplay(dpy), mDrawable(drawable), mSize(size)
+    : mPixmapTaken(false), mDisplay(dpy), mDrawable(drawable), mSize(size)
 #if defined(MOZ_WIDGET_GTK2) && !defined(MOZ_PLATFORM_MAEMO)
     , mGLXPixmap(None)
 #endif
@@ -81,7 +47,7 @@ gfxXlibSurface::gfxXlibSurface(Display *dpy, Drawable drawable, Visual *visual, 
 
 gfxXlibSurface::gfxXlibSurface(Screen *screen, Drawable drawable, XRenderPictFormat *format,
                                const gfxIntSize& size)
-    : mPixmapTaken(PR_FALSE), mDisplay(DisplayOfScreen(screen)),
+    : mPixmapTaken(false), mDisplay(DisplayOfScreen(screen)),
       mDrawable(drawable), mSize(size)
 #if defined(MOZ_WIDGET_GTK2) && !defined(MOZ_PLATFORM_MAEMO)
       , mGLXPixmap(None)
@@ -98,7 +64,7 @@ gfxXlibSurface::gfxXlibSurface(Screen *screen, Drawable drawable, XRenderPictFor
 }
 
 gfxXlibSurface::gfxXlibSurface(cairo_surface_t *csurf)
-    : mPixmapTaken(PR_FALSE),
+    : mPixmapTaken(false),
       mSize(cairo_xlib_surface_get_width(csurf),
             cairo_xlib_surface_get_height(csurf))
 #if defined(MOZ_WIDGET_GTK2) && !defined(MOZ_PLATFORM_MAEMO)
@@ -111,7 +77,7 @@ gfxXlibSurface::gfxXlibSurface(cairo_surface_t *csurf)
     mDrawable = cairo_xlib_surface_get_drawable(csurf);
     mDisplay = cairo_xlib_surface_get_display(csurf);
 
-    Init(csurf, PR_TRUE);
+    Init(csurf, true);
 }
 
 gfxXlibSurface::~gfxXlibSurface()
@@ -149,7 +115,7 @@ void
 gfxXlibSurface::TakePixmap()
 {
     NS_ASSERTION(!mPixmapTaken, "I already own the Pixmap!");
-    mPixmapTaken = PR_TRUE;
+    mPixmapTaken = true;
 
     // Divide by 8 because surface_get_depth gives us the number of *bits* per
     // pixel.
@@ -160,7 +126,7 @@ gfxXlibSurface::TakePixmap()
 Drawable
 gfxXlibSurface::ReleasePixmap() {
     NS_ASSERTION(mPixmapTaken, "I don't own the Pixmap!");
-    mPixmapTaken = PR_FALSE;
+    mPixmapTaken = false;
     RecordMemoryFreed();
     return mDrawable;
 }
@@ -174,14 +140,14 @@ gfxXlibSurface::Create(Screen *screen, Visual *visual,
         CreatePixmap(screen, size, DepthOfVisual(screen, visual),
                      relatedDrawable);
     if (!drawable)
-        return nsnull;
+        return nullptr;
 
     nsRefPtr<gfxXlibSurface> result =
         new gfxXlibSurface(DisplayOfScreen(screen), drawable, visual, size);
     result->TakePixmap();
 
     if (result->CairoStatus() != 0)
-        return nsnull;
+        return nullptr;
 
     return result.forget();
 }
@@ -194,21 +160,21 @@ gfxXlibSurface::Create(Screen *screen, XRenderPictFormat *format,
     Drawable drawable =
         CreatePixmap(screen, size, format->depth, relatedDrawable);
     if (!drawable)
-        return nsnull;
+        return nullptr;
 
     nsRefPtr<gfxXlibSurface> result =
         new gfxXlibSurface(screen, drawable, format, size);
     result->TakePixmap();
 
     if (result->CairoStatus() != 0)
-        return nsnull;
+        return nullptr;
 
     return result.forget();
 }
 
-static PRBool GetForce24bppPref()
+static bool GetForce24bppPref()
 {
-    return Preferences::GetBool("mozilla.widget.force-24bpp", PR_FALSE);
+    return Preferences::GetBool("mozilla.widget.force-24bpp", false);
 }
 
 already_AddRefed<gfxASurface>
@@ -216,14 +182,14 @@ gfxXlibSurface::CreateSimilarSurface(gfxContentType aContent,
                                      const gfxIntSize& aSize)
 {
     if (!mSurface || !mSurfaceValid) {
-      return nsnull;
+      return nullptr;
     }
 
     if (aContent == CONTENT_COLOR) {
         // cairo_surface_create_similar will use a matching visual if it can.
         // However, systems with 16-bit or indexed default visuals may benefit
         // from rendering with 24-bit formats.
-        static PRBool force24bpp = GetForce24bppPref();
+        static bool force24bpp = GetForce24bppPref();
         if (force24bpp
             && cairo_xlib_surface_get_depth(CairoSurface()) != 24) {
             XRenderPictFormat* format =
@@ -268,7 +234,7 @@ gfxXlibSurface::DoSizeQuery()
 
 class DisplayTable {
 public:
-    static PRBool GetColormapAndVisual(Screen* screen,
+    static bool GetColormapAndVisual(Screen* screen,
                                        XRenderPictFormat* format,
                                        Visual* visual, Colormap* colormap,
                                        Visual** visualForColormap);
@@ -294,7 +260,7 @@ private:
     // Comparator for finding the DisplayInfo
     class FindDisplay {
     public:
-        PRBool Equals(const DisplayInfo& info, const Display *display) const
+        bool Equals(const DisplayInfo& info, const Display *display) const
         {
             return info.mDisplay == display;
         }
@@ -331,7 +297,7 @@ DisplayTable* DisplayTable::sDisplayTable;
 // differ from the visual passed in.  Colormaps are tied to a visual, so
 // should only be used with their visual.
 
-/* static */ PRBool
+/* static */ bool
 DisplayTable::GetColormapAndVisual(Screen* aScreen, XRenderPictFormat* aFormat,
                                    Visual* aVisual, Colormap* aColormap,
                                    Visual** aVisualForColormap)
@@ -347,19 +313,19 @@ DisplayTable::GetColormapAndVisual(Screen* aScreen, XRenderPictFormat* aFormat,
     {
         *aColormap = DefaultColormapOfScreen(aScreen);
         *aVisualForColormap = defaultVisual;
-        return PR_TRUE;
+        return true;
     }
 
     // Only supporting TrueColor non-default visuals
     if (!aVisual || aVisual->c_class != TrueColor)
-        return PR_FALSE;
+        return false;
 
     if (!sDisplayTable) {
         sDisplayTable = new DisplayTable();
     }
 
     nsTArray<DisplayInfo>* displays = &sDisplayTable->mDisplays;
-    PRUint32 d = displays->IndexOf(display, 0, FindDisplay());
+    uint32_t d = displays->IndexOf(display, 0, FindDisplay());
 
     if (d == displays->NoIndex) {
         d = displays->Length();
@@ -367,7 +333,7 @@ DisplayTable::GetColormapAndVisual(Screen* aScreen, XRenderPictFormat* aFormat,
         // becomes invalid.
         XExtCodes *codes = XAddExtension(display);
         if (!codes)
-            return PR_FALSE;
+            return false;
 
         XESetCloseDisplay(display, codes->extension, DisplayClosing);
         // Add a new DisplayInfo.
@@ -379,7 +345,7 @@ DisplayTable::GetColormapAndVisual(Screen* aScreen, XRenderPictFormat* aFormat,
 
     // Only a small number of formats are expected to be used, so just do a
     // simple linear search.
-    for (PRUint32 i = 0; i < entries->Length(); ++i) {
+    for (uint32_t i = 0; i < entries->Length(); ++i) {
         const ColormapEntry& entry = entries->ElementAt(i);
         // Only the format and screen need to match.  (The visual may differ.)
         // If there is no format (e.g. no RENDER extension) then just compare
@@ -388,7 +354,7 @@ DisplayTable::GetColormapAndVisual(Screen* aScreen, XRenderPictFormat* aFormat,
             || aVisual == entry.mVisual) {
             *aColormap = entry.mColormap;
             *aVisualForColormap = entry.mVisual;
-            return PR_TRUE;
+            return true;
         }
     }
 
@@ -403,7 +369,7 @@ DisplayTable::GetColormapAndVisual(Screen* aScreen, XRenderPictFormat* aFormat,
 
     *aColormap = colormap;
     *aVisualForColormap = aVisual;
-    return PR_TRUE;
+    return true;
 }
 
 /* static */ int
@@ -414,16 +380,16 @@ DisplayTable::DisplayClosing(Display *display, XExtCodes* codes)
     sDisplayTable->mDisplays.RemoveElement(display, FindDisplay());
     if (sDisplayTable->mDisplays.Length() == 0) {
         delete sDisplayTable;
-        sDisplayTable = nsnull;
+        sDisplayTable = nullptr;
     }
     return 0;
 }
 
-PRBool
+bool
 gfxXlibSurface::GetColormapAndVisual(Colormap* aColormap, Visual** aVisual)
 {
     if (!mSurfaceValid)
-        return PR_FALSE;
+        return false;
 
     XRenderPictFormat* format =
         cairo_xlib_surface_get_xrender_format(CairoSurface());

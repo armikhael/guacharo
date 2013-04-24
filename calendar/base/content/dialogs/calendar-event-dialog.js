@@ -1,47 +1,17 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Sun Microsystems code.
- *
- * The Initial Developer of the Original Code is Sun Microsystems.
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Michael Buettner <michael.buettner@sun.com>
- *   Philipp Kewisch <mozilla@kewis.ch>
- *   Martin Schroeder <mschroeder@mozilla.x-home.org>
- *   Fred Jendrzejewski <fred.jen@web.de>
- *   Daniel Boelzle <daniel.boelzle@sun.com>
- *   Markus Adrario <Mozilla@Adrario.de>
- *   Gianfranco Balza <bv1578@gmail.com>
- *   Matthew Mecca <matthew.mecca@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 Components.utils.import("resource://calendar/modules/calUtils.jsm");
+Components.utils.import("resource://gre/modules/Services.jsm");
+Components.utils.import("resource://calendar/modules/calRecurrenceUtils.jsm");
+
+try {
+    Components.utils.import("resource:///modules/cloudFileAccounts.js");
+} catch (e) {
+    // This will fail on Seamonkey, but thats ok since the pref for cloudfiles
+    // is false, which means the UI will not be shown
+}
 
 // the following variables are constructed if the jsContext this file
 // belongs to gets constructed. all those variables are meant to be accessed
@@ -60,6 +30,18 @@ var gConfirmCancel = true;
 var gLastRepeatSelection = 0;
 var gIgnoreUpdate = false;
 var gShowTimeAs = null;
+var gWarning = false;
+
+var eventDialogQuitObserver = {
+  observe: function(aSubject, aTopic, aData) {
+    // Check whether or not we want to veto the quit request (unless another
+    // observer already did.
+    if (aTopic == "quit-application-requested" &&
+        (aSubject instanceof Components.interfaces.nsISupportsPRBool) &&
+        !aSubject.data)
+      aSubject.data = !onCancel();
+  }
+};
 
 /**
  * Checks if the given calendar supports notifying attendees. The item is needed
@@ -211,7 +193,11 @@ function onLoad() {
     if (parentItem.parentItem != parentItem) {
         parentItem = parentItem.parentItem;
     }
-    window.recurrenceInfo = parentItem.recurrenceInfo;
+
+    window.recurrenceInfo = null;
+    if (parentItem.recurrenceInfo) {
+        window.recurrenceInfo = parentItem.recurrenceInfo.clone();
+    }
 
     document.documentElement.getButton("accept")
             .setAttribute("collapsed", "true");
@@ -236,12 +222,18 @@ function onLoad() {
 
     // This causes the app to ask if the window should be closed when the
     // application is closed.
-    window.tryToClose = onCancel;
+    Services.obs.addObserver(eventDialogQuitObserver,
+                             "quit-application-requested", false);
 
     // Normally, Enter closes a <dialog>. We want this to rather on Ctrl+Enter.
     // Stopping event propagation doesn't seem to work, so just overwrite the
     // function that does this.
     document.documentElement._hitEnter = function() {};
+}
+
+function onEventDialogUnload() {
+  Services.obs.removeObserver(eventDialogQuitObserver,
+                              "quit-application-requested");
 }
 
 /**
@@ -252,7 +244,7 @@ function onLoad() {
 function onAccept() {
     dispose();
     onCommandSave(true);
-    return true;
+    return !gWarning;
 }
 
 /**
@@ -264,7 +256,8 @@ function onAccept() {
  * @return    Returns true if the window should be closed.
  */
 function onCommandCancel() {
-    if (!isItemChanged()) {
+    // Allow closing if the item has not changed and no warning dialog has to be showed.
+    if (!isItemChanged() && !gWarning) {
         return true;
     }
 
@@ -301,6 +294,8 @@ function onCommandCancel() {
             onCommandSave(true);
             return true;
         case 2: // Don't save
+            // Don't show any warning dialog when closing without saving.
+            gWarning = false;
             return true;
         default: // Cancel
             return false;
@@ -319,7 +314,10 @@ function onCancel() {
 
     if (!gConfirmCancel || (gConfirmCancel && onCommandCancel())) {
         dispose();
-        return true;
+        // Don't allow closing the dialog when the user inputs a wrong
+        // date then closes the dialog and answers with "Save" in
+        // the "Save Event" dialog.
+        return !gWarning;
     }
     return false;
 }
@@ -349,6 +347,7 @@ function loadDialog(item) {
     categoryMenuList.selectedIndex = indexToSelect;
 
     // Attachment
+    loadCloudProviders();
     var hasAttachments = capSupported("attachments");
     var attachments = item.getAttachments({});
     if (hasAttachments && attachments && attachments.length > 0) {
@@ -571,14 +570,17 @@ function dateTimeControls2State(aStartDatepicker) {
     var saveEndTime = gEndTime;
     var kDefaultTimezone = calendarDefaultTimezone();
 
-    var menuItem = document.getElementById('options-timezone-menuitem');
+    let timezonesEnabled = document.getElementById('options-timezone-menuitem')
+                           .getAttribute('checked') == 'true';
     if (gStartTime) {
         // jsDate is always in OS timezone, thus we create a calIDateTime
-        // object from the jsDate representation and simply set the new
-        // timezone instead of converting.
-        gStartTime = jsDateToDateTime(
-            getElementValue(startWidgetId),
-            (menuItem.getAttribute('checked') == 'true' || allDay) ? gStartTimezone : kDefaultTimezone);
+        // object from the jsDate representation then we convert the timezone
+        // in order to keep gStartTime in default timezone.
+        gStartTime = cal.jsDateToDateTime(getElementValue(startWidgetId),
+                                          (timezonesEnabled || allDay) ? gStartTimezone : kDefaultTimezone);
+        if (timezonesEnabled || allDay) {
+            gStartTime = gStartTime.getInTimezone(kDefaultTimezone);
+        }
         gStartTime.isDate = allDay;
     }
     if (gEndTime) {
@@ -587,7 +589,6 @@ function dateTimeControls2State(aStartDatepicker) {
             gEndTime = gStartTime.clone();
             if (gItemDuration) {
                 gEndTime.addDuration(gItemDuration);
-                gEndTime = gEndTime.getInTimezone(gEndTimezone);
             }
         } else {
             let timezone = gEndTimezone;
@@ -596,9 +597,12 @@ function dateTimeControls2State(aStartDatepicker) {
                     timezone = gStartTimezone;
                 }
             }
-            gEndTime = jsDateToDateTime(
-                getElementValue(endWidgetId),
-                (menuItem.getAttribute('checked') == 'true' || allDay) ? timezone : kDefaultTimezone);
+            gEndTime = cal.jsDateToDateTime(getElementValue(endWidgetId),
+                                            (timezonesEnabled || allDay) ? timezone : kDefaultTimezone);
+            if (timezonesEnabled || allDay) {
+                gEndTime = gEndTime.getInTimezone(kDefaultTimezone);
+            }
+
             gEndTime.isDate = allDay;
             if (keepAttribute && gItemDuration) {
                 // Keepduration-button links the the Start to the End date. We
@@ -607,7 +611,6 @@ function dateTimeControls2State(aStartDatepicker) {
                 fduration.isNegative = true;
                 gStartTime = gEndTime.clone();
                 gStartTime.addDuration(fduration);
-                gStartTime = gStartTime.getInTimezone(gStartTimezone);
             }
         }
     }
@@ -635,6 +638,7 @@ function dateTimeControls2State(aStartDatepicker) {
     updateTimezone();
 
     if (warning) {
+        gWarning = true;
         var callback = function func() {
             var promptService = Components.classes["@mozilla.org/embedcomp/prompt-service;1"]
                                 .getService(Components.interfaces.nsIPromptService);
@@ -642,6 +646,7 @@ function dateTimeControls2State(aStartDatepicker) {
                 null,
                 document.title,
                 calGetString("calendar", "warningEndBeforeStart"));
+                gWarning = false;
         }
         setTimeout(callback, 1);
     }
@@ -704,23 +709,23 @@ function updateDateCheckboxes(aDatePickerId, aCheckboxId, aDateTime) {
     setElementValue(aDatePickerId, getElementValue(aDatePickerId));
 
     // first of all disable the datetime picker if we don't have a date
-    var hasDate = getElementValue(aCheckboxId, "checked");
+    let hasDate = getElementValue(aCheckboxId, "checked");
     setElementValue(aDatePickerId, !hasDate, "disabled");
 
     // create a new datetime object if date is now checked for the first time
     if (hasDate && !aDateTime.isValid()) {
-        var date = jsDateToDateTime(getElementValue(aDatePickerId), calendarDefaultTimezone());
-        aDateTime.setDateTime(date);
+        let dt = cal.jsDateToDateTime(getElementValue(aDatePickerId), cal.calendarDefaultTimezone());
+        aDateTime.setDateTime(dt);
     } else if (!hasDate && aDateTime.isValid()) {
         aDateTime.setDateTime(null);
     }
 
     // calculate the duration if possible
-    var hasEntryDate = getElementValue("todo-has-entrydate", "checked");
-    var hasDueDate = getElementValue("todo-has-duedate", "checked");
+    let hasEntryDate = getElementValue("todo-has-entrydate", "checked");
+    let hasDueDate = getElementValue("todo-has-duedate", "checked");
     if (hasEntryDate && hasDueDate) {
-        var start = jsDateToDateTime(getElementValue("todo-entrydate"));
-        var end = jsDateToDateTime(getElementValue("todo-duedate"));
+        let start = cal.jsDateToDateTime(getElementValue("todo-entrydate"));
+        let end = cal.jsDateToDateTime(getElementValue("todo-duedate"));
         gItemDuration = end.subtractDate(start);
     } else {
         gItemDuration = null;
@@ -940,7 +945,7 @@ function saveDialog(item) {
 
     if (item.status == "COMPLETED" && isToDo(item)) {
         var elementValue = getElementValue("completed-date-picker");
-        item.completedDate = jsDateToDateTime(elementValue);
+        item.completedDate = cal.jsDateToDateTime(elementValue);
     }
 
     saveReminder(item);
@@ -1011,15 +1016,18 @@ function updateTitle() {
 function updateStyle() {
     const kDialogStylesheet = "chrome://calendar/skin/calendar-event-dialog.css";
 
-    for each (var stylesheet in document.styleSheets) {
+    for each (let stylesheet in document.styleSheets) {
         if (stylesheet.href == kDialogStylesheet) {
-            if (isSunbird()) {
-                stylesheet.insertRule(".lightning-only { display: none; }", 0);
+            if (cal.isSunbird()) {
+                stylesheet.insertRule(".lightning-only { display: none; }",
+                                      stylesheet.cssRules.length);
             }
-            if (isEvent(window.calendarItem)) {
-                stylesheet.insertRule(".todo-only { display: none; }", 0);
-            } else if (isToDo(window.calendarItem)) {
-                stylesheet.insertRule(".event-only { display: none; }", 0);
+            if (cal.isEvent(window.calendarItem)) {
+                stylesheet.insertRule(".todo-only { display: none; }",
+                                      stylesheet.cssRules.length);
+            } else if (cal.isToDo(window.calendarItem)) {
+                stylesheet.insertRule(".event-only { display: none; }",
+                                      stylesheet.cssRules.length);
             }
             return;
         }
@@ -1064,8 +1072,8 @@ function updateAccept() {
     var startDate;
     var endDate;
     if (isEvent(window.calendarItem)) {
-        startDate = jsDateToDateTime(getElementValue("event-starttime"));
-        endDate = jsDateToDateTime(getElementValue("event-endtime"));
+        startDate = cal.jsDateToDateTime(getElementValue("event-starttime"));
+        endDate = cal.jsDateToDateTime(getElementValue("event-endtime"));
 
         var menuItem = document.getElementById('options-timezone-menuitem');
         if (menuItem.getAttribute('checked') == 'true') {
@@ -1105,9 +1113,9 @@ function updateAccept() {
         }
     } else {
         startDate = getElementValue("todo-has-entrydate", "checked") ?
-            jsDateToDateTime(getElementValue("todo-entrydate")) : null;
+            cal.jsDateToDateTime(getElementValue("todo-entrydate")) : null;
         endDate = getElementValue("todo-has-duedate", "checked") ?
-            jsDateToDateTime(getElementValue("todo-duedate")) : null;
+            cal.jsDateToDateTime(getElementValue("todo-duedate")) : null;
     }
 
     if (endDate && startDate && endDate.compare(startDate) == -1) {
@@ -1124,8 +1132,12 @@ function updateAccept() {
     return enableAccept;
 }
 
+// Global variables used to restore start and end date-time when changing the
+// "all day" status in the onUpdateAllday() function.
 var gOldStartTime = null;
 var gOldEndTime = null;
+var gOldStartTimezone = null;
+var gOldEndTimezone = null;
 
 /**
  * Handler function to update controls in consequence of the "all day" checkbox
@@ -1136,11 +1148,15 @@ function onUpdateAllDay() {
         return;
     }
     let allDay = getElementValue("event-all-day", "checked");
+    let kDefaultTimezone = calendarDefaultTimezone();
 
-    // Store/restore datetimes when "All day" checkbox changes status.
     if (allDay) {
+        // Store date-times and related timezones so we can restore
+        // if the user unchecks the "all day" checkbox.
         gOldStartTime = gStartTime.clone();
         gOldEndTime = gEndTime.clone();
+        gOldStartTimezone = gStartTimezone;
+        gOldEndTimezone = gEndTimezone;
         // When events that end at 0:00 become all-day events, we need to
         // subtract a day from the end date because the real end is midnight.
         if (gEndTime.hour == 0 && gEndTime.minute == 0) {
@@ -1154,45 +1170,32 @@ function onUpdateAllDay() {
             }
         }
     } else {
-        if (gStartTime.isDate || gEndTime.isDate) {
-            if (!gOldStartTime && !gOldEndTime) {
-                // Checkbox "all day" has been unchecked for the first time.
-                gOldStartTime = gStartTime.clone();
-                gOldStartTime.isDate = false;
-                gOldStartTime.hour = getDefaultStartDate(window.initialStartDateValue).hour;
-                gOldEndTime = gEndTime.clone();
-                gOldEndTime.isDate = false;
-                gOldEndTime.hour = gOldStartTime.hour;
-                gOldEndTime.minute += getPrefSafe("calendar.event.defaultlength", 60);
-            } else if (gOldStartTime != gStartTime || gOldEndTime != gEndTime) {
-                // Checkbox "all day" has been unchecked after a date change.
-                let startTimeHour = gOldStartTime.hour;
-                let startTimeMinute = gOldStartTime.minute;
-                let endTimeHour = gOldEndTime.hour;
-                let endTimeMinute = gOldEndTime.minute;
-                gOldStartTime = gStartTime.clone();
-                gOldStartTime.isDate = false;
-                gOldStartTime.hour = startTimeHour;
-                gOldStartTime.minute = startTimeMinute;
-                gOldEndTime = gEndTime.clone();
-                gOldEndTime.isDate = false;
-                gOldEndTime.hour = endTimeHour;
-                gOldEndTime.minute = endTimeMinute;
-                // When we restore 0:00 as end time, we need to add one day to
-                // the end date in order to include the last day until midnight.
-                if (endTimeHour == 0 && endTimeMinute == 0) {
-                    gOldEndTime.day++;
-                }
+        gStartTime.isDate = false;
+        gEndTime.isDate = false;
+        if (!gOldStartTime && !gOldEndTime) {
+            // The checkbox has been unchecked for the first time, the event
+            // was an "All day" type, so we have to set default values.
+            gStartTime.hour = getDefaultStartDate(window.initialStartDateValue).hour;
+            gEndTime.hour = gStartTime.hour;
+            gEndTime.minute += getPrefSafe("calendar.event.defaultlength", 60);
+            gOldStartTimezone = kDefaultTimezone;
+            gOldEndTimezone = kDefaultTimezone;
+        } else {
+            // Restore date-times previously stored.
+            gStartTime.hour = gOldStartTime.hour;
+            gStartTime.minute = gOldStartTime.minute;
+            gEndTime.hour = gOldEndTime.hour;
+            gEndTime.minute = gOldEndTime.minute;
+            // When we restore 0:00 as end time, we need to add one day to
+            // the end date in order to include the last day until midnight.
+            if (gEndTime.hour == 0 && gEndTime.minute == 0) {
+                gEndTime.day++;
             }
         }
-        gStartTime = gOldStartTime.clone();
-        gEndTime = gOldEndTime.clone();
     }
+    gStartTimezone = (allDay ? cal.floating() : gOldStartTimezone);
+    gEndTimezone = (allDay ? cal.floating() : gOldEndTimezone);
 
-    gStartTimezone = (allDay ? floating(): calendarDefaultTimezone());
-    gEndTimezone = gStartTimezone;
-    gStartTime.timezone = gStartTimezone;
-    gEndTime.timezone = gEndTimezone;
     updateAllDay();
 }
 
@@ -1632,6 +1635,43 @@ function updateShowTimeAs() {
                             gShowTimeAs == "TRANSPARENT" ? "true" : "false");
 }
 
+function loadCloudProviders() {
+    let cloudFileEnabled = cal.getPrefSafe("mail.cloud_files.enabled", false)
+    let cmd = document.getElementById("cmd_attach_cloud");
+
+    if (!cloudFileEnabled) {
+        // If cloud file support is disabled, just hide the attach item
+        cmd.hidden = true;
+        return;
+    }
+
+    cmd.hidden = (cloudFileAccounts.accounts.length == 0);
+    let toolbarPopup = document.getElementById("button-attach-menupopup");
+    let optionsPopup = document.getElementById("options-attachments-menupopup");
+    let attachmentPopup = document.getElementById("attachment-popup");
+
+    for (let [,cloudProvider] in Iterator(cloudFileAccounts.accounts)) {
+        let item = createXULElement("menuitem");
+        let displayName = cloudFileAccounts.getDisplayName(cloudProvider);
+        let label = cal.calGetString("calendar-event-dialog", "attachViaFilelink", [displayName]);
+        item.setAttribute("label", label);
+        item.setAttribute("observes", "cmd_attach_cloud");
+        item.setAttribute("oncommand", "attachFile(event.target.cloudProvider); event.stopPropagation();");
+
+        if (cloudProvider.iconClass) {
+            item.setAttribute("class", "menuitem-iconic");
+            item.setAttribute("image", cloudProvider.iconClass);
+        }
+
+        // Add the item to the different places we advertise cloud providers
+        toolbarPopup.appendChild(item.cloneNode()).cloudProvider = cloudProvider;
+        attachmentPopup.appendChild(item.cloneNode()).cloudProvider = cloudProvider;
+
+        // The last one doesn't need to clone, just use the item itself.
+        optionsPopup.appendChild(item).cloudProvider = cloudProvider;
+    }
+}
+
 /**
  * Prompts the user to attach an url to this item.
  */
@@ -1663,23 +1703,27 @@ function attachURL() {
     }
 }
 
-
 /**
- * This function is currently unused, since we don't support attaching files as
- * binary. This code can be used as soon as this works.
+ * Attach a file to the item. Not passing a cloud provider is currently unsupported.
+ *
+ * @param cloudProvider     If set, the cloud provider will be used for attaching
  */
-function attachFile() {
+function attachFile(cloudProvider) {
+    if (!cloudProvider) {
+        cal.ERROR("[calendar-event-dialog] Could not attach file wthout cloud provider" + cal.STACK(10));
+    }
+
     var files;
     try {
         const nsIFilePicker = Components.interfaces.nsIFilePicker;
-        var fp = Components.classes["@mozilla.org/filepicker;1"]
+        let fp = Components.classes["@mozilla.org/filepicker;1"]
                            .createInstance(nsIFilePicker);
         fp.init(window,
                 calGetString("calendar-event-dialog", "selectAFile"),
                 nsIFilePicker.modeOpenMultiple);
 
         // Check for the last directory
-        var lastDir = lastDirectory();
+        let lastDir = lastDirectory();
         if (lastDir) {
             fp.displayDirectory = lastDir;
         }
@@ -1699,11 +1743,11 @@ function attachFile() {
 
     // Create the attachment
     while (files.hasMoreElements()) {
-        var file = files.getNext().QueryInterface(Components.interfaces.nsILocalFile);
+        let file = files.getNext().QueryInterface(Components.interfaces.nsILocalFile);
 
-        var fileHandler = getIOService().getProtocolHandler("file")
-                                        .QueryInterface(Components.interfaces.nsIFileProtocolHandler);
-        var uriSpec = fileHandler.getURLSpecFromFile(file);
+        let fileHandler = Services.io.getProtocolHandler("file")
+                                     .QueryInterface(Components.interfaces.nsIFileProtocolHandler);
+        let uriSpec = fileHandler.getURLSpecFromFile(file);
 
         if (!(uriSpec in gAttachMap)) {
             // If the attachment hasn't been added, then set the last display
@@ -1711,19 +1755,19 @@ function attachFile() {
             lastDirectory(uriSpec);
 
             // ... and add the attachment.
-            var attachment = createAttachment();
-            attachment.uri = makeURL(uriSpec);
-            // TODO: set the formattype, but this isn't urgent as we don't have
-            // a type sensitive dialog to start files.
-            addAttachment(attachment);
+            let attachment = cal.createAttachment();
+            if (cloudProvider) {
+                attachment.uri = makeURL(uriSpec);
+            } else {
+                // TODO read file into attachment
+            }
+            addAttachment(attachment, cloudProvider);
         }
     }
 }
 
 /**
  * Helper function to remember the last directory chosen when attaching files.
- * XXX This function is currently unused, will be needed when we support
- * attaching files.
  *
  * @param aFileUri    (optional) If passed, the last directory will be set and
  *                                 returned. If null, the last chosen directory
@@ -1761,11 +1805,62 @@ function makePrettyName(aUri){
 }
 
 /**
+ * Asynchronously uploads the given attachment to the cloud provider, updating
+ * the passed listItem as things progress.
+ *
+ * @param attachment        A calIAttachment to upload
+ * @param cloudProvider     The clould provider to upload to
+ * @param listItem          The listitem in attachment-link listbox to update.
+ */
+function uploadCloudAttachment(attachment, cloudProvider, listItem) {
+    let file = attachment.uri.QueryInterface(Components.interfaces.nsIFileURL).file;
+    listItem.attachLocalFile = file;
+    listItem.attachCloudProvider = cloudProvider;
+    cloudProvider.uploadFile(file, {
+        onStartRequest: function onStartRequest() {
+            listItem.setAttribute("image", "chrome://messenger/skin/icons/loading.png");
+        },
+
+        onStopRequest: function onStopRequest(aRequest, aContext, aStatusCode) {
+            if (Components.isSuccessCode(aStatusCode)) {
+                delete gAttachMap[attachment.hashId];
+                attachment.uri = makeURL(cloudProvider.urlForFile(file));
+                attachment.setParameter("FILENAME", file.leafName);
+                attachment.setParameter("PROVIDER", cloudProvider.type);
+                listItem.setAttribute("label", file.leafName);
+                gAttachMap[attachment.hashId] = attachment;
+                listItem.setAttribute("image", cloudProvider.iconClass);
+                updateAttachment();
+            } else {
+                cal.ERROR("[calendar-event-dialog] Uploading cloud attachment " +
+                          "failed. Status code: " + aStatusCode);
+
+                // Uploading failed. First of all, show an error icon. Also,
+                // delete it from the attach map now, this will make sure it is
+                // not serialized if the user saves.
+                listItem.setAttribute("image", "chrome://messenger/skin/icons/error.png");
+                delete gAttachMap[attachment.hashId];
+
+                // Keep the item for a while so the user can see something failed.
+                // When we have a nice notification bar, we can show more info
+                // about the failure.
+                setTimeout(function() {
+                    let documentLink = document.getElementById("attachment-link");
+                    documentLink.removeChild(listItem);
+                    updateAttachment();
+                }, 5000);
+            }
+        }
+    });
+}
+
+/**
  * Adds the given attachment to dialog controls.
  *
  * @param attachment    The calIAttachment object to add
+ * @param cloudProvider (optional) If set, the given cloud provider will be used.
  */
-function addAttachment(attachment) {
+function addAttachment(attachment, cloudProvider) {
     if (!attachment ||
         !attachment.hashId ||
         attachment.hashId in gAttachMap) {
@@ -1775,20 +1870,51 @@ function addAttachment(attachment) {
     // We currently only support uri attachments
     if (attachment.uri) {
         let documentLink = document.getElementById("attachment-link");
-        let item = documentLink.appendChild(createXULElement("listitem"));
+        let listItem = createXULElement("listitem");
 
         // Set listitem attributes
-        item.setAttribute("label", makePrettyName(attachment.uri));
-        item.setAttribute("crop", "end");
-        item.setAttribute("class", "listitem-iconic");
-        if (attachment.uri.schemeIs("file")) {
-            item.setAttribute("image", "moz-icon://" + attachment.uri);
+        listItem.setAttribute("label", makePrettyName(attachment.uri));
+        listItem.setAttribute("crop", "end");
+        listItem.setAttribute("class", "listitem-iconic");
+        listItem.setAttribute("tooltiptext", attachment.uri.spec);
+        if (cloudProvider) {
+            if (attachment.uri.schemeIs("file")) {
+                // Its still a local url, needs to be uploaded
+                listItem.setAttribute("image", "chrome://messenger/skin/icons/connecting.png");
+                uploadCloudAttachment(attachment, cloudProvider, listItem);
+            } else {
+                let leafName = attachment.getParameter("FILENAME");
+                listItem.setAttribute("image", cloudProvider.iconClass);
+                if (leafName) {
+                    listItem.setAttribute("label", leafName);
+                }
+            }
         } else {
-            item.setAttribute("image", "moz-icon://dummy.html");
+            if (attachment.uri.schemeIs("file")) {
+                listItem.setAttribute("image", "moz-icon://" + attachment.uri);
+            } else {
+                let leafName = attachment.getParameter("FILENAME");
+                let providerType = attachment.getParameter("PROVIDER");
+                let cloudFileEnabled = cal.getPrefSafe("mail.cloud_files.enabled", false);
+
+                if (leafName) {
+                    // TODO security issues?
+                    listItem.setAttribute("label", leafName);
+                }
+                if (providerType && cloudFileEnabled) {
+                    let cloudProvider = cloudFileAccounts.getProviderForType(providerType);
+                    listItem.setAttribute("image", cloudProvider.iconClass);
+                } else {
+                    listItem.setAttribute("image", "moz-icon://dummy.html");
+                }
+            }
         }
 
+        // Now that everything is set up, add it to the attachment box.
+        documentLink.appendChild(listItem);
+
         // full attachment object is stored here
-        item.attachment = attachment;
+        listItem.attachment = attachment;
 
         // Update the number of rows and save our attachment globally
         documentLink.rows = documentLink.getRowCount();
@@ -1804,9 +1930,31 @@ function addAttachment(attachment) {
  * XXX This could use a dialog maybe?
  */
 function deleteAttachment() {
-    var documentLink = document.getElementById("attachment-link");
-    delete gAttachMap[documentLink.selectedItem.attachment.hashId];
+    let documentLink = document.getElementById("attachment-link");
+    let item = documentLink.selectedItem;
+    delete gAttachMap[item.attachment.hashId];
     documentLink.removeItemAt(documentLink.selectedIndex);
+
+    if (item.attachLocalFile && item.attachCloudProvider) {
+        try {
+            item.attachCloudProvider.deleteFile(item.attachLocalFile, {
+                onStartRequest: function() {},
+                onStopRequest: function(aRequest, aContext, aStatusCode) {
+                    if (!Components.isSuccessCode(aStatusCode)) {
+                        // TODO With a notification bar, we could actually show this error.
+                        cal.ERROR("[calendar-event-dialog] Deleting cloud attachment " +
+                                  "failed, file will remain on server. " +
+                                  " Status code: " + aStatusCode);
+                    }
+                }
+            });
+        } catch (e) {
+            cal.ERROR("[calendar-event-dialog] Deleting cloud attachment " +
+                      "failed, file will remain on server. " +
+                      "Exception: " + e);
+        }
+    }
+
     updateAttachment();
 }
 
@@ -1859,6 +2007,17 @@ function openAttachment() {
 }
 
 /**
+ * Copies the link location of the first selected attachment to the clipboard
+ */
+function copyAttachment() {
+    let documentLink = document.getElementById("attachment-link");
+    let attURI = documentLink.getSelectedItem(0).attachment.uri.spec;
+    let clipboard = Components.classes["@mozilla.org/widget/clipboardhelper;1"]
+                              .getService(Components.interfaces.nsIClipboardHelper);
+    clipboard.copyString(attURI);
+}
+
+/**
  * Handler function to handle pressing keys in the attachment listbox.
  *
  * @param event     The DOM event caused by the key press.
@@ -1903,6 +2062,14 @@ function updateCalendar() {
     let calendar = getCurrentCalendar();
 
     gIsReadOnly = calendar.readOnly;
+
+    // We might have to change the organizer, let's see
+    let calendarOrgId = calendar.getProperty("organizerId");
+    if (window.organizer && calendar.aclEntry && calendarOrgId &&
+        calendar.id != item.calendar.id) {
+        window.organizer.id = calendarOrgId;
+        window.organizer.commonName = calendar.getProperty("organizerCN");
+    }
 
     if (!canNotifyAttendees(calendar, item) && calendar.getProperty("imip.identity")) {
         enableElement("notify-attendees-checkbox");
@@ -2206,7 +2373,7 @@ function updateToDoStatus(status, passedInCompletedDate) {
           enableElement("percent-complete-textbox");
           enableElement("percent-complete-label");
           // if there isn't a completedDate, set it to the previous value
-          if (!completedDate) { 
+          if (!completedDate) {
               completedDate = oldCompletedDate;
           }
           break;
@@ -2272,6 +2439,19 @@ function saveItem() {
         }
     }
 
+    // We check if the organizerID is different from our
+    // calendar-user-address-set. The organzerID is the owner of the calendar.
+    // If it's different, that is because someone is acting on behalf of
+    // the organizer.
+    if (item.organizer && item.calendar.aclEntry) {
+        let userAddresses = item.calendar.aclEntry.getUserAddresses({});
+        if (userAddresses.length > 0
+            && !cal.attendeeMatchesAddresses(item.organizer, userAddresses)) {
+            let organizer = item.organizer.clone();
+            organizer.setProperty("SENT-BY", "mailto:" + userAddresses[0]);
+            item.organizer = organizer;
+        }
+    }
     return item;
 }
 
@@ -2291,6 +2471,11 @@ function onCommandSave(aIsClosing) {
     // validation of the values just edited, with the keyboard, but not yet
     // confirmed (i.e. not followed by a click, a tab or enter keys pressure).
     document.documentElement.focus();
+
+    // Don't save if a warning dialog about a wrong input date must be showed.
+    if (gWarning) {
+        return;
+    }
 
     let originalItem = window.calendarItem;
     let item = saveItem();
@@ -2313,7 +2498,10 @@ function onCommandSave(aIsClosing) {
             // Check if the current window has a calendarItem first, because in case of undo
             // window refers to the main window and we would get a 'calendarItem is undefined' warning.
             if ("calendarItem" in window) {
+                // If we changed the calendar of the item, onOperationComplete will be called multiple
+                // times. We need to make sure we're receiving the update on the right calendar.
                 if ((!window.calendarItem.id ||aId == window.calendarItem.id) &&
+                    (aCalendar.id == window.calendarItem.calendar.id) &&
                     Components.isSuccessCode(aStatus)) {
                     if (window.calendarItem.recurrenceId) {
                         // TODO This workaround needs to be removed in bug 396182
@@ -2392,7 +2580,7 @@ function onCommandDeleteItem() {
             let newItem = window.calendarItem.parentItem.clone();
             newItem.recurrenceInfo.removeOccurrenceAt(window.calendarItem.recurrenceId);
 
-            window.opener.doTransaction("modify", newItem, newItem.calendar, 
+            window.opener.doTransaction("modify", newItem, newItem.calendar,
                                         window.calendarItem.parentItem, deleteListener);
         } else {
             window.opener.doTransaction("delete", window.calendarItem, window.calendarItem.calendar,
@@ -2497,35 +2685,98 @@ function onCommandCustomize() {
  * Prompts the user to change the start timezone.
  */
 function editStartTimezone() {
-    editTimezone(
-        "timezone-starttime",
-        gStartTime.getInTimezone(gStartTimezone),
-        function(datetime) {
-            var equalTimezones = false;
-            if (gStartTimezone && gEndTimezone) {
-                if (gStartTimezone == gEndTimezone) {
-                    equalTimezones = true;
-                }
-            }
-            gStartTimezone = datetime.timezone;
-            if (equalTimezones) {
-              gEndTimezone = datetime.timezone;
-            }
-            updateDateTime();
-        });
+    editTimezone("timezone-starttime",
+                 gStartTime.getInTimezone(gStartTimezone),
+                 editStartTimezone.complete);
 }
+editStartTimezone.complete = function(datetime) {
+    var equalTimezones = false;
+    if (gStartTimezone && gEndTimezone) {
+        if (gStartTimezone == gEndTimezone) {
+            equalTimezones = true;
+        }
+    }
+    gStartTimezone = datetime.timezone;
+    if (equalTimezones) {
+      gEndTimezone = datetime.timezone;
+    }
+    updateDateTime();
+};
 
 /**
  * Prompts the user to change the end timezone.
  */
 function editEndTimezone() {
-    editTimezone(
-        "timezone-endtime",
-        gEndTime.getInTimezone(gEndTimezone),
-        function(datetime) {
-            gEndTimezone = datetime.timezone;
-            updateDateTime();
-        });
+    editTimezone("timezone-endtime",
+                 gEndTime.getInTimezone(gEndTimezone),
+                 editEndTimezone.complete);
+}
+editEndTimezone.complete = function(datetime) {
+    gEndTimezone = datetime.timezone;
+    updateDateTime();
+};
+
+/**
+ * Called to choose a recent timezone from the timezone popup.
+ *
+ * @param event     The event with a target that holds the timezone id value.
+ */
+function chooseRecentTimezone(event) {
+    let tzid = event.target.value;
+    let timezonePopup = document.getElementById("timezone-popup");
+    let tzProvider = getCurrentCalendar().getProperty("timezones.provider") ||
+                     cal.getTimezoneService();
+
+    if (tzid != "custom") {
+        let zone = tzProvider.getTimezone(tzid);
+        let datetime = timezonePopup.dateTime.getInTimezone(zone);
+        timezonePopup.editTimezone.complete(datetime);
+    }
+}
+
+/**
+ * Opens the timezone popup on the node the event target points at.
+ *
+ * @param event     The event causing the popup to open
+ * @param dateTime  The datetime for which the timezone should be modified
+ * @param editFunc  The function to be called when the custom menuitem is clicked.
+ */
+function showTimezonePopup(event, dateTime, editFunc) {
+    // Don't do anything for right/middle-clicks. Also, don't show the popup if
+    // the opening node is disabled.
+    if (event.button != 0 || event.target.disabled) {
+        return;
+    }
+
+    let timezonePopup = document.getElementById("timezone-popup");
+    let timezoneDefaultItem = document.getElementById("timezone-popup-defaulttz");
+    let timezoneSeparator = document.getElementById("timezone-popup-menuseparator");
+    let defaultTimezone = cal.calendarDefaultTimezone();
+    let recentTimezones = cal.getRecentTimezones(true);
+
+    // Set up the right editTimezone function, so the custom item can use it.
+    timezonePopup.editTimezone = editFunc;
+    timezonePopup.dateTime = dateTime;
+
+    // Set up the default timezone item
+    timezoneDefaultItem.value = defaultTimezone.tzid;
+    timezoneDefaultItem.label = defaultTimezone.displayName;
+
+    // Clear out any old recent timezones
+    while (timezoneDefaultItem.nextSibling != timezoneSeparator) {
+        timezonePopup.removeChild(timezoneDefaultItem.nextSibling);
+    }
+
+    // Fill in the new recent timezones
+    for each (let tz in recentTimezones) {
+        let menuItem = createXULElement("menuitem");
+        menuItem.setAttribute("value", tz.tzid);
+        menuItem.setAttribute("label", tz.displayName);
+        timezonePopup.insertBefore(menuItem, timezoneDefaultItem.nextSibling);
+    }
+
+    // Show the popup
+    timezonePopup.openPopup(event.target, "after_start", 0, 0, true);
 }
 
 /**
@@ -2546,7 +2797,10 @@ function editTimezone(aElementId,aDateTime,aCallback) {
     var args = new Object();
     args.time = aDateTime;
     args.calendar = getCurrentCalendar();
-    args.onOk = aCallback;
+    args.onOk = function(datetime) {
+        cal.saveRecentTimezone(datetime.timezone.tzid);
+        return aCallback(datetime);
+    };
 
     // open the dialog modally
     openDialog(
@@ -2899,31 +3153,33 @@ function updateRepeatDetails() {
 
         let startDate = getElementValue(event ? "event-starttime" : "todo-entrydate");
         let endDate = getElementValue(event ? "event-endtime" : "todo-duedate");
-        startDate = jsDateToDateTime(startDate, kDefaultTimezone);
-        endDate = jsDateToDateTime(endDate, kDefaultTimezone);
+        startDate = cal.jsDateToDateTime(startDate, kDefaultTimezone);
+        endDate = cal.jsDateToDateTime(endDate, kDefaultTimezone);
 
         let allDay = getElementValue("event-all-day", "checked");
-        let detailsString = recurrenceRule2String(
-            recurrenceInfo, startDate, endDate, allDay);
+        let detailsString = recurrenceRule2String(recurrenceInfo, startDate,
+                                                  endDate, allDay);
+
+        if (!detailsString) {
+            detailsString = cal.calGetString("calendar-event-dialog", "ruleTooComplex");
+        }
 
         // Now display the string...
-        if (detailsString) {
-            let lines = detailsString.split("\n");
-            repeatDetails.removeAttribute("collapsed");
-            while (repeatDetails.childNodes.length > lines.length) {
-                repeatDetails.removeChild(repeatDetails.lastChild);
+        let lines = detailsString.split("\n");
+        repeatDetails.removeAttribute("collapsed");
+        while (repeatDetails.childNodes.length > lines.length) {
+            repeatDetails.removeChild(repeatDetails.lastChild);
+        }
+        let numChilds = repeatDetails.childNodes.length;
+        for (let i = 0; i < lines.length; i++) {
+            if (i >= numChilds) {
+                var newNode = repeatDetails.childNodes[0]
+                                           .cloneNode(true);
+                repeatDetails.appendChild(newNode);
             }
-            let numChilds = repeatDetails.childNodes.length;
-            for (let i = 0; i < lines.length; i++) {
-                if (i >= numChilds) {
-                    var newNode = repeatDetails.childNodes[0]
-                                               .cloneNode(true);
-                    repeatDetails.appendChild(newNode);
-                }
-                repeatDetails.childNodes[i].value = lines[i];
-                repeatDetails.childNodes[i].setAttribute("tooltiptext",
-                                                         detailsString);
-            }
+            repeatDetails.childNodes[i].value = lines[i];
+            repeatDetails.childNodes[i].setAttribute("tooltiptext",
+                                                     detailsString);
         }
     } else {
         let repeatDetails = document.getElementById("repeat-details");
@@ -2965,29 +3221,7 @@ function showAttendeePopup(event) {
             responsiveAttendees++;
         }
 
-        // Construct the display string from common name and/or email address.
-        var re = new RegExp("^mailto:(.*)", "i");
-        var name = aAttendee.commonName;
-        if (name) {
-            var email = aAttendee.id;
-            if (email && email.length) {
-                if (re.test(email)) {
-                    name += ' <' + RegExp.$1 + '>';
-                } else {
-                    name += ' <' + email + '>';
-                }
-            }
-        } else {
-            var email = aAttendee.id;
-            if (email && email.length) {
-                if (re.test(email)) {
-                    name = RegExp.$1;
-                } else {
-                    name = email;
-                }
-            }
-        }
-        aNode.setAttribute("label", name);
+        aNode.setAttribute("label", aAttendee.toString());
         aNode.setAttribute("status", aAttendee.participationStatus);
         aNode.attendee = aAttendee;
     }

@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is The Mail Profile Migrator.
- *
- * The Initial Developer of the Original Code is Scott MacGregor.
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Scott MacGregor <mscott@mozilla.org>
- *  Jeff Beckley <beckley@qualcomm.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsMailProfileMigratorUtils.h"
 #include "nsISupportsPrimitives.h"
@@ -49,7 +16,7 @@
 nsProfileMigratorBase::nsProfileMigratorBase()
 {
   mObserverService = do_GetService("@mozilla.org/observer-service;1");
-  mProcessingMailFolders = PR_FALSE;
+  mProcessingMailFolders = false;
 }
 
 nsProfileMigratorBase::~nsProfileMigratorBase()
@@ -70,7 +37,7 @@ nsresult nsProfileMigratorBase::ImportSettings(nsIImportModule * aImportModule)
   rv = aImportModule->GetImportInterface(NS_IMPORT_SETTINGS_STR, getter_AddRefs(importSettings));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool importedSettings = PR_FALSE;
+  bool importedSettings = false;
 
   rv = importSettings->Import(getter_AddRefs(mLocalFolderAccount), &importedSettings);
 
@@ -97,10 +64,10 @@ nsresult nsProfileMigratorBase::ImportAddressBook(nsIImportModule * aImportModul
   pabString->SetData(nsDependentCString(kPersonalAddressbookUri));
   mGenericImporter->SetData("addressDestination", pabString);
 
-  PRBool importResult;
-  PRBool wantsProgress;
+  bool importResult;
+  bool wantsProgress;
   mGenericImporter->WantsProgress(&wantsProgress);
-  rv = mGenericImporter->BeginImport(nsnull, nsnull, &importResult);
+  rv = mGenericImporter->BeginImport(nullptr, nullptr, &importResult);
 
   if (wantsProgress)
     ContinueImport();
@@ -138,15 +105,15 @@ nsresult nsProfileMigratorBase::ImportMailData(nsIImportModule * aImportModule)
 
   // by setting the migration flag, we force the import utility to install local folders from OE
   // directly into Local Folders and not as a subfolder
-  migrating->SetData(PR_TRUE);
+  migrating->SetData(true);
   mGenericImporter->SetData("migration", migrating);
 
-  PRBool importResult;
-  PRBool wantsProgress;
+  bool importResult;
+  bool wantsProgress;
   mGenericImporter->WantsProgress(&wantsProgress);
-  rv = mGenericImporter->BeginImport(nsnull, nsnull, &importResult);
+  rv = mGenericImporter->BeginImport(nullptr, nullptr, &importResult);
 
-  mProcessingMailFolders = PR_TRUE;
+  mProcessingMailFolders = true;
 
   if (wantsProgress)
     ContinueImport();
@@ -179,7 +146,7 @@ nsresult nsProfileMigratorBase::ImportFilters(nsIImportModule * aImportModule)
     index.AppendInt(nsIMailProfileMigrator::FILTERS);
     NOTIFY_OBSERVERS(MIGRATION_ITEMBEFOREMIGRATE, index.get());
 
-    PRBool importedFilters = PR_FALSE;
+    bool importedFilters = false;
     PRUnichar* error;
 
     rv = importFilters->Import(&error, &importedFilters);
@@ -188,7 +155,7 @@ nsresult nsProfileMigratorBase::ImportFilters(nsIImportModule * aImportModule)
   }
 
   // migration is now done...notify the UI.
-  NOTIFY_OBSERVERS(MIGRATION_ENDED, nsnull);
+  NOTIFY_OBSERVERS(MIGRATION_ENDED, nullptr);
 
   return rv;
 }

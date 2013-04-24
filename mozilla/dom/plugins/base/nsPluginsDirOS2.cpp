@@ -1,38 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Mozilla OS/2 libraries.
- *
- * The Initial Developer of the Original Code is
- * John Fairhurst, <john_fairhurst@iname.com>.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // OS/2 plugin-loading code.
 
@@ -110,11 +78,11 @@ static char *LoadRCDATAVersion(HMODULE hMod, ULONG resid)
    return string;
 }
 
-static PRUint32 CalculateVariantCount(char* mimeTypes)
+static uint32_t CalculateVariantCount(char* mimeTypes)
 {
-  PRUint32 variants = 1;
+  uint32_t variants = 1;
 
-  if(mimeTypes == nsnull)
+  if(mimeTypes == nullptr)
     return 0;
 
   char* index = mimeTypes;
@@ -128,20 +96,20 @@ static PRUint32 CalculateVariantCount(char* mimeTypes)
   return variants;
 }
 
-static char** MakeStringArray(PRUint32 variants, char* data)
+static char** MakeStringArray(uint32_t variants, char* data)
 {
-  if((variants <= 0) || (data == nsnull))
-    return nsnull;
+  if((variants <= 0) || (data == nullptr))
+    return nullptr;
 
   char ** array = (char **)PR_Calloc(variants, sizeof(char *));
-  if(array == nsnull)
-    return nsnull;
+  if(array == nullptr)
+    return nullptr;
 
   char * start = data;
-  for(PRUint32 i = 0; i < variants; i++)
+  for(uint32_t i = 0; i < variants; i++)
   {
     char * p = PL_strchr(start, '|');
-    if(p != nsnull)
+    if(p != nullptr)
       *p = 0;
 
     array[i] = PL_strdup(start);
@@ -150,17 +118,17 @@ static char** MakeStringArray(PRUint32 variants, char* data)
   return array;
 }
 
-static void FreeStringArray(PRUint32 variants, char ** array)
+static void FreeStringArray(uint32_t variants, char ** array)
 {
-  if((variants == 0) || (array == nsnull))
+  if((variants == 0) || (array == nullptr))
     return;
 
-  for(PRUint32 i = 0; i < variants; i++)
+  for(uint32_t i = 0; i < variants; i++)
   {
-    if(array[i] != nsnull)
+    if(array[i] != nullptr)
     {
       PL_strfree(array[i]);
-      array[i] = nsnull;
+      array[i] = nullptr;
     }
   }
   PR_Free(array);
@@ -168,25 +136,25 @@ static void FreeStringArray(PRUint32 variants, char ** array)
 
 // nsPluginsDir class
 
-PRBool nsPluginsDir::IsPluginFile(nsIFile* file)
+bool nsPluginsDir::IsPluginFile(nsIFile* file)
 {
     nsCAutoString leaf;
     if (NS_FAILED(file->GetNativeLeafName(leaf)))
-        return PR_FALSE;
+        return false;
 
     const char *leafname = leaf.get();
     
-    if( nsnull != leafname)
+    if( nullptr != leafname)
     {
       int len = strlen( leafname);
       if( len > 6 &&                 // np*.dll
           (0 == strnicmp( &(leafname[len - 4]), ".dll", 4)) &&
           (0 == strnicmp( leafname, "np", 2)))
       {
-        return PR_TRUE;
+        return true;
       }
     }
-    return PR_FALSE;
+    return false;
 }
 
 // nsPluginFile implementation
@@ -208,13 +176,13 @@ nsresult nsPluginFile::LoadPlugin(PRLibrary **outLibrary)
     mPlugin->GetNativePath(temp);
 
     *outLibrary = PR_LoadLibrary(temp.get());
-    return *outLibrary == nsnull ? NS_ERROR_FAILURE : NS_OK;
+    return *outLibrary == nullptr ? NS_ERROR_FAILURE : NS_OK;
 }
 
 // Obtains all of the information currently available for this plugin.
 nsresult nsPluginFile::GetPluginInfo(nsPluginInfo &info, PRLibrary **outLibrary)
 {
-   *outLibrary = nsnull;
+   *outLibrary = nullptr;
 
    nsresult   rv = NS_ERROR_FAILURE;
    HMODULE    hPlug = 0; // Need a HMODULE to query resource statements
@@ -230,7 +198,7 @@ nsresult nsPluginFile::GetPluginInfo(nsPluginInfo &info, PRLibrary **outLibrary)
      return rv;
 
    ret = DosLoadModule( failure, CCHMAXPATH, path.get(), &hPlug);
-   info.fVersion = nsnull;
+   info.fVersion = nullptr;
 
    while( ret == NO_ERROR)
    {
@@ -242,24 +210,24 @@ nsresult nsPluginFile::GetPluginInfo(nsPluginInfo &info, PRLibrary **outLibrary)
       info.fDescription = LoadRCDATAString( hPlug, NP_INFO_FileDescription);
 
       char * mimeType = LoadRCDATAString( hPlug, NP_INFO_MIMEType);
-      if( nsnull == mimeType) break;
+      if( nullptr == mimeType) break;
 
       char * mimeDescription = LoadRCDATAString( hPlug, NP_INFO_FileOpenName);
-      if( nsnull == mimeDescription) break;
+      if( nullptr == mimeDescription) break;
 
       char * extensions = LoadRCDATAString( hPlug, NP_INFO_FileExtents);
-      if( nsnull == extensions) break;
+      if( nullptr == extensions) break;
 
       info.fVariantCount = CalculateVariantCount(mimeType);
 
       info.fMimeTypeArray = MakeStringArray(info.fVariantCount, mimeType);
-      if( info.fMimeTypeArray == nsnull) break;
+      if( info.fMimeTypeArray == nullptr) break;
 
       info.fMimeDescriptionArray = MakeStringArray(info.fVariantCount, mimeDescription);
-      if( nsnull == info.fMimeDescriptionArray) break;
+      if( nullptr == info.fMimeDescriptionArray) break;
 
       info.fExtensionArray = MakeStringArray(info.fVariantCount, extensions);
-      if( nsnull == info.fExtensionArray) break;
+      if( nullptr == info.fExtensionArray) break;
 
       info.fFullPath = PL_strdup(path.get());
       info.fFileName = PL_strdup(fileName.get());
@@ -276,28 +244,28 @@ nsresult nsPluginFile::GetPluginInfo(nsPluginInfo &info, PRLibrary **outLibrary)
 
 nsresult nsPluginFile::FreePluginInfo(nsPluginInfo& info)
 {
-   if(info.fName != nsnull)
+   if(info.fName != nullptr)
      PL_strfree(info.fName);
 
-   if(info.fFullPath != nsnull)
+   if(info.fFullPath != nullptr)
      PL_strfree(info.fFullPath);
 
-   if(info.fFileName != nsnull)
+   if(info.fFileName != nullptr)
      PL_strfree(info.fFileName);
  
-   if(info.fVersion != nsnull)
+   if(info.fVersion != nullptr)
      PL_strfree(info.fVersion);
  
-   if(info.fDescription != nsnull)
+   if(info.fDescription != nullptr)
      PL_strfree(info.fDescription);
  
-   if(info.fMimeTypeArray != nsnull)
+   if(info.fMimeTypeArray != nullptr)
      FreeStringArray(info.fVariantCount, info.fMimeTypeArray);
  
-   if(info.fMimeDescriptionArray != nsnull)
+   if(info.fMimeDescriptionArray != nullptr)
      FreeStringArray(info.fVariantCount, info.fMimeDescriptionArray);
  
-   if(info.fExtensionArray != nsnull)
+   if(info.fExtensionArray != nullptr)
      FreeStringArray(info.fVariantCount, info.fExtensionArray);
  
    memset((void *)&info, 0, sizeof(info));

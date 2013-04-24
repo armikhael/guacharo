@@ -1,49 +1,19 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Mozilla SVG project.
- *
- * The Initial Developer of the Original Code is IBM Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include "nsIDOMDocument.h"
-#include "nsIDocument.h"
-#include "nsIDOMSVGClipPathElement.h"
+// Main header first:
 #include "nsSVGClipPathFrame.h"
-#include "nsGkAtoms.h"
-#include "nsSVGUtils.h"
-#include "nsSVGEffects.h"
-#include "nsSVGClipPathElement.h"
+
+// Keep others in (case-insensitive) order:
 #include "gfxContext.h"
-#include "nsSVGMatrix.h"
+#include "nsGkAtoms.h"
+#include "nsIDOMSVGClipPathElement.h"
+#include "nsRenderingContext.h"
+#include "nsSVGClipPathElement.h"
+#include "nsSVGEffects.h"
+#include "nsSVGUtils.h"
 
 //----------------------------------------------------------------------
 // Implementation
@@ -57,7 +27,7 @@ NS_NewSVGClipPathFrame(nsIPresShell* aPresShell, nsStyleContext* aContext)
 NS_IMPL_FRAMEARENA_HELPERS(nsSVGClipPathFrame)
 
 nsresult
-nsSVGClipPathFrame::ClipPaint(nsSVGRenderState* aContext,
+nsSVGClipPathFrame::ClipPaint(nsRenderingContext* aContext,
                               nsIFrame* aParent,
                               const gfxMatrix &aMatrix)
 {
@@ -71,20 +41,43 @@ nsSVGClipPathFrame::ClipPaint(nsSVGRenderState* aContext,
   AutoClipPathReferencer clipRef(this);
 
   mClipParent = aParent;
-  mClipParentMatrix = NS_NewSVGMatrix(aMatrix);
+  if (mClipParentMatrix) {
+    *mClipParentMatrix = aMatrix;
+  } else {
+    mClipParentMatrix = new gfxMatrix(aMatrix);
+  }
 
-  PRBool isTrivial = IsTrivial();
+  gfxContext *gfx = aContext->ThebesContext();
 
-  nsAutoSVGRenderMode mode(aContext,
-                           isTrivial ? nsSVGRenderState::CLIP
-                                     : nsSVGRenderState::CLIP_MASK);
+  nsISVGChildFrame *singleClipPathChild = nullptr;
 
+  if (IsTrivial(&singleClipPathChild)) {
+    // Notify our child that it's painting as part of a clipPath, and that
+    // we only require it to draw its path (it should skip filling, etc.):
+    SVGAutoRenderState mode(aContext, SVGAutoRenderState::CLIP);
 
-  gfxContext *gfx = aContext->GetGfxContext();
+    if (!singleClipPathChild) {
+      // We have no children - the spec says clip away everything:
+      gfx->Rectangle(gfxRect());
+    } else {
+      singleClipPathChild->NotifySVGChanged(
+                             nsISVGChildFrame::TRANSFORM_CHANGED);
+      singleClipPathChild->PaintSVG(aContext, nullptr);
+    }
+    gfx->Clip();
+    gfx->NewPath();
+    return NS_OK;
+  }
 
+  // Seems like this is a non-trivial clipPath, so we need to use a clip mask.
+
+  // Notify our children that they're painting into a clip mask:
+  SVGAutoRenderState mode(aContext, SVGAutoRenderState::CLIP_MASK);
+
+  // Check if this clipPath is itself clipped by another clipPath:
   nsSVGClipPathFrame *clipPathFrame =
-    nsSVGEffects::GetEffectProperties(this).GetClipPathFrame(nsnull);
-  PRBool referencedClipIsTrivial;
+    nsSVGEffects::GetEffectProperties(this).GetClipPathFrame(nullptr);
+  bool referencedClipIsTrivial;
   if (clipPathFrame) {
     referencedClipIsTrivial = clipPathFrame->IsTrivial();
     gfx->Save();
@@ -100,17 +93,16 @@ nsSVGClipPathFrame::ClipPaint(nsSVGRenderState* aContext,
     nsISVGChildFrame* SVGFrame = do_QueryFrame(kid);
     if (SVGFrame) {
       // The CTM of each frame referencing us can be different.
-      SVGFrame->NotifySVGChanged(nsISVGChildFrame::SUPPRESS_INVALIDATION | 
-                                 nsISVGChildFrame::TRANSFORM_CHANGED);
+      SVGFrame->NotifySVGChanged(nsISVGChildFrame::TRANSFORM_CHANGED);
 
-      PRBool isOK = PR_TRUE;
+      bool isOK = true;
       nsSVGClipPathFrame *clipPathFrame =
         nsSVGEffects::GetEffectProperties(kid).GetClipPathFrame(&isOK);
       if (!isOK) {
         continue;
       }
 
-      PRBool isTrivial;
+      bool isTrivial;
 
       if (clipPathFrame) {
         isTrivial = clipPathFrame->IsTrivial();
@@ -122,7 +114,7 @@ nsSVGClipPathFrame::ClipPaint(nsSVGRenderState* aContext,
         }
       }
 
-      SVGFrame->PaintSVG(aContext, nsnull);
+      SVGFrame->PaintSVG(aContext, nullptr);
 
       if (clipPathFrame) {
         if (!isTrivial) {
@@ -160,15 +152,10 @@ nsSVGClipPathFrame::ClipPaint(nsSVGRenderState* aContext,
     gfx->Restore();
   }
 
-  if (isTrivial) {
-    gfx->Clip();
-    gfx->NewPath();
-  }
-
   return NS_OK;
 }
 
-PRBool
+bool
 nsSVGClipPathFrame::ClipHitTest(nsIFrame* aParent,
                                 const gfxMatrix &aMatrix,
                                 const nsPoint &aPoint)
@@ -178,17 +165,21 @@ nsSVGClipPathFrame::ClipHitTest(nsIFrame* aParent,
   // and the document has a clip reference loop.
   if (mInUse) {
     NS_WARNING("Clip loop detected!");
-    return PR_FALSE;
+    return false;
   }
   AutoClipPathReferencer clipRef(this);
 
   mClipParent = aParent;
-  mClipParentMatrix = NS_NewSVGMatrix(aMatrix);
+  if (mClipParentMatrix) {
+    *mClipParentMatrix = aMatrix;
+  } else {
+    mClipParentMatrix = new gfxMatrix(aMatrix);
+  }
 
   nsSVGClipPathFrame *clipPathFrame =
-    nsSVGEffects::GetEffectProperties(this).GetClipPathFrame(nsnull);
+    nsSVGEffects::GetEffectProperties(this).GetClipPathFrame(nullptr);
   if (clipPathFrame && !clipPathFrame->ClipHitTest(aParent, aMatrix, aPoint))
-    return PR_FALSE;
+    return false;
 
   for (nsIFrame* kid = mFrames.FirstChild(); kid;
        kid = kid->GetNextSibling()) {
@@ -200,20 +191,24 @@ nsSVGClipPathFrame::ClipHitTest(nsIFrame* aParent,
       SVGFrame->NotifySVGChanged(nsISVGChildFrame::TRANSFORM_CHANGED);
 
       if (SVGFrame->GetFrameForPoint(aPoint))
-        return PR_TRUE;
+        return true;
     }
   }
-  return PR_FALSE;
+  return false;
 }
 
-PRBool
-nsSVGClipPathFrame::IsTrivial()
+bool
+nsSVGClipPathFrame::IsTrivial(nsISVGChildFrame **aSingleChild)
 {
   // If the clip path is clipped then it's non-trivial
-  if (nsSVGEffects::GetEffectProperties(this).GetClipPathFrame(nsnull))
-    return PR_FALSE;
+  if (nsSVGEffects::GetEffectProperties(this).GetClipPathFrame(nullptr))
+    return false;
 
-  PRBool foundChild = PR_FALSE;
+  if (aSingleChild) {
+    *aSingleChild = nullptr;
+  }
+
+  nsISVGChildFrame *foundChild = nullptr;
 
   for (nsIFrame* kid = mFrames.FirstChild(); kid;
        kid = kid->GetNextSibling()) {
@@ -222,31 +217,34 @@ nsSVGClipPathFrame::IsTrivial()
       // We consider a non-trivial clipPath to be one containing
       // either more than one svg child and/or a svg container
       if (foundChild || svgChild->IsDisplayContainer())
-        return PR_FALSE;
+        return false;
 
       // or where the child is itself clipped
-      if (nsSVGEffects::GetEffectProperties(kid).GetClipPathFrame(nsnull))
-        return PR_FALSE;
+      if (nsSVGEffects::GetEffectProperties(kid).GetClipPathFrame(nullptr))
+        return false;
 
-      foundChild = PR_TRUE;
+      foundChild = svgChild;
     }
   }
-  return PR_TRUE;
+  if (aSingleChild) {
+    *aSingleChild = foundChild;
+  }
+  return true;
 }
 
-PRBool
+bool
 nsSVGClipPathFrame::IsValid()
 {
   if (mInUse) {
     NS_WARNING("Clip loop detected!");
-    return PR_FALSE;
+    return false;
   }
   AutoClipPathReferencer clipRef(this);
 
-  PRBool isOK = PR_TRUE;
+  bool isOK = true;
   nsSVGEffects::GetEffectProperties(this).GetClipPathFrame(&isOK);
   if (!isOK) {
-    return PR_FALSE;
+    return false;
   }
 
   for (nsIFrame* kid = mFrames.FirstChild(); kid;
@@ -255,35 +253,40 @@ nsSVGClipPathFrame::IsValid()
     nsIAtom *type = kid->GetType();
 
     if (type == nsGkAtoms::svgUseFrame) {
-      for (nsIFrame* grandKid = kid->GetFirstChild(nsnull); grandKid;
+      for (nsIFrame* grandKid = kid->GetFirstPrincipalChild(); grandKid;
            grandKid = grandKid->GetNextSibling()) {
 
         nsIAtom *type = grandKid->GetType();
 
         if (type != nsGkAtoms::svgPathGeometryFrame &&
             type != nsGkAtoms::svgTextFrame) {
-          return PR_FALSE;
+          return false;
         }
       }
       continue;
     }
     if (type != nsGkAtoms::svgPathGeometryFrame &&
         type != nsGkAtoms::svgTextFrame) {
-      return PR_FALSE;
+      return false;
     }
   }
-  return PR_TRUE;
+  return true;
 }
 
 NS_IMETHODIMP
-nsSVGClipPathFrame::AttributeChanged(PRInt32         aNameSpaceID,
+nsSVGClipPathFrame::AttributeChanged(int32_t         aNameSpaceID,
                                      nsIAtom*        aAttribute,
-                                     PRInt32         aModType)
+                                     int32_t         aModType)
 {
-  if (aNameSpaceID == kNameSpaceID_None &&
-      aAttribute == nsGkAtoms::transform) {
-    nsSVGUtils::NotifyChildrenOfSVGChange(this,
-                                          nsISVGChildFrame::TRANSFORM_CHANGED);
+  if (aNameSpaceID == kNameSpaceID_None) {
+    if (aAttribute == nsGkAtoms::transform) {
+      nsSVGEffects::InvalidateDirectRenderingObservers(this);
+      nsSVGUtils::NotifyChildrenOfSVGChange(this,
+                                            nsISVGChildFrame::TRANSFORM_CHANGED);
+    }
+    if (aAttribute == nsGkAtoms::clipPathUnits) {
+      nsSVGEffects::InvalidateRenderingObservers(this);
+    }
   }
 
   return nsSVGClipPathFrameBase::AttributeChanged(aNameSpaceID,
@@ -311,12 +314,13 @@ nsSVGClipPathFrame::GetType() const
 }
 
 gfxMatrix
-nsSVGClipPathFrame::GetCanvasTM()
+nsSVGClipPathFrame::GetCanvasTM(uint32_t aFor)
 {
   nsSVGClipPathElement *content = static_cast<nsSVGClipPathElement*>(mContent);
 
-  gfxMatrix tm = content->PrependLocalTransformTo(
-    nsSVGUtils::ConvertSVGMatrixToThebes(mClipParentMatrix));
+  gfxMatrix tm =
+    content->PrependLocalTransformsTo(mClipParentMatrix ?
+                                      *mClipParentMatrix : gfxMatrix());
 
   return nsSVGUtils::AdjustMatrixForUnits(tm,
                                           &content->mEnumAttributes[nsSVGClipPathElement::CLIPPATHUNITS],

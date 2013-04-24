@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Seth Spitzer <sspitzer@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsMsgIncomingServer_h__
 #define nsMsgIncomingServer_h__
@@ -44,13 +11,14 @@
 #include "nsIMsgFilterList.h"
 #include "msgCore.h"
 #include "nsIMsgFolder.h"
-#include "nsILocalFile.h"
+#include "nsIFile.h"
 #include "nsCOMPtr.h"
 #include "nsWeakReference.h"
 #include "nsIMsgDatabase.h"
 #include "nsISpamSettings.h"
 #include "nsIMsgFilterPlugin.h"
 #include "nsDataHashtable.h"
+#include "nsIMsgPluggableStore.h"
 
 class nsIMsgFolderCache;
 class nsIMsgProtocolInfo;
@@ -88,7 +56,11 @@ protected:
   nsCOMPtr <nsIMsgFolder> m_rootFolder;
   nsCOMPtr <nsIMsgDownloadSettings> m_downloadSettings;
 
-  nsresult CreateLocalFolder(nsIFile *path, const nsACString& folderName);
+  // For local servers, where we put messages. For imap/pop3, where we store
+  // offline messages.
+  nsCOMPtr <nsIMsgPluggableStore> m_msgStore;
+
+  nsresult CreateLocalFolder(const nsAString& folderName);
   nsresult GetDeferredServers(nsIMsgIncomingServer *server, nsISupportsArray **_retval);
 
   nsresult CreateRootFolder();
@@ -98,27 +70,27 @@ protected:
   nsresult InternalSetHostName(const nsACString& aHostname, const char * prefName);
 
   nsresult getProtocolInfo(nsIMsgProtocolInfo **aResult);
-  nsCOMPtr <nsILocalFile> mFilterFile;
+  nsCOMPtr <nsIFile> mFilterFile;
   nsCOMPtr <nsIMsgFilterList> mFilterList;
   nsCOMPtr <nsIMsgFilterList> mEditableFilterList;
   nsCOMPtr<nsIPrefBranch> mPrefBranch;
   nsCOMPtr<nsIPrefBranch> mDefPrefBranch;
 
   // these allow us to handle duplicate incoming messages, e.g. delete them.
-  nsDataHashtable<nsCStringHashKey,PRInt32> m_downloadedHdrs;
-  PRInt32  m_numMsgsDownloaded;
-static PLDHashOperator evictOldEntries(nsCStringHashKey::KeyType aKey, PRInt32 &aData, void *aClosure);
+  nsDataHashtable<nsCStringHashKey,int32_t> m_downloadedHdrs;
+  int32_t  m_numMsgsDownloaded;
+static PLDHashOperator evictOldEntries(nsCStringHashKey::KeyType aKey, int32_t &aData, void *aClosure);
 private:
-  PRUint32 m_biffState;
-  PRPackedBool m_serverBusy;
+  uint32_t m_biffState;
+  bool m_serverBusy;
   nsCOMPtr <nsISpamSettings> mSpamSettings;
   nsCOMPtr<nsIMsgFilterPlugin> mFilterPlugin;  // XXX should be a list
 
 protected:
   nsCString m_password;
-  PRPackedBool m_canHaveFilters;
-  PRPackedBool m_displayStartupPage;
-  PRPackedBool mPerformingBiff;
+  bool m_canHaveFilters;
+  bool m_displayStartupPage;
+  bool mPerformingBiff;
 };
 
 #undef  IMETHOD_VISIBILITY

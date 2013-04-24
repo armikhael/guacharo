@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 20; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Corporation code.
- *
- * The Initial Developer of the Original Code is Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2009
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Bas Schouten <bschouten@mozilla.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef GFX_LAYERMANAGERD3D10_H
 #define GFX_LAYERMANAGERD3D10_H
@@ -87,8 +55,6 @@ extern cairo_user_data_key_t gKeyD3D10Texture;
 class THEBES_API LayerManagerD3D10 : public ShadowLayerManager,
                                      public ShadowLayerForwarder {
 public:
-  typedef LayerManager::LayersBackend LayersBackend;
-
   LayerManagerD3D10(nsIWidget *aWidget);
   virtual ~LayerManagerD3D10();
 
@@ -100,7 +66,7 @@ public:
    *
    * \return True is initialization was succesful, false when it was not.
    */
-  bool Initialize();
+  bool Initialize(bool force = false);
 
   /*
    * LayerManager implementation.
@@ -119,7 +85,7 @@ public:
 
   virtual void BeginTransactionWithTarget(gfxContext* aTarget);
 
-  virtual bool EndEmptyTransaction();
+  virtual bool EndEmptyTransaction(EndTransactionFlags aFlags = END_DEFAULT);
 
   struct CallbackInfo {
     DrawThebesLayerCallback Callback;
@@ -127,7 +93,8 @@ public:
   };
 
   virtual void EndTransaction(DrawThebesLayerCallback aCallback,
-                              void* aCallbackData);
+                              void* aCallbackData,
+                              EndTransactionFlags aFlags = END_DEFAULT);
 
   const CallbackInfo &GetCallbackInfo() { return mCurrentCallbackInfo; }
 
@@ -140,6 +107,11 @@ public:
     return aSize <= gfxIntSize(MAX_TEXTURE_SIZE, MAX_TEXTURE_SIZE);
   }
 
+  virtual int32_t GetMaxTextureSize() const
+  {
+    return MAX_TEXTURE_SIZE;
+  }
+
   virtual already_AddRefed<ThebesLayer> CreateThebesLayer();
   virtual already_AddRefed<ShadowThebesLayer> CreateShadowThebesLayer();
 
@@ -148,23 +120,24 @@ public:
 
   virtual already_AddRefed<ImageLayer> CreateImageLayer();
   virtual already_AddRefed<ShadowImageLayer> CreateShadowImageLayer()
-  { return nsnull; }
+  { return nullptr; }
 
   virtual already_AddRefed<ColorLayer> CreateColorLayer();
   virtual already_AddRefed<ShadowColorLayer> CreateShadowColorLayer()
-  { return nsnull; }
+  { return nullptr; }
 
   virtual already_AddRefed<CanvasLayer> CreateCanvasLayer();
   virtual already_AddRefed<ShadowCanvasLayer> CreateShadowCanvasLayer()
-  { return nsnull; }
+  { return nullptr; }
 
   virtual already_AddRefed<ReadbackLayer> CreateReadbackLayer();
-
-  virtual already_AddRefed<ImageContainer> CreateImageContainer();
 
   virtual already_AddRefed<gfxASurface>
     CreateOptimalSurface(const gfxIntSize &aSize,
                          gfxASurface::gfxImageFormat imageFormat);
+
+  virtual already_AddRefed<gfxASurface>
+    CreateOptimalMaskSurface(const gfxIntSize &aSize);
 
   virtual TemporaryRef<mozilla::gfx::DrawTarget>
     CreateDrawTarget(const mozilla::gfx::IntSize &aSize,
@@ -182,9 +155,13 @@ public:
   ID3D10Device1 *device() const { return mDevice; }
 
   ID3D10Effect *effect() const { return mEffect; }
-
+  IDXGISwapChain *SwapChain() const
+  {
+    return mSwapChain;
+  }
   ReadbackManagerD3D10 *readbackManager();
 
+  void SetupInputAssembler();
   void SetViewport(const nsIntSize &aViewport);
   const nsIntSize &GetViewport() { return mViewport; }
 
@@ -201,7 +178,7 @@ private:
   void VerifyBufferSize();
   void EnsureReadbackManager();
 
-  void Render();
+  void Render(EndTransactionFlags aFlags);
 
   nsRefPtr<ID3D10Device1> mDevice;
 
@@ -264,7 +241,7 @@ class LayerD3D10
 public:
   LayerD3D10(LayerManagerD3D10 *aManager);
 
-  virtual LayerD3D10 *GetFirstChildD3D10() { return nsnull; }
+  virtual LayerD3D10 *GetFirstChildD3D10() { return nullptr; }
 
   void SetFirstChild(LayerD3D10 *aParent);
 
@@ -288,6 +265,20 @@ public:
    */
   Nv3DVUtils *GetNv3DVUtils()  { return mD3DManager->GetNv3DVUtils(); }
 
+  /*
+   * Returns a shader resource view of a texture containing the contents of this
+   * layer. Will try to return an existing texture if possible, or a temporary
+   * one if not. It is the callee's responsibility to release the shader
+   * resource view. Will return null if a texture could not be constructed.
+   * The texture will not be transformed, i.e., it will be in the same coord
+   * space as this.
+   * Any layer that can be used as a mask layer should override this method.
+   * If aSize is non-null, it will contain the size of the texture.
+   */
+  virtual already_AddRefed<ID3D10ShaderResourceView> GetAsTexture(gfxIntSize* aSize)
+  {
+    return nullptr;
+  }
 
   void SetEffectTransformAndOpacity()
   {
@@ -299,6 +290,37 @@ public:
   }
 
 protected:
+  /*
+   * Finds a texture for this layer's mask layer (if it has one) and sets it
+   * as an input to the shaders.
+   * Returns SHADER_MASK if a texture is loaded, SHADER_NO_MASK if there was no 
+   * mask layer, or a texture for the mask layer could not be loaded.
+   */
+  uint8_t LoadMaskTexture();
+
+  /**
+   * Select a shader technique using a combination of the following flags.
+   * Not all combinations of flags are supported, and might cause an error,
+   * check the fx file to see which shaders exist. In particular, aFlags should
+   * include any combination of the 0x20 bit = 0 flags OR one of the 0x20 bit = 1
+   * flags. Mask flags can be used in either case.
+   */
+  ID3D10EffectTechnique* SelectShader(uint8_t aFlags);
+  const static uint8_t SHADER_NO_MASK = 0;
+  const static uint8_t SHADER_MASK = 0x1;
+  const static uint8_t SHADER_MASK_3D = 0x2;
+  // 0x20 bit = 0
+  const static uint8_t SHADER_RGB = 0;
+  const static uint8_t SHADER_RGBA = 0x4;
+  const static uint8_t SHADER_NON_PREMUL = 0;
+  const static uint8_t SHADER_PREMUL = 0x8;
+  const static uint8_t SHADER_LINEAR = 0;
+  const static uint8_t SHADER_POINT = 0x10;
+  // 0x20 bit = 1
+  const static uint8_t SHADER_YCBCR = 0x20;
+  const static uint8_t SHADER_COMPONENT_ALPHA = 0x24;
+  const static uint8_t SHADER_SOLID = 0x28;
+
   LayerManagerD3D10 *mD3DManager;
 };
 
@@ -335,6 +357,7 @@ public:
   void ComputeEffectiveTransforms(const gfx3DMatrix&) {}
   void InsertAfter(Layer*, Layer*);
   void RemoveChild(Layer*);
+  void RepositionChild(Layer*, Layer*);
   Layer* AsLayer() { return this; }
 
   void SetShadow(PLayerChild* aChild) { mShadow = aChild; }

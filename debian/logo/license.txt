@@ -1,4 +1,4 @@
-License for iceweasel_icon/logo - guacharo_icon/logo - iceape_icon/logo artworks.
+License for iceweasel_icon/logo - icedove_icon/logo - iceape_icon/logo artworks.
 
 Version: MPL 1.1/GPL 2.0/LGPL 2.1
 

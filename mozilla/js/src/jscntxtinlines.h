@@ -1,115 +1,205 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * vim: set ts=4 sw=4 et tw=78:
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is SpiderMonkey code.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Corporation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jeff Walden <jwalden+code@mit.edu> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef jscntxtinlines_h___
 #define jscntxtinlines_h___
 
 #include "jscntxt.h"
 #include "jscompartment.h"
-#include "jsstaticcheck.h"
+#include "jsfriendapi.h"
+#include "jsinterp.h"
+#include "jsprobes.h"
 #include "jsxml.h"
-#include "jsregexp.h"
 #include "jsgc.h"
 
 #include "frontend/ParseMaps.h"
+#include "vm/RegExpObject.h"
+
+#include "jsgcinlines.h"
 
 namespace js {
 
-static inline GlobalObject *
-GetGlobalForScopeChain(JSContext *cx)
+inline void
+NewObjectCache::staticAsserts()
 {
-    /*
-     * This is essentially GetScopeChain(cx)->getGlobal(), but without
-     * falling off trace.
-     *
-     * This use of cx->fp, possibly on trace, is deliberate:
-     * cx->fp->scopeChain->getGlobal() returns the same object whether we're on
-     * trace or not, since we do not trace calls across global objects.
-     */
-    VOUCH_DOES_NOT_REQUIRE_STACK();
-
-    if (cx->hasfp())
-        return cx->fp()->scopeChain().getGlobal();
-
-    JSObject *scope = cx->globalObject;
-    if (!NULLABLE_OBJ_TO_INNER_OBJECT(cx, scope))
-        return NULL;
-    return scope->asGlobal();
+    JS_STATIC_ASSERT(NewObjectCache::MAX_OBJ_SIZE == sizeof(JSObject_Slots16));
+    JS_STATIC_ASSERT(gc::FINALIZE_OBJECT_LAST == gc::FINALIZE_OBJECT16_BACKGROUND);
 }
+
+inline bool
+NewObjectCache::lookup(Class *clasp, gc::Cell *key, gc::AllocKind kind, EntryIndex *pentry)
+{
+    uintptr_t hash = (uintptr_t(clasp) ^ uintptr_t(key)) + kind;
+    *pentry = hash % js::ArrayLength(entries);
+
+    Entry *entry = &entries[*pentry];
+
+    /* N.B. Lookups with the same clasp/key but different kinds map to different entries. */
+    return (entry->clasp == clasp && entry->key == key);
+}
+
+inline bool
+NewObjectCache::lookupProto(Class *clasp, JSObject *proto, gc::AllocKind kind, EntryIndex *pentry)
+{
+    JS_ASSERT(!proto->isGlobal());
+    return lookup(clasp, proto, kind, pentry);
+}
+
+inline bool
+NewObjectCache::lookupGlobal(Class *clasp, js::GlobalObject *global, gc::AllocKind kind, EntryIndex *pentry)
+{
+    return lookup(clasp, global, kind, pentry);
+}
+
+inline bool
+NewObjectCache::lookupType(Class *clasp, js::types::TypeObject *type, gc::AllocKind kind, EntryIndex *pentry)
+{
+    return lookup(clasp, type, kind, pentry);
+}
+
+inline void
+NewObjectCache::fill(EntryIndex entry_, Class *clasp, gc::Cell *key, gc::AllocKind kind, JSObject *obj)
+{
+    JS_ASSERT(unsigned(entry_) < ArrayLength(entries));
+    Entry *entry = &entries[entry_];
+
+    JS_ASSERT(!obj->hasDynamicSlots() && !obj->hasDynamicElements());
+
+    entry->clasp = clasp;
+    entry->key = key;
+    entry->kind = kind;
+
+    entry->nbytes = obj->sizeOfThis();
+    js_memcpy(&entry->templateObject, obj, entry->nbytes);
+}
+
+inline void
+NewObjectCache::fillProto(EntryIndex entry, Class *clasp, JSObject *proto, gc::AllocKind kind, JSObject *obj)
+{
+    JS_ASSERT(!proto->isGlobal());
+    JS_ASSERT(obj->getProto() == proto);
+    return fill(entry, clasp, proto, kind, obj);
+}
+
+inline void
+NewObjectCache::fillGlobal(EntryIndex entry, Class *clasp, js::GlobalObject *global, gc::AllocKind kind, JSObject *obj)
+{
+    //JS_ASSERT(global == obj->getGlobal());
+    return fill(entry, clasp, global, kind, obj);
+}
+
+inline void
+NewObjectCache::fillType(EntryIndex entry, Class *clasp, js::types::TypeObject *type, gc::AllocKind kind, JSObject *obj)
+{
+    JS_ASSERT(obj->type() == type);
+    return fill(entry, clasp, type, kind, obj);
+}
+
+inline JSObject *
+NewObjectCache::newObjectFromHit(JSContext *cx, EntryIndex entry_)
+{
+    JS_ASSERT(unsigned(entry_) < ArrayLength(entries));
+    Entry *entry = &entries[entry_];
+
+    JSObject *obj = js_TryNewGCObject(cx, entry->kind);
+    if (obj) {
+        copyCachedToObject(obj, reinterpret_cast<JSObject *>(&entry->templateObject));
+        Probes::createObject(cx, obj);
+        return obj;
+    }
+
+    return NULL;
+}
+
+struct PreserveRegsGuard
+{
+    PreserveRegsGuard(JSContext *cx, FrameRegs &regs)
+      : prevContextRegs(cx->maybeRegs()), cx(cx), regs_(regs) {
+        cx->stack.repointRegs(&regs_);
+    }
+    ~PreserveRegsGuard() {
+        JS_ASSERT(cx->maybeRegs() == &regs_);
+        *prevContextRegs = regs_;
+        cx->stack.repointRegs(prevContextRegs);
+    }
+
+    FrameRegs *prevContextRegs;
+
+  private:
+    JSContext *cx;
+    FrameRegs &regs_;
+};
 
 inline GSNCache *
 GetGSNCache(JSContext *cx)
 {
-    return &JS_THREAD_DATA(cx)->gsnCache;
+    return &cx->runtime->gsnCache;
 }
+
+#if JS_HAS_XML_SUPPORT
 
 class AutoNamespaceArray : protected AutoGCRooter {
   public:
-    AutoNamespaceArray(JSContext *cx) : AutoGCRooter(cx, NAMESPACES) {
+    AutoNamespaceArray(JSContext *cx)
+        : AutoGCRooter(cx, NAMESPACES), context(cx) {
         array.init();
     }
 
     ~AutoNamespaceArray() {
-        array.finish(context);
+        array.finish(context->runtime->defaultFreeOp());
     }
 
-    uint32 length() const { return array.length; }
+    uint32_t length() const { return array.length; }
 
-  public:
+  private:
+    JSContext *context;
     friend void AutoGCRooter::trace(JSTracer *trc);
 
-    JSXMLArray array;
+  public:
+    JSXMLArray<JSObject> array;
+};
+
+#endif /* JS_HAS_XML_SUPPORT */
+
+template <typename T>
+class AutoPtr
+{
+    JSContext *cx;
+    T *value;
+
+    AutoPtr(const AutoPtr &other) MOZ_DELETE;
+
+  public:
+    explicit AutoPtr(JSContext *cx) : cx(cx), value(NULL) {}
+    ~AutoPtr() {
+        cx->delete_<T>(value);
+    }
+
+    void operator=(T *ptr) { value = ptr; }
+
+    typedef void ***** ConvertibleToBool;
+    operator ConvertibleToBool() const { return (ConvertibleToBool) value; }
+
+    const T *operator->() const { return value; }
+    T *operator->() { return value; }
+
+    T *get() { return value; }
 };
 
 #ifdef DEBUG
 class CompartmentChecker
 {
-  private:
     JSContext *context;
     JSCompartment *compartment;
 
   public:
-    explicit CompartmentChecker(JSContext *cx) : context(cx), compartment(cx->compartment) {
-        check(cx->hasfp() ? JS_GetGlobalForScopeChain(cx) : cx->globalObject);
-        VOUCH_DOES_NOT_REQUIRE_STACK();
-    }
+    explicit CompartmentChecker(JSContext *cx)
+      : context(cx), compartment(cx->compartment)
+    {}
 
     /*
      * Set a breakpoint here (break js::CompartmentChecker::fail) to debug
@@ -144,6 +234,11 @@ class CompartmentChecker
             check(obj->compartment());
     }
 
+    template<typename T>
+    void check(Handle<T> handle) {
+        check(handle.get());
+    }
+
     void check(JSString *str) {
         if (!str->isAtom())
             check(str->compartment());
@@ -154,10 +249,6 @@ class CompartmentChecker
             check(&v.toObject());
         else if (v.isString())
             check(v.toString());
-    }
-
-    void check(jsval v) {
-        check(Valueify(v));
     }
 
     void check(const ValueArray &arr) {
@@ -179,10 +270,10 @@ class CompartmentChecker
         if (JSID_IS_OBJECT(id))
             check(JSID_TO_OBJECT(id));
     }
-    
+
     void check(JSIdArray *ida) {
         if (ida) {
-            for (jsint i = 0; i < ida->length; i++) {
+            for (int i = 0; i < ida->length; i++) {
                 if (JSID_IS_OBJECT(ida->vector[i]))
                     check(ida->vector[i]);
             }
@@ -190,15 +281,13 @@ class CompartmentChecker
     }
 
     void check(JSScript *script) {
-        if (script) {
-            check(script->compartment);
-            if (script->u.object)
-                check(script->u.object);
-        }
+        if (script)
+            check(script->compartment());
     }
 
     void check(StackFrame *fp) {
-        check(&fp->scopeChain());
+        if (fp)
+            check(fp->scopeChain());
     }
 };
 
@@ -209,12 +298,12 @@ class CompartmentChecker
  * depends on other objects not having been swept yet.
  */
 #define START_ASSERT_SAME_COMPARTMENT()                                       \
-    if (cx->runtime->gcRunning)                                               \
+    if (cx->runtime->isHeapBusy())                                            \
         return;                                                               \
     CompartmentChecker c(cx)
 
 template <class T1> inline void
-assertSameCompartment(JSContext *cx, T1 t1)
+assertSameCompartment(JSContext *cx, const T1 &t1)
 {
 #ifdef DEBUG
     START_ASSERT_SAME_COMPARTMENT();
@@ -223,7 +312,7 @@ assertSameCompartment(JSContext *cx, T1 t1)
 }
 
 template <class T1, class T2> inline void
-assertSameCompartment(JSContext *cx, T1 t1, T2 t2)
+assertSameCompartment(JSContext *cx, const T1 &t1, const T2 &t2)
 {
 #ifdef DEBUG
     START_ASSERT_SAME_COMPARTMENT();
@@ -233,7 +322,7 @@ assertSameCompartment(JSContext *cx, T1 t1, T2 t2)
 }
 
 template <class T1, class T2, class T3> inline void
-assertSameCompartment(JSContext *cx, T1 t1, T2 t2, T3 t3)
+assertSameCompartment(JSContext *cx, const T1 &t1, const T2 &t2, const T3 &t3)
 {
 #ifdef DEBUG
     START_ASSERT_SAME_COMPARTMENT();
@@ -244,7 +333,7 @@ assertSameCompartment(JSContext *cx, T1 t1, T2 t2, T3 t3)
 }
 
 template <class T1, class T2, class T3, class T4> inline void
-assertSameCompartment(JSContext *cx, T1 t1, T2 t2, T3 t3, T4 t4)
+assertSameCompartment(JSContext *cx, const T1 &t1, const T2 &t2, const T3 &t3, const T4 &t4)
 {
 #ifdef DEBUG
     START_ASSERT_SAME_COMPARTMENT();
@@ -256,7 +345,7 @@ assertSameCompartment(JSContext *cx, T1 t1, T2 t2, T3 t3, T4 t4)
 }
 
 template <class T1, class T2, class T3, class T4, class T5> inline void
-assertSameCompartment(JSContext *cx, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5)
+assertSameCompartment(JSContext *cx, const T1 &t1, const T2 &t2, const T3 &t3, const T4 &t4, const T5 &t5)
 {
 #ifdef DEBUG
     START_ASSERT_SAME_COMPARTMENT();
@@ -272,13 +361,15 @@ assertSameCompartment(JSContext *cx, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5)
 
 STATIC_PRECONDITION_ASSUME(ubound(args.argv_) >= argc)
 JS_ALWAYS_INLINE bool
-CallJSNative(JSContext *cx, js::Native native, const CallArgs &args)
+CallJSNative(JSContext *cx, Native native, const CallArgs &args)
 {
+    JS_CHECK_RECURSION(cx, return false);
+
 #ifdef DEBUG
-    JSBool alreadyThrowing = cx->isExceptionPending();
+    bool alreadyThrowing = cx->isExceptionPending();
 #endif
     assertSameCompartment(cx, args);
-    JSBool ok = native(cx, args.argc(), args.base());
+    bool ok = native(cx, args.length(), args.base());
     if (ok) {
         assertSameCompartment(cx, args.rval());
         JS_ASSERT_IF(!alreadyThrowing, !cx->isExceptionPending());
@@ -286,14 +377,30 @@ CallJSNative(JSContext *cx, js::Native native, const CallArgs &args)
     return ok;
 }
 
-extern JSBool CallOrConstructBoundFunction(JSContext *, uintN, js::Value *);
+STATIC_PRECONDITION_ASSUME(ubound(args.argv_) >= argc)
+JS_ALWAYS_INLINE bool
+CallNativeImpl(JSContext *cx, NativeImpl impl, const CallArgs &args)
+{
+#ifdef DEBUG
+    bool alreadyThrowing = cx->isExceptionPending();
+#endif
+    assertSameCompartment(cx, args);
+    bool ok = impl(cx, args);
+    if (ok) {
+        assertSameCompartment(cx, args.rval());
+        JS_ASSERT_IF(!alreadyThrowing, !cx->isExceptionPending());
+    }
+    return ok;
+}
+
+extern JSBool CallOrConstructBoundFunction(JSContext *, unsigned, js::Value *);
 
 STATIC_PRECONDITION(ubound(args.argv_) >= argc)
 JS_ALWAYS_INLINE bool
-CallJSNativeConstructor(JSContext *cx, js::Native native, const CallArgs &args)
+CallJSNativeConstructor(JSContext *cx, Native native, const CallArgs &args)
 {
 #ifdef DEBUG
-    JSObject &callee = args.callee();
+    RootedObject callee(cx, &args.callee());
 #endif
 
     JS_ASSERT(args.thisv().isMagic());
@@ -307,113 +414,142 @@ CallJSNativeConstructor(JSContext *cx, js::Native native, const CallArgs &args)
      * constructor to return the callee, the assertion can be removed or
      * (another) conjunct can be added to the antecedent.
      *
-     * Proxies are exceptions to both rules: they can return primitives and
-     * they allow content to return the callee.
+     * Exceptions:
      *
-     * CallOrConstructBoundFunction is an exception as well because we
-     * might have used bind on a proxy function.
+     * - Proxies are exceptions to both rules: they can return primitives and
+     *   they allow content to return the callee.
      *
-     * (new Object(Object)) returns the callee.
+     * - CallOrConstructBoundFunction is an exception as well because we might
+     *   have used bind on a proxy function.
+     *
+     * - new Iterator(x) is user-hookable; it returns x.__iterator__() which
+     *   could be any object.
+     *
+     * - (new Object(Object)) returns the callee.
      */
-    extern JSBool proxy_Construct(JSContext *, uintN, Value *);
-    extern JSBool callable_Construct(JSContext *, uintN, Value *);
-    JS_ASSERT_IF(native != proxy_Construct &&
-                 native != callable_Construct &&
+    JS_ASSERT_IF(native != FunctionProxyClass.construct &&
                  native != js::CallOrConstructBoundFunction &&
-                 (!callee.isFunction() || callee.getFunctionPrivate()->u.n.clasp != &js_ObjectClass),
-                 !args.rval().isPrimitive() && callee != args.rval().toObject());
+                 native != js::IteratorConstructor &&
+                 (!callee->isFunction() || callee->toFunction()->native() != js_Object),
+                 !args.rval().isPrimitive() && callee != &args.rval().toObject());
 
     return true;
 }
 
 JS_ALWAYS_INLINE bool
-CallJSPropertyOp(JSContext *cx, js::PropertyOp op, JSObject *receiver, jsid id, js::Value *vp)
+CallJSPropertyOp(JSContext *cx, PropertyOp op, HandleObject receiver, HandleId id, MutableHandleValue vp)
 {
-    assertSameCompartment(cx, receiver, id, *vp);
+    JS_CHECK_RECURSION(cx, return false);
+
+    assertSameCompartment(cx, receiver, id, vp);
     JSBool ok = op(cx, receiver, id, vp);
     if (ok)
-        assertSameCompartment(cx, receiver, *vp);
+        assertSameCompartment(cx, vp);
     return ok;
 }
 
 JS_ALWAYS_INLINE bool
-CallJSPropertyOpSetter(JSContext *cx, js::StrictPropertyOp op, JSObject *obj, jsid id,
-                       JSBool strict, js::Value *vp)
+CallJSPropertyOpSetter(JSContext *cx, StrictPropertyOp op, HandleObject obj, HandleId id,
+                       JSBool strict, MutableHandleValue vp)
 {
-    assertSameCompartment(cx, obj, id, *vp);
+    JS_CHECK_RECURSION(cx, return false);
+
+    assertSameCompartment(cx, obj, id, vp);
     return op(cx, obj, id, strict, vp);
 }
 
 inline bool
-CallSetter(JSContext *cx, JSObject *obj, jsid id, js::StrictPropertyOp op, uintN attrs,
-           uintN shortid, JSBool strict, js::Value *vp)
+CallSetter(JSContext *cx, HandleObject obj, HandleId id, StrictPropertyOp op, unsigned attrs,
+           unsigned shortid, JSBool strict, MutableHandleValue vp)
 {
     if (attrs & JSPROP_SETTER)
-        return ExternalGetOrSet(cx, obj, id, CastAsObjectJsval(op), JSACC_WRITE, 1, vp, vp);
+        return InvokeGetterOrSetter(cx, obj, CastAsObjectJsval(op), 1, vp.address(), vp.address());
 
     if (attrs & JSPROP_GETTER)
         return js_ReportGetterOnlyAssignment(cx);
 
-    if (attrs & JSPROP_SHORTID)
-        id = INT_TO_JSID(shortid);
-    return CallJSPropertyOpSetter(cx, op, obj, id, strict, vp);
-}
+    if (!(attrs & JSPROP_SHORTID))
+        return CallJSPropertyOpSetter(cx, op, obj, id, strict, vp);
 
-#ifdef JS_TRACER
-/*
- * Reconstruct the JS stack and clear cx->tracecx. We must be currently in a
- * _FAIL builtin from trace on cx or another context on the same thread. The
- * machine code for the trace remains on the C stack when js_DeepBail returns.
- *
- * Implemented in jstracer.cpp.
- */
-JS_FORCES_STACK JS_FRIEND_API(void)
-DeepBail(JSContext *cx);
-#endif
+    RootedId nid(cx, INT_TO_JSID(shortid));
 
-static JS_INLINE void
-LeaveTraceIfGlobalObject(JSContext *cx, JSObject *obj)
-{
-    if (!obj->getParent())
-        LeaveTrace(cx);
-}
-
-static JS_INLINE void
-LeaveTraceIfArgumentsObject(JSContext *cx, JSObject *obj)
-{
-    if (obj->isArguments())
-        LeaveTrace(cx);
+    return CallJSPropertyOpSetter(cx, op, obj, nid, strict, vp);
 }
 
 }  /* namespace js */
 
-#ifdef JS_METHODJIT
-inline js::mjit::JaegerCompartment *JSContext::jaegerCompartment()
+inline JSVersion
+JSContext::findVersion() const
 {
-    return compartment->jaegerCompartment();
+    if (hasVersionOverride)
+        return versionOverride;
+
+    if (stack.hasfp())
+        return fp()->script()->getVersion();
+
+    return defaultVersion;
 }
-#endif
 
 inline bool
-JSContext::ensureGeneratorStackSpace()
+JSContext::canSetDefaultVersion() const
 {
-    bool ok = genStack.reserve(genStack.length() + 1);
-    if (!ok)
-        js_ReportOutOfMemory(this);
-    return ok;
+    return !stack.hasfp() && !hasVersionOverride;
 }
 
-inline js::RegExpStatics *
-JSContext::regExpStatics()
+inline void
+JSContext::overrideVersion(JSVersion newVersion)
 {
-    return js::RegExpStatics::extractFrom(js::GetGlobalForScopeChain(this));
+    JS_ASSERT(!canSetDefaultVersion());
+    versionOverride = newVersion;
+    hasVersionOverride = true;
+}
+
+inline bool
+JSContext::maybeOverrideVersion(JSVersion newVersion)
+{
+    if (canSetDefaultVersion()) {
+        setDefaultVersion(newVersion);
+        return false;
+    }
+    overrideVersion(newVersion);
+    return true;
+}
+
+inline unsigned
+JSContext::getCompileOptions() const { return js::VersionFlagsToOptions(findVersion()); }
+
+inline unsigned
+JSContext::allOptions() const { return getRunOptions() | getCompileOptions(); }
+
+inline void
+JSContext::setCompileOptions(unsigned newcopts)
+{
+    JS_ASSERT((newcopts & JSCOMPILEOPTION_MASK) == newcopts);
+    if (JS_LIKELY(getCompileOptions() == newcopts))
+        return;
+    JSVersion version = findVersion();
+    JSVersion newVersion = js::OptionFlagsToVersion(newcopts, version);
+    maybeOverrideVersion(newVersion);
+}
+
+inline js::LifoAlloc &
+JSContext::analysisLifoAlloc()
+{
+    return compartment->analysisLifoAlloc;
+}
+
+inline js::LifoAlloc &
+JSContext::typeLifoAlloc()
+{
+    return compartment->typeLifoAlloc;
 }
 
 inline void
 JSContext::setPendingException(js::Value v) {
+    JS_ASSERT(!IsPoisonedValue(v));
     this->throwing = true;
     this->exception = v;
-    assertSameCompartment(this, v);
+    js::assertSameCompartment(this, v);
 }
 
 inline bool
@@ -421,8 +557,90 @@ JSContext::ensureParseMapPool()
 {
     if (parseMapPool_)
         return true;
-    parseMapPool_ = js::OffTheBooks::new_<js::ParseMapPool>(this);
+    parseMapPool_ = js::OffTheBooks::new_<js::frontend::ParseMapPool>(this);
     return parseMapPool_;
+}
+
+inline js::PropertyTree&
+JSContext::propertyTree()
+{
+    return compartment->propertyTree;
+}
+
+inline bool
+JSContext::hasEnteredCompartment() const
+{
+    return enterCompartmentDepth_ > 0;
+}
+
+inline void
+JSContext::enterCompartment(JSCompartment *c)
+{
+    enterCompartmentDepth_++;
+    compartment = c;
+    if (throwing)
+        wrapPendingException();
+}
+
+inline void
+JSContext::leaveCompartment(JSCompartment *oldCompartment)
+{
+    JS_ASSERT(hasEnteredCompartment());
+    enterCompartmentDepth_--;
+
+    /*
+     * Before we entered the current compartment, 'compartment' was
+     * 'oldCompartment', so we might want to simply set it back. However, we
+     * currently have this terrible scheme whereby defaultCompartmentObject_
+     * can be updated while enterCompartmentDepth_ > 0. In this case,
+     * oldCompartment != defaultCompartmentObject_->compartment and we must
+     * ignore oldCompartment.
+     */
+    if (hasEnteredCompartment() || !defaultCompartmentObject_)
+        compartment = oldCompartment;
+    else
+        compartment = defaultCompartmentObject_->compartment();
+
+    if (throwing)
+        wrapPendingException();
+}
+
+inline void
+JSContext::setDefaultCompartmentObject(JSObject *obj)
+{
+    defaultCompartmentObject_ = obj;
+
+    if (!hasEnteredCompartment()) {
+        /*
+         * If JSAPI callers want to JS_SetGlobalObject while code is running,
+         * they must have entered a compartment (otherwise there will be no
+         * final leaveCompartment call to set the context's compartment back to
+         * defaultCompartmentObject->compartment()).
+         */
+        JS_ASSERT(!hasfp());
+        compartment = obj ? obj->compartment() : NULL;
+        if (throwing)
+            wrapPendingException();
+    }
+}
+
+inline void
+JSContext::setDefaultCompartmentObjectIfUnset(JSObject *obj)
+{
+    if (!defaultCompartmentObject_)
+        setDefaultCompartmentObject(obj);
+}
+
+/* Get the current frame, first lazily instantiating stack frames if needed. */
+static inline js::StackFrame *
+js_GetTopStackFrame(JSContext *cx, FrameExpandKind expand)
+{
+#ifdef JS_METHODJIT
+    if (expand)
+        js::mjit::ExpandInlineFrames(cx->compartment);
+#endif
+
+    return cx->maybefp();
 }
 
 #endif /* jscntxtinlines_h___ */

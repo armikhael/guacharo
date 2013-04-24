@@ -1,4 +1,8 @@
 <?xml version="1.0"?>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
 
 <!DOCTYPE bindings [
   <!ENTITY % wizardDTD SYSTEM "chrome://global/locale/wizard.dtd">
@@ -263,7 +267,7 @@
           if (this.currentPage && !this._fireEvent(this.currentPage, "pageadvanced"))
             return;
 
-          if (this.onLastPage) {
+          if (this.onLastPage && !aPageId) {
             if (this._fireEvent(this, "wizardfinish"))
               window.setTimeout(function() {window.close();}, 1);
           } else {
@@ -408,7 +412,7 @@
         <parameter name="evt"/>
         <body>
         <![CDATA[
-          if (!evt.getPreventDefault())
+          if (!evt.defaultPrevented)
             this.advance();
         ]]>
         </body>
@@ -447,7 +451,7 @@
       <handler event="keypress" keycode="VK_RETURN"
                group="system" action="this._hitEnter(event)"/>
       <handler event="keypress" keycode="VK_ESCAPE" group="system">
-        if (!event.getPreventDefault())
+        if (!event.defaultPrevented)
           this.cancel();
       </handler>
     </handlers>

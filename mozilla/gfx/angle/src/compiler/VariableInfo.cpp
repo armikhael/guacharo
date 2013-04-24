@@ -63,6 +63,8 @@ static ShDataType getVariableDataType(const TType& type)
           }
       case EbtSampler2D: return SH_SAMPLER_2D;
       case EbtSamplerCube: return SH_SAMPLER_CUBE;
+      case EbtSamplerExternalOES: return SH_SAMPLER_EXTERNAL_OES;
+      case EbtSampler2DRect: return SH_SAMPLER_2D_RECT_ARB;
       default: UNREACHABLE();
     }
     return SH_NONE;
@@ -134,6 +136,16 @@ void getUserDefinedVariableInfo(const TType& type,
                         mappedName + "." + fieldType->getFieldName(),
                         infoList);
     }
+}
+
+TVariableInfo::TVariableInfo()
+{
+}
+
+TVariableInfo::TVariableInfo(ShDataType type, int size)
+    : type(type),
+      size(size)
+{
 }
 
 CollectAttribsUniforms::CollectAttribsUniforms(TVariableInfoList& attribs,

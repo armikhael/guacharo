@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Firefox Sync.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- * Philipp von Weitershausen <philipp@weitershausen.de>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 const Ci = Components.interfaces;
 const Cc = Components.classes;
@@ -74,7 +41,7 @@ let gSyncAddDevice = {
         this.wizard.getButton("back").hidden = false;
         this.wizard.getButton("next").hidden = true;
         document.getElementById("weavePassphrase").value =
-          Weave.Utils.hyphenatePassphrase(Weave.Service.passphrase);
+          Weave.Utils.hyphenatePassphrase(Weave.Identity.syncKey);
         break;
       case DEVICE_CONNECTED_PAGE:
         this.wizard.canAdvance = true;
@@ -98,8 +65,18 @@ let gSyncAddDevice = {
 
   startTransfer: function startTransfer() {
     this.errorRow.hidden = true;
+    // When onAbort is called, Weave may already be gone.
+    const JPAKE_ERROR_USERABORT = Weave.JPAKE_ERROR_USERABORT;
+
     let self = this;
-    this._jpakeclient = new Weave.JPAKEClient({
+    let jpakeclient = this._jpakeclient = new Weave.JPAKEClient({
+      onPaired: function onPaired() {
+        let credentials = {account:   Weave.Identity.account,
+                           password:  Weave.Identity.basicPassword,
+                           synckey:   Weave.Identity.syncKey,
+                           serverURL: Weave.Service.serverURL};
+        jpakeclient.sendAndComplete(credentials);
+      },
       onComplete: function onComplete() {
         delete self._jpakeclient;
         self.wizard.pageIndex = DEVICE_CONNECTED_PAGE;
@@ -112,7 +89,7 @@ let gSyncAddDevice = {
         delete self._jpakeclient;
 
         // Aborted by user, ignore.
-        if (!error)
+        if (error == JPAKE_ERROR_USERABORT)
           return;
 
         self.errorRow.hidden = false;
@@ -127,11 +104,8 @@ let gSyncAddDevice = {
     this.wizard.canAdvance = false;
 
     let pin = this.pin1.value + this.pin2.value + this.pin3.value;
-    let credentials = {account: Weave.Service.account,
-                       password: Weave.Service.password,
-                       synckey: Weave.Service.passphrase,
-                       serverURL: Weave.Service.serverURL};
-    this._jpakeclient.sendWithPIN(pin, credentials);
+    let expectDelay = false;
+    jpakeclient.pairWithPIN(pin, expectDelay);
   },
 
   onWizardBack: function onWizardBack() {

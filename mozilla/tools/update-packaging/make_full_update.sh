@@ -1,4 +1,8 @@
 #!/bin/bash
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 #
 # This tool generates full update packages for the update system.
 # Author: Darin Fisher
@@ -61,9 +65,6 @@ fi
 
 list_files files
 
-# Files that should be added on channel change
-ccfiles=$(find . -type f -name "channel-prefs.js" | sed 's/\.\/\(.*\)/\1/')
-
 popd
 
 notice ""
@@ -92,19 +93,6 @@ notice ""
 notice "Adding type instruction to file 'updatev2.manifest'"
 notice "       type: complete"
 echo "type \"complete\"" >> $updatemanifestv2
-
-notice ""
-notice "Adding file ADD instructions for channel change to file 'updatev2.manifest'"
-for f in $ccfiles; do
-  notice "     add-cc: $f"
-  echo "add-cc \"$f\"" >> $updatemanifestv2
-  dir=$(dirname "$f")
-  mkdir -p "$workdir/$dir"
-  $BZIP2 -cz9 "$targetdir/$f" > "$workdir/$f"
-  copy_perm "$targetdir/$f" "$workdir/$f"
-
-  targetfiles="$targetfiles \"$f\""
-done
 
 notice ""
 notice "Concatenating file 'update.manifest' to file 'updatev2.manifest'"

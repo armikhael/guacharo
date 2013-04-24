@@ -6,14 +6,14 @@
 
 Components.utils.import("resource://gre/modules/AddonUpdateChecker.jsm");
 
-do_load_httpd_js();
+Components.utils.import("resource://testing-common/httpd.js");
 var testserver;
 
 function run_test() {
   createAppInfo("xpcshell@tests.mozilla.org", "XPCShell", "1", "1.9.2");
 
   // Create and configure the HTTP server.
-  testserver = new nsHttpServer();
+  testserver = new HttpServer();
   testserver.registerDirectory("/data/", do_get_file("data"));
   testserver.start(4444);
 
@@ -226,7 +226,87 @@ function run_test_11() {
 
     onUpdateCheckError: function(status) {
       do_check_eq(status, AddonUpdateChecker.ERROR_PARSE_ERROR);
+      run_test_12();
+    }
+  });
+}
+
+function run_test_12() {
+  AddonUpdateChecker.checkForUpdates("ignore-compat@tests.mozilla.org",
+                                     "extension", null,
+                                     "http://localhost:4444/data/test_updatecheck.rdf", {
+    onUpdateCheckComplete: function(updates) {
+      do_check_eq(updates.length, 3);
+      let update = AddonUpdateChecker.getNewestCompatibleUpdate(updates,
+                                                                null,
+                                                                null,
+                                                                true);
+      do_check_neq(update, null);
+      do_check_eq(update.version, 2);
+      run_test_13();
+    },
+
+    onUpdateCheckError: function(status) {
+      do_throw("Update check failed with status " + status);
+    }
+  });
+}
+
+function run_test_13() {
+  AddonUpdateChecker.checkForUpdates("compat-override@tests.mozilla.org",
+                                     "extension", null,
+                                     "http://localhost:4444/data/test_updatecheck.rdf", {
+    onUpdateCheckComplete: function(updates) {
+      do_check_eq(updates.length, 3);
+      let overrides = [{
+        type: "incompatible",
+        minVersion: 1,
+        maxVersion: 2,
+        appID: "xpcshell@tests.mozilla.org",
+        appMinVersion: 0.1,
+        appMaxVersion: 0.2
+      }, {
+        type: "incompatible",
+        minVersion: 2,
+        maxVersion: 2,
+        appID: "xpcshell@tests.mozilla.org",
+        appMinVersion: 1,
+        appMaxVersion: 2
+      }];
+      let update = AddonUpdateChecker.getNewestCompatibleUpdate(updates,
+                                                                null,
+                                                                null,
+                                                                true,
+                                                                false,
+                                                                overrides);
+      do_check_neq(update, null);
+      do_check_eq(update.version, 1);
+      run_test_14();
+    },
+
+    onUpdateCheckError: function(status) {
+      do_throw("Update check failed with status " + status);
+    }
+  });
+}
+
+function run_test_14() {
+  AddonUpdateChecker.checkForUpdates("compat-strict-optin@tests.mozilla.org",
+                                     "extension", null,
+                                     "http://localhost:4444/data/test_updatecheck.rdf", {
+    onUpdateCheckComplete: function(updates) {
+      do_check_eq(updates.length, 1);
+      let update = AddonUpdateChecker.getNewestCompatibleUpdate(updates,
+                                                                null,
+                                                                null,
+                                                                true,
+                                                                false);
+      do_check_eq(update, null);
       end_test();
+    },
+
+    onUpdateCheckError: function(status) {
+      do_throw("Update check failed with status " + status);
     }
   });
 }

@@ -1,4 +1,8 @@
 #!/usr/local/bin/perl
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 
 # This is used to generate stub entry points. We generate a file to
 # be included in the declaraion and a file to be used for expanding macros
@@ -40,14 +44,14 @@ print OUTFILE "*  0 is QueryInterface\n";
 print OUTFILE "*  1 is AddRef\n";
 print OUTFILE "*  2 is Release\n";
 print OUTFILE "*/\n";
-print OUTFILE "#if !defined(__ia64) || (!defined(__hpux) && !defined(__linux__))\n";
+print OUTFILE "#if !defined(__ia64) || (!defined(__hpux) && !defined(__linux__) && !defined(__FreeBSD__))\n";
 for($i = 0; $i < $entry_count; $i++) {
     print OUTFILE "NS_IMETHOD Stub",$i+3,"();\n";
 }
 print OUTFILE "#else\n";
 for($i = 0; $i < $entry_count; $i++) {
-    print OUTFILE "NS_IMETHOD Stub",$i+3,"(PRUint64,PRUint64,\n";
-    print OUTFILE " PRUint64,PRUint64,PRUint64,PRUint64,PRUint64,PRUint64);\n";
+    print OUTFILE "NS_IMETHOD Stub",$i+3,"(uint64_t,uint64_t,\n";
+    print OUTFILE " uint64_t,uint64_t,uint64_t,uint64_t,uint64_t,uint64_t);\n";
 
 }
 print OUTFILE "#endif\n";

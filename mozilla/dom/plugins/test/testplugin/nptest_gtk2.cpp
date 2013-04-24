@@ -70,6 +70,12 @@ pluginSupportsWindowlessMode()
   return true;
 }
 
+bool
+pluginSupportsAsyncBitmapDrawing()
+{
+  return false;
+}
+
 NPError
 pluginInstanceInit(InstanceData* instanceData)
 {
@@ -125,7 +131,7 @@ pluginInstanceShutdown(InstanceData* instanceData)
 }
 
 static void 
-SetCairoRGBA(cairo_t* cairoWindow, PRUint32 rgba)
+SetCairoRGBA(cairo_t* cairoWindow, uint32_t rgba)
 {
   float b = (rgba & 0xFF) / 255.0;
   float g = ((rgba & 0xFF00) >> 8) / 255.0;
@@ -248,6 +254,9 @@ ButtonEvent(GtkWidget* widget, GdkEventButton* event,
   InstanceData* instanceData = static_cast<InstanceData*>(user_data);
   instanceData->lastMouseX = event->x;
   instanceData->lastMouseY = event->y;
+  if (event->type == GDK_BUTTON_RELEASE) {
+    instanceData->mouseUpEventCount++;
+  }
   return TRUE;
 }
 
@@ -412,6 +421,9 @@ pluginHandleEvent(InstanceData* instanceData, void* event)
     XButtonEvent* button = &nsEvent->xbutton;
     instanceData->lastMouseX = button->x;
     instanceData->lastMouseY = button->y;
+    if (nsEvent->type == ButtonRelease) {
+      instanceData->mouseUpEventCount++;
+    }
     break;
   }
   default:
@@ -541,7 +553,8 @@ static GdkRegion* computeClipRegion(InstanceData* instanceData)
       return 0;
     }
 
-    GdkRectangle windowRect = { 0, 0, width, height };
+    GdkRectangle windowRect = { 0, 0, static_cast<gint>(width),
+                                static_cast<gint>(height) };
     GdkRegion* windowRgn = gdk_region_rectangle(&windowRect);
     if (!windowRgn) {
       gdk_region_destroy(region);

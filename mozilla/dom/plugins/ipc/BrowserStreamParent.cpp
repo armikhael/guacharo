@@ -1,7 +1,12 @@
 /* -*- Mode: C++; c-basic-offset: 2; indent-tabs-mode: nil; tab-width: 8 -*- */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 
 #include "BrowserStreamParent.h"
 #include "PluginInstanceParent.h"
+#include "nsNPAPIPlugin.h"
 
 #include "mozilla/unused.h"
 
@@ -51,7 +56,7 @@ BrowserStreamParent::AnswerNPN_RequestRead(const IPCByteRanges& ranges,
     return false;
 
   nsAutoArrayPtr<NPByteRange> rp(new NPByteRange[ranges.size()]);
-  for (PRUint32 i = 0; i < ranges.size(); ++i) {
+  for (uint32_t i = 0; i < ranges.size(); ++i) {
     rp[i].offset = ranges[i].offset;
     rp[i].length = ranges[i].length;
     rp[i].next = &rp[i + 1];
@@ -97,6 +102,8 @@ BrowserStreamParent::RecvStreamDestroyed()
     return false;
   }
 
+  mStreamPeer = NULL;
+
   mState = DELETING;
   return Send__delete__(this);
 }
@@ -134,7 +141,15 @@ BrowserStreamParent::StreamAsFile(const char* fname)
   NS_ASSERTION(ALIVE == mState,
                "Calling streamasfile after NPP_DestroyStream?");
 
-  unused << CallNPP_StreamAsFile(nsCString(fname));
+  // Make sure our stream survives until the plugin process tells us we've
+  // been destroyed (until RecvStreamDestroyed() is called).  Since we retain
+  // mStreamPeer at most once, we won't get in trouble if StreamAsFile() is
+  // called more than once.
+  if (!mStreamPeer) {
+    nsNPAPIPlugin::RetainStream(mStream, getter_AddRefs(mStreamPeer));
+  }
+
+  unused << SendNPP_StreamAsFile(nsCString(fname));
   return;
 }
 

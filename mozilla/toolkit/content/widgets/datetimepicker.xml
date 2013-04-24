@@ -1,40 +1,8 @@
 <?xml version="1.0"?>
 
-<!-- ***** BEGIN LICENSE BLOCK *****
-   - Version: MPL 1.1/GPL 2.0/LGPL 2.1
-   -
-   - The contents of this file are subject to the Mozilla Public License Version
-   - 1.1 (the "License"); you may not use this file except in compliance with
-   - the License. You may obtain a copy of the License at
-   - http://www.mozilla.org/MPL/
-   -
-   - Software distributed under the License is distributed on an "AS IS" basis,
-   - WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-   - for the specific language governing rights and limitations under the
-   - License.
-   -
-   - The Original Code is Mozilla.org code.
-   -
-   - The Initial Developer of the Original Code is Mozilla Foundation.
-   - Portions created by the Initial Developer are Copyright (C) 2006
-   - the Initial Developer. All Rights Reserved.
-   -
-   - Contributor(s):
-   -   Neil Deakin <enndeakin@gmail.com> (Original Author)
-   -
-   - Alternatively, the contents of this file may be used under the terms of
-   - either of the GNU General Public License Version 2 or later (the "GPL"),
-   - or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-   - in which case the provisions of the GPL or the LGPL are applicable instead
-   - of those above. If you wish to allow use of your version of this file only
-   - under the terms of either the GPL or the LGPL, and not to allow others to
-   - use your version of this file under the terms of the MPL, indicate your
-   - decision by deleting the provisions above and replace them with the notice
-   - and other provisions required by the GPL or the LGPL. If you do not delete
-   - the provisions above, a recipient may use your version of this file under
-   - the terms of any one of the MPL, the GPL or the LGPL.
-   -
-   - ***** END LICENSE BLOCK ***** -->
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
 
 <!DOCTYPE bindings [
   <!ENTITY % datetimepickerDTD SYSTEM "chrome://global/locale/datetimepicker.dtd">
@@ -791,6 +759,15 @@
       <method name="_init">
         <body>
           <![CDATA[
+            // We'll default to YYYY/MM/DD to start.
+            var yfield = "input-one";
+            var mfield = "input-two";
+            var dfield = "input-three";
+            var twoDigitYear = false;
+            this.yearLeadingZero = true;
+            this.monthLeadingZero = true;
+            this.dateLeadingZero = true;
+
             var numberOrder = /^(\D*)\s*(\d+)(\D*)(\d+)(\D*)(\d+)\s*(\D*)$/;
 
             var dt = new Date(2002,9,4).toLocaleFormat("%x");
@@ -799,11 +776,8 @@
               this._separatorFirst.value = numberFields[3];
               this._separatorSecond.value = numberFields[5];
 
-              var twoDigitYear = false;
-              var yfield = "input-one";
-              var mfield = "input-two";
-              var dfield = "input-three";
               var yi = 2, mi = 4, di = 6;
+
               for (var i = 1; i < numberFields.length; i++) {
                 switch (Number(numberFields[i])) {
                   case 2:
@@ -825,6 +799,10 @@
                     break;
                 }
               }
+
+              this.yearLeadingZero = (numberFields[yi].length > 1);
+              this.monthLeadingZero = (numberFields[mi].length > 1);
+              this.dateLeadingZero = (numberFields[di].length > 1);
             }
 
             this.yearField = document.getAnonymousElementByAttribute(this, "anonid", yfield);
@@ -833,10 +811,6 @@
                 "datetimepicker-input-subbox datetimepicker-year";
             this.monthField = document.getAnonymousElementByAttribute(this, "anonid", mfield);
             this.dateField = document.getAnonymousElementByAttribute(this, "anonid", dfield);
-
-            this.yearLeadingZero = (numberFields[yi].length > 1);
-            this.monthLeadingZero = (numberFields[mi].length > 1);
-            this.dateLeadingZero = (numberFields[di].length > 1);
 
             this._fieldAMPM.parentNode.collapsed = true;
             this.yearField.size = twoDigitYear ? 2 : 4;

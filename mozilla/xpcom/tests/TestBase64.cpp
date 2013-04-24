@@ -1,39 +1,7 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Base 64 Encoder Test Code.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Kyle Huey <me@kylehuey.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "TestHarness.h"
 
@@ -44,11 +12,11 @@
 #include <wchar.h>
 
 struct Chunk {
-  Chunk(PRUint32 l, const char* c)
+  Chunk(uint32_t l, const char* c)
     : mLength(l), mData(c)
   {}
 
-  PRUint32 mLength;
+  uint32_t mLength;
   const char* mData;
 };
 
@@ -64,7 +32,7 @@ struct Test {
 static Chunk kTest1Chunks[] =
 {
    Chunk(9, "Hello sir"),
-   Chunk(0, nsnull)
+   Chunk(0, nullptr)
 };
 
 static Chunk kTest2Chunks[] =
@@ -72,33 +40,33 @@ static Chunk kTest2Chunks[] =
    Chunk(3, "Hel"),
    Chunk(3, "lo "),
    Chunk(3, "sir"),
-   Chunk(0, nsnull)
+   Chunk(0, nullptr)
 };
 
 static Chunk kTest3Chunks[] =
 {
    Chunk(1, "I"),
-   Chunk(0, nsnull)
+   Chunk(0, nullptr)
 };
 
 static Chunk kTest4Chunks[] =
 {
    Chunk(2, "Hi"),
-   Chunk(0, nsnull)
+   Chunk(0, nullptr)
 };
 
 static Chunk kTest5Chunks[] =
 {
    Chunk(1, "B"),
    Chunk(2, "ob"),
-   Chunk(0, nsnull)
+   Chunk(0, nullptr)
 };
 
 static Chunk kTest6Chunks[] =
 {
    Chunk(2, "Bo"),
    Chunk(1, "b"),
-   Chunk(0, nsnull)
+   Chunk(0, nullptr)
 };
 
 static Chunk kTest7Chunks[] =
@@ -110,7 +78,7 @@ static Chunk kTest7Chunks[] =
    Chunk(2, "aw"),   //            1
    Chunk(4, "esom"), //            2
    Chunk(2, "e!"),
-   Chunk(0, nsnull)
+   Chunk(0, nullptr)
 };
 
 static Chunk kTest8Chunks[] =
@@ -122,7 +90,7 @@ static Chunk kTest8Chunks[] =
    Chunk(21, "RLDS ARE YOURS EXCEPT"),
    Chunk(9, " EUROPA. "),
    Chunk(25, "ATTEMPT NO LANDING THERE."),
-   Chunk(0, nsnull)
+   Chunk(0, nullptr)
 };
 
 static Test kTests[] =
@@ -169,8 +137,8 @@ static Test kTests[] =
     ),
     // Terminator
     Test(
-      nsnull,
-      nsnull
+      nullptr,
+      nullptr
     )
   };
 
@@ -193,7 +161,7 @@ public:
   bool CheckTest(nsACString& aResult);
   bool CheckTest(nsAString& aResult);
 private:
-  PRUint32 mTestNumber;
+  uint32_t mTestNumber;
   const Test* mTest;
   const Chunk* mChunk;
   bool mClosed;
@@ -209,7 +177,7 @@ FakeInputStream::Close()
 }
 
 NS_IMETHODIMP
-FakeInputStream::Available(PRUint32* aAvailable)
+FakeInputStream::Available(uint64_t* aAvailable)
 {
   *aAvailable = 0;
 
@@ -226,7 +194,7 @@ FakeInputStream::Available(PRUint32* aAvailable)
 }
 
 NS_IMETHODIMP
-FakeInputStream::Read(char* aBuffer, PRUint32 aCount, PRUint32* aOut)
+FakeInputStream::Read(char* aBuffer, uint32_t aCount, uint32_t* aOut)
 {
   return NS_ERROR_NOT_IMPLEMENTED;
 }
@@ -234,8 +202,8 @@ FakeInputStream::Read(char* aBuffer, PRUint32 aCount, PRUint32* aOut)
 NS_IMETHODIMP
 FakeInputStream::ReadSegments(nsWriteSegmentFun aWriter,
                               void* aClosure,
-                              PRUint32 aCount,
-                              PRUint32* aRead)
+                              uint32_t aCount,
+                              uint32_t* aRead)
 {
   *aRead = 0;
 
@@ -243,7 +211,7 @@ FakeInputStream::ReadSegments(nsWriteSegmentFun aWriter,
     return NS_BASE_STREAM_CLOSED;
 
   while (mChunk->mLength) {
-    PRUint32 written = 0;
+    uint32_t written = 0;
 
     nsresult rv = (*aWriter)(this, aClosure, mChunk->mData,
                              *aRead, mChunk->mLength, &written);
@@ -258,9 +226,9 @@ FakeInputStream::ReadSegments(nsWriteSegmentFun aWriter,
 }
 
 NS_IMETHODIMP
-FakeInputStream::IsNonBlocking(PRBool* aIsBlocking)
+FakeInputStream::IsNonBlocking(bool* aIsBlocking)
 {
-  *aIsBlocking = PR_FALSE;
+  *aIsBlocking = false;
   return NS_OK;
 }
 

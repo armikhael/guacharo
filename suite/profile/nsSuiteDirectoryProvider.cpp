@@ -1,40 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Mozilla Firefox browser.
- *
- * The Initial Developer of the Original Code is
- * Benjamin Smedberg <benjamin@smedbergs.us>
- *
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Mark Banner <bugzilla@standard8.demon.co.uk>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsSuiteDirectoryProvider.h"
 #include "nsAppDirectoryServiceDefs.h"
@@ -48,13 +14,13 @@ NS_IMPL_ISUPPORTS2(nsSuiteDirectoryProvider,
 
 NS_IMETHODIMP
 nsSuiteDirectoryProvider::GetFile(const char *aKey,
-                                  PRBool *aPersist,
+                                  bool *aPersist,
                                   nsIFile* *aResult)
 {
   // NOTE: This function can be reentrant through the NS_GetSpecialDirectory
   // call, so be careful not to cause infinite recursion.
   // i.e. the check for supported files must come first.
-  const char* leafName = nsnull;
+  const char* leafName = nullptr;
 
   if (!strcmp(aKey, NS_APP_BOOKMARKS_50_FILE))
     leafName = "bookmarks.html";
@@ -79,11 +45,11 @@ nsSuiteDirectoryProvider::GetFile(const char *aKey,
   nsDependentCString leafStr(leafName);
   file->AppendNative(leafStr);
 
-  PRBool exists;
+  bool exists;
   if (NS_SUCCEEDED(file->Exists(&exists)) && !exists)
     EnsureProfileFile(leafStr, parentDir, file);
 
-  *aPersist = PR_TRUE;
+  *aPersist = true;
   NS_IF_ADDREF(*aResult = file);
 
   return NS_OK;
@@ -136,9 +102,9 @@ NS_IMPL_ISUPPORTS1(nsSuiteDirectoryProvider::AppendingEnumerator,
                    nsISimpleEnumerator)
 
 NS_IMETHODIMP
-nsSuiteDirectoryProvider::AppendingEnumerator::HasMoreElements(PRBool *aResult)
+nsSuiteDirectoryProvider::AppendingEnumerator::HasMoreElements(bool *aResult)
 {
-  *aResult = mNext != nsnull;
+  *aResult = mNext != nullptr;
   return NS_OK;
 }
 
@@ -147,7 +113,7 @@ nsSuiteDirectoryProvider::AppendingEnumerator::GetNext()
 {
   // Ignore all errors
 
-  PRBool more;
+  bool more;
   while (NS_SUCCEEDED(mBase->HasMoreElements(&more)) && more) {
     nsCOMPtr<nsISupports> nextSupports;
     mBase->GetNext(getter_AddRefs(nextSupports));
@@ -158,12 +124,12 @@ nsSuiteDirectoryProvider::AppendingEnumerator::GetNext()
 
     mNext->AppendNative(mLeafName);
 
-    PRBool exists;
+    bool exists;
     if (NS_SUCCEEDED(mNext->Exists(&exists)) && exists)
       return;
   }
 
-  mNext = nsnull;
+  mNext = nullptr;
 }
 
 NS_IMETHODIMP
@@ -172,7 +138,7 @@ nsSuiteDirectoryProvider::AppendingEnumerator::GetNext(nsISupports* *aResult)
   NS_ENSURE_ARG_POINTER(aResult);
 
   if (!mNext) {
-    *aResult = nsnull;
+    *aResult = nullptr;
     return NS_ERROR_FAILURE;
   }
 

@@ -1,44 +1,8 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 // vim:cindent:ts=2:et:sw=2:
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Steve Clark <buster@netscape.com>
- *   Robert O'Callahan <roc+moz@cs.cmu.edu>
- *   L. David Baron <dbaron@dbaron.org>
- *   Mats Palmgren <mats.palmgren@bredband.net>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* state used in reflow of block frames */
 
@@ -62,41 +26,42 @@
 #endif
 
 using namespace mozilla;
+using namespace mozilla::layout;
 
 nsBlockReflowState::nsBlockReflowState(const nsHTMLReflowState& aReflowState,
                                        nsPresContext* aPresContext,
                                        nsBlockFrame* aFrame,
                                        const nsHTMLReflowMetrics& aMetrics,
-                                       PRBool aTopMarginRoot,
-                                       PRBool aBottomMarginRoot,
-                                       PRBool aBlockNeedsFloatManager)
+                                       bool aTopMarginRoot,
+                                       bool aBottomMarginRoot,
+                                       bool aBlockNeedsFloatManager)
   : mBlock(aFrame),
     mPresContext(aPresContext),
     mReflowState(aReflowState),
-    mPushedFloats(nsnull),
-    mOverflowTracker(nsnull),
+    mPushedFloats(nullptr),
+    mOverflowTracker(nullptr),
     mPrevBottomMargin(),
     mLineNumber(0),
     mFlags(0),
     mFloatBreakType(NS_STYLE_CLEAR_NONE)
 {
-  SetFlag(BRS_ISFIRSTINFLOW, aFrame->GetPrevInFlow() == nsnull);
+  SetFlag(BRS_ISFIRSTINFLOW, aFrame->GetPrevInFlow() == nullptr);
   SetFlag(BRS_ISOVERFLOWCONTAINER,
           IS_TRUE_OVERFLOW_CONTAINER(aFrame));
 
   const nsMargin& borderPadding = BorderPadding();
 
   if (aTopMarginRoot || 0 != aReflowState.mComputedBorderPadding.top) {
-    SetFlag(BRS_ISTOPMARGINROOT, PR_TRUE);
+    SetFlag(BRS_ISTOPMARGINROOT, true);
   }
   if (aBottomMarginRoot || 0 != aReflowState.mComputedBorderPadding.bottom) {
-    SetFlag(BRS_ISBOTTOMMARGINROOT, PR_TRUE);
+    SetFlag(BRS_ISBOTTOMMARGINROOT, true);
   }
   if (GetFlag(BRS_ISTOPMARGINROOT)) {
-    SetFlag(BRS_APPLYTOPMARGIN, PR_TRUE);
+    SetFlag(BRS_APPLYTOPMARGIN, true);
   }
   if (aBlockNeedsFloatManager) {
-    SetFlag(BRS_FLOAT_MGR, PR_TRUE);
+    SetFlag(BRS_FLOAT_MGR, true);
   }
   
   mFloatManager = aReflowState.mFloatManager;
@@ -136,42 +101,23 @@ nsBlockReflowState::nsBlockReflowState(const nsHTMLReflowState& aReflowState,
   else {
     // When we are not in a paginated situation then we always use
     // an constrained height.
-    SetFlag(BRS_UNCONSTRAINEDHEIGHT, PR_TRUE);
+    SetFlag(BRS_UNCONSTRAINEDHEIGHT, true);
     mContentArea.height = mBottomEdge = NS_UNCONSTRAINEDSIZE;
   }
   mContentArea.x = borderPadding.left;
   mY = mContentArea.y = borderPadding.top;
 
-  mPrevChild = nsnull;
+  mPrevChild = nullptr;
   mCurrentLine = aFrame->end_lines();
 
   mMinLineHeight = aReflowState.CalcLineHeight();
-}
-
-nsLineBox*
-nsBlockReflowState::NewLineBox(nsIFrame* aFrame,
-                               PRInt32 aCount,
-                               PRBool aIsBlock)
-{
-  return NS_NewLineBox(mPresContext->PresShell(), aFrame, aCount, aIsBlock);
-}
-
-void
-nsBlockReflowState::FreeLineBox(nsLineBox* aLine)
-{
-  if (aLine) {
-    aLine->Destroy(mPresContext->PresShell());
-  }
 }
 
 void
 nsBlockReflowState::ComputeReplacedBlockOffsetsForFloats(nsIFrame* aFrame,
                                                          const nsRect& aFloatAvailableSpace,
                                                          nscoord& aLeftResult,
-                                                         nscoord& aRightResult,
-                                                         nsBlockFrame::
-                                                      ReplacedElementWidthToClear
-                                                                 *aReplacedWidth)
+                                                         nscoord& aRightResult)
 {
   // The frame is clueless about the float manager and therefore we
   // only give it free space. An example is a table frame - the
@@ -188,28 +134,18 @@ nsBlockReflowState::ComputeReplacedBlockOffsetsForFloats(nsIFrame* aFrame,
     leftOffset = 0;
     rightOffset = 0;
   } else {
-    // We pass in aReplacedWidth to make handling outer table frames
-    // work correctly.  For outer table frames, we need to subtract off
-    // the margin that's going to be at the edge of them, since we're
-    // dealing with margin that it's really the child's responsibility
-    // to place.
+    nsMargin frameMargin;
     nsCSSOffsetState os(aFrame, mReflowState.rendContext, mContentArea.width);
-    NS_ASSERTION(!aReplacedWidth ||
-                 aFrame->GetType() == nsGkAtoms::tableOuterFrame ||
-                 (aReplacedWidth->marginLeft  == os.mComputedMargin.left &&
-                  aReplacedWidth->marginRight == os.mComputedMargin.right),
-                 "unexpected aReplacedWidth");
+    frameMargin = os.mComputedMargin;
 
     nscoord leftFloatXOffset = aFloatAvailableSpace.x - mContentArea.x;
-    leftOffset = NS_MAX(leftFloatXOffset, os.mComputedMargin.left) -
-                 (aReplacedWidth ? aReplacedWidth->marginLeft
-                                 : os.mComputedMargin.left);
+    leftOffset = NS_MAX(leftFloatXOffset, frameMargin.left) -
+                 frameMargin.left;
     leftOffset = NS_MAX(leftOffset, 0); // in case of negative margin
     nscoord rightFloatXOffset =
       mContentArea.XMost() - aFloatAvailableSpace.XMost();
-    rightOffset = NS_MAX(rightFloatXOffset, os.mComputedMargin.right) -
-                  (aReplacedWidth ? aReplacedWidth->marginRight
-                                  : os.mComputedMargin.right);
+    rightOffset = NS_MAX(rightFloatXOffset, frameMargin.right) -
+                  frameMargin.right;
     rightOffset = NS_MAX(rightOffset, 0); // in case of negative margin
   }
   aLeftResult = leftOffset;
@@ -223,7 +159,7 @@ void
 nsBlockReflowState::ComputeBlockAvailSpace(nsIFrame* aFrame,
                                            const nsStyleDisplay* aDisplay,
                                            const nsFlowAreaRect& aFloatAvailableSpace,
-                                           PRBool aBlockAvoidsFloats,
+                                           bool aBlockAvoidsFloats,
                                            nsRect& aResult)
 {
 #ifdef REALLY_NOISY_REFLOW
@@ -285,19 +221,9 @@ nsBlockReflowState::ComputeBlockAvailSpace(nsIFrame* aFrame,
     }
   }
   else {
-    nsBlockFrame::ReplacedElementWidthToClear replacedWidthStruct;
-    nsBlockFrame::ReplacedElementWidthToClear *replacedWidth = nsnull;
-    if (aFrame->GetType() == nsGkAtoms::tableOuterFrame) {
-      replacedWidth = &replacedWidthStruct;
-      replacedWidthStruct =
-        nsBlockFrame::WidthToClearPastFloats(*this, aFloatAvailableSpace.mRect,
-                                             aFrame);
-    }
-
     nscoord leftOffset, rightOffset;
     ComputeReplacedBlockOffsetsForFloats(aFrame, aFloatAvailableSpace.mRect,
-                                         leftOffset, rightOffset,
-                                         replacedWidth);
+                                         leftOffset, rightOffset);
     aResult.x = mContentArea.x + leftOffset;
     aResult.width = mContentArea.width - leftOffset - rightOffset;
   }
@@ -425,7 +351,7 @@ nsBlockReflowState::SetupPushedFloatList()
     // (nsBlockFrame::ReflowDirtyLines ensures that any lines with
     // pushed floats are reflowed.)
     mPushedFloats = mBlock->EnsurePushedFloats();
-    SetFlag(BRS_PROPTABLE_FLOATCLIST, PR_TRUE);
+    SetFlag(BRS_PROPTABLE_FLOATCLIST, true);
   }
 }
 
@@ -516,7 +442,7 @@ nsBlockReflowState::RecoverStateFrom(nsLineList::iterator aLine,
 // technically we're supposed let the current line flow around the
 // float as well unless it won't fit next to what we already have.
 // But nobody else implements it that way...
-PRBool
+bool
 nsBlockReflowState::AddFloat(nsLineLayout*       aLineLayout,
                              nsIFrame*           aFloat,
                              nscoord             aAvailableWidth)
@@ -561,7 +487,7 @@ nsBlockReflowState::AddFloat(nsLineLayout*       aLineLayout,
   nscoord dy = oy - mFloatManagerY;
   mFloatManager->Translate(-dx, -dy);
 
-  PRBool placed;
+  bool placed;
 
   // Now place the float immediately if possible. Otherwise stash it
   // away in mPendingFloats and place it later.
@@ -590,7 +516,7 @@ nsBlockReflowState::AddFloat(nsLineLayout*       aLineLayout,
   else {
     // Always claim to be placed; we don't know whether we fit yet, so we
     // deal with this in PlaceBelowCurrentLineFloats
-    placed = PR_TRUE;
+    placed = true;
     // This float will be placed after the line is done (it is a
     // below-current-line float).
     mBelowCurrentLineFloats.Append(mFloatCacheFreeList.Alloc(aFloat));
@@ -602,7 +528,7 @@ nsBlockReflowState::AddFloat(nsLineLayout*       aLineLayout,
   return placed;
 }
 
-PRBool
+bool
 nsBlockReflowState::CanPlaceFloat(nscoord aFloatWidth,
                                   const nsFlowAreaRect& aFloatAvailableSpace)
 {
@@ -620,6 +546,7 @@ FloatMarginWidth(const nsHTMLReflowState& aCBReflowState,
                  nsIFrame *aFloat,
                  const nsCSSOffsetState& aFloatOffsetState)
 {
+  AutoMaybeDisableFontInflation an(aFloat);
   return aFloat->ComputeSize(
     aCBReflowState.rendContext,
     nsSize(aCBReflowState.ComputedWidth(),
@@ -633,12 +560,12 @@ FloatMarginWidth(const nsHTMLReflowState& aCBReflowState,
              aFloatOffsetState.mComputedPadding.TopBottom()),
     nsSize(aFloatOffsetState.mComputedPadding.LeftRight(),
            aFloatOffsetState.mComputedPadding.TopBottom()),
-    PR_TRUE).width +
+    true).width +
   aFloatOffsetState.mComputedMargin.LeftRight() +
   aFloatOffsetState.mComputedBorderPadding.LeftRight();
 }
 
-PRBool
+bool
 nsBlockReflowState::FlowAndPlaceFloat(nsIFrame* aFloat)
 {
   // Save away the Y coordinate before placing the float. We will
@@ -688,10 +615,10 @@ nsBlockReflowState::FlowAndPlaceFloat(nsIFrame* aFloat)
   // If it's a floating first-letter, we need to reflow it before we
   // know how wide it is (since we don't compute which letters are part
   // of the first letter until reflow!).
-  PRBool isLetter = aFloat->GetType() == nsGkAtoms::letterFrame;
+  bool isLetter = aFloat->GetType() == nsGkAtoms::letterFrame;
   if (isLetter) {
     mBlock->ReflowFloat(*this, adjustedAvailableSpace, aFloat,
-                        floatMargin, PR_FALSE, reflowStatus);
+                        floatMargin, false, reflowStatus);
     floatMarginWidth = aFloat->GetSize().width + floatMargin.LeftRight();
     NS_ASSERTION(NS_FRAME_IS_COMPLETE(reflowStatus),
                  "letter frames shouldn't break, and if they do now, "
@@ -706,12 +633,12 @@ nsBlockReflowState::FlowAndPlaceFloat(nsIFrame* aFloat)
 	       "invalid float type");
 
   // Can the float fit here?
-  PRBool keepFloatOnSameLine = PR_FALSE;
+  bool keepFloatOnSameLine = false;
 
   // Are we required to place at least part of the float because we're
   // at the top of the page (to avoid an infinite loop of pushing and
   // breaking).
-  PRBool mustPlaceFloat =
+  bool mustPlaceFloat =
     mReflowState.mFlags.mIsTopOfPage && IsAdjacentWithTop();
 
   for (;;) {
@@ -720,7 +647,7 @@ nsBlockReflowState::FlowAndPlaceFloat(nsIFrame* aFloat)
         !mustPlaceFloat) {
       // No space, nowhere to put anything.
       PushFloatPastBreak(aFloat);
-      return PR_FALSE;
+      return false;
     }
 
     if (CanPlaceFloat(floatMarginWidth, floatAvailableSpace)) {
@@ -743,7 +670,7 @@ nsBlockReflowState::FlowAndPlaceFloat(nsIFrame* aFloat)
 
       // see if the previous float is also a table and has "align"
       nsFloatCache* fc = mCurrentLineFloats.Head();
-      nsIFrame* prevFrame = nsnull;
+      nsIFrame* prevFrame = nullptr;
       while (fc) {
         if (fc->mFloat == aFloat) {
           break;
@@ -763,7 +690,7 @@ nsBlockReflowState::FlowAndPlaceFloat(nsIFrame* aFloat)
             // IE messes things up when "right" (overlapping frames) 
             if (content->AttrValueIs(kNameSpaceID_None, nsGkAtoms::align,
                                      NS_LITERAL_STRING("left"), eIgnoreCase)) {
-              keepFloatOnSameLine = PR_TRUE;
+              keepFloatOnSameLine = true;
               // don't advance to next line (IE quirkie behaviour)
               // it breaks rule CSS2/9.5.1/1, but what the hell
               // since we cannot evangelize the world
@@ -785,7 +712,7 @@ nsBlockReflowState::FlowAndPlaceFloat(nsIFrame* aFloat)
                                           aFloat, offsets);
     }
 
-    mustPlaceFloat = PR_FALSE;
+    mustPlaceFloat = false;
   }
 
   // If the float is continued, it will get the same absolute x value as its prev-in-flow
@@ -819,7 +746,7 @@ nsBlockReflowState::FlowAndPlaceFloat(nsIFrame* aFloat)
   // Reflow the float after computing its vertical position so it knows
   // where to break.
   if (!isLetter) {
-    PRBool pushedDown = mY != saveY;
+    bool pushedDown = mY != saveY;
     mBlock->ReflowFloat(*this, adjustedAvailableSpace, aFloat,
                         floatMargin, pushedDown, reflowStatus);
   }
@@ -843,7 +770,7 @@ nsBlockReflowState::FlowAndPlaceFloat(nsIFrame* aFloat)
       NS_FRAME_IS_TRUNCATED(reflowStatus)) {
 
     PushFloatPastBreak(aFloat);
-    return PR_FALSE;
+    return false;
   }
 
   // Calculate the actual origin of the float frame's border rect
@@ -858,7 +785,7 @@ nsBlockReflowState::FlowAndPlaceFloat(nsIFrame* aFloat)
   // Position the float and make sure and views are properly
   // positioned. We need to explicitly position its child views as
   // well, since we're moving the float after flowing it.
-  PRBool moved = aFloat->GetPosition() != origin;
+  bool moved = aFloat->GetPosition() != origin;
   if (moved) {
     aFloat->SetPosition(origin);
     nsContainerFrame::PositionFrameView(aFloat);
@@ -919,7 +846,7 @@ nsBlockReflowState::FlowAndPlaceFloat(nsIFrame* aFloat)
   }
 #endif
 
-  return PR_TRUE;
+  return true;
 }
 
 void
@@ -966,7 +893,7 @@ nsBlockReflowState::PlaceBelowCurrentLineFloats(nsFloatCacheFreeList& aList,
     }
 #endif
     // Place the float
-    PRBool placed = FlowAndPlaceFloat(fc->mFloat);
+    bool placed = FlowAndPlaceFloat(fc->mFloat);
     nsFloatCache *next = fc->Next();
     if (!placed) {
       aList.Remove(fc);
@@ -978,9 +905,9 @@ nsBlockReflowState::PlaceBelowCurrentLineFloats(nsFloatCacheFreeList& aList,
 }
 
 nscoord
-nsBlockReflowState::ClearFloats(nscoord aY, PRUint8 aBreakType,
+nsBlockReflowState::ClearFloats(nscoord aY, uint8_t aBreakType,
                                 nsIFrame *aReplacedBlock,
-                                PRUint32 aFlags)
+                                uint32_t aFlags)
 {
 #ifdef DEBUG
   if (nsBlockFrame::gNoisyReflow) {

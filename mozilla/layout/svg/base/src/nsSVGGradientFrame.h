@@ -1,50 +1,31 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Mozilla SVG project.
- *
- * The Initial Developer of the Original Code is
- * Scooter Morris.
- * Portions created by the Initial Developer are Copyright (C) 2004
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Scooter Morris <scootermorris@comcast.net>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef __NS_SVGGRADIENTFRAME_H__
 #define __NS_SVGGRADIENTFRAME_H__
 
+#include "gfxMatrix.h"
+#include "nsCOMPtr.h"
+#include "nsFrame.h"
+#include "nsLiteralString.h"
 #include "nsSVGPaintServerFrame.h"
-#include "nsWeakReference.h"
-#include "nsSVGElement.h"
-#include "gfxPattern.h"
 
-class nsIDOMSVGStopElement;
+class gfxPattern;
+class nsIAtom;
+class nsIContent;
+class nsIFrame;
+class nsIPresShell;
+class nsStyleContext;
+class nsSVGLinearGradientElement;
+class nsSVGRadialGradientElement;
+
+struct gfxRect;
+
+namespace mozilla {
+class SVGAnimatedTransformList;
+}
 
 typedef nsSVGPaintServerFrame nsSVGGradientFrameBase;
 
@@ -63,15 +44,17 @@ public:
   // nsSVGPaintServerFrame methods:
   virtual already_AddRefed<gfxPattern>
     GetPaintServerPattern(nsIFrame *aSource,
+                          const gfxMatrix& aContextMatrix,
+                          nsStyleSVGPaint nsStyleSVG::*aFillOrStroke,
                           float aGraphicOpacity,
                           const gfxRect *aOverrideBounds);
 
   // nsIFrame interface:
   virtual void DidSetStyleContext(nsStyleContext* aOldStyleContext);
 
-  NS_IMETHOD AttributeChanged(PRInt32         aNameSpaceID,
+  NS_IMETHOD AttributeChanged(int32_t         aNameSpaceID,
                               nsIAtom*        aAttribute,
-                              PRInt32         aModType);
+                              int32_t         aModType);
 
 #ifdef DEBUG
   NS_IMETHOD GetFrameName(nsAString& aResult) const
@@ -87,45 +70,41 @@ private:
   // the referenced gradient's frame if available, null otherwise.
   nsSVGGradientFrame* GetReferencedGradient();
 
-  // Helpers to look at our gradient and then along its reference chain (if any)
-  // to find the first gradient with the specified attribute.
-  // Returns aDefault if no content with that attribute is found
-  nsSVGGradientElement* GetGradientWithAttr(nsIAtom *aAttrName, nsIContent *aDefault);
-
-  // Some attributes are only valid on one type of gradient, and we *must* get
-  // the right type or we won't have the data structures we require.
-  // Returns aDefault if no content with that attribute is found
-  nsSVGGradientElement* GetGradientWithAttr(nsIAtom *aAttrName, nsIAtom *aGradType,
-                                            nsIContent *aDefault);
-
   // Optionally get a stop frame (returns stop index/count)
-  PRInt32 GetStopFrame(PRInt32 aIndex, nsIFrame * *aStopFrame);
+  int32_t GetStopFrame(int32_t aIndex, nsIFrame * *aStopFrame);
 
-  PRUint16 GetSpreadMethod();
-  PRUint32 GetStopCount();
-  void GetStopInformation(PRInt32 aIndex,
+  uint32_t GetStopCount();
+  void GetStopInformation(int32_t aIndex,
                           float *aOffset, nscolor *aColor, float *aStopOpacity);
 
+  const mozilla::SVGAnimatedTransformList* GetGradientTransformList(
+    nsIContent* aDefault);
   // Will be singular for gradientUnits="objectBoundingBox" with an empty bbox.
-  gfxMatrix GetGradientTransform(nsIFrame *aSource, const gfxRect *aOverrideBounds);
+  gfxMatrix GetGradientTransform(nsIFrame *aSource,
+                                 const gfxRect *aOverrideBounds);
 
 protected:
   virtual already_AddRefed<gfxPattern> CreateGradient() = 0;
 
-  // Use these inline methods instead of GetGradientWithAttr(..., aGradType)
-  nsSVGLinearGradientElement* GetLinearGradientWithAttr(nsIAtom *aAttrName, nsIContent *aDefault)
-  {
-    return static_cast<nsSVGLinearGradientElement*>(
-            GetGradientWithAttr(aAttrName, nsGkAtoms::svgLinearGradientFrame, aDefault));
-  }
-  nsSVGRadialGradientElement* GetRadialGradientWithAttr(nsIAtom *aAttrName, nsIContent *aDefault)
-  {
-    return static_cast<nsSVGRadialGradientElement*>(
-            GetGradientWithAttr(aAttrName, nsGkAtoms::svgRadialGradientFrame, aDefault));
-  }
+  // Internal methods for handling referenced gradients
+  class AutoGradientReferencer;
+  nsSVGGradientFrame* GetReferencedGradientIfNotInUse();
 
-  // Get the value of our gradientUnits attribute
-  PRUint16 GetGradientUnits();
+  // Accessors to lookup gradient attributes
+  uint16_t GetEnumValue(uint32_t aIndex, nsIContent *aDefault);
+  uint16_t GetEnumValue(uint32_t aIndex)
+  {
+    return GetEnumValue(aIndex, mContent);
+  }
+  uint16_t GetGradientUnits();
+  uint16_t GetSpreadMethod();
+
+  // Gradient-type-specific lookups since the length values differ between
+  // linear and radial gradients
+  virtual nsSVGLinearGradientElement * GetLinearGradientWithLength(
+    uint32_t aIndex, nsSVGLinearGradientElement* aDefault);
+  virtual nsSVGRadialGradientElement * GetRadialGradientWithLength(
+    uint32_t aIndex, nsSVGRadialGradientElement* aDefault);
 
   // The frame our gradient is (currently) being applied to
   nsIFrame*                              mSource;
@@ -134,10 +113,10 @@ private:
   // Flag to mark this frame as "in use" during recursive calls along our
   // gradient's reference chain so we can detect reference loops. See:
   // http://www.w3.org/TR/SVG11/pservers.html#LinearGradientElementHrefAttribute
-  PRPackedBool                           mLoopFlag;
+  bool                                   mLoopFlag;
   // Gradients often don't reference other gradients, so here we cache
   // the fact that that isn't happening.
-  PRPackedBool                           mNoHRefURI;
+  bool                                   mNoHRefURI;
 };
 
 
@@ -167,9 +146,9 @@ public:
 
   virtual nsIAtom* GetType() const;  // frame type: nsGkAtoms::svgLinearGradientFrame
 
-  NS_IMETHOD AttributeChanged(PRInt32         aNameSpaceID,
+  NS_IMETHOD AttributeChanged(int32_t         aNameSpaceID,
                               nsIAtom*        aAttribute,
-                              PRInt32         aModType);
+                              int32_t         aModType);
 
 #ifdef DEBUG
   NS_IMETHOD GetFrameName(nsAString& aResult) const
@@ -179,7 +158,9 @@ public:
 #endif // DEBUG
 
 protected:
-  float GradientLookupAttribute(nsIAtom *aAtomName, PRUint16 aEnumName);
+  float GetLengthValue(uint32_t aIndex);
+  virtual nsSVGLinearGradientElement * GetLinearGradientWithLength(
+    uint32_t aIndex, nsSVGLinearGradientElement* aDefault);
   virtual already_AddRefed<gfxPattern> CreateGradient();
 };
 
@@ -209,9 +190,9 @@ public:
 
   virtual nsIAtom* GetType() const;  // frame type: nsGkAtoms::svgRadialGradientFrame
 
-  NS_IMETHOD AttributeChanged(PRInt32         aNameSpaceID,
+  NS_IMETHOD AttributeChanged(int32_t         aNameSpaceID,
                               nsIAtom*        aAttribute,
-                              PRInt32         aModType);
+                              int32_t         aModType);
 
 #ifdef DEBUG
   NS_IMETHOD GetFrameName(nsAString& aResult) const
@@ -221,8 +202,12 @@ public:
 #endif // DEBUG
 
 protected:
-  float GradientLookupAttribute(nsIAtom *aAtomName, PRUint16 aEnumName,
-                                nsSVGRadialGradientElement *aElement = nsnull);
+  float GetLengthValue(uint32_t aIndex);
+  float GetLengthValue(uint32_t aIndex, float aDefaultValue);
+  float GetLengthValueFromElement(uint32_t aIndex,
+                                  nsSVGRadialGradientElement& aElement);
+  virtual nsSVGRadialGradientElement * GetRadialGradientWithLength(
+    uint32_t aIndex, nsSVGRadialGradientElement* aDefault);
   virtual already_AddRefed<gfxPattern> CreateGradient();
 };
 

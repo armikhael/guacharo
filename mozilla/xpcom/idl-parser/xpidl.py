@@ -1,42 +1,9 @@
 #!/usr/bin/env python
 # xpidl.py - A parser for cross-platform IDL (XPIDL) files.
 #
-# ***** BEGIN LICENSE BLOCK *****
-# Version: MPL 1.1/GPL 2.0/LGPL 2.1
-#
-# The contents of this file are subject to the Mozilla Public License Version
-# 1.1 (the "License"); you may not use this file except in compliance with
-# the License. You may obtain a copy of the License at
-# http://www.mozilla.org/MPL/
-#
-# Software distributed under the License is distributed on an "AS IS" basis,
-# WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-# for the specific language governing rights and limitations under the
-# License.
-#
-# The Original Code is mozilla.org code.
-#
-# The Initial Developer of the Original Code is
-#   Mozilla Foundation.
-# Portions created by the Initial Developer are Copyright (C) 2008
-# the Initial Developer. All Rights Reserved.
-#
-# Contributor(s):
-#   Benjamin Smedberg <benjamin@smedbergs.us>
-#
-# Alternatively, the contents of this file may be used under the terms of
-# either of the GNU General Public License Version 2 or later (the "GPL"),
-# or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-# in which case the provisions of the GPL or the LGPL are applicable instead
-# of those above. If you wish to allow use of your version of this file only
-# under the terms of either the GPL or the LGPL, and not to allow others to
-# use your version of this file under the terms of the MPL, indicate your
-# decision by deleting the provisions above and replace them with the notice
-# and other provisions required by the GPL or the LGPL. If you do not delete
-# the provisions above, a recipient may use your version of this file under
-# the terms of any one of the MPL, the GPL or the LGPL.
-#
-# ***** END LICENSE BLOCK *****
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 """A parser for cross-platform IDL (XPIDL) files."""
 
@@ -151,15 +118,15 @@ class Builtin(object):
                             calltype != 'in' and '*' or '')
 
 builtinNames = [
-    Builtin('boolean', 'PRBool'),
+    Builtin('boolean', 'bool'),
     Builtin('void', 'void'),
-    Builtin('octet', 'PRUint8'),
-    Builtin('short', 'PRInt16', True, True),
-    Builtin('long', 'PRInt32', True, True),
-    Builtin('long long', 'PRInt64', True, False),
-    Builtin('unsigned short', 'PRUint16', False, True),
-    Builtin('unsigned long', 'PRUint32', False, True),
-    Builtin('unsigned long long', 'PRUint64', False, False),
+    Builtin('octet', 'uint8_t'),
+    Builtin('short', 'int16_t', True, True),
+    Builtin('long', 'int32_t', True, True),
+    Builtin('long long', 'int64_t', True, False),
+    Builtin('unsigned short', 'uint16_t', False, True),
+    Builtin('unsigned long', 'uint32_t', False, True),
+    Builtin('unsigned long long', 'uint64_t', False, False),
     Builtin('float', 'float', True, False),
     Builtin('double', 'double', True, False),
     Builtin('char', 'char', True, False),
@@ -231,6 +198,8 @@ class NameMap(object):
     def set(self, object):
         if object.name in builtinMap:
             raise IDLError("name '%s' is a builtin and cannot be redeclared" % (object.name), object.location)
+        if object.name.startswith("_"):
+            object.name = object.name[1:]
         if object.name in self._d:
             old = self._d[object.name]
             if old == object: return
@@ -417,7 +386,7 @@ class Native(object):
         'utf8string': 'nsACString',
         'cstring': 'nsACString',
         'astring': 'nsAString',
-        'jsval': 'jsval'
+        'jsval': 'JS::Value'
         }
 
     def __init__(self, name, nativename, attlist, location):
@@ -485,13 +454,13 @@ class Native(object):
     def __str__(self):
         return "native %s(%s)\n" % (self.name, self.nativename)
 
-class Interface(object):
-    kind = 'interface'
-
+class BaseInterface(object):
     def __init__(self, name, attlist, base, members, location, doccomments):
         self.name = name
         self.attributes = InterfaceAttributes(attlist, location)
         self.base = base
+        if self.kind == 'dictionary':
+            members.sort(key=lambda x:x.name)
         self.members = members
         self.location = location
         self.namemap = NameMap()
@@ -501,6 +470,20 @@ class Interface(object):
         for m in members:
             if not isinstance(m, CDATA):
                 self.namemap.set(m)
+
+        self.ops = {
+            'index':
+                {
+                    'getter': None,
+                    'setter': None
+                },
+            'name':
+                {
+                    'getter': None,
+                    'setter': None
+                },
+            'stringifier': None
+            }
 
     def __eq__(self, other):
         return self.name == other.name and self.location == other.location
@@ -517,21 +500,37 @@ class Interface(object):
                     break
             self.doccomments = parent.getName(self.name, None).doccomments
 
+        if self.attributes.function:
+            has_method = False
+            for member in self.members:
+                if member.kind is 'method':
+                    if has_method:
+                        raise IDLError("interface '%s' has multiple methods, but marked 'function'" % self.name, self.location)
+                    else:
+                        has_method = True
+
         parent.setName(self)
-        if self.base is None:
-            if self.name != 'nsISupports':
-                print >>sys.stderr, IDLError("interface '%s' not derived from nsISupports",
-                                             self.location, warning=True)
-        else:
+        if self.base is not None:
             realbase = parent.getName(self.base, self.location)
-            if realbase.kind != 'interface':
-                raise IDLError("interface '%s' inherits from non-interface type '%s'" % (self.name, self.base), self.location)
+            if realbase.kind != self.kind:
+                raise IDLError("%s '%s' inherits from non-%s type '%s'" % (self.kind, self.name, self.kind, self.base), self.location)
 
             if self.attributes.scriptable and not realbase.attributes.scriptable:
                 print >>sys.stderr, IDLError("interface '%s' is scriptable but derives from non-scriptable '%s'" % (self.name, self.base), self.location, warning=True)
 
+            if self.attributes.scriptable and realbase.attributes.builtinclass and not self.attributes.builtinclass:
+                raise IDLError("interface '%s' is not builtinclass but derives from builtinclass '%s'" % (self.name, self.base), self.location)
+
+        forwardedMembers = set()
         for member in self.members:
             member.resolve(self)
+            if member.kind is 'method' and member.forward:
+                forwardedMembers.add(member.forward)
+        for member in self.members:
+            if member.kind is 'method' and member.name in forwardedMembers:
+                forwardedMembers.remove(member.name)
+        for member in forwardedMembers:
+            raise IDLError("member '%s' on interface '%s' forwards to '%s' which is not on the interface itself" % (member.name, self.name, member.forward), self.location)
 
         # The number 250 is NOT arbitrary; this number is the maximum number of
         # stub entries defined in xpcom/reflect/xptcall/public/genstubs.pl
@@ -565,7 +564,13 @@ class Interface(object):
         return "".join(l)
 
     def getConst(self, name, location):
-        c = self.namemap.get(name, location)
+        # The constant may be in a base class
+        iface = self
+        while name not in iface.namemap and iface is not None:
+            iface = self.idl.getName(self.base, self.location)
+        if iface is None:
+            raise IDLError("cannot find symbol '%s'" % name, c.location)
+        c = iface.namemap.get(name, location)
         if c.kind != 'const':
             raise IDLError("symbol '%s' is not a constant", c.location)
 
@@ -586,6 +591,21 @@ class Interface(object):
             realbase = self.idl.getName(self.base, self.location)
             total += realbase.countEntries()
         return total
+
+class Interface(BaseInterface):
+    kind = 'interface'
+
+    def __init__(self, name, attlist, base, members, location, doccomments):
+        BaseInterface.__init__(self, name, attlist, base, members, location, doccomments)
+
+        if self.attributes.uuid is None:
+            raise IDLError("interface has no uuid", location)
+
+class Dictionary(BaseInterface):
+    kind = 'dictionary'
+
+    def __init__(self, name, attlist, base, members, location, doccomments):
+        BaseInterface.__init__(self, name, attlist, base, members, location, doccomments)
 
 class InterfaceAttributes(object):
     uuid = None
@@ -642,9 +662,6 @@ class InterfaceAttributes(object):
 
                 action(self)
 
-        if self.uuid is None:
-            raise IDLError("interface has no uuid", location)
-
     def __str__(self):
         l = []
         if self.uuid:
@@ -697,12 +714,17 @@ class Attribute(object):
     null = None
     undefined = None
     deprecated = False
+    nullable = False
+    infallible = False
+    defvalue = None
 
-    def __init__(self, type, name, attlist, readonly, location, doccomments):
+    def __init__(self, type, name, attlist, readonly, nullable, defvalue, location, doccomments):
         self.type = type
         self.name = name
         self.attlist = attlist
         self.readonly = readonly
+        self.nullable = nullable
+        self.defvalue = defvalue
         self.location = location
         self.doccomments = doccomments
 
@@ -749,6 +771,8 @@ class Attribute(object):
                     self.deprecated = True
                 elif name == 'nostdcall':
                     self.nostdcall = True
+                elif name == 'infallible':
+                    self.infallible = True
                 else:
                     raise IDLError("Unexpected attribute '%s'" % name, aloc)
 
@@ -763,6 +787,19 @@ class Attribute(object):
             getBuiltinOrNativeTypeName(self.realtype) != '[domstring]'):
             raise IDLError("'Undefined' attribute can only be used on DOMString",
                            self.location)
+        if (self.nullable and
+            getBuiltinOrNativeTypeName(self.realtype) != '[domstring]'):
+            raise IDLError("Nullable types (T?) is supported only for DOMString",
+                           self.location)
+        if self.infallible and not self.realtype.kind == 'builtin':
+            raise IDLError('[infallible] only works on builtin types '
+                           '(numbers, bool, and raw char types)',
+                           self.location)
+        if self.infallible and not iface.attributes.builtinclass:
+            raise IDLError('[infallible] attributes are only allowed on '
+                           '[builtinclass] interfaces',
+                           self.location)
+
 
     def toIDL(self):
         attribs = attlistToIDL(self.attlist)
@@ -789,6 +826,10 @@ class Method(object):
     nostdcall = False
     optional_argc = False
     deprecated = False
+    getter = False
+    setter = False
+    stringifier = False
+    forward = None
 
     def __init__(self, type, name, attlist, paramlist, location, doccomments, raises):
         self.type = type
@@ -807,6 +848,13 @@ class Method(object):
 
                 self.binaryname = value
                 continue
+            if name == 'forward':
+                if value is None:
+                    raise IDLError("forward attribute requires a value",
+                                   aloc)
+
+                self.forward = value
+                continue
 
             if value is not None:
                 raise IDLError("Unexpected attribute value", aloc)
@@ -823,6 +871,18 @@ class Method(object):
                 self.deprecated = True
             elif name == 'nostdcall':
                 self.nostdcall = True
+            elif name == 'getter':
+                if (len(self.params) != 1):
+                    raise IDLError("Methods marked as getter must take 1 argument", aloc)
+                self.getter = True
+            elif name == 'setter':
+                if (len(self.params) != 2):
+                    raise IDLError("Methods marked as setter must take 2 arguments", aloc)
+                self.setter = True
+            elif name == 'stringifier':
+                if (len(self.params) != 0):
+                    raise IDLError("Methods marked as stringifier must take 0 arguments", aloc)
+                self.stringifier = True
             else:
                 raise IDLError("Unexpected attribute '%s'" % name, aloc)
 
@@ -835,6 +895,46 @@ class Method(object):
         self.realtype = self.iface.idl.getName(self.type, self.location)
         for p in self.params:
             p.resolve(self)
+        if self.getter:
+            if getBuiltinOrNativeTypeName(self.params[0].realtype) == 'unsigned long':
+                ops = 'index'
+            else:
+                if getBuiltinOrNativeTypeName(self.params[0].realtype) != '[domstring]':
+                    raise IDLError("a getter must take a single unsigned long or DOMString argument" % self.iface.name, self.location)
+                ops = 'name'
+            if self.iface.ops[ops]['getter']:
+                raise IDLError("a %s getter was already defined on interface '%s'" % (ops, self.iface.name), self.location)
+            self.iface.ops[ops]['getter'] = self
+        if self.setter:
+            if getBuiltinOrNativeTypeName(self.params[0].realtype) == 'unsigned long':
+                ops = 'index'
+            else:
+                if getBuiltinOrNativeTypeName(self.params[0].realtype) != '[domstring]':
+                    print getBuiltinOrNativeTypeName(self.params[0].realtype)
+                    raise IDLError("a setter must take a unsigned long or DOMString argument" % self.iface.name, self.location)
+                ops = 'name'
+            if self.iface.ops[ops]['setter']:
+                raise IDLError("a %s setter was already defined on interface '%s'" % (ops, self.iface.name), self.location)
+            self.iface.ops[ops]['setter'] = self
+        if self.stringifier:
+            if self.iface.ops['stringifier']:
+                raise IDLError("a stringifier was already defined on interface '%s'" % self.iface.name, self.location)
+            if getBuiltinOrNativeTypeName(self.realtype) != '[domstring]':
+                raise IDLError("'stringifier' attribute can only be used on methods returning DOMString",
+                               self.location)
+            self.iface.ops['stringifier'] = self
+        for p in self.params:
+            if p.retval and p != self.params[-1]:
+                raise IDLError("'retval' parameter '%s' is not the last parameter" % p.name, self.location)
+            if p.size_is:
+                found_size_param = False
+                for size_param in self.params:
+                    if p.size_is == size_param.name:
+                        found_size_param = True
+                        if getBuiltinOrNativeTypeName(size_param.realtype) != 'unsigned long':
+                            raise IDLError("is_size parameter must have type 'unsigned long'", self.location)
+                if not found_size_param:
+                    raise IDLError("could not find is_size parameter '%s'" % p.size_is, self.location)
 
     def isScriptable(self):
         if not self.iface.attributes.scriptable: return False
@@ -977,6 +1077,7 @@ class IDLParser(object):
     keywords = {
         'const': 'CONST',
         'interface': 'INTERFACE',
+        'dictionary': 'DICTIONARY',
         'in': 'IN',
         'inout': 'INOUT',
         'out': 'OUT',
@@ -997,6 +1098,7 @@ class IDLParser(object):
         'LSHIFT',
         'RSHIFT',
         'NATIVEID',
+        'STRING',
         ]
 
     tokens.extend(keywords.values())
@@ -1012,7 +1114,7 @@ class IDLParser(object):
     t_LSHIFT = r'<<'
     t_RSHIFT=  r'>>'
 
-    literals = '"(){}[],;:=|+-*'
+    literals = '"(){}[],;:=|+-*?'
 
     t_ignore = ' \t'
 
@@ -1030,7 +1132,7 @@ class IDLParser(object):
     t_IID.__doc__ = r'%(c)s{8}-%(c)s{4}-%(c)s{4}-%(c)s{4}-%(c)s{12}' % {'c': hexchar}
 
     def t_IDENTIFIER(self, t):
-        r'unsigned\ long\ long|unsigned\ short|unsigned\ long|long\ long|[A-Za-z][A-Za-z_0-9]*'
+        r'(unsigned\ long\ long|unsigned\ short|unsigned\ long|long\ long)(?!_?[A-Za-z][A-Za-z_0-9])|_?[A-Za-z][A-Za-z_0-9]*'
         t.type = self.keywords.get(t.value, 'IDENTIFIER')
         return t
 
@@ -1044,6 +1146,12 @@ class IDLParser(object):
     def t_INCLUDE(self, t):
         r'\#include[ \t]+"[^"\n]+"'
         inc, value, end = t.value.split('"')
+        t.value = value
+        return t
+
+    def t_STRING(self, t):
+        r'"[^"\n]+"'
+        begin, value, end = t.value.split('"')
         t.value = value
         return t
 
@@ -1098,6 +1206,7 @@ class IDLParser(object):
 
     def p_productions_interface(self, p):
         """productions : interface productions
+                       | dictionary productions
                        | typedef productions
                        | native productions"""
         p[0] = list(p[2])
@@ -1275,7 +1384,7 @@ class IDLParser(object):
         p[0] = lambda i: n1(i) | n2(i)
 
     def p_member_att(self, p):
-        """member : attributes optreadonly ATTRIBUTE IDENTIFIER IDENTIFIER ';'"""
+        """member : attributes optreadonly ATTRIBUTE IDENTIFIER identifier ';'"""
         if 'doccomments' in p[1]:
             doccomments = p[1]['doccomments']
         elif p[2] is not None:
@@ -1287,6 +1396,8 @@ class IDLParser(object):
                          name=p[5],
                          attlist=p[1]['attlist'],
                          readonly=p[2] is not None,
+                         nullable=False,
+                         defvalue=None,
                          location=self.getLocation(p, 3),
                          doccomments=doccomments)
 
@@ -1324,7 +1435,7 @@ class IDLParser(object):
         p[0].insert(0, p[2])
 
     def p_param(self, p):
-        """param : attributes paramtype IDENTIFIER IDENTIFIER"""
+        """param : attributes paramtype IDENTIFIER identifier"""
         p[0] = Param(paramtype=p[2],
                      type=p[3],
                      name=p[4],
@@ -1345,6 +1456,76 @@ class IDLParser(object):
         else:
             p[0] = None
 
+    def p_dictionary(self, p):
+        """dictionary : attributes DICTIONARY IDENTIFIER ifacebase dictbody ';'"""
+        atts, DICTIONARY, name, base, body, SEMI = p[1:]
+        attlist = atts['attlist']
+        doccomments = []
+        if 'doccomments' in atts:
+            doccomments.extend(atts['doccomments'])
+        doccomments.extend(p.slice[2].doccomments)
+
+        l = lambda: self.getLocation(p, 2)
+
+        p[0] = Dictionary(name=name,
+                          attlist=attlist,
+                          base=base,
+                          members=body,
+                          location=l(),
+                          doccomments=doccomments)
+
+    def p_dictbody(self, p):
+        """dictbody : '{' dictmembers '}'
+                     | """
+        if len(p) > 1:
+            p[0] = p[2]
+
+    def p_dictmembers_start(self, p):
+        """dictmembers : """
+        p[0] = []
+
+    def p_dictmembers_continue(self, p):
+        """dictmembers : dictmember dictmembers"""
+        p[0] = list(p[2])
+        p[0].insert(0, p[1])
+
+    def p_dictmember(self, p):
+        """dictmember : attributes IDENTIFIER optnullable IDENTIFIER optdefvalue ';'"""
+        if 'doccomments' in p[1]:
+            doccomments = p[1]['doccomments']
+        else:
+            doccomments = p.slice[2].doccomments
+
+        p[0] = Attribute(type=p[2],
+                         name=p[4],
+                         attlist=p[1]['attlist'],
+                         readonly=False,
+                         nullable=p[3] is not None,
+                         defvalue=p[5],
+                         location=self.getLocation(p, 1),
+                         doccomments=doccomments)
+
+    def p_optnullable(self, p):
+        """optnullable : '?'
+                       | """
+        if len(p) > 1:
+            p[0] = p[1]
+        else:
+            p[0] = None
+
+    def p_optdefvalue(self, p):
+        """optdefvalue : '=' STRING
+                       | """
+        if len(p) > 1:
+            p[0] = p[2]
+        else:
+            p[0] = None
+
+    def p_identifier(self, p):
+        """identifier : DICTIONARY
+                      | IDENTIFIER"""
+        p[0] = p[1]
+
     def p_raises(self, p):
         """raises : RAISES '(' idlist ')'
                   | """
@@ -1363,20 +1544,23 @@ class IDLParser(object):
         p[0].insert(0, p[1])
 
     def p_error(self, t):
-        location = Location(self.lexer, t.lineno, t.lexpos)
-        raise IDLError("invalid syntax", location)
+        if not t:
+            raise IDLError("Syntax Error at end of file. Possibly due to missing semicolon(;), braces(}) or both", None)
+        else:
+            location = Location(self.lexer, t.lineno, t.lexpos)
+            raise IDLError("invalid syntax", location)
 
-    def __init__(self, outputdir='', regen=False):
+    def __init__(self, outputdir=''):
         self._doccomments = []
         self.lexer = lex.lex(object=self,
                              outputdir=outputdir,
                              lextab='xpidllex',
-                             optimize=0 if regen else 1)
+                             optimize=1)
         self.parser = yacc.yacc(module=self,
                                 outputdir=outputdir,
                                 debugfile='xpidl_debug',
                                 tabmodule='xpidlyacc',
-                                optimize=0 if regen else 1)
+                                optimize=1)
 
     def clearComments(self):
         self._doccomments = []

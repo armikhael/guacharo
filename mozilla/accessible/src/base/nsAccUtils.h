@@ -1,70 +1,32 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2007
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Alexander Surkov <surkov.alexander@gmail.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsAccUtils_h_
 #define nsAccUtils_h_
 
 #include "nsIAccessible.h"
-#include "nsIAccessNode.h"
-#include "nsIAccessibleDocument.h"
 #include "nsIAccessibleRole.h"
 #include "nsIAccessibleText.h"
 #include "nsIAccessibleTable.h"
 
-#include "nsARIAMap.h"
 #include "nsAccessibilityService.h"
 #include "nsCoreUtils.h"
 
 #include "mozilla/dom/Element.h"
 #include "nsIDocShell.h"
+#include "nsIDocShellTreeItem.h"
 #include "nsIDOMNode.h"
 #include "nsIPersistentProperties2.h"
 #include "nsIPresShell.h"
 #include "nsPoint.h"
 
 class nsAccessNode;
-class nsAccessible;
-class nsHyperTextAccessible;
-class nsHTMLTableAccessible;
-class nsDocAccessible;
-#ifdef MOZ_XUL
-class nsXULTreeAccessible;
-#endif
+class Accessible;
+class HyperTextAccessible;
+class DocAccessible;
+struct nsRoleMapEntry;
 
 class nsAccUtils
 {
@@ -95,40 +57,24 @@ public:
    * Set group attributes ('level', 'setsize', 'posinset').
    */
   static void SetAccGroupAttrs(nsIPersistentProperties *aAttributes,
-                               PRInt32 aLevel, PRInt32 aSetSize,
-                               PRInt32 aPosInSet);
+                               int32_t aLevel, int32_t aSetSize,
+                               int32_t aPosInSet);
 
   /**
    * Get default value of the level for the given accessible.
    */
-  static PRInt32 GetDefaultLevel(nsAccessible *aAcc);
+  static int32_t GetDefaultLevel(Accessible* aAcc);
 
   /**
    * Return ARIA level value or the default one if ARIA is missed for the
    * given accessible.
    */
-  static PRInt32 GetARIAOrDefaultLevel(nsAccessible *aAccessible);
-
-  /**
-   * Compute position in group (posinset) and group size (setsize) for
-   * nsIDOMXULSelectControlItemElement node.
-   */
-  static void GetPositionAndSizeForXULSelectControlItem(nsIContent *aContent,
-                                                        PRInt32 *aPosInSet,
-                                                        PRInt32 *aSetSize);
-
-  /**
-   * Compute group position and group size (posinset and setsize) for
-   * nsIDOMXULContainerItemElement node.
-   */
-  static void GetPositionAndSizeForXULContainerItem(nsIContent *aContent,
-                                                    PRInt32 *aPosInSet,
-                                                    PRInt32 *aSetSize);
+  static int32_t GetARIAOrDefaultLevel(Accessible* aAccessible);
 
   /**
    * Compute group level for nsIDOMXULContainerItemElement node.
    */
-  static PRInt32 GetLevelForXULContainerItem(nsIContent *aContent);
+  static int32_t GetLevelForXULContainerItem(nsIContent *aContent);
 
   /**
    * Set container-foo live region attributes for the given node.
@@ -146,9 +92,9 @@ public:
    * property is not present, or is "" or "undefined". Do not call 
    * this method for properties of type string, decimal, IDREF or IDREFS.
    * 
-   * Return PR_TRUE if the ARIA property is defined, otherwise PR_FALSE
+   * Return true if the ARIA property is defined, otherwise false
    */
-  static PRBool HasDefinedARIAToken(nsIContent *aContent, nsIAtom *aAtom);
+  static bool HasDefinedARIAToken(nsIContent *aContent, nsIAtom *aAtom);
 
   /**
    * Return atomic value of ARIA attribute of boolean or NMTOKEN type.
@@ -156,35 +102,23 @@ public:
   static nsIAtom* GetARIAToken(mozilla::dom::Element* aElement, nsIAtom* aAttr);
 
   /**
-   * Return document accessible for the given presshell.
-   */
-  static nsDocAccessible *GetDocAccessibleFor(nsIWeakReference *aWeakShell)
-  {
-    nsCOMPtr<nsIPresShell> presShell(do_QueryReferent(aWeakShell));
-    return presShell ?
-      GetAccService()->GetDocAccessible(presShell->GetDocument()) : nsnull;
-  }
-
-  /**
    * Return document accessible for the given DOM node.
    */
-  static nsDocAccessible *GetDocAccessibleFor(nsINode *aNode)
+  static DocAccessible* GetDocAccessibleFor(nsINode* aNode)
   {
     nsIPresShell *presShell = nsCoreUtils::GetPresShellFor(aNode);
-    return presShell ?
-      GetAccService()->GetDocAccessible(presShell->GetDocument()) : nsnull;
+    return GetAccService()->GetDocAccessible(presShell);
   }
 
   /**
    * Return document accessible for the given docshell.
    */
-  static nsDocAccessible *GetDocAccessibleFor(nsIDocShellTreeItem *aContainer)
+  static DocAccessible* GetDocAccessibleFor(nsIDocShellTreeItem* aContainer)
   {
     nsCOMPtr<nsIDocShell> docShell(do_QueryInterface(aContainer));
     nsCOMPtr<nsIPresShell> presShell;
     docShell->GetPresShell(getter_AddRefs(presShell));
-    return presShell ?
-      GetAccService()->GetDocAccessible(presShell->GetDocument()) : nsnull;
+    return GetAccService()->GetDocAccessible(presShell);
   }
 
   /**
@@ -193,10 +127,10 @@ public:
     * @param  aDescendant  [in] descendant to start search with
     * @param  aRole        [in] role to find matching ancestor for
     * @return               the ancestor accessible with the given role, or
-    *                       nsnull if no match is found
+    *                       nullptr if no match is found
     */
-   static nsAccessible * GetAncestorWithRole(nsAccessible *aDescendant,
-                                             PRUint32 aRole);
+   static Accessible* GetAncestorWithRole(Accessible* aDescendant,
+                                          uint32_t aRole);
 
   /**
    * Return single or multi selectable container for the given item.
@@ -204,19 +138,14 @@ public:
    * @param  aAccessible  [in] the item accessible
    * @param  aState       [in] the state of the item accessible
    */
-  static nsAccessible* GetSelectableContainer(nsAccessible* aAccessible,
-                                              PRUint64 aState);
-
-  /**
-   * Return multi selectable container for the given item.
-   */
-  static nsAccessible *GetMultiSelectableContainer(nsINode *aNode);
+  static Accessible* GetSelectableContainer(Accessible* aAccessible,
+                                            uint64_t aState);
 
   /**
    * Return true if the DOM node of given accessible has aria-selected="true"
    * attribute.
    */
-  static PRBool IsARIASelected(nsAccessible *aAccessible);
+  static bool IsARIASelected(Accessible* aAccessible);
 
   /**
    * Return text accessible containing focus point of the given selection.
@@ -225,7 +154,7 @@ public:
    * @param aSelection  [in] the given selection
    * @return            text accessible
    */
-  static nsHyperTextAccessible*
+  static HyperTextAccessible*
     GetTextAccessibleFromSelection(nsISelection* aSelection);
 
   /**
@@ -239,8 +168,8 @@ public:
    *                         relative it.
    * @param aCoords          [out] converted coordinates
    */
-  static nsresult ConvertToScreenCoords(PRInt32 aX, PRInt32 aY,
-                                        PRUint32 aCoordinateType,
+  static nsresult ConvertToScreenCoords(int32_t aX, int32_t aY,
+                                        uint32_t aCoordinateType,
                                         nsAccessNode *aAccessNode,
                                         nsIntPoint *aCoords);
 
@@ -255,8 +184,8 @@ public:
    * @param aAccessNode      [in] the accessible if coordinates are given
    *                         relative it
    */
-  static nsresult ConvertScreenCoordsTo(PRInt32 *aX, PRInt32 *aY,
-                                        PRUint32 aCoordinateType,
+  static nsresult ConvertScreenCoordsTo(int32_t *aX, int32_t *aY,
+                                        uint32_t aCoordinateType,
                                         nsAccessNode *aAccessNode);
 
   /**
@@ -274,21 +203,11 @@ public:
   static nsIntPoint GetScreenCoordsForParent(nsAccessNode *aAccessNode);
 
   /**
-   * Get the role map entry for a given DOM node. This will use the first
-   * ARIA role if the role attribute provides a space delimited list of roles.
-   *
-   * @param aNode  [in] the DOM node to get the role map entry for
-   * @return        a pointer to the role map entry for the ARIA role, or nsnull
-   *                if none
-   */
-  static nsRoleMapEntry *GetRoleMapEntry(nsINode *aNode);
-
-  /**
    * Return the role of the given accessible.
    */
-  static PRUint32 Role(nsIAccessible *aAcc)
+  static uint32_t Role(nsIAccessible *aAcc)
   {
-    PRUint32 role = nsIAccessibleRole::ROLE_NOTHING;
+    uint32_t role = nsIAccessibleRole::ROLE_NOTHING;
     if (aAcc)
       aAcc->GetRole(&role);
 
@@ -302,7 +221,7 @@ public:
    * @return       A bitflag representing the attribute characteristics
    *               (see nsARIAMap.h for possible bit masks, prefixed "ARIA_")
    */
-  static PRUint8 GetAttributeCharacteristics(nsIAtom* aAtom);
+  static uint8_t GetAttributeCharacteristics(nsIAtom* aAtom);
 
   /**
    * Get the 'live' or 'container-live' object attribute value from the given
@@ -313,22 +232,22 @@ public:
    *
    * @return         true if object attribute should be exposed
    */
-  static PRBool GetLiveAttrValue(PRUint32 aRule, nsAString& aValue);
+  static bool GetLiveAttrValue(uint32_t aRule, nsAString& aValue);
 
-#ifdef DEBUG_A11Y
+#ifdef DEBUG
   /**
    * Detect whether the given accessible object implements nsIAccessibleText,
    * when it is text or has text child node.
    */
-  static PRBool IsTextInterfaceSupportCorrect(nsAccessible *aAccessible);
+  static bool IsTextInterfaceSupportCorrect(Accessible* aAccessible);
 #endif
 
   /**
    * Return true if the given accessible has text role.
    */
-  static PRBool IsText(nsIAccessible *aAcc)
+  static bool IsText(nsIAccessible *aAcc)
   {
-    PRUint32 role = Role(aAcc);
+    uint32_t role = Role(aAcc);
     return role == nsIAccessibleRole::ROLE_TEXT_LEAF ||
            role == nsIAccessibleRole::ROLE_STATICTEXT;
   }
@@ -336,14 +255,14 @@ public:
   /**
    * Return text length of the given accessible, return 0 on failure.
    */
-  static PRUint32 TextLength(nsAccessible *aAccessible);
+  static uint32_t TextLength(Accessible* aAccessible);
 
   /**
    * Return true if the given accessible is embedded object.
    */
-  static PRBool IsEmbeddedObject(nsIAccessible *aAcc)
+  static bool IsEmbeddedObject(nsIAccessible *aAcc)
   {
-    PRUint32 role = Role(aAcc);
+    uint32_t role = Role(aAcc);
     return role != nsIAccessibleRole::ROLE_TEXT_LEAF &&
            role != nsIAccessibleRole::ROLE_WHITESPACE &&
            role != nsIAccessibleRole::ROLE_STATICTEXT;
@@ -352,28 +271,28 @@ public:
   /**
    * Transform nsIAccessibleStates constants to internal state constant.
    */
-  static inline PRUint64 To64State(PRUint32 aState1, PRUint32 aState2)
+  static inline uint64_t To64State(uint32_t aState1, uint32_t aState2)
   {
-    return static_cast<PRUint64>(aState1) +
-        (static_cast<PRUint64>(aState2) << 31);
+    return static_cast<uint64_t>(aState1) +
+        (static_cast<uint64_t>(aState2) << 31);
   }
 
   /**
    * Transform internal state constant to nsIAccessibleStates constants.
    */
-  static inline void To32States(PRUint64 aState64,
-                                PRUint32* aState1, PRUint32* aState2)
+  static inline void To32States(uint64_t aState64,
+                                uint32_t* aState1, uint32_t* aState2)
   {
     *aState1 = aState64 & 0x7fffffff;
     if (aState2)
-      *aState2 = static_cast<PRUint32>(aState64 >> 31);
+      *aState2 = static_cast<uint32_t>(aState64 >> 31);
   }
 
   /**
    * Return true if the given accessible can't have children. Used when exposing
    * to platform accessibility APIs, should the children be pruned off?
    */
-  static PRBool MustPrune(nsIAccessible *aAccessible);
+  static bool MustPrune(Accessible* aAccessible);
 
   /**
    * Search hint enum constants. Used by GetHeaderCellsFor() method.
@@ -398,7 +317,7 @@ public:
    */
   static nsresult GetHeaderCellsFor(nsIAccessibleTable *aTable,
                                     nsIAccessibleTableCell *aCell,
-                                    PRInt32 aRowOrColHeaderCells,
+                                    int32_t aRowOrColHeaderCells,
                                     nsIArray **aCells);
 };
 

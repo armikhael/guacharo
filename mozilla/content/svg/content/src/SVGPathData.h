@@ -1,51 +1,26 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla SVG Project code.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef MOZILLA_SVGPATHDATA_H__
 #define MOZILLA_SVGPATHDATA_H__
 
-#include "SVGPathSegUtils.h"
-#include "nsTArray.h"
-#include "nsSVGElement.h"
+#include "nsCOMPtr.h"
+#include "nsDebug.h"
+#include "nsIContent.h"
+#include "nsINode.h"
 #include "nsIWeakReferenceUtils.h"
+#include "nsSVGElement.h"
+#include "nsTArray.h"
+
+#include <string.h>
 
 class gfxContext;
-struct gfxMatrix;
 class gfxFlattenedPath;
-class nsSVGPathDataParserToInternal;
+class nsSVGPathDataParserToInternal; // IWYU pragma: keep
+
+struct gfxMatrix;
 struct nsSVGMark;
 
 namespace mozilla {
@@ -86,7 +61,7 @@ namespace mozilla {
  *
  * Segment encoding: the first float in the encoding of a segment contains the
  * segment's type. The segment's type is encoded to/decoded from this float
- * using the static methods SVGPathSegUtils::EncodeType(PRUint32)/
+ * using the static methods SVGPathSegUtils::EncodeType(uint32_t)/
  * SVGPathSegUtils::DecodeType(float). If the path segment type in question
  * takes any arguments then these follow the first float, and are in the same
  * order as they are given in a <path> element's 'd' attribute (NOT in the
@@ -117,7 +92,7 @@ public:
   /// This may return an incomplete string on OOM, but that's acceptable.
   void GetValueAsString(nsAString& aValue) const;
 
-  PRBool IsEmpty() const {
+  bool IsEmpty() const {
     return mData.IsEmpty();
   }
 
@@ -126,23 +101,23 @@ public:
    * This method iterates over the encoded segment data and counts the number
    * of segments we currently have.
    */
-  PRUint32 CountItems() const;
+  uint32_t CountItems() const;
 #endif
 
   /**
    * Returns the number of *floats* in the encoding array, and NOT the number
    * of segments encoded in this object. (For that, see CountItems() above.)
    */
-  PRUint32 Length() const {
+  uint32_t Length() const {
     return mData.Length();
   }
 
-  const float& operator[](PRUint32 aIndex) const {
+  const float& operator[](uint32_t aIndex) const {
     return mData[aIndex];
   }
 
   // Used by nsSMILCompositor to check if the cached base val is out of date
-  PRBool operator==(const SVGPathData& rhs) const {
+  bool operator==(const SVGPathData& rhs) const {
     // We use memcmp so that we don't need to worry that the data encoded in
     // the first float may have the same bit pattern as a NaN.
     return mData.Length() == rhs.mData.Length() &&
@@ -150,7 +125,7 @@ public:
                   mData.Length() * sizeof(float)) == 0;
   }
 
-  PRBool SetCapacity(PRUint32 aSize) {
+  bool SetCapacity(uint32_t aSize) {
     return mData.SetCapacity(aSize);
   }
 
@@ -161,19 +136,19 @@ public:
 
   float GetPathLength() const;
 
-  PRUint32 GetPathSegAtLength(float aLength) const;
+  uint32_t GetPathSegAtLength(float aLength) const;
 
   void GetMarkerPositioningData(nsTArray<nsSVGMark> *aMarks) const;
 
   /**
-   * Returns PR_TRUE, except on OOM, in which case returns PR_FALSE.
+   * Returns true, except on OOM, in which case returns false.
    */
-  PRBool GetSegmentLengths(nsTArray<double> *aLengths) const;
+  bool GetSegmentLengths(nsTArray<double> *aLengths) const;
 
   /**
-   * Returns PR_TRUE, except on OOM, in which case returns PR_FALSE.
+   * Returns true, except on OOM, in which case returns false.
    */
-  PRBool GetDistancesFromOriginToEndsOfVisibleSegments(nsTArray<double> *aArray) const;
+  bool GetDistancesFromOriginToEndsOfVisibleSegments(nsTArray<double> *aArray) const;
 
   already_AddRefed<gfxFlattenedPath>
   ToFlattenedPath(const gfxMatrix& aMatrix) const;
@@ -199,15 +174,15 @@ protected:
    */
   nsresult CopyFrom(const SVGPathData& rhs);
 
-  float& operator[](PRUint32 aIndex) {
+  float& operator[](uint32_t aIndex) {
     return mData[aIndex];
   }
 
   /**
-   * This may fail (return PR_FALSE) on OOM if the internal capacity is being
+   * This may fail (return false) on OOM if the internal capacity is being
    * increased, in which case the list will be left unmodified.
    */
-  PRBool SetLength(PRUint32 aLength) {
+  bool SetLength(uint32_t aLength) {
     return mData.SetLength(aLength);
   }
 
@@ -220,12 +195,12 @@ protected:
   // Our DOM wrappers have direct access to our mData, so they directly
   // manipulate it rather than us implementing:
   //
-  // * InsertItem(PRUint32 aDataIndex, PRUint32 aType, const float *aArgs);
-  // * ReplaceItem(PRUint32 aDataIndex, PRUint32 aType, const float *aArgs);
-  // * RemoveItem(PRUint32 aDataIndex);
-  // * PRBool AppendItem(PRUint32 aType, const float *aArgs);
+  // * InsertItem(uint32_t aDataIndex, uint32_t aType, const float *aArgs);
+  // * ReplaceItem(uint32_t aDataIndex, uint32_t aType, const float *aArgs);
+  // * RemoveItem(uint32_t aDataIndex);
+  // * bool AppendItem(uint32_t aType, const float *aArgs);
 
-  nsresult AppendSeg(PRUint32 aType, ...); // variable number of float args
+  nsresult AppendSeg(uint32_t aType, ...); // variable number of float args
 
   iterator begin() { return mData.Elements(); }
   iterator end() { return mData.Elements() + mData.Length(); }
@@ -245,7 +220,7 @@ protected:
 class SVGPathDataAndOwner : public SVGPathData
 {
 public:
-  SVGPathDataAndOwner(nsSVGElement *aElement = nsnull)
+  SVGPathDataAndOwner(nsSVGElement *aElement = nullptr)
     : mElement(do_GetWeakReference(static_cast<nsINode*>(aElement)))
   {}
 
@@ -263,12 +238,12 @@ public:
     return SVGPathData::CopyFrom(rhs);
   }
 
-  PRBool IsIdentity() const {
+  bool IsIdentity() const {
     if (!mElement) {
       NS_ABORT_IF_FALSE(IsEmpty(), "target element propagation failure");
-      return PR_TRUE;
+      return true;
     }
-    return PR_FALSE;
+    return false;
   }
 
   /**

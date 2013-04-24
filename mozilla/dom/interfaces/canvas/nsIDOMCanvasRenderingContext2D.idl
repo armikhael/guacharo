@@ -1,39 +1,7 @@
 /* -*- Mode: IDL; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- *   Vladimir Vukicevic <vladimir@pobox.com>
- * Portions created by the Initial Developer are Copyright (C) 2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsISupports.idl"
 #include "nsIVariant.idl"
@@ -62,7 +30,15 @@ interface nsIDOMTextMetrics : nsISupports
   readonly attribute float width;
 };
 
-[scriptable, uuid(274213a8-df51-4b52-bfad-d306a1d5f642)]
+[scriptable, builtinclass, uuid(1ea11207-b3e3-4ffc-a256-bf5c7011e806)]
+interface nsIDOMImageData : nsISupports
+{
+  readonly attribute unsigned long width;
+  readonly attribute unsigned long height;
+  [implicit_jscontext] readonly attribute jsval data;
+};
+
+[scriptable, uuid(c835c768-2dcc-461c-82f5-3653710d2942)]
 interface nsIDOMCanvasRenderingContext2D : nsISupports
 {
   // back-reference to the canvas element for which
@@ -70,7 +46,9 @@ interface nsIDOMCanvasRenderingContext2D : nsISupports
   readonly attribute nsIDOMHTMLCanvasElement canvas;
 
   // state
+  [binaryname(MozSave)]
   void save();
+  [binaryname(MozRestore)]
   void restore();
 
   // transformations
@@ -117,7 +95,9 @@ enum CanvasMultiGetterType {
   nsIDOMCanvasGradient createRadialGradient(in float x0, in float y0, in float r0, in float x1, in float y1, in float r1);
   nsIDOMCanvasPattern createPattern(in nsIDOMHTMLElement image, in DOMString repetition);
   attribute float lineWidth; /* default 1 */
+  [binaryname(MozLineCap)]
   attribute DOMString lineCap; /* "butt", "round", "square" (default) */
+  [binaryname(MozLineJoin)]
   attribute DOMString lineJoin; /* "round", "bevel", "miter" (default) */
   attribute float miterLimit; /* default 10 */
 
@@ -129,6 +109,7 @@ enum CanvasMultiGetterType {
   attribute float shadowOffsetX;
   attribute float shadowOffsetY;
   attribute float shadowBlur;
+  [binaryname(MozShadowColor)]
   attribute DOMString shadowColor;
 
   // rects
@@ -137,7 +118,9 @@ enum CanvasMultiGetterType {
   void strokeRect(in float x, in float y, in float w, in float h);
 
   // path API
+  [binaryname(MozBeginPath)]
   void beginPath();
+  [binaryname(MozClosePath)]
   void closePath();
 
   void moveTo(in float x, in float y);
@@ -148,14 +131,20 @@ enum CanvasMultiGetterType {
   void arc(in float x, in float y, in float r, in float startAngle, in float endAngle, [optional] in boolean anticlockwise);
   void rect(in float x, in float y, in float w, in float h);
 
+  [binaryname(MozFill)]
   void fill();
+  [binaryname(MozStroke)]
   void stroke();
+  [binaryname(MozClip)]
   void clip();
 
   // text api
+  [binaryname(MozFont)]
   attribute DOMString font; /* default "10px sans-serif" */
+  [binaryname(MozTextAlign)]
   attribute DOMString textAlign; /* "start" (default), "end", "left", "right",
                                  "center" */
+  [binaryname(MozTextBaseline)]
   attribute DOMString textBaseline; /* "alphabetic" (default), "top", "hanging",
                                     "middle", "ideographic", "bottom" */
 
@@ -163,6 +152,7 @@ enum CanvasMultiGetterType {
   void strokeText(in DOMString text, in float x, in float y, [optional] in float maxWidth);
   nsIDOMTextMetrics measureText(in DOMString text);
 
+  [binaryname(TextStyle)]
   attribute DOMString mozTextStyle;
 
   // image api
@@ -190,24 +180,28 @@ enum CanvasMultiGetterType {
   // void putImageData (in ImageData d, in float x, in float y);
   // ImageData = { width: #, height: #, data: [r, g, b, a, ...] }
 
-  // These are just dummy functions; for JS, they are implemented as quickstubs
-  // that call the _explicit methods below.  Native callers should use the _explit
-  // methods directly.
-  void getImageData();
-  void putImageData();
+  [implicit_jscontext]
+  nsIDOMImageData getImageData(in double sx, in double sy, in double sw, in double sh);
 
-  // dataLen must be == width*height*4 in both of these calls
-  [noscript] void getImageData_explicit(in long x, in long y, in unsigned long width, in unsigned long height,
-                                        [array, size_is(dataLen)] in octet dataPtr, in unsigned long dataLen);
+
+  // void putImageData(ImageData imagedata, double dx, double dy);
+  // void putImageDataHD(ImageData imagedata, double dx, double dy, double dirtyX, double dirtyY, double dirtyWidth, double dirtyHeight);
+  // We use jsval for the imageData because that's what our C++ code wants
+  [implicit_jscontext, optional_argc]
+  void putImageData(in jsval imageData, in double dx, in double dy,
+                    [optional] in double dirtyX, [optional] in double dirtyY,
+                    [optional] in double dirtyWidth,
+                    [optional] in double dirtyHeight);
+
+  // dataLen must be == width*height*4 in this call
   [noscript] void putImageData_explicit(in long x, in long y, in unsigned long width, in unsigned long height,
                                         [array, size_is(dataLen)] in octet dataPtr, in unsigned long dataLen, in boolean hasDirtyRect,
                                         in long dirtyX, in long dirtyY, in long dirtyWidth, in long dirtyHeight);
 
-  // ImageData createImageData(in float w, in float h);
-  // Note: this is basically script-only (and really, quickstub-only).  Native callers
-  // should just use the noscript 'explicit' get/put methods above, instead of using
-  // a separate ImageData object.
-  void createImageData();
+  // ImageData createImageData(double w, double h);
+  // ImageData createImageData(ImageData data);
+  [implicit_jscontext, optional_argc]
+  nsIDOMImageData createImageData(in jsval arg1, [optional] in jsval arg2);
 
   // image smoothing mode -- if disabled, images won't be smoothed
   // if scaled.
@@ -244,7 +238,7 @@ enum CanvasMultiGetterType {
    * transparent/translucent. It is given as a CSS color string
    * (e.g., rgb() or rgba()).
    *
-   * @param flags Uused to better control the drawWindow call.
+   * @param flags Used to better control the drawWindow call.
    * Flags can be ORed together.
    *
    * Of course, the rendering obeys the current scale, transform and

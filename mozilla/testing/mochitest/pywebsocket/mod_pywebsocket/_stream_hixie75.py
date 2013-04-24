@@ -28,8 +28,11 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-"""Stream of WebSocket protocol with the framing used by IETF HyBi 00 and
-Hixie 75. For Hixie 75 this stream doesn't perform closing handshake.
+"""This file provides a class for parsing/building frames of the WebSocket
+protocol version HyBi 00 and Hixie 75.
+
+Specification:
+http://tools.ietf.org/html/draft-ietf-hybi-thewebsocketprotocol-00
 """
 
 
@@ -43,7 +46,9 @@ from mod_pywebsocket import util
 
 
 class StreamHixie75(StreamBase):
-    """Stream of WebSocket messages."""
+    """A class for parsing/building frames of the WebSocket protocol version
+    HyBi 00 and Hixie 75.
+    """
 
     def __init__(self, request, enable_closing_handshake=False):
         """Construct an instance.
@@ -64,11 +69,12 @@ class StreamHixie75(StreamBase):
         self._request.client_terminated = False
         self._request.server_terminated = False
 
-    def send_message(self, message, end=True):
+    def send_message(self, message, end=True, binary=False):
         """Send message.
 
         Args:
             message: unicode string to send.
+            binary: not used in hixie75.
 
         Raises:
             BadOperationException: when called on a server-terminated
@@ -78,6 +84,10 @@ class StreamHixie75(StreamBase):
         if not end:
             raise BadOperationException(
                 'StreamHixie75 doesn\'t support send_message with end=False')
+
+        if binary:
+            raise BadOperationException(
+                'StreamHixie75 doesn\'t support send_message with binary=True')
 
         if self._request.server_terminated:
             raise BadOperationException(

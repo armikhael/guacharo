@@ -1,44 +1,10 @@
 /* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is this file as it was released on January 3, 2001.
- *
- * The Initial Developer of the Original Code is
- * Jonas Sicking.
- * Portions created by the Initial Developer are Copyright (C) 2000
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jonas Sicking <sicking@bigfoot.com> (Original Author)
- *   Gervase Markham <gerv@gerv.net>
- *   Heikki Toivonen <heikki@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+const MathMLNS = "http://www.w3.org/1998/Math/MathML";
 const XLinkNS = "http://www.w3.org/1999/xlink";
 const XULNS = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
 const XMLNS = "http://www.w3.org/XML/1998/namespace";
@@ -58,14 +24,8 @@ var onTable  = false;
 var onTitle  = false;
 var onLang   = false;
 
+const nsICache = Components.interfaces.nsICache;
 const nsICacheService = Components.interfaces.nsICacheService;
-const cacheService = Components.classes["@mozilla.org/network/cache-service;1"]
-                     .getService(nsICacheService);
-var httpCacheSession = cacheService.createSession("HTTP", 0, true);
-httpCacheSession.doomEntriesIfExpired = false;
-var ftpCacheSession = cacheService.createSession("FTP", 0, true);
-ftpCacheSession.doomEntriesIfExpired = false;
-
 
 function onLoad()
 {
@@ -142,6 +102,19 @@ function showMetadataFor(elem)
         hideNode("no-properties")
 }
 
+var cacheListener = {
+    onCacheEntryAvailable: function onCacheEntryAvailable(descriptor) {
+        if (descriptor) {
+            var kbSize = descriptor.dataSize / 1024;
+            kbSize = Math.round(kbSize * 100) / 100;
+            setInfo("image-filesize", gMetadataBundle.getFormattedString("imageSize",
+                                                                         [formatNumber(kbSize),
+                                                                          formatNumber(descriptor.dataSize)]));
+        } else {
+            setInfo("image-filesize", gMetadataBundle.getString("imageSizeUnknown"));
+        }
+    }
+};
 
 function checkForImage(elem, htmllocalname)
 {
@@ -191,17 +164,13 @@ function checkForImage(elem, htmllocalname)
 
         var imgURL = imgType == "object" ? img.data : img.src;
         setInfo("image-url", imgURL);
-        var size = getSize(imgURL);
 
-        if (size != -1) {
-            var kbSize = size / 1024;
-            kbSize = Math.round(kbSize*100)/100;
-            setInfo("image-filesize", gMetadataBundle.getFormattedString("imageSize",
-                                                                         [formatNumber(kbSize),
-                                                                          formatNumber(size)]));
-        } else {
-            setInfo("image-filesize", gMetadataBundle.getString("imageSizeUnknown"));
-        }
+        const cacheService = Components.classes["@mozilla.org/network/cache-service;1"]
+                                       .getService(nsICacheService);
+        var httpCacheSession = cacheService.createSession("HTTP", nsICache.STORE_ANYWHERE, true);
+        httpCacheSession.doomEntriesIfExpired = false;
+        httpCacheSession.asyncOpenCacheEntry(imgURL, nsICache.ACCESS_READ, cacheListener);
+
         if ("width" in img && img.width != "") {
             setInfo("image-width", gMetadataBundle.getFormattedString("imageWidth", [formatNumber(img.width)]));
             setInfo("image-height", gMetadataBundle.getFormattedString("imageHeight", [formatNumber(img.height)]));
@@ -234,11 +203,9 @@ function checkForLink(elem, htmllocalname)
     if ((htmllocalname === "a" && elem.href != "") ||
         htmllocalname === "area") {
 
-        setInfo("link-lang", convertLanguageCode(elem.getAttribute("hreflang")));
-        setInfo("link-url",  elem.href);
-        setInfo("link-type", elem.getAttribute("type"));
-        setInfo("link-rel",  elem.getAttribute("rel"));
-        setInfo("link-rev",  elem.getAttribute("rev"));
+        setLink(elem.href, elem.getAttribute("type"),
+                convertLanguageCode(elem.getAttribute("hreflang")),
+                elem.getAttribute("rel"), elem.getAttribute("rev"));
 
         var target = elem.target;
 
@@ -269,20 +236,15 @@ function checkForLink(elem, htmllocalname)
         
         onLink = true;
     }
+    else if (elem.namespaceURI == MathMLNS && elem.hasAttribute("href")) {
+        setLink(makeHrefAbsolute(elem.getAttribute("href"), elem));
 
-    else if (elem.getAttributeNS(XLinkNS, "href") != "") {
-        var ioService = Components.classes["@mozilla.org/network/io-service;1"]
-                                  .getService(Components.interfaces.nsIIOService);
-        var url = elem.getAttributeNS(XLinkNS, "href");
-        try {
-            var baseURI = ioService.newURI(elem.baseURI, elem.ownerDocument.characterSet, null);
-            url = ioService.newURI(url, elem.ownerDocument.characterSet, baseURI).spec;
-        } catch (e) {}
-        setInfo("link-url", url);
-        setInfo("link-lang", "");
-        setInfo("link-type", "");
-        setInfo("link-rel", "");
-        setInfo("link-rev", "");
+        setInfo("link-target", "");
+
+        onLink = true;
+    }
+    else if (elem.getAttributeNS(XLinkNS, "href")) {
+        setLink(makeHrefAbsolute(elem.getAttributeNS(XLinkNS, "href"), elem));
 
         switch (elem.getAttributeNS(XLinkNS,"show")) {
         case "embed":
@@ -291,6 +253,7 @@ function checkForLink(elem, htmllocalname)
         case "new":
             setInfo("link-target", gMetadataBundle.getString("newWindowText"));
             break;
+        case null:
         case "":
         case "replace":
             if (elem.ownerDocument != elem.ownerDocument.defaultView.content.document)
@@ -354,6 +317,19 @@ function checkForTitle(elem, htmllocalname)
         setInfo("misc-title", elem.title);
         onTitle = true;
     }    
+}
+
+/*
+ * Set five link properties at once.
+ * All parameters are optional.
+ */
+function setLink(url, lang, type, rel, rev)
+{
+    setInfo("link-url", url);
+    setInfo("link-type", type);
+    setInfo("link-lang", lang);
+    setInfo("link-rel", rel);
+    setInfo("link-rev", rev);
 }
 
 /*
@@ -513,25 +489,6 @@ function convertLanguageCode(abbr)
     return result;
 }
 
-// Returns the size of the URL in bytes; must be cached and therefore an HTTP or FTP URL
-function getSize(url) {
-    try
-    {
-        var cacheEntryDescriptor = httpCacheSession.openCacheEntry(url, Components.interfaces.nsICache.ACCESS_READ, false);
-        if(cacheEntryDescriptor)
-          return cacheEntryDescriptor.dataSize;
-    }
-    catch(ex) {}
-    try
-    {
-        cacheEntryDescriptor = ftpCacheSession.openCacheEntry(url, Components.interfaces.nsICache.ACCESS_READ, false);
-        if (cacheEntryDescriptor)
-            return cacheEntryDescriptor.dataSize;
-    }
-    catch(ex) {}
-    return -1;
-}
-
 function setAlt(elem) {
     var altText = document.getElementById("image-alt-text");
     if (elem.hasAttribute("alt")) {
@@ -552,4 +509,15 @@ function setAlt(elem) {
 function formatNumber(number)
 {
   return (+number).toLocaleString();  // coerce number to a numeric value before calling toLocaleString()
+}
+
+function makeHrefAbsolute(href, elem)
+{
+  Components.utils.import("resource://gre/modules/NetUtil.jsm");
+  try {
+    var baseURI = NetUtil.newURI(elem.baseURI, elem.ownerDocument.characterSet);
+    href = NetUtil.newURI(href, elem.ownerDocument.characterSet, baseURI).spec;
+  } catch (e) {
+  }
+  return href;
 }

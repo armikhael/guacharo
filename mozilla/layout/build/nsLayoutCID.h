@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsLayoutCID_h__
 #define nsLayoutCID_h__
@@ -95,10 +63,6 @@
 #define NS_CANVASRENDERINGCONTEXT2DTHEBES_CID \
 { 0xbcd923c0, 0x9788, 0x4350, { 0xac, 0x48, 0x36, 0x5f, 0x47, 0x31, 0x61, 0xeb } }
 
-// {9052bb12-79b0-4bdd-8e60-7bf078026b6d}
-#define NS_CANVASRENDERINGCONTEXT2DAZURE_CID \
-{0x9052bb12, 0x79b0, 0x4bdd, {0x8e, 0x60, 0x7b, 0xf0, 0x78, 0x02, 0x6b, 0x6d}}
-
 // {2fe88332-31c6-4829-b247-a07d8a73e80f}
 #define NS_CANVASRENDERINGCONTEXTWEBGL_CID \
 { 0x2fe88332, 0x31c6, 0x4829, { 0xb2, 0x47, 0xa0, 0x7d, 0x8a, 0x7e, 0xe8, 0x0fe } }
@@ -115,10 +79,6 @@
 #define NS_DOMSTORAGEMANAGER_CID               \
 { 0xb88a4712, 0xeb52, 0x4c10, { 0x9b, 0x85, 0xbf, 0x58, 0x94, 0xb5, 0x10, 0xf0 } }
 
-// {14632191-AC21-4BDF-83E7-2363AD17E838}
-#define NS_XULPOPUPMANAGER_CID \
-{ 0x14632191, 0xac21, 0x4bdf, { 0x83, 0xe7, 0x23, 0x63, 0xad, 0x17, 0xe8, 0x38 } }
-
 // {93ad72a6-02cd-4716-9626-d47d5ec275ec}
 #define NS_DOMJSON_CID \
 { 0x93ad72a6, 0x02cd, 0x4716, { 0x96, 0x26, 0xd4, 0x7d, 0x5e, 0xc2, 0x75, 0xec } }
@@ -130,5 +90,9 @@
 // {1A26A7B7-D06E-4F45-8B45-D7AD60F7A9AB}
 #define INDEXEDDB_MANAGER_CID \
 { 0x1a26a7b7, 0xd06e, 0x4f45, { 0x8b, 0x45, 0xd7, 0xad, 0x60, 0xf7, 0xa9, 0xab } }
+
+// {3160e271-138d-4cc7-9d63-6429f16957c7}
+#define DOMREQUEST_SERVICE_CID \
+{ 0x3160e271, 0x138d, 0x4cc7, { 0x9d, 0x63, 0x64, 0x29, 0xf1, 0x69, 0x57, 0xc7 } }
 
 #endif /* nsLayoutCID_h__ */

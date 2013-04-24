@@ -4,12 +4,10 @@
 
 // Test loading views in data manager.
 
-Components.utils.import("resource://gre/modules/Services.jsm");
-
 const DATAMAN_LOADED = "dataman-loaded";
 
 // See browser_dataman_basics.js.
-const kPreexistingDomains = 10;
+const kPreexistingDomains = 12;
 
 var testIndex = 0;
 

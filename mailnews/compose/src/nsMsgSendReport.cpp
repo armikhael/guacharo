@@ -1,40 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Jean-Francois Ducarroz <ducarroz@netscape.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsMsgSendReport.h"
 
@@ -42,10 +9,11 @@
 #include "nsIMsgCompose.h"
 #include "nsMsgCompCID.h"
 #include "nsMsgPrompts.h"
-#include "nsNetError.h"
+#include "nsError.h"
 #include "nsComposeStrings.h"
 #include "nsIStringBundle.h"
 #include "nsServiceManagerUtils.h"
+#include "mozilla/Services.h"
 
 NS_IMPL_ISUPPORTS1(nsMsgProcessReport, nsIMsgProcessReport)
 
@@ -59,13 +27,13 @@ nsMsgProcessReport::~nsMsgProcessReport()
 }
 
 /* attribute boolean proceeded; */
-NS_IMETHODIMP nsMsgProcessReport::GetProceeded(PRBool *aProceeded)
+NS_IMETHODIMP nsMsgProcessReport::GetProceeded(bool *aProceeded)
 {
   NS_ENSURE_ARG_POINTER(aProceeded);
   *aProceeded = mProceeded;
   return NS_OK;
 }
-NS_IMETHODIMP nsMsgProcessReport::SetProceeded(PRBool aProceeded)
+NS_IMETHODIMP nsMsgProcessReport::SetProceeded(bool aProceeded)
 {
   mProceeded = aProceeded;
   return NS_OK;
@@ -100,7 +68,7 @@ NS_IMETHODIMP nsMsgProcessReport::SetMessage(const PRUnichar * aMessage)
 /* void Reset (); */
 NS_IMETHODIMP nsMsgProcessReport::Reset()
 {
-  mProceeded = PR_FALSE;
+  mProceeded = false;
   mError = NS_OK;
   mMessage.Truncate();
 
@@ -112,7 +80,7 @@ NS_IMPL_ISUPPORTS1(nsMsgSendReport, nsIMsgSendReport)
 
 nsMsgSendReport::nsMsgSendReport()
 {
-  PRUint32 i;
+  uint32_t i;
   for (i = 0; i <= SEND_LAST_PROCESS; i ++)
     mProcessReport[i] = new nsMsgProcessReport();
 
@@ -121,38 +89,38 @@ nsMsgSendReport::nsMsgSendReport()
 
 nsMsgSendReport::~nsMsgSendReport()
 {
-  PRUint32 i;
+  uint32_t i;
   for (i = 0; i <= SEND_LAST_PROCESS; i ++)
-    mProcessReport[i] = nsnull;
+    mProcessReport[i] = nullptr;
 }
 
 /* attribute long currentProcess; */
-NS_IMETHODIMP nsMsgSendReport::GetCurrentProcess(PRInt32 *aCurrentProcess)
+NS_IMETHODIMP nsMsgSendReport::GetCurrentProcess(int32_t *aCurrentProcess)
 {
   NS_ENSURE_ARG_POINTER(aCurrentProcess);
   *aCurrentProcess = mCurrentProcess;
   return NS_OK;
 }
-NS_IMETHODIMP nsMsgSendReport::SetCurrentProcess(PRInt32 aCurrentProcess)
+NS_IMETHODIMP nsMsgSendReport::SetCurrentProcess(int32_t aCurrentProcess)
 {
   if (aCurrentProcess < 0 || aCurrentProcess > SEND_LAST_PROCESS)
     return NS_ERROR_ILLEGAL_VALUE;
 
   mCurrentProcess = aCurrentProcess;
   if (mProcessReport[mCurrentProcess])
-    mProcessReport[mCurrentProcess]->SetProceeded(PR_TRUE);
+    mProcessReport[mCurrentProcess]->SetProceeded(true);
 
   return NS_OK;
 }
 
 /* attribute long deliveryMode; */
-NS_IMETHODIMP nsMsgSendReport::GetDeliveryMode(PRInt32 *aDeliveryMode)
+NS_IMETHODIMP nsMsgSendReport::GetDeliveryMode(int32_t *aDeliveryMode)
 {
   NS_ENSURE_ARG_POINTER(aDeliveryMode);
   *aDeliveryMode = mDeliveryMode;
   return NS_OK;
 }
-NS_IMETHODIMP nsMsgSendReport::SetDeliveryMode(PRInt32 aDeliveryMode)
+NS_IMETHODIMP nsMsgSendReport::SetDeliveryMode(int32_t aDeliveryMode)
 {
   mDeliveryMode = aDeliveryMode;
   return NS_OK;
@@ -161,20 +129,20 @@ NS_IMETHODIMP nsMsgSendReport::SetDeliveryMode(PRInt32 aDeliveryMode)
 /* void Reset (); */
 NS_IMETHODIMP nsMsgSendReport::Reset()
 {
-  PRUint32 i;
+  uint32_t i;
   for (i = 0; i <= SEND_LAST_PROCESS; i ++)
     if (mProcessReport[i])
       mProcessReport[i]->Reset();
 
   mCurrentProcess = 0;
   mDeliveryMode = 0;
-  mAlreadyDisplayReport = PR_FALSE;
+  mAlreadyDisplayReport = false;
 
   return NS_OK;
 }
 
 /* void setProceeded (in long process, in boolean proceeded); */
-NS_IMETHODIMP nsMsgSendReport::SetProceeded(PRInt32 process, PRBool proceeded)
+NS_IMETHODIMP nsMsgSendReport::SetProceeded(int32_t process, bool proceeded)
 {
   if (process < process_Current || process > SEND_LAST_PROCESS)
     return NS_ERROR_ILLEGAL_VALUE;
@@ -189,7 +157,7 @@ NS_IMETHODIMP nsMsgSendReport::SetProceeded(PRInt32 process, PRBool proceeded)
 }
 
 /* void setError (in long process, in nsresult error, in boolean overwriteError); */
-NS_IMETHODIMP nsMsgSendReport::SetError(PRInt32 process, nsresult newError, PRBool overwriteError)
+NS_IMETHODIMP nsMsgSendReport::SetError(int32_t process, nsresult newError, bool overwriteError)
 {
   if (process < process_Current || process > SEND_LAST_PROCESS)
     return NS_ERROR_ILLEGAL_VALUE;
@@ -209,7 +177,7 @@ NS_IMETHODIMP nsMsgSendReport::SetError(PRInt32 process, nsresult newError, PRBo
 }
 
 /* void setMessage (in long process, in wstring message, in boolean overwriteMessage); */
-NS_IMETHODIMP nsMsgSendReport::SetMessage(PRInt32 process, const PRUnichar *message, PRBool overwriteMessage)
+NS_IMETHODIMP nsMsgSendReport::SetMessage(int32_t process, const PRUnichar *message, bool overwriteMessage)
 {
   if (process < process_Current || process > SEND_LAST_PROCESS)
     return NS_ERROR_ILLEGAL_VALUE;
@@ -229,7 +197,7 @@ NS_IMETHODIMP nsMsgSendReport::SetMessage(PRInt32 process, const PRUnichar *mess
 }
 
 /* nsIMsgProcessReport getProcessReport (in long process); */
-NS_IMETHODIMP nsMsgSendReport::GetProcessReport(PRInt32 process, nsIMsgProcessReport **_retval)
+NS_IMETHODIMP nsMsgSendReport::GetProcessReport(int32_t process, nsIMsgProcessReport **_retval)
 {
   NS_ENSURE_ARG_POINTER(_retval);
   if (process < process_Current || process > SEND_LAST_PROCESS)
@@ -243,7 +211,7 @@ NS_IMETHODIMP nsMsgSendReport::GetProcessReport(PRInt32 process, nsIMsgProcessRe
 }
 
 /* nsresult displayReport (in nsIPrompt prompt, in boolean showErrorOnly, in boolean dontShowReportTwice); */
-NS_IMETHODIMP nsMsgSendReport::DisplayReport(nsIPrompt *prompt, PRBool showErrorOnly, PRBool dontShowReportTwice, nsresult *_retval)
+NS_IMETHODIMP nsMsgSendReport::DisplayReport(nsIPrompt *prompt, bool showErrorOnly, bool dontShowReportTwice, nsresult *_retval)
 {
   NS_ENSURE_ARG_POINTER(_retval);
 
@@ -261,14 +229,15 @@ NS_IMETHODIMP nsMsgSendReport::DisplayReport(nsIPrompt *prompt, PRBool showError
   mProcessReport[mCurrentProcess]->GetMessage(getter_Copies(currMessage));
 
   nsresult rv; // don't step on currError.
-  nsCOMPtr<nsIStringBundleService> bundleService(do_GetService("@mozilla.org/intl/stringbundle;1", &rv));
-  NS_ENSURE_SUCCESS(rv, rv);
+  nsCOMPtr<nsIStringBundleService> bundleService =
+    mozilla::services::GetStringBundleService();
+  NS_ENSURE_TRUE(bundleService, NS_ERROR_UNEXPECTED);
   nsCOMPtr<nsIStringBundle> bundle;
   rv = bundleService->CreateBundle("chrome://messenger/locale/messengercompose/composeMsgs.properties", getter_AddRefs(bundle));
   if (NS_FAILED(rv))
   {
     //TODO need to display a generic hardcoded message
-    mAlreadyDisplayReport = PR_TRUE;
+    mAlreadyDisplayReport = true;
     return NS_OK;  
   }
 
@@ -307,32 +276,32 @@ NS_IMETHODIMP nsMsgSendReport::DisplayReport(nsIPrompt *prompt, PRBool showError
     // In that case, we must not show an alert ourself.
     if (currError == NS_ERROR_BUT_DONT_SHOW_ALERT)
     {
-      mAlreadyDisplayReport = PR_TRUE;
+      mAlreadyDisplayReport = true;
       return NS_OK;
     }
 
     bundle->GetStringFromID(NS_MSG_SEND_ERROR_TITLE, getter_Copies(dialogTitle));
 
-    PRInt32 preStrId = NS_ERROR_SEND_FAILED;
-    PRBool askToGoBackToCompose = PR_FALSE;
+    int32_t preStrId = NS_ERROR_SEND_FAILED;
+    bool askToGoBackToCompose = false;
     switch (mCurrentProcess)
     {
       case process_BuildMessage :
         preStrId = NS_ERROR_SEND_FAILED;
-        askToGoBackToCompose = PR_FALSE;
+        askToGoBackToCompose = false;
         break;
       case process_NNTP :
         preStrId = NS_ERROR_SEND_FAILED;
-        askToGoBackToCompose = PR_FALSE;
+        askToGoBackToCompose = false;
         break;
       case process_SMTP :
-        PRBool nntpProceeded;
+        bool nntpProceeded;
         mProcessReport[process_NNTP]->GetProceeded(&nntpProceeded);
         if (nntpProceeded)
           preStrId = NS_ERROR_SEND_FAILED_BUT_NNTP_OK;
         else
           preStrId = NS_ERROR_SEND_FAILED;
-        askToGoBackToCompose = PR_FALSE;
+        askToGoBackToCompose = false;
         break;
       case process_Copy:
         preStrId = NS_MSG_FAILED_COPY_OPERATION;
@@ -365,7 +334,7 @@ NS_IMETHODIMP nsMsgSendReport::DisplayReport(nsIPrompt *prompt, PRBool showError
 
     if (askToGoBackToCompose)
     {
-      PRBool oopsGiveMeBackTheComposeWindow = PR_TRUE;
+      bool oopsGiveMeBackTheComposeWindow = true;
       nsString text1;
       bundle->GetStringFromID(NS_MSG_ASK_TO_COMEBACK_TO_COMPOSE, getter_Copies(text1));
       if (!dialogMessage.IsEmpty())
@@ -380,8 +349,8 @@ NS_IMETHODIMP nsMsgSendReport::DisplayReport(nsIPrompt *prompt, PRBool showError
   }
   else
   {
-    PRInt32 titleID;
-    PRInt32 preStrId;
+    int32_t titleID;
+    int32_t preStrId;
 
     switch (mDeliveryMode)
     {
@@ -428,7 +397,7 @@ NS_IMETHODIMP nsMsgSendReport::DisplayReport(nsIPrompt *prompt, PRBool showError
     nsMsgDisplayMessageByString(prompt, dialogMessage.get(), dialogTitle.get());
   }
 
-  mAlreadyDisplayReport = PR_TRUE;
+  mAlreadyDisplayReport = true;
   return NS_OK;
 }
 

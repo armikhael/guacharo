@@ -1,39 +1,6 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla.org code.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * 
- * Portions created by the Initial Developer are Copyright (C) 2011
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *  Justin Lebar <justin.lebar@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsSHEntryShared.h"
 #include "nsISHistory.h"
@@ -47,12 +14,13 @@
 #include "nsThreadUtils.h"
 #include "nsILayoutHistoryState.h"
 #include "prprf.h"
+#include "mozilla/Attributes.h"
 
 namespace dom = mozilla::dom;
 
 namespace {
 
-PRUint64 gSHEntrySharedID = 0;
+uint64_t gSHEntrySharedID = 0;
 
 } // anonymous namespace
 
@@ -61,7 +29,7 @@ PRUint64 gSHEntrySharedID = 0;
 #define CONTENT_VIEWER_TIMEOUT_SECONDS (30*60)
 
 typedef nsExpirationTracker<nsSHEntryShared, 3> HistoryTrackerBase;
-class HistoryTracker : public HistoryTrackerBase {
+class HistoryTracker MOZ_FINAL : public HistoryTrackerBase {
 public:
   // Expire cached contentviewers after 20-30 minutes in the cache.
   HistoryTracker() 
@@ -76,7 +44,7 @@ protected:
   }
 };
 
-static HistoryTracker *gHistoryTracker = nsnull;
+static HistoryTracker *gHistoryTracker = nullptr;
 
 void
 nsSHEntryShared::Startup()
@@ -88,19 +56,18 @@ void
 nsSHEntryShared::Shutdown()
 {
   delete gHistoryTracker;
-  gHistoryTracker = nsnull;
+  gHistoryTracker = nullptr;
 }
 
 nsSHEntryShared::nsSHEntryShared()
   : mDocShellID(0)
-  , mParent(nsnull)
-  , mIsFrameNavigation(PR_FALSE)
-  , mSaveLayoutState(PR_TRUE)
-  , mSticky(PR_TRUE)
-  , mDynamicallyCreated(PR_FALSE)
+  , mIsFrameNavigation(false)
+  , mSaveLayoutState(true)
+  , mSticky(true)
+  , mDynamicallyCreated(false)
   , mLastTouched(0)
   , mID(gSHEntrySharedID++)
-  , mExpired(PR_FALSE)
+  , mExpired(false)
   , mViewerBounds(0, 0, 0, 0)
 {
 }
@@ -116,7 +83,7 @@ nsSHEntryShared::~nsSHEntryShared()
     iterator(gHistoryTracker);
 
   nsSHEntryShared *elem;
-  while ((elem = iterator.Next()) != nsnull) {
+  while ((elem = iterator.Next()) != nullptr) {
     NS_ASSERTION(elem != this, "Found dead entry still in the tracker!");
   }
 #endif
@@ -136,7 +103,6 @@ nsSHEntryShared::Duplicate(nsSHEntryShared *aEntry)
   newEntry->mDocShellID = aEntry->mDocShellID;
   newEntry->mChildShells.AppendObjects(aEntry->mChildShells);
   newEntry->mOwner = aEntry->mOwner;
-  newEntry->mParent = aEntry->mParent;
   newEntry->mContentType.Assign(aEntry->mContentType);
   newEntry->mIsFrameNavigation = aEntry->mIsFrameNavigation;
   newEntry->mSaveLayoutState = aEntry->mSaveLayoutState;
@@ -174,22 +140,22 @@ nsSHEntryShared::DropPresentationState()
   nsRefPtr<nsSHEntryShared> kungFuDeathGrip = this;
 
   if (mDocument) {
-    mDocument->SetBFCacheEntry(nsnull);
+    mDocument->SetBFCacheEntry(nullptr);
     mDocument->RemoveMutationObserver(this);
-    mDocument = nsnull;
+    mDocument = nullptr;
   }
   if (mContentViewer) {
     mContentViewer->ClearHistoryEntry();
   }
 
   RemoveFromExpirationTracker();
-  mContentViewer = nsnull;
-  mSticky = PR_TRUE;
-  mWindowState = nsnull;
+  mContentViewer = nullptr;
+  mSticky = true;
+  mWindowState = nullptr;
   mViewerBounds.SetRect(0, 0, 0, 0);
   mChildShells.Clear();
-  mRefreshURIList = nsnull;
-  mEditorData = nsnull;
+  mRefreshURIList = nullptr;
+  mEditorData = nullptr;
 }
 
 void
@@ -316,7 +282,7 @@ nsSHEntryShared::RemoveFromBFCacheAsync()
 }
 
 nsresult
-nsSHEntryShared::GetID(PRUint64 *aID)
+nsSHEntryShared::GetID(uint64_t *aID)
 {
   *aID = mID;
   return NS_OK;
@@ -350,18 +316,18 @@ nsSHEntryShared::CharacterDataChanged(nsIDocument* aDocument,
 void
 nsSHEntryShared::AttributeWillChange(nsIDocument* aDocument,
                                      dom::Element* aContent,
-                                     PRInt32 aNameSpaceID,
+                                     int32_t aNameSpaceID,
                                      nsIAtom* aAttribute,
-                                     PRInt32 aModType)
+                                     int32_t aModType)
 {
 }
 
 void
 nsSHEntryShared::AttributeChanged(nsIDocument* aDocument,
                                   dom::Element* aElement,
-                                  PRInt32 aNameSpaceID,
+                                  int32_t aNameSpaceID,
                                   nsIAtom* aAttribute,
-                                  PRInt32 aModType)
+                                  int32_t aModType)
 {
   RemoveFromBFCacheAsync();
 }
@@ -370,7 +336,7 @@ void
 nsSHEntryShared::ContentAppended(nsIDocument* aDocument,
                                  nsIContent* aContainer,
                                  nsIContent* aFirstNewContent,
-                                 PRInt32 /* unused */)
+                                 int32_t /* unused */)
 {
   RemoveFromBFCacheAsync();
 }
@@ -379,7 +345,7 @@ void
 nsSHEntryShared::ContentInserted(nsIDocument* aDocument,
                                  nsIContent* aContainer,
                                  nsIContent* aChild,
-                                 PRInt32 /* unused */)
+                                 int32_t /* unused */)
 {
   RemoveFromBFCacheAsync();
 }
@@ -388,7 +354,7 @@ void
 nsSHEntryShared::ContentRemoved(nsIDocument* aDocument,
                                 nsIContent* aContainer,
                                 nsIContent* aChild,
-                                PRInt32 aIndexInContainer,
+                                int32_t aIndexInContainer,
                                 nsIContent* aPreviousSibling)
 {
   RemoveFromBFCacheAsync();

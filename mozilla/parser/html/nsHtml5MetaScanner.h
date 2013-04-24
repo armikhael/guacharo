@@ -35,17 +35,13 @@
 #include "nsString.h"
 #include "nsINameSpaceManager.h"
 #include "nsIContent.h"
-#include "nsIDocument.h"
 #include "nsTraceRefcnt.h"
 #include "jArray.h"
-#include "nsHtml5DocumentMode.h"
 #include "nsHtml5ArrayCopy.h"
-#include "nsHtml5NamedCharacters.h"
-#include "nsHtml5NamedCharactersAccel.h"
+#include "nsAHtml5TreeBuilderState.h"
 #include "nsHtml5Atoms.h"
 #include "nsHtml5ByteReadable.h"
 #include "nsIUnicodeDecoder.h"
-#include "nsAHtml5TreeBuilderState.h"
 #include "nsHtml5Macros.h"
 
 class nsHtml5StreamParser;
@@ -63,34 +59,34 @@ class nsHtml5Portability;
 class nsHtml5MetaScanner
 {
   private:
-    static staticJArray<PRUnichar,PRInt32> CHARSET;
-    static staticJArray<PRUnichar,PRInt32> CONTENT;
-    static staticJArray<PRUnichar,PRInt32> HTTP_EQUIV;
-    static staticJArray<PRUnichar,PRInt32> CONTENT_TYPE;
+    static staticJArray<PRUnichar,int32_t> CHARSET;
+    static staticJArray<PRUnichar,int32_t> CONTENT;
+    static staticJArray<PRUnichar,int32_t> HTTP_EQUIV;
+    static staticJArray<PRUnichar,int32_t> CONTENT_TYPE;
   protected:
     nsHtml5ByteReadable* readable;
   private:
-    PRInt32 metaState;
-    PRInt32 contentIndex;
-    PRInt32 charsetIndex;
-    PRInt32 httpEquivIndex;
-    PRInt32 contentTypeIndex;
+    int32_t metaState;
+    int32_t contentIndex;
+    int32_t charsetIndex;
+    int32_t httpEquivIndex;
+    int32_t contentTypeIndex;
   protected:
-    PRInt32 stateSave;
+    int32_t stateSave;
   private:
-    PRInt32 strBufLen;
-    autoJArray<PRUnichar,PRInt32> strBuf;
+    int32_t strBufLen;
+    autoJArray<PRUnichar,int32_t> strBuf;
     nsString* content;
     nsString* charset;
-    PRInt32 httpEquivState;
+    int32_t httpEquivState;
   public:
     nsHtml5MetaScanner();
     ~nsHtml5MetaScanner();
   protected:
-    void stateLoop(PRInt32 state);
+    void stateLoop(int32_t state);
   private:
-    void handleCharInAttributeValue(PRInt32 c);
-    inline PRInt32 toAsciiLowerCase(PRInt32 c)
+    void handleCharInAttributeValue(int32_t c);
+    inline int32_t toAsciiLowerCase(int32_t c)
     {
       if (c >= 'A' && c <= 'Z') {
         return c + 0x20;
@@ -98,12 +94,12 @@ class nsHtml5MetaScanner
       return c;
     }
 
-    void addToBuffer(PRInt32 c);
+    void addToBuffer(int32_t c);
     void handleAttributeValue();
-    PRBool handleTag();
-    PRBool handleTagInner();
+    bool handleTag();
+    bool handleTagInner();
   protected:
-    PRBool tryCharset(nsString* encoding);
+    bool tryCharset(nsString* encoding);
   public:
     static void initializeStatics();
     static void releaseStatics();

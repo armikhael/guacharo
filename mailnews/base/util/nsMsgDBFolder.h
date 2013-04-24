@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsMsgDBFolder_h__
 #define nsMsgDBFolder_h__
@@ -47,8 +15,9 @@
 #include "nsCOMPtr.h"
 #include "nsStaticAtom.h"
 #include "nsIDBChangeListener.h"
+#include "nsIMsgPluggableStore.h"
 #include "nsIURL.h"
-#include "nsILocalFile.h"
+#include "nsIFile.h"
 #include "nsWeakReference.h"
 #include "nsIMsgFilterList.h"
 #include "nsIUrlListener.h"
@@ -102,15 +71,15 @@ public:
   // we don't want to do an expensive select until the user actually opens that folder
   // These functions are called when MSG_Master::GetFolderLineById is populating a MSG_FolderLine
   // struct used by the FE
-  PRInt32 GetNumPendingUnread();
-  PRInt32 GetNumPendingTotalMessages();
+  int32_t GetNumPendingUnread();
+  int32_t GetNumPendingTotalMessages();
 
-  void ChangeNumPendingUnread(PRInt32 delta);
-  void ChangeNumPendingTotalMessages(PRInt32 delta);
+  void ChangeNumPendingUnread(int32_t delta);
+  void ChangeNumPendingTotalMessages(int32_t delta);
 
-  nsresult CreateDirectoryForFolder(nsILocalFile **result);
-  nsresult CreateBackupDirectory(nsILocalFile **result);
-  nsresult GetBackupSummaryFile(nsILocalFile **result, const nsACString& newName);
+  nsresult CreateDirectoryForFolder(nsIFile **result);
+  nsresult CreateBackupDirectory(nsIFile **result);
+  nsresult GetBackupSummaryFile(nsIFile **result, const nsACString& newName);
   nsresult GetMsgPreviewTextFromStream(nsIMsgDBHdr *msgHdr, nsIInputStream *stream);
   nsresult HandleAutoCompactEvent(nsIMsgWindow *aMsgWindow);
 protected:
@@ -124,38 +93,40 @@ protected:
   virtual nsresult CreateBaseMessageURI(const nsACString& aURI);
 
   void compressQuotesInMsgSnippet(const nsString& aMessageText, nsAString& aCompressedQuotesStr);
-  void decodeMsgSnippet(const nsACString& aEncodingType, PRBool aIsComplete, nsCString& aMsgSnippet);
+  void decodeMsgSnippet(const nsACString& aEncodingType, bool aIsComplete, nsCString& aMsgSnippet);
 
   // helper routine to parse the URI and update member variables
-  nsresult parseURI(PRBool needServer=PR_FALSE);
+  nsresult parseURI(bool needServer=false);
   nsresult GetBaseStringBundle(nsIStringBundle **aBundle);
   nsresult GetStringFromBundle(const char* msgName, nsString& aResult);
-  nsresult ThrowConfirmationPrompt(nsIMsgWindow *msgWindow, const nsAString& confirmString, PRBool *confirmed);
-  nsresult GetWarnFilterChanged(PRBool *aVal);
-  nsresult SetWarnFilterChanged(PRBool aVal);
-  nsresult CreateCollationKey(const nsString &aSource,  PRUint8 **aKey, PRUint32 *aLength);
+  nsresult ThrowConfirmationPrompt(nsIMsgWindow *msgWindow, const nsAString& confirmString, bool *confirmed);
+  nsresult GetWarnFilterChanged(bool *aVal);
+  nsresult SetWarnFilterChanged(bool aVal);
+  nsresult CreateCollationKey(const nsString &aSource,  uint8_t **aKey, uint32_t *aLength);
 
 protected:
   // all children will override this to create the right class of object.
   virtual nsresult CreateChildFromURI(const nsCString &uri, nsIMsgFolder **folder) = 0;
-  virtual nsresult ReadDBFolderInfo(PRBool force);
+  virtual nsresult ReadDBFolderInfo(bool force);
   virtual nsresult FlushToFolderCache();
   virtual nsresult GetDatabase() = 0;
-  virtual nsresult SendFlagNotifications(nsIMsgDBHdr *item, PRUint32 oldFlags, PRUint32 newFlags);
-  nsresult CheckWithNewMessagesStatus(PRBool messageAdded);
+  virtual nsresult SendFlagNotifications(nsIMsgDBHdr *item, uint32_t oldFlags, uint32_t newFlags);
+  nsresult CheckWithNewMessagesStatus(bool messageAdded);
   void     UpdateNewMessages();
-  nsresult OnHdrAddedOrDeleted(nsIMsgDBHdr *hdrChanged, PRBool added);
-  nsresult CreateFileForDB(const nsAString& userLeafName, nsILocalFile *baseDir,
-                           nsILocalFile **dbFile);
+  nsresult OnHdrAddedOrDeleted(nsIMsgDBHdr *hdrChanged, bool added);
+  nsresult CreateFileForDB(const nsAString& userLeafName, nsIFile *baseDir,
+                           nsIFile **dbFile);
 
-  nsresult GetFolderCacheKey(nsILocalFile **aFile, PRBool createDBIfMissing = PR_FALSE);
-  nsresult GetFolderCacheElemFromFile(nsILocalFile *file, nsIMsgFolderCacheElement **cacheElement);
-  nsresult AddDirectorySeparator(nsILocalFile *path);
+  nsresult GetFolderCacheKey(nsIFile **aFile, bool createDBIfMissing = false);
+  nsresult GetFolderCacheElemFromFile(nsIFile *file, nsIMsgFolderCacheElement **cacheElement);
+  nsresult AddDirectorySeparator(nsIFile *path);
   nsresult CheckIfFolderExists(const nsAString& newFolderName, nsIMsgFolder *parentFolder, nsIMsgWindow *msgWindow);
+
+  nsresult GetSummaryFile(nsIFile** aSummaryFile);
 
   // Returns true if: a) there is no need to prompt or b) the user is already
   // logged in or c) the user logged in successfully.
-  static PRBool PromptForMasterPasswordIfNecessary();
+  static bool PromptForMasterPasswordIfNecessary();
 
   // offline support methods.
   nsresult StartNewOfflineMessage();
@@ -164,21 +135,21 @@ protected:
   nsresult CompactOfflineStore(nsIMsgWindow *inWindow, nsIUrlListener *aUrlListener);
   nsresult AutoCompact(nsIMsgWindow *aWindow);
   // this is a helper routine that ignores whether nsMsgMessageFlags::Offline is set for the folder
-  nsresult MsgFitsDownloadCriteria(nsMsgKey msgKey, PRBool *result);
-  nsresult GetPromptPurgeThreshold(PRBool *aPrompt);
-  nsresult GetPurgeThreshold(PRInt32 *aThreshold);
-  nsresult ApplyRetentionSettings(PRBool deleteViaFolder);
-  PRBool   VerifyOfflineMessage(nsIMsgDBHdr *msgHdr, nsIInputStream *fileStream);
+  nsresult MsgFitsDownloadCriteria(nsMsgKey msgKey, bool *result);
+  nsresult GetPromptPurgeThreshold(bool *aPrompt);
+  nsresult GetPurgeThreshold(int32_t *aThreshold);
+  nsresult ApplyRetentionSettings(bool deleteViaFolder);
+  bool     VerifyOfflineMessage(nsIMsgDBHdr *msgHdr, nsIInputStream *fileStream);
   nsresult AddMarkAllReadUndoAction(nsIMsgWindow *msgWindow,
-                                    nsMsgKey *thoseMarked, PRUint32 numMarked);
+                                    nsMsgKey *thoseMarked, uint32_t numMarked);
 
   nsresult PerformBiffNotifications(void); // if there are new, non spam messages, do biff
   nsresult CloseDBIfFolderNotOpen();
 
   virtual nsresult SpamFilterClassifyMessage(const char *aURI, nsIMsgWindow *aMsgWindow, nsIJunkMailPlugin *aJunkMailPlugin);
-  virtual nsresult SpamFilterClassifyMessages(const char **aURIArray, PRUint32 aURICount, nsIMsgWindow *aMsgWindow, nsIJunkMailPlugin *aJunkMailPlugin);
+  virtual nsresult SpamFilterClassifyMessages(const char **aURIArray, uint32_t aURICount, nsIMsgWindow *aMsgWindow, nsIJunkMailPlugin *aJunkMailPlugin);
   // Helper function for Move code to call to update the MRU and MRM time.
-  void    UpdateTimestamps(PRBool allowUndo);
+  void    UpdateTimestamps(bool allowUndo);
   void    SetMRUTime();
   void    SetMRMTime();
   /**
@@ -193,15 +164,15 @@ protected:
   nsCOMPtr<nsIMsgDatabase> mDatabase;
   nsCOMPtr<nsIMsgDatabase> mBackupDatabase;
   nsCString mCharset;
-  PRBool mCharsetOverride;
-  PRBool mAddListener;
-  PRBool mNewMessages;
-  PRBool mGettingNewMessages;
+  bool mCharsetOverride;
+  bool mAddListener;
+  bool mNewMessages;
+  bool mGettingNewMessages;
   nsMsgKey mLastMessageLoaded;
 
   nsCOMPtr <nsIMsgDBHdr> m_offlineHeader;
-  PRInt32 m_numOfflineMsgLines;
-  PRInt32 m_bytesAddedToLocalMsg;
+  int32_t m_numOfflineMsgLines;
+  int32_t m_bytesAddedToLocalMsg;
   // this is currently used when we do a save as of an imap or news message..
   nsCOMPtr<nsIOutputStream> m_tempMessageStream;
 
@@ -210,17 +181,17 @@ protected:
   static NS_MSG_BASE_STATIC_MEMBER_(nsrefcnt) mInstanceCount;
 
 protected:
-  PRUint32 mFlags;
+  uint32_t mFlags;
   nsWeakPtr mParent;     //This won't be refcounted for ownership reasons.
-  PRInt32 mNumUnreadMessages;        /* count of unread messages (-1 means unknown; -2 means unknown but we already tried to find out.) */
-  PRInt32 mNumTotalMessages;         /* count of existing messages. */
-  PRBool mNotifyCountChanges;
-  PRUint32 mExpungedBytes;
+  int32_t mNumUnreadMessages;        /* count of unread messages (-1 means unknown; -2 means unknown but we already tried to find out.) */
+  int32_t mNumTotalMessages;         /* count of existing messages. */
+  bool mNotifyCountChanges;
+  uint32_t mExpungedBytes;
   nsCOMArray<nsIMsgFolder> mSubFolders;
   // This can't be refcounted due to ownsership issues
   nsTObserverArray<nsIFolderListener*> mListeners;
 
-  PRBool mInitializedFromCache;
+  bool mInitializedFromCache;
   nsISupports *mSemaphoreHolder; // set when the folder is being written to
                                  //Due to ownership issues, this won't be AddRef'd.
 
@@ -229,12 +200,12 @@ protected:
   // These values are used for tricking the front end into thinking that we have more 
   // messages than are really in the DB.  This is usually after and IMAP message copy where
   // we don't want to do an expensive select until the user actually opens that folder
-  PRInt32 mNumPendingUnreadMessages;
-  PRInt32 mNumPendingTotalMessages;
-  PRUint32 mFolderSize;
+  int32_t mNumPendingUnreadMessages;
+  int32_t mNumPendingTotalMessages;
+  uint32_t mFolderSize;
 
-  PRInt32 mNumNewBiffMessages;
-  PRBool mIsCachable;
+  int32_t mNumNewBiffMessages;
+  bool mIsCachable;
 
   // these are previous set of new msgs, which we might
   // want to run junk controls on. This is in addition to "new" hdrs
@@ -250,14 +221,14 @@ protected:
   //
   // stuff from the uri
   //
-  PRBool mHaveParsedURI;        // is the URI completely parsed?
-  PRBool mIsServerIsValid;
-  PRBool mIsServer;
+  bool mHaveParsedURI;        // is the URI completely parsed?
+  bool mIsServerIsValid;
+  bool mIsServer;
   nsString mName;
-  nsCOMPtr<nsILocalFile> mPath;
+  nsCOMPtr<nsIFile> mPath;
   nsCString mBaseMessageURI; //The uri with the message scheme
 
-  PRBool mInVFEditSearchScope ; // non persistant state used by the virtual folder UI
+  bool mInVFEditSearchScope ; // non persistant state used by the virtual folder UI
 
   // static stuff for cross-instance objects like atoms
   static NS_MSG_BASE_STATIC_MEMBER_(nsrefcnt) gInstanceCount;
@@ -282,18 +253,12 @@ protected:
 
   static NS_MSG_BASE_STATIC_MEMBER_(nsICollation*) gCollationKeyGenerator;
 
-#ifdef MSG_FASTER_URI_PARSING
-  // cached parsing URL object
-  static NS_MSG_BASE_STATIC_MEMBER_(nsCOMPtr<nsIURL>) mParsingURL;
-  static NS_MSG_BASE_STATIC_MEMBER_(PRBool) mParsingURLInUse;
-#endif
-
   static const NS_MSG_BASE_STATIC_MEMBER_(nsStaticAtom) folder_atoms[];
 
   // store of keys that have a processing flag set
   struct
   {
-    PRUint32 bit;
+    uint32_t bit;
     nsMsgKeySetU* keys;
   } mProcessingFlag[nsMsgProcessingFlags::NumberOfFlags];
 
@@ -309,12 +274,12 @@ protected:
    */
   nsTArray<nsMsgKey> mClassifiedMsgKeys;
   // Is the current bayes filtering doing junk classification?
-  PRBool mBayesJunkClassifying;
+  bool mBayesJunkClassifying;
   // Is the current bayes filtering doing trait classification?
-  PRBool mBayesTraitClassifying;
+  bool mBayesTraitClassifying;
 };
 
-// This class is a kludge to allow nsMsgKeySet to be used with PRUint32 keys
+// This class is a kludge to allow nsMsgKeySet to be used with uint32_t keys
 class nsMsgKeySetU
 {
 public:
@@ -322,12 +287,12 @@ public:
   static nsMsgKeySetU* Create();
   ~nsMsgKeySetU();
   // IsMember() returns whether the given key is a member of this set.
-  PRBool IsMember(PRUint32 key);
+  bool IsMember(uint32_t key);
   // Add() adds the given key to the set.  (Returns 1 if a change was
   // made, 0 if it was already there, and negative on error.)
-  int Add(PRUint32 key);
+  int Add(uint32_t key);
   // Remove() removes the given article from the set. 
-  int Remove(PRUint32 key);
+  int Remove(uint32_t key);
   // Add the keys in the set to aArray.
   nsresult ToMsgKeyArray(nsTArray<nsMsgKey> &aArray);
 

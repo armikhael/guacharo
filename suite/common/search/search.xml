@@ -1,45 +1,7 @@
 <?xml version="1.0"?>
-<!-- ***** BEGIN LICENSE BLOCK *****
-   - Version: MPL 1.1/GPL 2.0/LGPL 2.1
-   -
-   - The contents of this file are subject to the Mozilla Public License Version
-   - 1.1 (the "License"); you may not use this file except in compliance with
-   - the License. You may obtain a copy of the License at
-   - http://www.mozilla.org/MPL/
-   -
-   - Software distributed under the License is distributed on an "AS IS" basis,
-   - WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
-   - for the specific language governing rights and limitations under the
-   - License.
-   -
-   - The Original Code is mozilla.org browser.
-   -
-   - The Initial Developer of the Original Code is
-   - Joe Hewitt.
-   - Portions created by the Initial Developer are Copyright (C) 2003
-   - the Initial Developer. All Rights Reserved.
-   -
-   - Contributor(s):
-   -   Pierre Chanial (v2) <p_ch@verizon.net>
-   -   Gavin Sharp (v3) <gavin@gavinsharp.com>
-   -   Ben Goodger <beng@google.com>
-   -   Pamela Greene <pamg.bugs@gmail.com>
-   -   Michael Ventnor <m.ventnor@gmail.com>
-   -   Ehsan Akhgari <ehsan.akhgari@gmail.com>
-   -
-   - Alternatively, the contents of this file may be used under the terms of
-   - either the GNU General Public License Version 2 or later (the "GPL"), or
-   - the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
-   - in which case the provisions of the GPL or the LGPL are applicable instead
-   - of those above. If you wish to allow use of your version of this file only
-   - under the terms of either the GPL or the LGPL, and not to allow others to
-   - use your version of this file under the terms of the MPL, indicate your
-   - decision by deleting the provisions above and replace them with the notice
-   - and other provisions required by the GPL or the LGPL. If you do not delete
-   - the provisions above, a recipient may use your version of this file under
-   - the terms of any one of the MPL, the GPL or the LGPL.
-   -
-   - ***** END LICENSE BLOCK ***** -->
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
 
 <!DOCTYPE bindings [
   <!ENTITY % searchBarDTD SYSTEM "chrome://communicator/locale/search/searchbar.dtd">
@@ -101,38 +63,27 @@
       </xul:textbox>
     </content>
 
-    <implementation implements="nsIObserver">
+    <implementation implements="nsIObserver, nsIBrowserSearchInitObserver">
       <constructor><![CDATA[
         if (this.parentNode.parentNode.localName == "toolbarpaletteitem")
           return;
-        setTimeout(function (a) { a.init(); }, 0, this);
+
+        this.searchService.init(this);
+        var os = Components.classes["@mozilla.org/observer-service;1"]
+                           .getService(Components.interfaces.nsIObserverService);
+        os.addObserver(this, "browser-search-engine-modified", false);
+        this._addedObserver = true;
       ]]></constructor>
-
-      <method name="init">
-        <body><![CDATA[
-          // Make sure we rebuild the popup in onpopupshowing
-          this._needToBuildPopup = true;
-
-          // Refresh the display (updating icon, etc)
-          this.updateDisplay();
-
-          var os =
-               Components.classes["@mozilla.org/observer-service;1"]
-                         .getService(Components.interfaces.nsIObserverService);
-          os.addObserver(this, "browser-search-engine-modified", false);
-
-          this._addedObserver = true;
-        ]]></body>
-      </method>
 
       <destructor><![CDATA[
         if (this._addedObserver) {
           var os = Components.classes["@mozilla.org/observer-service;1"]
                              .getService(Components.interfaces.nsIObserverService);
           os.removeObserver(this, "browser-search-engine-modified");
+          this._addedObserver = false;
         }
 
-        // Make sure to break the cycle from _texbox to us. Otherwise we leak
+        // Make sure to break the cycle from _textbox to us. Otherwise we leak
         // the world. But make sure it's actually pointing to us.
         if (this._textbox.mController.input == this)
           this._textbox.mController.input = null;
@@ -152,6 +103,7 @@
       </field>
       <field name="_addedObserver">false</field>
       <field name="_engines">null</field>
+      <field name="_needToBuildPopup">true</field>
 
       <property name="engines" readonly="true">
         <getter><![CDATA[
@@ -190,6 +142,18 @@
       <method name="select">
         <body><![CDATA[
           this._textbox.select();
+        ]]></body>
+      </method>
+
+      <method name="onInitComplete">
+        <parameter name="aStatus"/>
+        <body><![CDATA[
+          if (Components.isSuccessCode(aStatus)) {
+            // Refresh the display (updating icon, etc)
+            this.updateDisplay();
+          } else {
+            Components.utils.reportError("Cannot initialize search service, bailing out: " + aStatus);
+          }
         ]]></body>
       </method>
 
@@ -494,13 +458,10 @@
       <handler event="command"><![CDATA[
         const target = event.originalTarget;
         if (target.classList.contains("addengine-item")) {
-          var searchService =
-            Components.classes["@mozilla.org/browser/search-service;1"]
-                      .getService(Components.interfaces.nsIBrowserSearchService);
           // We only detect OpenSearch files
           var type = Components.interfaces.nsISearchEngine.DATA_XML;
-          searchService.addEngine(target.getAttribute("uri"), type,
-                                  target.getAttribute("image"), false);
+          this.searchService.addEngine(target.getAttribute("uri"), type,
+                                       target.getAttribute("image"), false);
         }
         else if (target.engine)
           this.currentEngine = target.engine;
@@ -517,6 +478,24 @@
                phase="capturing"
                modifiers="accel"
                action="this.selectEngine(event, (event.detail > 0));"/>
+
+      <handler event="focus"><![CDATA[
+        // Speculatively connect to the current engine's search URI (and
+        // suggest URI, if different) to reduce request latency.
+
+        const SUGGEST_TYPE = "application/x-suggestions+json";
+        var engine = this.currentEngine;
+        var connector = Components.classes["@mozilla.org/network/io-service;1"]
+                                  .getService(Components.interfaces.nsISpeculativeConnect);
+        var searchURI = engine.getSubmission("dummy").uri;
+        connector.speculativeConnect(searchURI, null, null);
+
+        if (engine.supportsResponseType(SUGGEST_TYPE)) {
+          var suggestURI = engine.getSubmission("dummy", SUGGEST_TYPE).uri;
+          if (suggestURI.prePath != searchURI.prePath)
+            connector.speculativeConnect(suggestURI, null, null);
+        }
+      ]]></handler>
     </handlers>
   </binding>
 
@@ -547,7 +526,7 @@
       </field>
       <field name="_prefBranch">
         Components.classes["@mozilla.org/preferences-service;1"]
-                  .getService(Components.interfaces.nsIPrefBranch2)
+                  .getService(Components.interfaces.nsIPrefBranch)
       </field>
       <field name="_inputBox">document.getAnonymousElementByAttribute(this,
           "anonid", "textbox-input-box");</field>

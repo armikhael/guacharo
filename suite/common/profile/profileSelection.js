@@ -1,46 +1,8 @@
 /* -*- Mode: C; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  *
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla Communicator client code, released
- * March 31, 1998.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Ben Goodger (03/01/00)
- *   Seth Spitzer (28/10/99)
- *   Dan Veditz <dveditz@netscape.com>
- *   Brant Gurganus <brantgurganus2001@cherokeescouting.org>
- *   Neil Rashbrook <neil@parkwaycc.co.uk>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var gMozAppsBundle;
 var gProfileBundle;
@@ -101,9 +63,14 @@ function AddItem(aProfile, aProfileToSelect)
   var treeitem = document.createElement("treeitem");
   var treerow = document.createElement("treerow");
   var treecell = document.createElement("treecell");
+  var treetip = document.getElementById("treetip");
+  var profileDir = gProfileService.getProfileByName(aProfile.name).rootDir;
+
   treecell.setAttribute("label", aProfile.name);
   treerow.appendChild(treecell);
   treeitem.appendChild(treerow);
+  treeitem.setAttribute("tooltip", profileDir.path);
+  treetip.setAttribute("value", profileDir.path);
   tree.lastChild.appendChild(treeitem);
   treeitem.profile = aProfile;
   if (aProfile == aProfileToSelect) {
@@ -156,6 +123,16 @@ function AcceptDialog()
     gPromptService.alert(window, null, message);
     return false;
   }
+
+  // Although switching profile works by performing a restart internally,
+  // the user is quitting the old profile, so make it look like a quit.
+  var cancelQuit = Components.classes["@mozilla.org/supports-PRBool;1"]
+                             .createInstance(Components.interfaces.nsISupportsPRBool);
+  Components.classes["@mozilla.org/observer-service;1"]
+            .getService(Components.interfaces.nsIObserverService)
+            .notifyObservers(cancelQuit, "quit-application-requested", null);
+  if (cancelQuit.data)
+    return false;
 
   try {
     var env = Components.classes["@mozilla.org/process/environment;1"]
@@ -359,4 +336,17 @@ function HandleClickEvent(aEvent)
   }
 
   return false;
+}
+
+function HandleToolTipEvent(aEvent)
+{
+  var treeTip = document.getElementById("treetip");
+  var tree = document.getElementById("profiles");
+  var row = {};
+
+  tree.treeBoxObject.getCellAt(aEvent.clientX, aEvent.clientY, row, {}, {});
+  if (row.value < 0)
+    aEvent.preventDefault();
+  else
+    treeTip.label = tree.view.getItemAtIndex(row.value).tooltip;
 }

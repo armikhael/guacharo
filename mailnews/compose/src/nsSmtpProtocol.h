@@ -1,39 +1,7 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef nsSmtpProtocol_h___
 #define nsSmtpProtocol_h___
@@ -113,8 +81,8 @@ public:
     nsSmtpProtocol(nsIURI * aURL);
     virtual ~nsSmtpProtocol();
 
-    virtual nsresult LoadUrl(nsIURI * aURL, nsISupports * aConsumer = nsnull);
-    virtual PRInt32 SendData(nsIURI * aURL, const char * dataBuffer, PRBool aSuppressLogging = PR_FALSE);
+    virtual nsresult LoadUrl(nsIURI * aURL, nsISupports * aConsumer = nullptr);
+    virtual nsresult SendData(const char * dataBuffer, bool aSuppressLogging = false);
 
     ////////////////////////////////////////////////////////////////////////////////////////
     // we suppport the nsIStreamListener interface 
@@ -134,58 +102,58 @@ private:
 
     // the error state we want to set on the url
     nsresult m_urlErrorState;
-    PRUint32 m_LastTime;
+    uint32_t m_LastTime;
     nsCOMPtr<nsIMsgStatusFeedback> m_statusFeedback;
 
     // Generic state information -- What state are we in? What state do we want to go to
     // after the next response? What was the last response code? etc. 
     SmtpState m_nextState;
     SmtpState m_nextStateAfterResponse;
-    PRInt32 m_responseCode;    /* code returned from Smtp server */
-    PRInt32 m_previousResponseCode; 
-    PRInt32 m_continuationResponse;
+    int32_t m_responseCode;    /* code returned from Smtp server */
+    int32_t m_previousResponseCode; 
+    int32_t m_continuationResponse;
     nsCString m_responseText;   /* text returned from Smtp server */
     nsMsgLineStreamBuffer *m_lineStreamBuffer; // used to efficiently extract lines from the incoming data stream
 
     char           *m_addressCopy;
     char           *m_addresses;
-    PRUint32       m_addressesLeft;
+    uint32_t       m_addressesLeft;
     nsCString m_mailAddr;
     nsCString m_helloArgument;
-    PRInt32        m_sizelimit;
+    int32_t        m_sizelimit;
 
     // *** the following should move to the smtp server when we support
     // multiple smtp servers
-    PRBool m_usernamePrompted;
-    PRInt32 m_prefSocketType;
-    PRBool m_tlsEnabled;
+    bool m_usernamePrompted;
+    int32_t m_prefSocketType;
+    bool m_tlsEnabled;
 
-    PRBool m_tlsInitiated;
+    bool m_tlsInitiated;
 
-    PRBool m_sendDone;
+    bool m_sendDone;
 
-    PRInt32 m_totalAmountRead;
+    int32_t m_totalAmountRead;
 #ifdef UNREADY_CODE 
     // message specific information
-    PRInt32 m_totalAmountWritten;
+    int32_t m_totalAmountWritten;
 #endif /* UNREADY_CODE */
-    PRInt64 m_totalMessageSize;
+    int64_t m_totalMessageSize;
 
     char *m_dataBuf;
-    PRUint32 m_dataBufSize;
+    uint32_t m_dataBufSize;
 
-    PRInt32   m_originalContentLength; /* the content length at the time of calling graph progress */
+    int32_t   m_originalContentLength; /* the content length at the time of calling graph progress */
 
     // initialization function given a new url and transport layer
     void Initialize(nsIURI * aURL);
     virtual nsresult ProcessProtocolState(nsIURI * url, nsIInputStream * inputStream, 
-                                          PRUint32 sourceOffset, PRUint32 length);
+                                          uint32_t sourceOffset, uint32_t length);
 
     ////////////////////////////////////////////////////////////////////////////////////////
     // Communication methods --> Reading and writing protocol
     ////////////////////////////////////////////////////////////////////////////////////////
 
-    void UpdateStatus(PRInt32 aStatusID);
+    void UpdateStatus(int32_t aStatusID);
     void UpdateStatusWithString(const PRUnichar * aStatusString);
 
     ////////////////////////////////////////////////////////////////////////////////////////
@@ -194,35 +162,34 @@ private:
     //						group them together based on functionality. 
     ////////////////////////////////////////////////////////////////////////////////////////
 
-    PRInt32 SmtpResponse(nsIInputStream * inputStream, PRUint32 length); 
-    PRInt32 ExtensionLoginResponse(nsIInputStream * inputStream, PRUint32 length);
-    PRInt32 SendHeloResponse(nsIInputStream * inputStream, PRUint32 length);
-    PRInt32 SendEhloResponse(nsIInputStream * inputStream, PRUint32 length);	
-    PRInt32 SendQuit();
+    nsresult SmtpResponse(nsIInputStream * inputStream, uint32_t length); 
+    nsresult ExtensionLoginResponse(nsIInputStream * inputStream, uint32_t length);
+    nsresult SendHeloResponse(nsIInputStream * inputStream, uint32_t length);
+    nsresult SendEhloResponse(nsIInputStream * inputStream, uint32_t length);	
+    nsresult SendQuit(SmtpState aNextStateAfterResponse = SMTP_DONE);
 
-    PRInt32 AuthGSSAPIFirst();
-    PRInt32 AuthGSSAPIStep();
-    PRInt32 AuthLoginStep0();
-    PRInt32 AuthLoginStep0Response();
-    PRInt32 AuthLoginStep1();
-    PRInt32 AuthLoginStep2();
-    PRInt32 AuthLoginResponse(nsIInputStream * stream, PRUint32 length);
+    nsresult AuthGSSAPIFirst();
+    nsresult AuthGSSAPIStep();
+    nsresult AuthLoginStep0();
+    void     AuthLoginStep0Response();
+    nsresult AuthLoginStep1();
+    nsresult AuthLoginStep2();
+    nsresult AuthLoginResponse(nsIInputStream * stream, uint32_t length);
 
-    PRInt32 SendTLSResponse();
-    PRInt32 SendMailResponse();
-    PRInt32 SendRecipientResponse();
-    PRInt32 SendDataResponse();
-    PRInt32 SendPostData();
-    PRInt32 SendMessageResponse();
-    PRInt32 CramMD5LoginResponse();
-    PRInt32 ProcessAuth();
+    nsresult SendTLSResponse();
+    nsresult SendMailResponse();
+    nsresult SendRecipientResponse();
+    nsresult SendDataResponse();
+    void     SendPostData();
+    nsresult SendMessageResponse();
+    nsresult ProcessAuth();
 
 
     ////////////////////////////////////////////////////////////////////////////////////////
     // End of Protocol Methods
     ////////////////////////////////////////////////////////////////////////////////////////
 
-    PRInt32 SendMessageInFile();
+    void SendMessageInFile();
 
     void AppendHelloArgument(nsACString& aResult);
     nsresult GetPassword(nsCString &aPassword);
@@ -231,16 +198,16 @@ private:
                                const PRUnichar **formatStrings, 
                                nsACString &aPassword);
 
-    void    InitPrefAuthMethods(PRInt32 authMethodPrefValue);
+    void    InitPrefAuthMethods(int32_t authMethodPrefValue);
     nsresult ChooseAuthMethod();
-    void    MarkAuthMethodAsFailed(PRInt32 failedAuthMethod);
+    void    MarkAuthMethodAsFailed(int32_t failedAuthMethod);
     void    ResetAuthMethods();
 
     virtual const char* GetType() {return "smtp";}
 
-    PRInt32 m_prefAuthMethods; // set of capability flags for auth methods
-    PRInt32 m_failedAuthMethods; // ditto
-    PRInt32 m_currentAuthMethod; // exactly one capability flag, or 0
+    int32_t m_prefAuthMethods; // set of capability flags for auth methods
+    int32_t m_failedAuthMethods; // ditto
+    int32_t m_currentAuthMethod; // exactly one capability flag, or 0
 };
 
 #endif  // nsSmtpProtocol_h___

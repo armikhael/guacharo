@@ -97,8 +97,8 @@ bool ParseScriptTable(const uint8_t *data, const size_t length,
     return OTS_FAILURE();
   }
 
-  const unsigned lang_sys_record_end = static_cast<unsigned>(4) +
-      lang_sys_count * 6;
+  const unsigned lang_sys_record_end =
+      6 * static_cast<unsigned>(lang_sys_count) + 4;
   if (lang_sys_record_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }
@@ -146,8 +146,8 @@ bool ParseFeatureTable(const uint8_t *data, const size_t length,
     return OTS_FAILURE();
   }
 
-  const unsigned feature_table_end = static_cast<unsigned>(4) +
-      num_lookups * 2;
+  const unsigned feature_table_end =
+      2 * static_cast<unsigned>(lookup_count) + 4;
   if (feature_table_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }
@@ -210,9 +210,8 @@ bool ParseLookupTable(ots::OpenTypeFile *file, const uint8_t *data,
   subtables.reserve(subtable_count);
   // If the |kUseMarkFilteringSetBit| of |lookup_flag| is set,
   // extra 2 bytes will follow after subtable offset array.
-  const unsigned lookup_table_end =
-      static_cast<unsigned>(use_mark_filtering_set ? 8 : 6) +
-      subtable_count * 2;
+  const unsigned lookup_table_end = 2 * static_cast<unsigned>(subtable_count) +
+      (use_mark_filtering_set ? 8 : 6);
   if (lookup_table_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }
@@ -395,7 +394,12 @@ bool ParseCoverageFormat2(const uint8_t *data, size_t length,
         !subtable.ReadU16(&start_coverage_index)) {
       return OTS_FAILURE();
     }
-    if (start > end || (last_end && start <= last_end)) {
+
+    // Some of the Adobe Pro fonts have ranges that overlap by one element: the
+    // start of one range is equal to the end of the previous range. Therefore
+    // the < in the following condition should be <= were it not for this.
+    // See crbug.com/134135.
+    if (start > end || (last_end && start < last_end)) {
       OTS_WARNING("glyph range is overlapping.");
       return OTS_FAILURE();
     }
@@ -471,8 +475,7 @@ bool ParseRuleSetTable(const uint8_t *data, const size_t length,
   if (!subtable.ReadU16(&rule_count)) {
     return OTS_FAILURE();
   }
-  const unsigned rule_end = static_cast<unsigned>(2) +
-      rule_count * 2;
+  const unsigned rule_end = 2 * static_cast<unsigned>(rule_count) + 2;
   if (rule_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }
@@ -578,8 +581,8 @@ bool ParseClassSetTable(const uint8_t *data, const size_t length,
   if (!subtable.ReadU16(&class_rule_count)) {
     return OTS_FAILURE();
   }
-  const unsigned class_rule_end = static_cast<unsigned>(2) +
-      class_rule_count * 2;
+  const unsigned class_rule_end =
+      2 * static_cast<unsigned>(class_rule_count) + 2;
   if (class_rule_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }
@@ -617,8 +620,7 @@ bool ParseContextFormat2(const uint8_t *data, const size_t length,
     return OTS_FAILURE();
   }
 
-  const unsigned class_set_end = static_cast<unsigned>(8) +
-      class_set_cnt * 2;
+  const unsigned class_set_end = 2 * static_cast<unsigned>(class_set_cnt) + 8;
   if (class_set_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }
@@ -676,8 +678,8 @@ bool ParseContextFormat3(const uint8_t *data, const size_t length,
   if (glyph_count >= num_glyphs) {
     return OTS_FAILURE();
   }
-  const unsigned lookup_record_end = static_cast<unsigned>(6) +
-      glyph_count * 2 + lookup_count * 4;
+  const unsigned lookup_record_end = 2 * static_cast<unsigned>(glyph_count) +
+      4 * static_cast<unsigned>(lookup_count) + 6;
   if (lookup_record_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }
@@ -784,8 +786,8 @@ bool ParseChainRuleSetTable(const uint8_t *data, const size_t length,
   if (!subtable.ReadU16(&chain_rule_count)) {
     return OTS_FAILURE();
   }
-  const unsigned chain_rule_end = static_cast<unsigned>(2) +
-      chain_rule_count * 2;
+  const unsigned chain_rule_end =
+      2 * static_cast<unsigned>(chain_rule_count) + 2;
   if (chain_rule_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }
@@ -821,8 +823,8 @@ bool ParseChainContextFormat1(const uint8_t *data, const size_t length,
     return OTS_FAILURE();
   }
 
-  const unsigned chain_rule_set_end = static_cast<unsigned>(6) +
-      chain_rule_set_count * 2;
+  const unsigned chain_rule_set_end =
+      2 * static_cast<unsigned>(chain_rule_set_count) + 6;
   if (chain_rule_set_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }
@@ -916,8 +918,8 @@ bool ParseChainClassSetTable(const uint8_t *data, const size_t length,
   if (!subtable.ReadU16(&chain_class_rule_count)) {
     return OTS_FAILURE();
   }
-  const unsigned chain_class_rule_end = static_cast<unsigned>(2) +
-      chain_class_rule_count * 2;
+  const unsigned chain_class_rule_end =
+      2 * static_cast<unsigned>(chain_class_rule_count) + 2;
   if (chain_class_rule_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }
@@ -960,8 +962,8 @@ bool ParseChainContextFormat2(const uint8_t *data, const size_t length,
     return OTS_FAILURE();
   }
 
-  const unsigned chain_class_set_end = static_cast<unsigned>(12) +
-      chain_class_set_count * 2;
+  const unsigned chain_class_set_end =
+      2 * static_cast<unsigned>(chain_class_set_count) + 12;
   if (chain_class_set_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }
@@ -1108,8 +1110,11 @@ bool ParseChainContextFormat3(const uint8_t *data, const size_t length,
     }
   }
 
-  const unsigned lookup_record_end = static_cast<unsigned>(10) +
-      (backtrack_count + input_count + lookahead_count) * 2 + lookup_count * 4;
+  const unsigned lookup_record_end =
+      2 * (static_cast<unsigned>(backtrack_count) +
+           static_cast<unsigned>(input_count) +
+           static_cast<unsigned>(lookahead_count)) +
+      4 * static_cast<unsigned>(lookup_count) + 10;
   if (lookup_record_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }
@@ -1175,8 +1180,8 @@ bool ParseScriptListTable(const uint8_t *data, const size_t length,
     return OTS_FAILURE();
   }
 
-  const unsigned script_record_end = static_cast<unsigned>(2) +
-      script_count * 6;
+  const unsigned script_record_end =
+      6 * static_cast<unsigned>(script_count) + 2;
   if (script_record_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }
@@ -1232,8 +1237,8 @@ bool ParseFeatureListTable(const uint8_t *data, const size_t length,
 
   std::vector<FeatureRecord> feature_records;
   feature_records.resize(feature_count);
-  const unsigned feature_record_end = static_cast<unsigned>(2) +
-      feature_count * 6;
+  const unsigned feature_record_end =
+      6 * static_cast<unsigned>(feature_count) + 2;
   if (feature_record_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }
@@ -1282,8 +1287,8 @@ bool ParseLookupListTable(OpenTypeFile *file, const uint8_t *data,
 
   std::vector<uint16_t> lookups;
   lookups.reserve(*num_lookups);
-  const unsigned lookup_end = static_cast<unsigned>(2) +
-      (*num_lookups) * 2;
+  const unsigned lookup_end =
+      2 * static_cast<unsigned>(*num_lookups) + 2;
   if (lookup_end > std::numeric_limits<uint16_t>::max()) {
     return OTS_FAILURE();
   }

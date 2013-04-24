@@ -231,7 +231,7 @@ struct prldap_errormap_entry {
 
 #if defined(__hpux) || defined(_AIX) || defined(OSF1) || defined(DARWIN) || \
   defined(BEOS) || defined(FREEBSD) || defined(BSDI) || defined(VMS) || \
-  defined(OPENBSD) || defined(NETBSD)
+  defined(OPENBSD) || defined(NETBSD) || defined(__FreeBSD_kernel__)
 #define EDEADLOCK       -1
 #endif
 

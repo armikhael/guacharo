@@ -1,44 +1,9 @@
 /* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998-1999
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Sammy Ford (sford@swbell.net)
- *   Dan Haddix (dan6992@hotmail.com)
- *   John Ratke (jratke@owc.net)
- *   Ryan Cassin (rcassin@supernova.org)
- *   Daniel Glazman (glazman@netscape.com)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+Components.utils.import("resource:///modules/editorUtilities.jsm");
 
 /* Main Composer window UI control */
 
@@ -53,7 +18,6 @@ const kDisplayModeMenuIDs = ["viewNormalMode", "viewAllTagsMode", "viewSourceMod
 const kDisplayModeTabIDS = ["NormalModeButton", "TagModeButton", "SourceModeButton", "PreviewModeButton"];
 const kNormalStyleSheet = "chrome://editor/content/EditorContent.css";
 const kAllTagsStyleSheet = "chrome://editor/content/EditorAllTags.css";
-const kParagraphMarksStyleSheet = "chrome://editor/content/EditorParagraphMarks.css";
 const kContentEditableStyleSheet = "resource://gre/res/contenteditable.css";
 
 const kTextMimeType = "text/plain";
@@ -72,6 +36,7 @@ var gContentWindowDeck;
 var gFormatToolbar;
 var gFormatToolbarHidden = false;
 var gViewFormatToolbar;
+var gChromeState;
 var gColorObj = { LastTextColor:"", LastBackgroundColor:"", LastHighlightColor:"",
                   Type:"", SelectedType:"", NoDefault:false, Cancel:false,
                   HighlightColor:"", BackgroundColor:"", PageColor:"",
@@ -123,8 +88,9 @@ function ShowHideToolbarButtons()
   var array = gPrefs.getChildList(kEditorToolbarPrefs);
   for (var i in array) {
     var prefName = array[i];
-    var id = prefName.substr(kEditorToolbarPrefs.length) + "Button";
-    var button = document.getElementById(id);
+    var id = prefName.substr(kEditorToolbarPrefs.length);
+    var button = document.getElementById(id + "Button") ||
+                 document.getElementById(id + "-button");
     if (button)
       button.hidden = !gPrefs.getBoolPref(prefName);
   }
@@ -145,8 +111,7 @@ nsPrefListener.prototype =
   {
     this.domain = prefName;
     try {
-      var pbi = pref.QueryInterface(Components.interfaces.nsIPrefBranch2);
-      pbi.addObserver(this.domain, this, false);
+      pref.addObserver(this.domain, this, false);
     } catch(ex) {
       dump("Failed to observe prefs: " + ex + "\n");
     }
@@ -154,8 +119,7 @@ nsPrefListener.prototype =
   shutdown: function()
   {
     try {
-      var pbi = pref.QueryInterface(Components.interfaces.nsIPrefBranch2);
-      pbi.removeObserver(this.domain, this);
+      pref.removeObserver(this.domain, this);
     } catch(ex) {
       dump("Failed to remove pref observers: " + ex + "\n");
     }
@@ -203,54 +167,6 @@ nsPrefListener.prototype =
   }
 }
 
-function EditorOnLoad()
-{
-    // See if argument was passed.
-    if ( window.arguments && window.arguments[0] ) {
-        // Opened via window.openDialog with URL as argument.
-        // Put argument where EditorStartup expects it.
-        document.getElementById( "args" ).setAttribute( "value", window.arguments[0] );
-    }
-
-    // get default character set if provided
-    if ("arguments" in window && window.arguments.length > 1 && window.arguments[1]) {
-      if (window.arguments[1].indexOf("charset=") != -1) {
-        var arrayArgComponents = window.arguments[1].split("=");
-        if (arrayArgComponents) {
-          // Put argument where EditorStartup expects it.
-          document.getElementById( "args" ).setAttribute("charset", arrayArgComponents[1]);
-        }
-      }
-    }
-
-    window.tryToClose = EditorCanClose;
-
-    // Continue with normal startup.
-    EditorStartup();
-
-    // Initialize our source text <editor>
-    try {
-      gSourceContentWindow = document.getElementById("content-source");
-      gSourceContentWindow.makeEditable("text", false);
-      gSourceTextEditor = gSourceContentWindow.getEditor(gSourceContentWindow.contentWindow);
-      gSourceTextEditor.QueryInterface(Components.interfaces.nsIPlaintextEditor);
-      gSourceTextEditor.enableUndo(false);
-      gSourceTextEditor.rootElement.style.fontFamily = "-moz-fixed";
-      gSourceTextEditor.rootElement.style.whiteSpace = "pre";
-      gSourceTextEditor.rootElement.style.margin = 0;
-      var controller = Components.classes["@mozilla.org/embedcomp/base-command-controller;1"]
-                                 .createInstance(Components.interfaces.nsIControllerContext);
-      controller.init(null);
-      controller.setCommandContext(gSourceContentWindow);
-      gSourceContentWindow.contentWindow.controllers.insertControllerAt(0, controller);
-      var commandTable = controller.QueryInterface(Components.interfaces.nsIInterfaceRequestor)
-                                   .getInterface(Components.interfaces.nsIControllerCommandTable);
-      commandTable.registerCommand("cmd_find",        nsFindCommand);
-      commandTable.registerCommand("cmd_findNext",    nsFindAgainCommand);
-      commandTable.registerCommand("cmd_findPrev",    nsFindAgainCommand);
-    } catch (e) { dump("makeEditable failed: "+e+"\n"); }
-}
-
 const gSourceTextListener =
 {
   NotifyDocumentCreated: function NotifyDocumentCreated() {},
@@ -269,18 +185,6 @@ const gSourceTextObserver =
     window.updateCommands("undo");
   }
 };
-
-function TextEditorOnLoad()
-{
-    // See if argument was passed.
-    if ( window.arguments && window.arguments[0] ) {
-        // Opened via window.openDialog with URL as argument.
-        // Put argument where EditorStartup expects it.
-        document.getElementById( "args" ).setAttribute( "value", window.arguments[0] );
-    }
-    // Continue with normal startup.
-    EditorStartup();
-}
 
 // This should be called by all editor users when they close their window
 //  or other similar "done with editor" actions, like recycling a Mail Composer window.
@@ -392,7 +296,7 @@ var gEditorDocumentObserver =
         if (IsWebComposer())
         {
           InlineSpellCheckerUI.init(editor);
-          document.getElementById('menu_inlinespellcheck').setAttribute('disabled', !InlineSpellCheckerUI.canSpellCheck);
+          document.getElementById('menu_inlineSpellCheck').setAttribute('disabled', !InlineSpellCheckerUI.canSpellCheck);
 
           editor.returnInParagraphCreatesNewParagraph = gPrefs.getBoolPref(kCRInParagraphsPref);
 
@@ -517,65 +421,6 @@ function SetFocusOnStartup()
   gContentWindow.focus();
 }
 
-function EditorStartup()
-{
-  var ds = GetCurrentEditorElement().docShell;
-  ds.useErrorPages = false;
-  var root = ds.QueryInterface(Components.interfaces.nsIDocShellTreeItem).
-    rootTreeItem.QueryInterface(Components.interfaces.nsIDocShell);
-
-  root.QueryInterface(Components.interfaces.nsIDocShell).appType =
-    Components.interfaces.nsIDocShell.APP_TYPE_EDITOR;
-
-  var is_HTMLEditor = IsHTMLEditor();
-  if (is_HTMLEditor)
-  {
-    // XUL elements we use when switching from normal editor to edit source
-    gContentWindowDeck = document.getElementById("ContentWindowDeck");
-    gFormatToolbar = document.getElementById("FormatToolbar");
-    gViewFormatToolbar = document.getElementById("viewFormatToolbar");
-  }
-
-  // set up our global prefs object
-  GetPrefsService();
-
-  // Startup also used by other editor users, such as Message Composer
-  EditorSharedStartup();
-
-  // Commands specific to the Composer Application window,
-  //  (i.e., not embedded editors)
-  //  such as file-related commands, HTML Source editing, Edit Modes...
-  SetupComposerWindowCommands();
-
-  ShowHideToolbarButtons();
-  gEditorToolbarPrefListener = new nsPrefListener(kEditorToolbarPrefs);
-
-  gCSSPrefListener = new nsPrefListener(kUseCssPref);
-  gReturnInParagraphPrefListener = new nsPrefListener(kCRInParagraphsPref);
-
-  // hide Highlight button if we are in an HTML editor with CSS mode off
-  // and tell the editor if a CR in a paragraph creates a new paragraph
-  var cmd = document.getElementById("cmd_highlight");
-  if (cmd) {
-    var useCSS = gPrefs.getBoolPref(kUseCssPref);
-    if (!useCSS && is_HTMLEditor) {
-      cmd.collapsed = true;
-    }
-  }
-
-  // Get url for editor content and load it.
-  // the editor gets instantiated by the edittingSession when the URL has finished loading.
-  var url = document.getElementById("args").getAttribute("value");
-  try {
-    var charset = document.getElementById("args").getAttribute("charset");
-    var contentViewer = GetCurrentEditorElement().docShell.contentViewer;
-    contentViewer.QueryInterface(Components.interfaces.nsIMarkupDocumentViewer);
-    contentViewer.defaultCharacterSet = charset;
-    contentViewer.forceCharacterSet = charset;
-  } catch (e) {}
-  EditorLoadUrl(url);
-}
-
 function EditorLoadUrl(url)
 {
   try {
@@ -658,6 +503,80 @@ function EditorSharedStartup()
   gColorObj.LastHighlightColor = "";
 }
 
+function toggleAffectedChrome(aHide)
+{
+  // chrome to toggle includes:
+  //   (*) menubar
+  //   (*) toolbox
+  //   (*) sidebar
+  //   (*) statusbar
+
+  if (!gChromeState)
+    gChromeState = new Object;
+
+  var statusbar = document.getElementById("status-bar");
+
+  // sidebar states map as follows:
+  //   hidden    => hide/show nothing
+  //   collapsed => hide/show only the splitter
+  //   shown     => hide/show the splitter and the box
+  if (aHide)
+  {
+    // going into print preview mode
+    gChromeState.sidebar = SidebarGetState();
+    SidebarSetState("hidden");
+
+    // deal with the Status Bar
+    gChromeState.statusbarWasHidden = statusbar.hidden;
+    statusbar.hidden = true;
+  }
+  else
+  {
+    // restoring normal mode (i.e., leaving print preview mode)
+    SidebarSetState(gChromeState.sidebar);
+
+    // restore the Status Bar
+    statusbar.hidden = gChromeState.statusbarWasHidden;
+  }
+
+  // if we are unhiding and sidebar used to be there rebuild it
+  if (!aHide && gChromeState.sidebar == "visible")
+    SidebarRebuild();
+
+  document.getElementById("EditorToolbox").hidden = aHide;
+  document.getElementById("appcontent").collapsed = aHide;
+}
+
+var PrintPreviewListener = {
+  getPrintPreviewBrowser: function () {
+    var browser = document.getElementById("ppBrowser");
+    if (!browser) {
+      browser = document.createElement("browser");
+      browser.setAttribute("id", "ppBrowser");
+      browser.setAttribute("flex", "1");
+      browser.setAttribute("disablehistory", "true");
+      browser.setAttribute("disablesecurity", "true");
+      browser.setAttribute("type", "content");
+      document.getElementById("sidebar-parent").
+        insertBefore(browser, document.getElementById("appcontent"));
+    }
+    return browser;
+  },
+  getSourceBrowser: function () {
+    return GetCurrentEditorElement();
+  },
+  getNavToolbox: function () {
+    return document.getElementById("EditorToolbox");
+  },
+  onEnter: function () {
+    toggleAffectedChrome(true);
+  },
+  onExit: function () {
+    document.getElementById("ppBrowser").collapsed = true;
+    toggleAffectedChrome(false);
+  }
+}
+
 // This method is only called by Message composer when recycling a compose window
 function EditorResetFontAndColorAttributes()
 {
@@ -675,20 +594,6 @@ function EditorResetFontAndColorAttributes()
     document.getElementById("cmd_backgroundColor").setAttribute("state", "");
     UpdateDefaultColors();
   } catch (e) {}
-}
-
-function EditorShutdown()
-{
-  gEditorToolbarPrefListener.shutdown();
-  gCSSPrefListener.shutdown();
-  gReturnInParagraphPrefListener.shutdown();
-
-  try {
-    var commandManager = GetCurrentCommandManager();
-    commandManager.removeCommandObserver(gEditorDocumentObserver, "obs_documentCreated");
-    commandManager.removeCommandObserver(gEditorDocumentObserver, "obs_documentWillBeDestroyed");
-    commandManager.removeCommandObserver(gEditorDocumentObserver, "obs_documentLocationChanged");
-  } catch (e) { dump (e); }   
 }
 
 function SafeSetAttribute(nodeID, attributeName, attributeValue)
@@ -754,17 +659,13 @@ function CheckAndSaveDocument(command, allowDontSave)
     
   var reasonToSave = strID ? GetString(strID) : "";
 
-  var title = document.title;
-  if (!title)
-    title = GetString("untitled");
+  var title = document.title || GetString("untitledDefaultFilename");
 
   var dialogTitle = GetString(doPublish ? "PublishPage" : "SaveDocument");
   var dialogMsg = GetString(doPublish ? "PublishPrompt" : "SaveFilePrompt");
   dialogMsg = (dialogMsg.replace(/%title%/,title)).replace(/%reason%/,reasonToSave);
 
   var promptService = GetPromptService();
-  if (!promptService)
-    return false;
 
   var result = {value:0};
   var promptFlags = promptService.BUTTON_TITLE_CANCEL * promptService.BUTTON_POS_1;
@@ -821,27 +722,6 @@ function CheckAndSaveDocument(command, allowDontSave)
   return false;
 }
 
-// --------------------------- File menu ---------------------------
-
-// Check for changes to document and allow saving before closing
-// This is hooked up to the OS's window close widget (e.g., "X" for Windows)
-function EditorCanClose()
-{
-  // Returns FALSE only if user cancels save action
-
-  // "true" means allow "Don't Save" button
-  var canClose = CheckAndSaveDocument("cmd_close", true);
-
-  // This is our only hook into closing via the "X" in the caption
-  //   or "Quit" (or other paths?)
-  //   so we must shift association to another
-  //   editor or close any non-modal windows now
-  if (canClose && "InsertCharWindow" in window && window.InsertCharWindow)
-    SwitchInsertCharToAnotherEditorOrClose();
-
-  return canClose;
-}
-
 // --------------------------- View menu ---------------------------
 
 function EditorSetDocumentCharacterSet(aCharset)
@@ -858,19 +738,6 @@ function EditorSetDocumentCharacterSet(aCharset)
       EditorLoadUrl(docUrl);
     }
   } catch (e) {}
-}
-
-// ------------------------------------------------------------------
-function updateCharsetPopupMenu(menuPopup)
-{
-  if (IsDocumentModified() && !IsDocumentEmpty())
-  {
-    for (var i = 0; i < menuPopup.childNodes.length; i++)
-    {
-      var menuItem = menuPopup.childNodes[i];
-      menuItem.setAttribute('disabled', 'true');
-    }
-  }
 }
 
 // --------------------------- Text style ---------------------------
@@ -1691,7 +1558,7 @@ function SetEditMode(mode)
 
   // must have editor if here!
   var editor = GetCurrentEditor();
-  var inlineSpellCheckItem = document.getElementById('menu_inlinespellcheck');
+  var inlineSpellCheckItem = document.getElementById('menu_inlineSpellCheck');
 
   // Switch the UI mode before inserting contents
   //   so user can't type in source window while new window is being filled
@@ -1818,7 +1685,8 @@ function SetEditMode(mode)
     gSourceTextEditor.removeDocumentStateListener(gSourceTextListener);
     gSourceTextEditor.enableUndo(false);
     gSourceTextEditor.selectAll();
-    gSourceTextEditor.deleteSelection(gSourceTextEditor.eNone);
+    gSourceTextEditor.deleteSelection(gSourceTextEditor.eNone,
+                                      gSourceTextEditor.eStrip);
     gSourceTextEditor.resetModificationCount();
 
     gContentWindow.focus();
@@ -1963,28 +1831,6 @@ function SetDisplayMode(mode)
   return true;
 }
 
-function EditorToggleParagraphMarks()
-{
-  var menuItem = document.getElementById("viewParagraphMarks");
-  if (menuItem)
-  {
-    // Note that the 'type="checbox"' mechanism automatically
-    //  toggles the "checked" state before the oncommand is called,
-    //  so if "checked" is true now, it was just switched to that mode
-    var checked = menuItem.getAttribute("checked");
-    try {
-      var editor = GetCurrentEditor();
-      editor.QueryInterface(nsIEditorStyleSheets);
-
-      if (checked == "true")
-        editor.addOverrideStyleSheet(kParagraphMarksStyleSheet);
-      else
-        editor.enableStyleSheet(kParagraphMarksStyleSheet, false);
-    }
-    catch(e) { return; }
-  }
-}
-
 function UpdateWindowTitle()
 {
   try {
@@ -2008,50 +1854,12 @@ function UpdateWindowTitle()
 
     // Set window title with " - Composer" or " - Text Editor" appended.
     var xulWin = document.documentElement;
-    document.title = (title || filename || GetString("untitled")) +
+
+    document.title = (title || filename || gUntitledString) +
                      windowTitle +
                      xulWin.getAttribute("titlemenuseparator") + 
                      xulWin.getAttribute("titlemodifier");
   } catch (e) { dump(e); }
-}
-
-function BuildRecentPagesMenu()
-{
-  var editor = GetCurrentEditor();
-  if (!editor || !gPrefs)
-    return;
-
-  var popup = document.getElementById("menupopup_RecentFiles");
-  if (!popup || !editor.document)
-    return;
-
-  // Delete existing menu
-  while (popup.firstChild)
-    popup.removeChild(popup.firstChild);
-
-  // Current page is the "0" item in the list we save in prefs,
-  //  but we don't include it in the menu.
-  var curUrl = StripPassword(GetDocumentUrl());
-  var historyCount = 10;
-  try {
-    historyCount = gPrefs.getIntPref("editor.history.url_maximum");
-  } catch(e) {}
-  var menuIndex = 1;
-
-  for (var i = 0; i < historyCount; i++)
-  {
-    var url = GetUnicharPref("editor.history_url_"+i);
-
-    // Skip over current url
-    if (url && url != curUrl)
-    {
-      // Build the menu
-      var title = GetUnicharPref("editor.history_title_"+i);
-      var fileType = GetUnicharPref("editor.history_type_" + i);
-      AppendRecentMenuitem(popup, title, url, fileType, menuIndex);
-      menuIndex++;
-    }
-  }
 }
 
 function SaveRecentFilesPrefs(aTitle, aFileType)
@@ -2101,69 +1909,6 @@ function SaveRecentFilesPrefs(aTitle, aFileType)
     SetUnicharPref("editor.history_url_"+i, urlArray[i]);
     SetUnicharPref("editor.history_type_" + i, typeArray[i]);
   }
-}
-
-function AppendRecentMenuitem(menupopup, title, url, aFileType, menuIndex)
-{
-  if (menupopup)
-  {
-    var menuItem = document.createElementNS(XUL_NS, "menuitem");
-    if (menuItem)
-    {
-      var accessKey;
-      if (menuIndex <= 9)
-        accessKey = String(menuIndex);
-      else if (menuIndex == 10)
-        accessKey = "0";
-      else
-        accessKey = " ";
-
-      var itemString = accessKey+" ";
-
-      // Show "title [url]" or just the URL
-      if (title)
-      {
-       itemString += title;
-       itemString += " [";
-      }
-      itemString += url;
-      if (title)
-        itemString += "]";
-
-      menuItem.setAttribute("label", itemString);
-      menuItem.setAttribute("crop", "center");
-      menuItem.setAttribute("tooltiptext", url);
-      menuItem.setAttribute("value", url);
-      menuItem.setAttribute("fileType", aFileType);
-      if (accessKey != " ")
-        menuItem.setAttribute("accesskey", accessKey);
-      menupopup.appendChild(menuItem);
-    }
-  }
-}
-
-function EditorInitFileMenu()
-{
-  // Disable "Save" menuitem when editing remote url. User should use "Save As"
-  var docUrl = GetDocumentUrl();
-  var scheme = GetScheme(docUrl);
-  if (scheme && scheme != "file")
-    SetElementEnabledById("saveMenuitem", false);
-
-  // Enable recent pages submenu if there are any history entries in prefs
-  var historyUrl = "";
-
-  var historyCount = 10;
-  try { historyCount = gPrefs.getIntPref("editor.history.url_maximum"); } catch(e) {}
-  if (historyCount)
-  {
-    historyUrl = GetUnicharPref("editor.history_url_0");
-    
-    // See if there's more if current file is only entry in history list
-    if (historyUrl && historyUrl == docUrl)
-      historyUrl = GetUnicharPref("editor.history_url_1");
-  }
-  SetElementEnabledById("menu_RecentFiles", historyUrl != "");
 }
 
 function EditorInitFormatMenu()
@@ -2722,12 +2467,6 @@ function RemoveInapplicableUIElements()
     HideItem("spellingButton");
     HideItem("menu_checkspelling");
     RemoveItem("sep_checkspelling");
-  }
-  else
-  {
-    SetElementEnabled(document.getElementById("menu_checkspelling"), true);
-    SetElementEnabled(document.getElementById("spellingButton"), true);
-    SetElementEnabled(document.getElementById("checkspellingkb"), true);
   }
 
   // Remove menu items (from overlay shared with HTML editor) in non-HTML.

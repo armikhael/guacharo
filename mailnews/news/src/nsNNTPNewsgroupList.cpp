@@ -1,42 +1,7 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Pierre Phaneuf <pp@ludusdesign.com>
- *   Henrik Gemal <mozilla@gemal.dk>
- *   Karsten Düsterloh <mnyromyr@tprac.de>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
  * formerly listngst.cpp
@@ -95,27 +60,28 @@
 #include "nsIMsgFilterCustomAction.h"
 #include "nsComponentManagerUtils.h"
 #include "nsServiceManagerUtils.h"
+#include "mozilla/Services.h"
 
 // update status on header download once per second
 #define MIN_STATUS_UPDATE_INTERVAL PRTime(PR_USEC_PER_SEC)
 
 
 nsNNTPNewsgroupList::nsNNTPNewsgroupList()
-  : m_finishingXover(PR_FALSE),
-  m_getOldMessages(PR_FALSE),
-  m_promptedAlready(PR_FALSE),
-  m_downloadAll(PR_FALSE),
+  : m_finishingXover(false),
+  m_getOldMessages(false),
+  m_promptedAlready(false),
+  m_downloadAll(false),
   m_maxArticles(0),
   m_lastPercent(-1),
+  m_lastStatusUpdate(0),
   m_lastProcessedNumber(0),
   m_firstMsgNumber(0),
   m_lastMsgNumber(0),
   m_firstMsgToDownload(0),
   m_lastMsgToDownload(0),
-  m_set(nsnull)
+  m_set(nullptr)
 {
   memset(&m_knownArts, 0, sizeof(m_knownArts));
-  m_lastStatusUpdate = LL_Zero();
 }
 
 nsNNTPNewsgroupList::~nsNNTPNewsgroupList()
@@ -157,7 +123,7 @@ nsNNTPNewsgroupList::Initialize(nsINntpUrl *runningURL, nsIMsgNewsFolder *newsFo
   ParseString(servHeaders, ' ', servArray);
 
   // servArray may have duplicates already in m_filterHeaders.
-  for (PRUint32 i = 0; i < servArray.Length(); i++)
+  for (uint32_t i = 0; i < servArray.Length(); i++)
   {
     if (m_filterHeaders.IndexOf(servArray[i]) == m_filterHeaders.NoIndex)
       m_filterHeaders.AppendElement(servArray[i]);
@@ -177,19 +143,19 @@ nsNNTPNewsgroupList::CleanUp()
     {
       nsCOMPtr <nsIDBFolderInfo> folderInfo;
       m_newsDB->GetDBFolderInfo(getter_AddRefs(folderInfo));
-      PRInt32 firstKnown = m_knownArts.set->GetFirstMember();
-      PRInt32 lastKnown =  m_knownArts.set->GetLastMember();
+      int32_t firstKnown = m_knownArts.set->GetFirstMember();
+      int32_t lastKnown =  m_knownArts.set->GetLastMember();
       if (folderInfo)
       {
-        PRUint32 lastMissingCheck;
+        uint32_t lastMissingCheck;
         folderInfo->GetUint32Property("lastMissingCheck", 0, &lastMissingCheck);
         if (lastMissingCheck)
           firstKnown = lastMissingCheck + 1;
       }
-      PRBool foundMissingArticle = PR_FALSE;
+      bool foundMissingArticle = false;
       while (firstKnown <= lastKnown)
       {
-        PRInt32 firstUnreadStart, firstUnreadEnd;
+        int32_t firstUnreadStart, firstUnreadEnd;
         if (firstKnown == 0)
           firstKnown = 1;
         m_set->FirstMissingRange(firstKnown, lastKnown, &firstUnreadStart, &firstUnreadEnd);
@@ -197,12 +163,12 @@ nsNNTPNewsgroupList::CleanUp()
         {
           while (firstUnreadStart <= firstUnreadEnd)
           {
-            PRBool containsKey;
+            bool containsKey;
             m_newsDB->ContainsKey(firstUnreadStart, &containsKey);
             if (!containsKey)
             {
               m_set->Add(firstUnreadStart);
-              foundMissingArticle = PR_TRUE;
+              foundMissingArticle = true;
             }
             firstUnreadStart++;
           }
@@ -224,20 +190,20 @@ nsNNTPNewsgroupList::CleanUp()
       }
     }
     m_newsDB->Commit(nsMsgDBCommitType::kSessionCommit);
-    m_newsDB->Close(PR_TRUE);
-    m_newsDB = nsnull;
+    m_newsDB->Close(true);
+    m_newsDB = nullptr;
   }
 
   if (m_knownArts.set)
   {
     delete m_knownArts.set;
-    m_knownArts.set = nsnull;
+    m_knownArts.set = nullptr;
   }
   if (m_newsFolder)
     m_newsFolder->NotifyFinishedDownloadinghdrs();
 
-  m_newsFolder = nsnull;
-  m_runningURL = nsnull;
+  m_newsFolder = nullptr;
+  m_runningURL = nullptr;
 
   return NS_OK;
 }
@@ -279,12 +245,12 @@ openWindow(nsIMsgWindow *aMsgWindow, const char *chromeURL,
 
 nsresult
 nsNNTPNewsgroupList::GetRangeOfArtsToDownload(nsIMsgWindow *aMsgWindow,
-                                              PRInt32 first_possible,
-                                              PRInt32 last_possible,
-                                              PRInt32 maxextra,
-                                              PRInt32 *first,
-                                              PRInt32 *last,
-                                              PRInt32 *status)
+                                              int32_t first_possible,
+                                              int32_t last_possible,
+                                              int32_t maxextra,
+                                              int32_t *first,
+                                              int32_t *last,
+                                              int32_t *status)
 {
   nsresult rv = NS_OK;
 
@@ -317,7 +283,7 @@ nsNNTPNewsgroupList::GetRangeOfArtsToDownload(nsIMsgWindow *aMsgWindow,
     rv = newsGroupInfo->GetHighWater(&mark);
     NS_ENSURE_SUCCESS(rv,rv);
 
-    if (last_possible < ((PRInt32)mark))
+    if (last_possible < ((int32_t)mark))
       newsGroupInfo->SetHighWater(last_possible);
     if (m_knownArts.set)
       delete m_knownArts.set;
@@ -338,8 +304,9 @@ nsNNTPNewsgroupList::GetRangeOfArtsToDownload(nsIMsgWindow *aMsgWindow,
 
   if (m_knownArts.set->IsMember(last_possible)) {
     nsString statusString;
-    nsCOMPtr<nsIStringBundleService> bundleService = do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-    NS_ENSURE_SUCCESS(rv, rv);
+    nsCOMPtr<nsIStringBundleService> bundleService =
+      mozilla::services::GetStringBundleService();
+    NS_ENSURE_TRUE(bundleService, NS_ERROR_UNEXPECTED);
 
     nsCOMPtr<nsIStringBundle> bundle;
     rv = bundleService->CreateBundle(NEWS_MSGS_URL, getter_AddRefs(bundle));
@@ -375,9 +342,9 @@ nsNNTPNewsgroupList::GetRangeOfArtsToDownload(nsIMsgWindow *aMsgWindow,
 
   if (m_getOldMessages || !m_knownArts.set->IsMember(last_possible))
   {
-    PRBool notifyMaxExceededOn = PR_TRUE;
+    bool notifyMaxExceededOn = true;
     rv = nntpServer->GetNotifyOn(&notifyMaxExceededOn);
-    if (NS_FAILED(rv)) notifyMaxExceededOn = PR_TRUE;
+    if (NS_FAILED(rv)) notifyMaxExceededOn = true;
 
     // if the preference to notify when downloading more than x headers is not on,
     // and we're downloading new headers, set maxextra to a very large number.
@@ -394,7 +361,7 @@ nsNNTPNewsgroupList::GetRangeOfArtsToDownload(nsIMsgWindow *aMsgWindow,
     {
       if (!m_getOldMessages && !m_promptedAlready && notifyMaxExceededOn)
       {
-        m_downloadAll = PR_FALSE;
+        m_downloadAll = false;
         nsCOMPtr<nsINewsDownloadDialogArgs> args = do_CreateInstance("@mozilla.org/messenger/newsdownloaddialogargs;1", &rv);
         if (NS_FAILED(rv)) return rv;
         NS_ENSURE_SUCCESS(rv,rv);
@@ -428,7 +395,7 @@ nsNNTPNewsgroupList::GetRangeOfArtsToDownload(nsIMsgWindow *aMsgWindow,
         // TODO, figure out why we aren't opening and using a 3 pane when the autosubscribe url is run.
         // perhaps we can find an available 3 pane, and use it.
 
-        PRBool download = PR_FALSE;
+        bool download = false;
 
         if (aMsgWindow) {
           rv = openWindow(aMsgWindow, DOWNLOAD_HEADERS_URL, args);
@@ -448,10 +415,10 @@ nsNNTPNewsgroupList::GetRangeOfArtsToDownload(nsIMsgWindow *aMsgWindow,
           maxextra = m_maxArticles;
           if (!m_downloadAll)
           {
-            PRBool markOldRead = PR_FALSE;
+            bool markOldRead = false;
 
             rv = nntpServer->GetMarkOldRead(&markOldRead);
-            if (NS_FAILED(rv)) markOldRead = PR_FALSE;
+            if (NS_FAILED(rv)) markOldRead = false;
 
             if (markOldRead && m_set)
               m_set->AddRange(*first, *last - maxextra);
@@ -460,7 +427,7 @@ nsNNTPNewsgroupList::GetRangeOfArtsToDownload(nsIMsgWindow *aMsgWindow,
         }
         else
           *first = *last = 0;
-        m_promptedAlready = PR_TRUE;
+        m_promptedAlready = true;
       }
       else if (m_promptedAlready && !m_downloadAll)
         *first = *last - m_maxArticles + 1;
@@ -476,9 +443,9 @@ nsNNTPNewsgroupList::GetRangeOfArtsToDownload(nsIMsgWindow *aMsgWindow,
 }
 
 nsresult
-nsNNTPNewsgroupList::AddToKnownArticles(PRInt32 first, PRInt32 last)
+nsNNTPNewsgroupList::AddToKnownArticles(int32_t first, int32_t last)
 {
-  int status;
+  nsresult status;
 
   if (!m_knownArts.set)
   {
@@ -487,7 +454,8 @@ nsNNTPNewsgroupList::AddToKnownArticles(PRInt32 first, PRInt32 last)
       return NS_ERROR_OUT_OF_MEMORY;
   }
 
-  status = m_knownArts.set->AddRange(first, last);
+  // XXX Casting int to nsresult
+  status = static_cast<nsresult>(m_knownArts.set->AddRange(first, last));
 
   if (m_newsDB) {
     nsresult rv = NS_OK;
@@ -504,7 +472,7 @@ nsNNTPNewsgroupList::AddToKnownArticles(PRInt32 first, PRInt32 last)
 }
 
 nsresult
-nsNNTPNewsgroupList::InitXOVER(PRInt32 first_msg, PRInt32 last_msg)
+nsNNTPNewsgroupList::InitXOVER(int32_t first_msg, int32_t last_msg)
 {
   /* Consistency checks, not that I know what to do if it fails (it will
    probably handle it OK...) */
@@ -529,12 +497,12 @@ nsNNTPNewsgroupList::InitXOVER(PRInt32 first_msg, PRInt32 last_msg)
 #define DATE_HEADER "Date: "
 
 nsresult
-nsNNTPNewsgroupList::ParseLine(char *line, PRUint32 * message_number)
+nsNNTPNewsgroupList::ParseLine(char *line, uint32_t * message_number)
 {
   nsresult rv = NS_OK;
   nsCOMPtr <nsIMsgDBHdr> newMsgHdr;
-  char *dateStr = nsnull;  // keep track of date str, for filters
-  char *authorStr = nsnull; // keep track of author str, for filters
+  char *dateStr = nullptr;  // keep track of date str, for filters
+  char *authorStr = nullptr; // keep track of author str, for filters
 
   if (!line || !message_number) {
     return NS_ERROR_NULL_POINTER;
@@ -562,9 +530,9 @@ nsNNTPNewsgroupList::ParseLine(char *line, PRUint32 * message_number)
   GET_TOKEN (); /* subject */
   if (line) {
     const char *subject = line;  /* #### const evilness */
-    PRUint32 subjectLen = strlen(line);
+    uint32_t subjectLen = strlen(line);
 
-    PRUint32 flags = 0;
+    uint32_t flags = 0;
     // ### should call IsHeaderRead here...
     /* strip "Re: " */
     nsCString modifiedSubject;
@@ -593,7 +561,7 @@ nsNNTPNewsgroupList::ParseLine(char *line, PRUint32 * message_number)
   if (line) {
     dateStr = line;
     PRTime date;
-    PRStatus status = PR_ParseTimeString (line, PR_FALSE, &date);
+    PRStatus status = PR_ParseTimeString (line, false, &date);
     if (PR_SUCCESS == status) {
       rv = newMsgHdr->SetDate(date); /* date */
       if (NS_FAILED(rv))
@@ -625,7 +593,7 @@ nsNNTPNewsgroupList::ParseLine(char *line, PRUint32 * message_number)
 
   GET_TOKEN (); /* bytes */
   if (line) {
-    PRUint32 msgSize = 0;
+    uint32_t msgSize = 0;
     msgSize = (line) ? atol (line) : 0;
 
     rv = newMsgHdr->SetMessageSize(msgSize);
@@ -634,7 +602,7 @@ nsNNTPNewsgroupList::ParseLine(char *line, PRUint32 * message_number)
 
   GET_TOKEN (); /* lines */
   if (line) {
-    PRUint32 numLines = 0;
+    uint32_t numLines = 0;
     numLines = line ? atol (line) : 0;
     rv = newMsgHdr->SetLineCount(numLines);
     if (NS_FAILED(rv)) return rv;
@@ -646,7 +614,7 @@ nsNNTPNewsgroupList::ParseLine(char *line, PRUint32 * message_number)
   return NS_OK;
 }
 
-NS_IMETHODIMP nsNNTPNewsgroupList::ApplyFilterHit(nsIMsgFilter *aFilter, nsIMsgWindow *aMsgWindow, PRBool *aApplyMore)
+NS_IMETHODIMP nsNNTPNewsgroupList::ApplyFilterHit(nsIMsgFilter *aFilter, nsIMsgWindow *aMsgWindow, bool *aApplyMore)
 {
   NS_ENSURE_ARG_POINTER(aFilter);
   NS_ENSURE_ARG_POINTER(aApplyMore);
@@ -654,7 +622,7 @@ NS_IMETHODIMP nsNNTPNewsgroupList::ApplyFilterHit(nsIMsgFilter *aFilter, nsIMsgW
   NS_ENSURE_TRUE(m_newsDB, NS_ERROR_UNEXPECTED);
 
   // you can't move news messages, so applyMore is always true
-  *aApplyMore = PR_TRUE;
+  *aApplyMore = true;
 
   nsCOMPtr<nsISupportsArray> filterActionList;
   nsresult rv = NS_NewISupportsArray(getter_AddRefs(filterActionList));
@@ -662,17 +630,17 @@ NS_IMETHODIMP nsNNTPNewsgroupList::ApplyFilterHit(nsIMsgFilter *aFilter, nsIMsgW
   rv = aFilter->GetSortedActionList(filterActionList);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRUint32 numActions;
+  uint32_t numActions;
   rv = filterActionList->Count(&numActions);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRBool loggingEnabled = PR_FALSE;
+  bool loggingEnabled = false;
   nsCOMPtr<nsIMsgFilterList> currentFilterList;
   rv = aFilter->GetFilterList(getter_AddRefs(currentFilterList));
   if (NS_SUCCEEDED(rv) && currentFilterList && numActions)
     currentFilterList->GetLoggingEnabled(&loggingEnabled);
 
-  for (PRUint32 actionIndex = 0; actionIndex < numActions; actionIndex++)
+  for (uint32_t actionIndex = 0; actionIndex < numActions; actionIndex++)
   {
     nsCOMPtr<nsIMsgRuleAction> filterAction;
     filterActionList->QueryElementAt(actionIndex, NS_GET_IID(nsIMsgRuleAction), getter_AddRefs(filterAction));
@@ -685,28 +653,31 @@ NS_IMETHODIMP nsNNTPNewsgroupList::ApplyFilterHit(nsIMsgFilter *aFilter, nsIMsgW
       switch (actionType)
       {
       case nsMsgFilterAction::Delete:
-        m_addHdrToDB = PR_FALSE;
+        m_addHdrToDB = false;
         break;
       case nsMsgFilterAction::MarkRead:
-        m_newsDB->MarkHdrRead(m_newMsgHdr, PR_TRUE, nsnull);
+        m_newsDB->MarkHdrRead(m_newMsgHdr, true, nullptr);
+        break;
+      case nsMsgFilterAction::MarkUnread:
+        m_newsDB->MarkHdrRead(m_newMsgHdr, false, nullptr);
         break;
       case nsMsgFilterAction::KillThread:
         m_newMsgHdr->SetUint32Property("ProtoThreadFlags", nsMsgMessageFlags::Ignored);
         break;
       case nsMsgFilterAction::KillSubthread:
         {
-          PRUint32 newFlags;
+          uint32_t newFlags;
           m_newMsgHdr->OrFlags(nsMsgMessageFlags::Ignored, &newFlags);
         }
         break;
       case nsMsgFilterAction::WatchThread:
         {
-          PRUint32 newFlags;
+          uint32_t newFlags;
           m_newMsgHdr->OrFlags(nsMsgMessageFlags::Watched, &newFlags);
         }
         break;
       case nsMsgFilterAction::MarkFlagged:
-        m_newMsgHdr->MarkFlagged(PR_TRUE);
+        m_newMsgHdr->MarkFlagged(true);
         break;
       case nsMsgFilterAction::ChangePriority:
         {
@@ -720,7 +691,7 @@ NS_IMETHODIMP nsNNTPNewsgroupList::ApplyFilterHit(nsIMsgFilter *aFilter, nsIMsgW
         nsCString keyword;
         filterAction->GetStrValue(keyword);
         nsCOMPtr<nsIMutableArray> messageArray(do_CreateInstance(NS_ARRAY_CONTRACTID));
-        messageArray->AppendElement(m_newMsgHdr, PR_FALSE);
+        messageArray->AppendElement(m_newMsgHdr, false);
         nsCOMPtr <nsIMsgFolder> folder = do_QueryInterface(m_newsFolder, &rv);
         if (folder)
           folder->AddKeywordsToMessages(messageArray, keyword);
@@ -739,7 +710,7 @@ NS_IMETHODIMP nsNNTPNewsgroupList::ApplyFilterHit(nsIMsgFilter *aFilter, nsIMsgW
       case nsMsgFilterAction::StopExecution:
       {
         // don't apply any more filters
-        *aApplyMore = PR_FALSE;
+        *aApplyMore = false;
       }
       break;
 
@@ -755,9 +726,9 @@ NS_IMETHODIMP nsNNTPNewsgroupList::ApplyFilterHit(nsIMsgFilter *aFilter, nsIMsgW
         nsCOMPtr<nsIMutableArray> messageArray(
             do_CreateInstance(NS_ARRAY_CONTRACTID, &rv));
         NS_ENSURE_TRUE(messageArray, rv);
-        messageArray->AppendElement(m_newMsgHdr, PR_FALSE);
+        messageArray->AppendElement(m_newMsgHdr, false);
 
-        customAction->Apply(messageArray, value, nsnull,
+        customAction->Apply(messageArray, value, nullptr,
                             nsMsgFilterType::NewsRule, aMsgWindow);
       }
       break;
@@ -775,11 +746,11 @@ NS_IMETHODIMP nsNNTPNewsgroupList::ApplyFilterHit(nsIMsgFilter *aFilter, nsIMsgW
 }
 
 nsresult
-nsNNTPNewsgroupList::ProcessXOVERLINE(const char *line, PRUint32 *status)
+nsNNTPNewsgroupList::ProcessXOVERLINE(const char *line, uint32_t *status)
 {
-  PRUint32 message_number=0;
-  //  PRInt32 lines;
-  PRBool read_p = PR_FALSE;
+  uint32_t message_number=0;
+  //  int32_t lines;
+  bool read_p = false;
   nsresult rv = NS_OK;
 
   NS_ASSERTION(line, "null ptr");
@@ -793,7 +764,7 @@ nsNNTPNewsgroupList::ProcessXOVERLINE(const char *line, PRUint32 *status)
       return NS_ERROR_OUT_OF_MEMORY;
     rv = ParseLine(xoverline, &message_number);
     PL_strfree(xoverline);
-    xoverline = nsnull;
+    xoverline = nullptr;
     if (NS_FAILED(rv))
       return rv;
   }
@@ -838,15 +809,15 @@ nsNNTPNewsgroupList::ProcessXOVERLINE(const char *line, PRUint32 *status)
   /* Update the progress meter with a percentage of articles retrieved */
   if (m_lastMsgNumber > m_firstMsgNumber)
   {
-    PRInt32 totalToDownload = m_lastMsgToDownload - m_firstMsgToDownload + 1;
-    PRInt32 lastIndex = m_lastProcessedNumber - m_firstMsgNumber + 1;
-    PRInt32 numDownloaded = lastIndex;
-    PRInt32 totIndex = m_lastMsgNumber - m_firstMsgNumber + 1;
+    int32_t totalToDownload = m_lastMsgToDownload - m_firstMsgToDownload + 1;
+    int32_t lastIndex = m_lastProcessedNumber - m_firstMsgNumber + 1;
+    int32_t numDownloaded = lastIndex;
+    int32_t totIndex = m_lastMsgNumber - m_firstMsgNumber + 1;
 
     PRTime elapsedTime = PR_Now() - m_lastStatusUpdate;
 
     if (elapsedTime > MIN_STATUS_UPDATE_INTERVAL || lastIndex == totIndex)
-      UpdateStatus(PR_FALSE, numDownloaded, totalToDownload);
+      UpdateStatus(false, numDownloaded, totalToDownload);
   }
   return NS_OK;
 }
@@ -856,7 +827,7 @@ nsNNTPNewsgroupList::ResetXOVER()
 {
   m_lastMsgNumber = m_firstMsgNumber;
   m_lastProcessedNumber = m_lastMsgNumber;
-  return 0;
+  return NS_OK;
 }
 
 nsresult
@@ -879,7 +850,7 @@ nsNNTPNewsgroupList::FinishXOVERLINE(int status, int *newstatus)
 
   if (k && k->set)
   {
-    PRInt32 n = k->set->FirstNonMember();
+    int32_t n = k->set->FirstNonMember();
     if (n < k->first_possible || n > k->last_possible)
     {
       /* We know we've gotten all there is to know.
@@ -894,10 +865,10 @@ nsNNTPNewsgroupList::FinishXOVERLINE(int status, int *newstatus)
     // calls which happen when the fe selects a message as a result of getting EndingUpdate,
     // which interrupts this url right before it was going to finish and causes FinishXOver
     // to get called again.
-    m_finishingXover = PR_TRUE;
+    m_finishingXover = true;
 
     // XXX is this correct?
-    m_runningURL = nsnull;
+    m_runningURL = nullptr;
 
     if (m_lastMsgNumber > 0) {
       nsAutoString firstStr;
@@ -907,8 +878,9 @@ nsNNTPNewsgroupList::FinishXOVERLINE(int status, int *newstatus)
       lastStr.AppendInt(m_lastMsgNumber - m_firstMsgNumber + 1);
 
       nsString statusString;
-      nsCOMPtr<nsIStringBundleService> bundleService = do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-      NS_ENSURE_SUCCESS(rv, rv);
+      nsCOMPtr<nsIStringBundleService> bundleService =
+        mozilla::services::GetStringBundleService();
+      NS_ENSURE_TRUE(bundleService, NS_ERROR_UNEXPECTED);
 
       nsCOMPtr<nsIStringBundle> bundle;
       rv = bundleService->CreateBundle(NEWS_MSGS_URL, getter_AddRefs(bundle));
@@ -946,12 +918,12 @@ nsNNTPNewsgroupList::InitXHDR(nsACString &header)
 NS_IMETHODIMP
 nsNNTPNewsgroupList::ProcessXHDRLine(const nsACString &line)
 {
-  PRInt32 middle = line.FindChar(' ');
+  int32_t middle = line.FindChar(' ');
   nsCString value, key = PromiseFlatCString(line);
   if (middle == -1)
     return NS_OK;
   value = Substring(line, middle+1);
-  key.SetLength((PRUint32)middle);
+  key.SetLength((uint32_t)middle);
 
   // According to RFC 2980, some will send (none) instead.
   // So we don't treat this is an error.
@@ -959,7 +931,7 @@ nsNNTPNewsgroupList::ProcessXHDRLine(const nsACString &line)
     return NS_OK;
 
   nsresult code;
-  PRInt32 number = key.ToInteger(&code);
+  int32_t number = key.ToInteger(&code);
   if (code != NS_OK)
     return NS_ERROR_FAILURE;
   // RFC 2980 specifies one or more spaces.
@@ -972,18 +944,18 @@ nsNNTPNewsgroupList::ProcessXHDRLine(const nsACString &line)
   rv = header->SetStringProperty(m_filterHeaders[m_currentXHDRIndex].get(), value.get());
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRInt32 totalToDownload = m_lastMsgToDownload - m_firstMsgToDownload + 1;
-  PRInt32 numDownloaded = number - m_firstMsgNumber + 1;
+  int32_t totalToDownload = m_lastMsgToDownload - m_firstMsgToDownload + 1;
+  int32_t numDownloaded = number - m_firstMsgNumber + 1;
 
   PRTime elapsedTime = PR_Now() - m_lastStatusUpdate;
 
   if (elapsedTime > MIN_STATUS_UPDATE_INTERVAL)
-    UpdateStatus(PR_TRUE, numDownloaded, totalToDownload);
+    UpdateStatus(true, numDownloaded, totalToDownload);
   return rv;
 }
 
 NS_IMETHODIMP
-nsNNTPNewsgroupList::InitHEAD(PRInt32 number)
+nsNNTPNewsgroupList::InitHEAD(int32_t number)
 {
   if (m_newMsgHdr)
   {
@@ -991,15 +963,15 @@ nsNNTPNewsgroupList::InitHEAD(PRInt32 number)
     // If HEAD didn't properly return, then the header won't be set
     m_newHeaders.AppendObject(m_newMsgHdr);
 
-    PRInt32 totalToDownload = m_lastMsgToDownload - m_firstMsgToDownload + 1;
-    PRInt32 lastIndex = m_lastProcessedNumber - m_firstMsgNumber + 1;
-    PRInt32 numDownloaded = lastIndex;
-    PRInt32 totIndex = m_lastMsgNumber - m_firstMsgNumber + 1;
+    int32_t totalToDownload = m_lastMsgToDownload - m_firstMsgToDownload + 1;
+    int32_t lastIndex = m_lastProcessedNumber - m_firstMsgNumber + 1;
+    int32_t numDownloaded = lastIndex;
+    int32_t totIndex = m_lastMsgNumber - m_firstMsgNumber + 1;
 
     PRTime elapsedTime = PR_Now() - m_lastStatusUpdate;
 
     if (elapsedTime > MIN_STATUS_UPDATE_INTERVAL || lastIndex == totIndex)
-      UpdateStatus(PR_FALSE, numDownloaded, totalToDownload);
+      UpdateStatus(false, numDownloaded, totalToDownload);
   }
 
   if (number >= 0)
@@ -1024,7 +996,7 @@ nsNNTPNewsgroupList::InitHEAD(PRInt32 number)
 }
 
 NS_IMETHODIMP
-nsNNTPNewsgroupList::HEADFailed(PRInt32 number)
+nsNNTPNewsgroupList::HEADFailed(int32_t number)
 {
   m_set->Add(number);
   return NS_OK;
@@ -1033,12 +1005,12 @@ nsNNTPNewsgroupList::HEADFailed(PRInt32 number)
 NS_IMETHODIMP
 nsNNTPNewsgroupList::ProcessHEADLine(const nsACString &line)
 {
-  PRInt32 colon = line.FindChar(':');
+  int32_t colon = line.FindChar(':');
   nsCString header = PromiseFlatCString(line), value;
   if (colon != -1)
   {
     value = Substring(line, colon+1);
-    header.SetLength((PRUint32)colon);
+    header.SetLength((uint32_t)colon);
   }
   else if (line.CharAt(0) == ' ' || line.CharAt(0) == '\t') // We are continuing the header
   {
@@ -1076,16 +1048,16 @@ nsNNTPNewsgroupList::AddHeader(const char *header, const char *value)
   else if (PL_strcmp(header, "date") == 0)
   {
     PRTime date;
-    PRStatus status = PR_ParseTimeString (value, PR_FALSE, &date);
+    PRStatus status = PR_ParseTimeString (value, false, &date);
     if (PR_SUCCESS == status)
       rv = m_newMsgHdr->SetDate(date);
   }
   else if (PL_strcmp(header, "subject") == 0)
   {
     const char *subject = value;
-    PRUint32 subjectLen = strlen(value);
+    uint32_t subjectLen = strlen(value);
 
-    PRUint32 flags = 0;
+    uint32_t flags = 0;
     // ### should call IsHeaderRead here...
     /* strip "Re: " */
     nsCString modifiedSubject;
@@ -1131,31 +1103,31 @@ nsNNTPNewsgroupList::CallFilters()
   nsCOMPtr <nsIMsgFolder> folder = do_QueryInterface(m_newsFolder, &rv);
   NS_ENSURE_SUCCESS(rv,rv);
 
-  PRUint32 filterCount = 0;
+  uint32_t filterCount = 0;
   if (m_filterList)
   {
     rv = m_filterList->GetFilterCount(&filterCount);
     NS_ENSURE_SUCCESS(rv,rv);
   }
 
-  PRUint32 serverFilterCount = 0;
+  uint32_t serverFilterCount = 0;
   if (m_serverFilterList)
   {
     rv = m_serverFilterList->GetFilterCount(&serverFilterCount);
     NS_ENSURE_SUCCESS(rv,rv);
   }
 
-  PRUint32 count = m_newHeaders.Count();
+  uint32_t count = m_newHeaders.Count();
 
   // Notify MsgFolderListeners of message adds
   nsCOMPtr<nsIMsgFolderNotificationService> notifier(do_GetService(NS_MSGNOTIFICATIONSERVICE_CONTRACTID));
 
-  for (PRUint32 i = 0; i < count; i++)
+  for (uint32_t i = 0; i < count; i++)
   {
     m_newMsgHdr = m_newHeaders[i];
     if (!filterCount && !serverFilterCount)
     {
-      m_newsDB->AddNewHdrToDB(m_newMsgHdr, PR_TRUE);
+      m_newsDB->AddNewHdrToDB(m_newMsgHdr, true);
 
       if (notifier)
         notifier->NotifyMsgAdded(m_newMsgHdr);
@@ -1167,7 +1139,7 @@ nsNNTPNewsgroupList::CallFilters()
 
       continue;
     }
-    m_addHdrToDB = PR_TRUE;
+    m_addHdrToDB = true;
 
     // build up a "headers" for filter code
     nsCString subject, author, date;
@@ -1191,7 +1163,7 @@ nsNNTPNewsgroupList::CallFilters()
       fullHeaders += '\0';
     }
 
-    for (PRUint32 header = 0; header < m_filterHeaders.Length(); header++)
+    for (uint32_t header = 0; header < m_filterHeaders.Length(); header++)
     {
       nsCString retValue;
       m_newMsgHdr->GetStringProperty(m_filterHeaders[header].get(),
@@ -1225,7 +1197,7 @@ nsNNTPNewsgroupList::CallFilters()
 
     if (m_addHdrToDB)
     {
-      m_newsDB->AddNewHdrToDB(m_newMsgHdr, PR_TRUE);
+      m_newsDB->AddNewHdrToDB(m_newMsgHdr, true);
       if (notifier)
         notifier->NotifyMsgAdded(m_newMsgHdr);
       // mark the header as not yet reported classified
@@ -1240,7 +1212,7 @@ nsNNTPNewsgroupList::CallFilters()
 }
 
 void
-nsNNTPNewsgroupList::SetProgressBarPercent(PRInt32 percent)
+nsNNTPNewsgroupList::SetProgressBarPercent(int32_t percent)
 {
   if (!m_runningURL)
     return;
@@ -1274,11 +1246,11 @@ nsNNTPNewsgroupList::SetProgressStatus(const PRUnichar *message)
 }
 
 void
-nsNNTPNewsgroupList::UpdateStatus(PRBool filtering, PRInt32 numDLed, PRInt32 totToDL)
+nsNNTPNewsgroupList::UpdateStatus(bool filtering, int32_t numDLed, int32_t totToDL)
 {
-  PRInt32 numerator = (filtering ? m_currentXHDRIndex + 1 : 1) * numDLed;
-  PRInt32 denominator = (m_filterHeaders.Length() + 1) * totToDL;
-  PRInt32 percent = numerator * 100 / denominator;
+  int32_t numerator = (filtering ? m_currentXHDRIndex + 1 : 1) * numDLed;
+  int32_t denominator = (m_filterHeaders.Length() + 1) * totToDL;
+  int32_t percent = numerator * 100 / denominator;
   
   nsAutoString numDownloadedStr;
   numDownloadedStr.AppendInt(numDLed);
@@ -1292,8 +1264,9 @@ nsNNTPNewsgroupList::UpdateStatus(PRBool filtering, PRInt32 numDLed, PRInt32 tot
       return;
 
   nsString statusString;
-  nsCOMPtr<nsIStringBundleService> bundleService = do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-  if (!NS_SUCCEEDED(rv))
+  nsCOMPtr<nsIStringBundleService> bundleService =
+    mozilla::services::GetStringBundleService();
+  if (!bundleService)
     return;
 
   nsCOMPtr<nsIStringBundle> bundle;
@@ -1330,13 +1303,13 @@ nsNNTPNewsgroupList::UpdateStatus(PRBool filtering, PRInt32 numDLed, PRInt32 tot
   }
 }
 
-NS_IMETHODIMP nsNNTPNewsgroupList::SetGetOldMessages(PRBool aGetOldMessages)
+NS_IMETHODIMP nsNNTPNewsgroupList::SetGetOldMessages(bool aGetOldMessages)
 {
   m_getOldMessages = aGetOldMessages;
   return NS_OK;
 }
 
-NS_IMETHODIMP nsNNTPNewsgroupList::GetGetOldMessages(PRBool *aGetOldMessages)
+NS_IMETHODIMP nsNNTPNewsgroupList::GetGetOldMessages(bool *aGetOldMessages)
 {
   NS_ENSURE_ARG(aGetOldMessages);
 

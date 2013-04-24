@@ -1,40 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Henrik Gemal <mozilla@gemal.dk>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #include "nsCOMPtr.h"
 #include <stdio.h>
 #include "nsMimeRebuffer.h"
@@ -62,6 +29,7 @@
 #include "nsAutoPtr.h"
 #include "nsINetUtil.h"
 #include "nsMemory.h"
+#include "mozilla/Services.h"
 
 #define VIEW_ALL_HEADERS 2
 
@@ -81,13 +49,13 @@ public:
 
 protected:
   nsTArray<nsCString> mValues;
-  PRUint32 mCurrentIndex; // consumers expect first-in first-out enumeration
+  uint32_t mCurrentIndex; // consumers expect first-in first-out enumeration
 };
 
 NS_IMPL_ISUPPORTS1(nsMimeStringEnumerator, nsIUTF8StringEnumerator)
 
 NS_IMETHODIMP
-nsMimeStringEnumerator::HasMore(PRBool *result)
+nsMimeStringEnumerator::HasMore(bool *result)
 {
   NS_ENSURE_ARG_POINTER(result);
   *result = mCurrentIndex < mValues.Length();
@@ -109,8 +77,8 @@ nsMimeStringEnumerator::GetNext(nsACString& result)
  */
 nsMimeHtmlDisplayEmitter::nsMimeHtmlDisplayEmitter() : nsMimeBaseEmitter()
 {
-  mFirst = PR_TRUE;
-  mSkipAttachment = PR_FALSE;
+  mFirst = true;
+  mSkipAttachment = false;
 }
 
 nsMimeHtmlDisplayEmitter::~nsMimeHtmlDisplayEmitter(void)
@@ -122,15 +90,15 @@ nsresult nsMimeHtmlDisplayEmitter::Init()
   return NS_OK;
 }
 
-PRBool nsMimeHtmlDisplayEmitter::BroadCastHeadersAndAttachments()
+bool nsMimeHtmlDisplayEmitter::BroadCastHeadersAndAttachments()
 {
   // try to get a header sink if there is one....
   nsCOMPtr<nsIMsgHeaderSink> headerSink;
   nsresult rv = GetHeaderSink(getter_AddRefs(headerSink));
   if (NS_SUCCEEDED(rv) && headerSink && mDocHeader)
-    return PR_TRUE;
+    return true;
   else
-    return PR_FALSE;
+    return false;
 }
 
 nsresult
@@ -190,7 +158,7 @@ nsMimeHtmlDisplayEmitter::GetHeaderSink(nsIMsgHeaderSink ** aHeaderSink)
   return rv;
 }
 
-nsresult nsMimeHtmlDisplayEmitter::BroadcastHeaders(nsIMsgHeaderSink * aHeaderSink, PRInt32 aHeaderMode, PRBool aFromNewsgroup)
+nsresult nsMimeHtmlDisplayEmitter::BroadcastHeaders(nsIMsgHeaderSink * aHeaderSink, int32_t aHeaderMode, bool aFromNewsgroup)
 {
   // two string enumerators to pass out to the header sink
   nsRefPtr<nsMimeStringEnumerator> headerNameEnumerator = new nsMimeStringEnumerator();
@@ -215,7 +183,7 @@ nsresult nsMimeHtmlDisplayEmitter::BroadcastHeaders(nsIMsgHeaderSink * aHeaderSi
     }
   }
 
-  for (PRInt32 i=0; i<mHeaderArray->Count(); i++)
+  for (int32_t i=0; i<mHeaderArray->Count(); i++)
   {
     headerInfoType * headerInfo = (headerInfoType *) mHeaderArray->ElementAt(i);
     if ( (!headerInfo) || (!headerInfo->name) || (!(*headerInfo->name)) || (!headerInfo->value) || (!(*headerInfo->value)))
@@ -246,15 +214,16 @@ nsresult nsMimeHtmlDisplayEmitter::BroadcastHeaders(nsIMsgHeaderSink * aHeaderSi
             continue;
     }
 
+    headerNameEnumerator->Append(headerInfo->name);
+    headerValueEnumerator->Append(headerValue);
+
+    // Add a localized version of the date header if we encounter it.
     if (!PL_strcasecmp("Date", headerInfo->name))
     {
+      headerNameEnumerator->Append("X-Mozilla-LocalizedDate");
       GenerateDateString(headerValue, convertedDateString, false);
       headerValueEnumerator->Append(convertedDateString);
     }
-    else // append the header value as is
-      headerValueEnumerator->Append(headerValue);
-
-    headerNameEnumerator->Append(headerInfo->name);
   }
 
   aHeaderSink->ProcessHeaders(headerNameEnumerator, headerValueEnumerator, aFromNewsgroup);
@@ -279,10 +248,10 @@ NS_IMETHODIMP nsMimeHtmlDisplayEmitter::WriteHTMLHeaders(const nsACString &name)
     return nsMimeBaseEmitter::WriteHTMLHeaders(name);
   }
   else
-    mFirstHeaders = PR_FALSE;
+    mFirstHeaders = false;
 
-  PRBool bFromNewsgroups = PR_FALSE;
-  for (PRInt32 j=0; j < mHeaderArray->Count(); j++)
+  bool bFromNewsgroups = false;
+  for (int32_t j=0; j < mHeaderArray->Count(); j++)
   {
     headerInfoType *headerInfo = (headerInfoType *)mHeaderArray->ElementAt(j);
     if (!(headerInfo && headerInfo->name && *headerInfo->name))
@@ -290,7 +259,7 @@ NS_IMETHODIMP nsMimeHtmlDisplayEmitter::WriteHTMLHeaders(const nsACString &name)
 
     if (!PL_strcasecmp("Newsgroups", headerInfo->name))
     {
-      bFromNewsgroups = PR_TRUE;
+      bFromNewsgroups = true;
       break;
     }
   }
@@ -301,7 +270,7 @@ NS_IMETHODIMP nsMimeHtmlDisplayEmitter::WriteHTMLHeaders(const nsACString &name)
 
   if (headerSink)
   {
-    PRInt32 viewMode = 0;
+    int32_t viewMode = 0;
     nsCOMPtr<nsIPrefBranch> pPrefBranch(do_GetService(NS_PREFSERVICE_CONTRACTID, &rv));
     if (pPrefBranch)
       rv = pPrefBranch->GetIntPref("mail.show_headers", &viewMode);
@@ -326,7 +295,7 @@ nsMimeHtmlDisplayEmitter::EndHeader(const nsACString &name)
       char * subject = MsgEscapeHTML(val);
       if (subject)
       {
-        PRInt32 bufLen = strlen(subject) + 16;
+        int32_t bufLen = strlen(subject) + 16;
         char *buf = new char[bufLen];
         if (!buf)
           return NS_ERROR_OUT_OF_MEMORY;
@@ -353,7 +322,7 @@ nsresult
 nsMimeHtmlDisplayEmitter::StartAttachment(const nsACString &name,
                                           const char *contentType,
                                           const char *url,
-                                          PRBool aIsExternalAttachment)
+                                          bool aIsExternalAttachment)
 {
   nsresult rv = NS_OK;
   nsCOMPtr<nsIMsgHeaderSink> headerSink;
@@ -386,7 +355,7 @@ nsMimeHtmlDisplayEmitter::StartAttachment(const nsACString &name,
                                  unicodeHeaderValue.get(), uriString.get(),
                                  aIsExternalAttachment);
 
-    mSkipAttachment = PR_FALSE;
+    mSkipAttachment = false;
   }
   else if (mFormat == nsMimeOutput::nsMimeMessagePrintOutput)
   {
@@ -397,7 +366,7 @@ nsMimeHtmlDisplayEmitter::StartAttachment(const nsACString &name,
   else
   {
     // If we don't need or cannot broadcast attachment info, just ignore it
-    mSkipAttachment = PR_TRUE;
+    mSkipAttachment = true;
     rv = NS_OK;
   }
 
@@ -414,7 +383,7 @@ nsMimeHtmlDisplayEmitter::StartAttachmentInBody(const nsACString &name,
                                                 const char *contentType,
                                                 const char *url)
 {
-  mSkipAttachment = PR_FALSE;
+  mSkipAttachment = false;
 
   if ( (contentType) &&
        ((!strcmp(contentType, APPLICATION_XPKCS7_MIME)) ||
@@ -424,7 +393,7 @@ nsMimeHtmlDisplayEmitter::StartAttachmentInBody(const nsACString &name,
         (!strcmp(contentType, TEXT_VCARD)))
      )
   {
-     mSkipAttachment = PR_TRUE;
+     mSkipAttachment = true;
      return NS_OK;
   }
 
@@ -436,8 +405,8 @@ nsMimeHtmlDisplayEmitter::StartAttachmentInBody(const nsACString &name,
       nsresult rv;
 
       nsCOMPtr<nsIStringBundleService> bundleSvc =
-        do_GetService(NS_STRINGBUNDLE_CONTRACTID, &rv);
-      NS_ENSURE_SUCCESS(rv, rv);
+        mozilla::services::GetStringBundleService();
+      NS_ENSURE_TRUE(bundleSvc, NS_ERROR_UNEXPECTED);
 
       nsCOMPtr<nsIStringBundle> bundle;
       rv = bundleSvc->CreateBundle("chrome://messenger/locale/messenger.properties",
@@ -463,7 +432,7 @@ nsMimeHtmlDisplayEmitter::StartAttachmentInBody(const nsACString &name,
   UtilityWrite(name);
   UtilityWrite("</td>");
 
-  mFirst = PR_FALSE;
+  mFirst = false;
   return NS_OK;
 }
 
@@ -493,9 +462,9 @@ nsMimeHtmlDisplayEmitter::AddAttachmentField(const char *field, const char *valu
     if (strcmp(field, HEADER_X_MOZILLA_PART_SIZE))
       return NS_OK;
 
-    PRUint64 size = atoi(value);
+    uint64_t size = atoi(value);
     nsAutoString sizeString;
-    rv = FormatFileSize(size, PR_FALSE, sizeString);
+    rv = FormatFileSize(size, false, sizeString);
     UtilityWrite("<td class=\"mimeAttachmentSize\">");
     UtilityWrite(NS_ConvertUTF16toUTF8(sizeString).get());
     UtilityWrite("</td>");
@@ -510,7 +479,7 @@ nsMimeHtmlDisplayEmitter::EndAttachment()
   if (mSkipAttachment)
     return NS_OK;
 
-  mSkipAttachment = PR_FALSE; // reset it for next attachment round
+  mSkipAttachment = false; // reset it for next attachment round
 
   if (BroadCastHeadersAndAttachments())
     return NS_OK;
@@ -541,7 +510,7 @@ nsMimeHtmlDisplayEmitter::EndAllAttachments()
 
 nsresult
 nsMimeHtmlDisplayEmitter::WriteBody(const nsACString &buf,
-                                    PRUint32 *amountWritten)
+                                    uint32_t *amountWritten)
 {
   Write(buf, amountWritten);
   return NS_OK;

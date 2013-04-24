@@ -1,38 +1,9 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is Mozilla SVG Project code.
- *
- * The Initial Developer of the Original Code is the Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2010
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "mozilla/Util.h"
 
 #include "SVGLength.h"
 #include "nsSVGElement.h"
@@ -47,8 +18,8 @@
 namespace mozilla {
 
 // Declare some helpers defined below:
-static void GetUnitString(nsAString& unit, PRUint16 unitType);
-static PRUint16 GetUnitTypeForString(const char* unitStr);
+static void GetUnitString(nsAString& unit, uint16_t unitType);
+static uint16_t GetUnitTypeForString(const nsAString& unitStr);
 
 void
 SVGLength::GetValueAsString(nsAString &aValue) const
@@ -64,11 +35,11 @@ SVGLength::GetValueAsString(nsAString &aValue) const
   aValue.Append(unitString);
 }
 
-PRBool
+bool
 SVGLength::SetValueFromString(const nsAString &aValue)
 {
   float tmpValue;
-  PRUint16 tmpUnit;
+  uint16_t tmpUnit;
 
   NS_ConvertUTF16toUTF8 value(aValue);
   const char *str = value.get();
@@ -80,18 +51,14 @@ SVGLength::SetValueFromString(const nsAString &aValue)
   tmpValue = float(PR_strtod(str, &unit));
   if (unit != str && NS_finite(tmpValue)) {
     char *theRest = unit;
-    if (*unit != '\0' && !IsSVGWhitespace(*unit)) {
-      while (*theRest != '\0' && !IsSVGWhitespace(*theRest)) {
-        ++theRest;
-      }
-      nsCAutoString unitStr(unit, theRest - unit);
-      tmpUnit = GetUnitTypeForString(unitStr.get());
-      if (tmpUnit == nsIDOMSVGLength::SVG_LENGTHTYPE_UNKNOWN) {
-        // nsSVGUtils::ReportToConsole
-        return PR_FALSE;
-      }
-    } else {
-      tmpUnit = nsIDOMSVGLength::SVG_LENGTHTYPE_NUMBER;
+    while (*theRest != '\0' && !IsSVGWhitespace(*theRest)) {
+      ++theRest;
+    }
+    tmpUnit = GetUnitTypeForString(
+                Substring(aValue, unit - str, theRest - unit));
+    if (tmpUnit == nsIDOMSVGLength::SVG_LENGTHTYPE_UNKNOWN) {
+      // nsSVGUtils::ReportToConsole
+      return false;
     }
     while (*theRest && IsSVGWhitespace(*theRest)) {
       ++theRest;
@@ -99,14 +66,14 @@ SVGLength::SetValueFromString(const nsAString &aValue)
     if (!*theRest) {
       mValue = tmpValue;
       mUnit = tmpUnit;
-      return PR_TRUE;
+      return true;
     }
   }
-  return PR_FALSE;
+  return false;
 }
 
-inline static PRBool
-IsAbsoluteUnit(PRUint8 aUnit)
+inline static bool
+IsAbsoluteUnit(uint8_t aUnit)
 {
   return aUnit >= nsIDOMSVGLength::SVG_LENGTHTYPE_CM &&
          aUnit <= nsIDOMSVGLength::SVG_LENGTHTYPE_PC;
@@ -123,7 +90,7 @@ IsAbsoluteUnit(PRUint8 aUnit)
  *   GetAbsUnitsPerAbsUnit(nsIDOMSVGLength::SVG_LENGTHTYPE_CM,
  *                         nsIDOMSVGLength::SVG_LENGTHTYPE_IN)
  */
-inline static float GetAbsUnitsPerAbsUnit(PRUint8 aUnits, PRUint8 aPerUnit)
+inline static float GetAbsUnitsPerAbsUnit(uint8_t aUnits, uint8_t aPerUnit)
 {
   NS_ABORT_IF_FALSE(IsAbsoluteUnit(aUnits), "Not a CSS absolute unit");
   NS_ABORT_IF_FALSE(IsAbsoluteUnit(aPerUnit), "Not a CSS absolute unit");
@@ -146,9 +113,9 @@ inline static float GetAbsUnitsPerAbsUnit(PRUint8 aUnits, PRUint8 aPerUnit)
 }
 
 float
-SVGLength::GetValueInSpecifiedUnit(PRUint8 aUnit,
+SVGLength::GetValueInSpecifiedUnit(uint8_t aUnit,
                                    const nsSVGElement *aElement,
-                                   PRUint8 aAxis) const
+                                   uint8_t aAxis) const
 {
   if (aUnit == mUnit) {
     return mValue;
@@ -192,7 +159,7 @@ SVGLength::GetValueInSpecifiedUnit(PRUint8 aUnit,
 #define INCHES_PER_CM_FLOAT float(0.393700787)
 
 float
-SVGLength::GetUserUnitsPerUnit(const nsSVGElement *aElement, PRUint8 aAxis) const
+SVGLength::GetUserUnitsPerUnit(const nsSVGElement *aElement, uint8_t aAxis) const
 {
   switch (mUnit) {
     case nsIDOMSVGLength::SVG_LENGTHTYPE_NUMBER:
@@ -221,7 +188,7 @@ SVGLength::GetUserUnitsPerUnit(const nsSVGElement *aElement, PRUint8 aAxis) cons
 }
 
 /* static */ float
-SVGLength::GetUserUnitsPerPercent(const nsSVGElement *aElement, PRUint8 aAxis)
+SVGLength::GetUserUnitsPerPercent(const nsSVGElement *aElement, uint8_t aAxis)
 {
   if (aElement) {
     nsSVGSVGElement *viewportElement = const_cast<nsSVGElement*>(aElement)->GetCtx();
@@ -237,8 +204,8 @@ SVGLength::GetUserUnitsPerPercent(const nsSVGElement *aElement, PRUint8 aAxis)
 // These items must be at the same index as the nsIDOMSVGLength constants!
 static nsIAtom** const unitMap[] =
 {
-  nsnull, /* SVG_LENGTHTYPE_UNKNOWN */
-  nsnull, /* SVG_LENGTHTYPE_NUMBER */
+  nullptr, /* SVG_LENGTHTYPE_UNKNOWN */
+  nullptr, /* SVG_LENGTHTYPE_NUMBER */
   &nsGkAtoms::percentage,
   &nsGkAtoms::em,
   &nsGkAtoms::ex,
@@ -251,7 +218,7 @@ static nsIAtom** const unitMap[] =
 };
 
 static void
-GetUnitString(nsAString& unit, PRUint16 unitType)
+GetUnitString(nsAString& unit, uint16_t unitType)
 {
   if (SVGLength::IsValidUnitType(unitType)) {
     if (unitMap[unitType]) {
@@ -263,17 +230,19 @@ GetUnitString(nsAString& unit, PRUint16 unitType)
   return;
 }
 
-static PRUint16
-GetUnitTypeForString(const char* unitStr)
+static uint16_t
+GetUnitTypeForString(const nsAString& unitStr)
 {
-  if (!unitStr || *unitStr == '\0')
+  if (unitStr.IsEmpty())
     return nsIDOMSVGLength::SVG_LENGTHTYPE_NUMBER;
 
-  nsCOMPtr<nsIAtom> unitAtom = do_GetAtom(unitStr);
+  nsIAtom* unitAtom = NS_GetStaticAtom(unitStr);
 
-  for (PRUint32 i = 1 ; i < NS_ARRAY_LENGTH(unitMap) ; i++) {
-    if (unitMap[i] && *unitMap[i] == unitAtom) {
-      return i;
+  if (unitAtom) {
+    for (uint32_t i = 1 ; i < ArrayLength(unitMap) ; i++) {
+      if (unitMap[i] && *unitMap[i] == unitAtom) {
+        return i;
+      }
     }
   }
   return nsIDOMSVGLength::SVG_LENGTHTYPE_UNKNOWN;

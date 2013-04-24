@@ -22,31 +22,6 @@ const kUsername = "testsmtp";
 const kInvalidPassword = "smtptest";
 const kValidPassword = "smtptest1";
 
-var dummyDocShell =
-{
-  getInterface: function (iid) {
-    if (iid.equals(Ci.nsIAuthPrompt)) {
-      return Cc["@mozilla.org/login-manager/prompter;1"]
-               .getService(Ci.nsIAuthPrompt);
-    }
-
-    throw Components.results.NS_ERROR_FAILURE;
-  },
-
-  QueryInterface: XPCOMUtils.generateQI([Ci.nsIDocShell,
-                                         Ci.nsIInterfaceRequestor])
-}
-
-// Dummy message window that ensures we get prompted for logins.
-var dummyMsgWindow =
-{
-  rootDocShell: dummyDocShell,
-  promptDialog: alertUtilsPrompts,
-
-  QueryInterface: XPCOMUtils.generateQI([Ci.nsIMsgWindow,
-                                         Ci.nsISupportsWeakReference])
-};
-
 function alert(aDialogText, aText)
 {
   // The first few attempts may prompt about the password problem, the last
@@ -85,14 +60,17 @@ function promptPasswordPS(aParent, aDialogTitle, aText, aPassword, aCheckMsg,
 }
 
 function run_test() {
-  var handler = new SMTP_RFC2821_handler(new smtpDaemon());
-  handler.dropOnAuthFailure = true;
-  server = new nsMailServer(handler);
-  // Username needs to match signons.txt
-  handler.kUsername = kUsername;
-  handler.kPassword = kValidPassword;
-  handler.kAuthRequired = true;
-  handler.kAuthSchemes = [ "PLAIN", "LOGIN" ]; // make match expected transaction below
+  function createHandler(d) {
+    var handler = new SMTP_RFC2821_handler(d);
+    handler.dropOnAuthFailure = true;
+    // Username needs to match signons.txt
+    handler.kUsername = kUsername;
+    handler.kPassword = kValidPassword;
+    handler.kAuthRequired = true;
+    handler.kAuthSchemes = [ "PLAIN", "LOGIN" ]; // make match expected transaction below
+    return handler;
+  }
+  server = setupServerDaemon(createHandler);
 
   // Passwords File (generated from Mozilla 1.8 branch).
   var signons = do_get_file("../../../data/signons-mailnews1.8.txt");

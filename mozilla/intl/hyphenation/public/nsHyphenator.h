@@ -42,25 +42,24 @@
 #include "nsString.h"
 #include "nsTArray.h"
 
-class nsIUGenCategory;
+class nsIURI;
 
 class nsHyphenator
 {
 public:
-  nsHyphenator(nsIFile *aFile);
+  nsHyphenator(nsIURI *aURI);
 
   NS_INLINE_DECL_REFCOUNTING(nsHyphenator)
 
-  PRBool IsValid();
+  bool IsValid();
 
-  nsresult Hyphenate(const nsAString& aText, nsTArray<PRPackedBool>& aHyphens);
+  nsresult Hyphenate(const nsAString& aText, nsTArray<bool>& aHyphens);
 
 private:
   ~nsHyphenator();
 
 protected:
   void                      *mDict;
-  nsCOMPtr<nsIUGenCategory>  mCategories;
 };
 
 #endif // nsHyphenator_h__

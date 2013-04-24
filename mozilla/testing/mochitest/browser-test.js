@@ -7,29 +7,48 @@ if (Cc === undefined) {
   var Ci = Components.interfaces;
   var Cu = Components.utils;
 }
+
+Cu.import("resource://gre/modules/XPCOMUtils.jsm");
+
+XPCOMUtils.defineLazyModuleGetter(this, "Services",
+  "resource://gre/modules/Services.jsm");
+
 window.addEventListener("load", testOnLoad, false);
 
 function testOnLoad() {
   window.removeEventListener("load", testOnLoad, false);
 
-  // Make sure to launch the test harness for the first opened window only
-  var prefs = Cc["@mozilla.org/preferences-service;1"].
-              getService(Ci.nsIPrefBranch);
-  if (prefs.prefHasUserValue("testing.browserTestHarness.running"))
-    return;
-
-  prefs.setBoolPref("testing.browserTestHarness.running", true);
   gConfig = readConfig();
+  if (gConfig.testRoot == "browser" || gConfig.testRoot == "webapprtChrome") {
+    // Make sure to launch the test harness for the first opened window only
+    var prefs = Services.prefs;
+    if (prefs.prefHasUserValue("testing.browserTestHarness.running"))
+      return;
 
-  if (gConfig.testRoot == "browser") {
-    var ww = Cc["@mozilla.org/embedcomp/window-watcher;1"].
-             getService(Ci.nsIWindowWatcher);
+    prefs.setBoolPref("testing.browserTestHarness.running", true);
+
     var sstring = Cc["@mozilla.org/supports-string;1"].
                   createInstance(Ci.nsISupportsString);
     sstring.data = location.search;
 
-    ww.openWindow(window, "chrome://mochikit/content/browser-harness.xul", "browserTest",
-                  "chrome,centerscreen,dialog=no,resizable,titlebar,toolbar=no,width=800,height=600", sstring);
+    Services.ww.openWindow(window, "chrome://mochikit/content/browser-harness.xul", "browserTest",
+                           "chrome,centerscreen,dialog=no,resizable,titlebar,toolbar=no,width=800,height=600", sstring);
+  } else {
+    // This code allows us to redirect without requiring specialpowers for chrome and a11y tests.
+    function messageHandler(m) {
+      messageManager.removeMessageListener("chromeEvent", messageHandler);
+      var url = m.json.data;
+
+      // Window is the [ChromeWindow] for messageManager, so we need content.window 
+      // Currently chrome tests are run in a content window instead of a ChromeWindow
+      var webNav = content.window.QueryInterface(Components.interfaces.nsIInterfaceRequestor)
+                         .getInterface(Components.interfaces.nsIWebNavigation);
+      webNav.loadURI(url, null, null, null, null);
+    }
+
+    var listener = 'data:,function doLoad(e) { var data=e.getData("data");removeEventListener("contentEvent", function (e) { doLoad(e); }, false, true);sendAsyncMessage("chromeEvent", {"data":data}); };addEventListener("contentEvent", function (e) { doLoad(e); }, false, true);';
+    messageManager.loadFrameScript(listener, true);
+    messageManager.addMessageListener("chromeEvent", messageHandler);
   }
 }
 
@@ -37,17 +56,15 @@ function Tester(aTests, aDumper, aCallback) {
   this.dumper = aDumper;
   this.tests = aTests;
   this.callback = aCallback;
-  this._cs = Cc["@mozilla.org/consoleservice;1"].
-             getService(Ci.nsIConsoleService);
-  this._wm = Cc["@mozilla.org/appshell/window-mediator;1"].
-             getService(Ci.nsIWindowMediator);
-  this._fm = Cc["@mozilla.org/focus-manager;1"].
-             getService(Ci.nsIFocusManager);
+  this.openedWindows = {};
+  this.openedURLs = {};
 
-  this._scriptLoader = Cc["@mozilla.org/moz/jssubscript-loader;1"].
-                       getService(Ci.mozIJSSubScriptLoader);
+  this._scriptLoader = Services.scriptloader;
   this._scriptLoader.loadSubScript("chrome://mochikit/content/tests/SimpleTest/EventUtils.js", this.EventUtils);
   var simpleTestScope = {};
+  this._scriptLoader.loadSubScript("chrome://mochikit/content/tests/SimpleTest/specialpowersAPI.js", simpleTestScope);
+  this._scriptLoader.loadSubScript("chrome://mochikit/content/tests/SimpleTest/SpecialPowersObserverAPI.js", simpleTestScope);
+  this._scriptLoader.loadSubScript("chrome://mochikit/content/tests/SimpleTest/ChromePowers.js", simpleTestScope);
   this._scriptLoader.loadSubScript("chrome://mochikit/content/tests/SimpleTest/SimpleTest.js", simpleTestScope);
   this._scriptLoader.loadSubScript("chrome://mochikit/content/chrome-harness.js", simpleTestScope);
   this.SimpleTest = simpleTestScope.SimpleTest;
@@ -56,10 +73,12 @@ Tester.prototype = {
   EventUtils: {},
   SimpleTest: {},
 
-  loops: 0,
+  repeat: 0,
   checker: null,
   currentTestIndex: -1,
   lastStartTime: null,
+  openedWindows: null,
+
   get currentTest() {
     return this.tests[this.currentTestIndex];
   },
@@ -69,11 +88,17 @@ Tester.prototype = {
 
   start: function Tester_start() {
     //if testOnLoad was not called, then gConfig is not defined
-    if(!gConfig)
+    if (!gConfig)
       gConfig = readConfig();
-    this.loops = gConfig.loops;
+    this.repeat = gConfig.repeat;
     this.dumper.dump("*** Start BrowserChrome Test Results ***\n");
-    this._cs.registerListener(this);
+    Services.console.registerListener(this);
+    Services.obs.addObserver(this, "chrome-document-global-created", false);
+    Services.obs.addObserver(this, "content-document-global-created", false);
+    this._globalProperties = Object.keys(window);
+    this._globalPropertyWhitelist = ["navigator", "constructor", "Application",
+      "__SS_tabsToRestore", "__SSi", "webConsoleCommandController",
+    ];
 
     if (this.tests.length)
       this.nextTest();
@@ -98,7 +123,7 @@ Tester.prototype = {
     }
 
     this.dumper.dump("TEST-INFO | checking window state\n");
-    let windowsEnum = this._wm.getEnumerator(null);
+    let windowsEnum = Services.wm.getEnumerator(null);
     while (windowsEnum.hasMoreElements()) {
       let win = windowsEnum.getNext();
       if (win != window && !win.closed &&
@@ -127,13 +152,15 @@ Tester.prototype = {
   },
 
   finish: function Tester_finish(aSkipSummary) {
-    if(this.loops > 0){
-      --this.loops;
+    if (this.repeat > 0) {
+      --this.repeat;
       this.currentTestIndex = -1;
       this.nextTest();
     }
     else{
-      this._cs.unregisterListener(this);
+      Services.console.unregisterListener(this);
+      Services.obs.removeObserver(this, "chrome-document-global-created");
+      Services.obs.removeObserver(this, "content-document-global-created");
   
       this.dumper.dump("\nINFO TEST-START | Shutdown\n");
       if (this.tests.length) {
@@ -149,7 +176,7 @@ Tester.prototype = {
                          "\tTodo: " + todoCount + "\n");
       } else {
         this.dumper.dump("TEST-UNEXPECTED-FAIL | (browser-test.js) | " +
-                         "No tests to run. Did you pass an invalid --test-path?");
+                         "No tests to run. Did you pass an invalid --test-path?\n");
       }
   
       this.dumper.dump("\n*** End BrowserChrome Test Results ***\n");
@@ -160,16 +187,44 @@ Tester.prototype = {
       this.callback(this.tests);
       this.callback = null;
       this.tests = null;
+      this.openedWindows = null;
     }
   },
 
-  observe: function Tester_observe(aConsoleMessage) {
+  observe: function Tester_observe(aSubject, aTopic, aData) {
+    if (!aTopic) {
+      this.onConsoleMessage(aSubject);
+    } else if (this.currentTest) {
+      this.onDocumentCreated(aSubject);
+    }
+  },
+
+  onDocumentCreated: function Tester_onDocumentCreated(aWindow) {
+    let utils = aWindow.QueryInterface(Ci.nsIInterfaceRequestor)
+                       .getInterface(Ci.nsIDOMWindowUtils);
+    let outerID = utils.outerWindowID;
+    let innerID = utils.currentInnerWindowID;
+
+    if (!(outerID in this.openedWindows)) {
+      this.openedWindows[outerID] = this.currentTest;
+    }
+    this.openedWindows[innerID] = this.currentTest;
+
+    let url = aWindow.location.href || "about:blank";
+    this.openedURLs[outerID] = this.openedURLs[innerID] = url;
+  },
+
+  onConsoleMessage: function Tester_onConsoleMessage(aConsoleMessage) {
+    // Ignore empty messages.
+    if (!aConsoleMessage.message)
+      return;
+
     try {
       var msg = "Console message: " + aConsoleMessage.message;
       if (this.currentTest)
         this.currentTest.addResult(new testMessage(msg));
       else
-        this.dumper.dump("TEST-INFO | (browser-test.js) | " + msg);
+        this.dumper.dump("TEST-INFO | (browser-test.js) | " + msg.replace(/\n$/, "") + "\n");
     } catch (ex) {
       // Swallow exception so we don't lead to another error being reported,
       // throwing us into an infinite loop
@@ -191,6 +246,18 @@ Tester.prototype = {
         }
       };
 
+      if (this.SimpleTest.isExpectingUncaughtException()) {
+        this.currentTest.addResult(new testResult(false, "expectUncaughtException was called but no uncaught exception was detected!", "", false));
+      }
+
+      Object.keys(window).forEach(function (prop) {
+        if (this._globalProperties.indexOf(prop) == -1) {
+          this._globalProperties.push(prop);
+          if (this._globalPropertyWhitelist.indexOf(prop) == -1)
+            this.currentTest.addResult(new testResult(false, "leaked window property: " + prop, "", false));
+        }
+      }, this);
+
       // Clear document.popupNode.  The test could have set it to a custom value
       // for its own purposes, nulling it out it will go back to the default
       // behavior of returning the last opened popup.
@@ -210,15 +277,33 @@ Tester.prototype = {
     // is invoked to start the tests.
     this.waitForWindowsState((function () {
       if (this.done) {
+        // Many tests randomly add and remove tabs, resulting in the original
+        // tab being replaced by a new one. The last test in the suite doing this
+        // will erroneously be blamed for leaking this new tab's DOM window and
+        // docshell until shutdown. We can prevent this by removing this tab now
+        // that all tests are done.
+        if (window.gBrowser) {
+          gBrowser.addTab();
+          gBrowser.removeCurrentTab();
+        }
+
         // Schedule GC and CC runs before finishing in order to detect
         // DOM windows leaked by our tests or the tested code.
         Cu.schedulePreciseGC((function () {
-          let winutils = window.QueryInterface(Ci.nsIInterfaceRequestor)
-                               .getInterface(Ci.nsIDOMWindowUtils);
-          winutils.garbageCollect();
-          winutils.garbageCollect();
-          winutils.garbageCollect();
-          this.finish();
+          let analyzer = new CCAnalyzer();
+          analyzer.run(function () {
+            for (let obj of analyzer.find("nsGlobalWindow ")) {
+              let m = obj.name.match(/^nsGlobalWindow #(\d+)/);
+              if (m && m[1] in this.openedWindows) {
+                let test = this.openedWindows[m[1]];
+                let msg = "leaked until shutdown [" + obj.name +
+                          " " + (this.openedURLs[m[1]] || "NULL") + "]";
+                test.addResult(new testResult(false, msg, "", false));
+              }
+            }
+
+            this.finish();
+          }.bind(this));
         }).bind(this));
         return;
       }
@@ -231,6 +316,8 @@ Tester.prototype = {
   execTest: function Tester_execTest() {
     this.dumper.dump("TEST-START | " + this.currentTest.path + "\n");
 
+    this.SimpleTest.reset();
+
     // Load the tests into a testscope
     this.currentTest.scope = new testScope(this, this.currentTest);
 
@@ -240,7 +327,7 @@ Tester.prototype = {
     this.currentTest.scope.gTestPath = this.currentTest.path;
 
     // Override SimpleTest methods with ours.
-    ["ok", "is", "isnot", "todo", "todo_is", "todo_isnot"].forEach(function(m) {
+    ["ok", "is", "isnot", "ise", "todo", "todo_is", "todo_isnot", "info"].forEach(function(m) {
       this.SimpleTest[m] = this[m];
     }, this.currentTest.scope);
 
@@ -255,7 +342,14 @@ Tester.prototype = {
     var headPath = currentTestDirPath + "/head.js";
     try {
       this._scriptLoader.loadSubScript(headPath, this.currentTest.scope);
-    } catch (ex) { /* no head */ }
+    } catch (ex) {
+      // Ignore if no head.js exists, but report all other errors.  Note this
+      // will also ignore an existing head.js attempting to import a missing
+      // module - see bug 755558 for why this strategy is preferred anyway.
+      if (ex.toString() != 'Error opening input stream (invalid filename?)') {
+       this.currentTest.addResult(new testResult(false, "head.js import threw an exception", ex, false));
+      }
+    }
 
     // Import the test script.
     try {
@@ -277,7 +371,13 @@ Tester.prototype = {
         this.currentTest.scope.test();
       }
     } catch (ex) {
-      this.currentTest.addResult(new testResult(false, "Exception thrown", ex, false));
+      var isExpected = !!this.SimpleTest.isExpectingUncaughtException();
+      if (!this.SimpleTest.isIgnoringAllUncaughtExceptions()) {
+        this.currentTest.addResult(new testResult(isExpected, "Exception thrown", ex, false));
+        this.SimpleTest.expectUncaughtException(false);
+      } else {
+        this.currentTest.addResult(new testMessage("Exception thrown: " + ex));
+      }
       this.currentTest.scope.finish();
     }
 
@@ -315,7 +415,7 @@ Tester.prototype = {
   }
 };
 
-function testResult(aCondition, aName, aDiag, aIsTodo) {
+function testResult(aCondition, aName, aDiag, aIsTodo, aStack) {
   this.msg = aName || "";
 
   this.info = false;
@@ -335,6 +435,14 @@ function testResult(aCondition, aName, aDiag, aIsTodo) {
       }
       this.msg += " - " + aDiag;
     }
+    if (aStack) {
+      this.msg += "\nStack trace:\n";
+      var frame = aStack;
+      while (frame) {
+        this.msg += "    " + frame + "\n";
+        frame = frame.caller;
+      }
+    }
     if (aIsTodo)
       this.result = "TEST-UNEXPECTED-PASS";
     else
@@ -352,35 +460,42 @@ function testMessage(aName) {
 // cannot conflict with global variables used in tests.
 function testScope(aTester, aTest) {
   this.__tester = aTester;
-  this.__browserTest = aTest;
 
   var self = this;
-  this.ok = function test_ok(condition, name, diag) {
-    self.__browserTest.addResult(new testResult(condition, name, diag, false));
+  this.ok = function test_ok(condition, name, diag, stack) {
+    aTest.addResult(new testResult(condition, name, diag, false,
+                                   stack ? stack : Components.stack.caller));
   };
   this.is = function test_is(a, b, name) {
-    self.ok(a == b, name, "Got " + a + ", expected " + b);
+    self.ok(a == b, name, "Got " + a + ", expected " + b, false,
+            Components.stack.caller);
   };
   this.isnot = function test_isnot(a, b, name) {
-    self.ok(a != b, name, "Didn't expect " + a + ", but got it");
+    self.ok(a != b, name, "Didn't expect " + a + ", but got it", false,
+            Components.stack.caller);
   };
-  this.todo = function test_todo(condition, name, diag) {
-    self.__browserTest.addResult(new testResult(!condition, name, diag, true));
+  this.ise = function test_ise(a, b, name) {
+    self.ok(a === b, name, "Got " + a + ", strictly expected " + b, false,
+            Components.stack.caller);
+  };
+  this.todo = function test_todo(condition, name, diag, stack) {
+    aTest.addResult(new testResult(!condition, name, diag, true,
+                                   stack ? stack : Components.stack.caller));
   };
   this.todo_is = function test_todo_is(a, b, name) {
-    self.todo(a == b, name, "Got " + a + ", expected " + b);
+    self.todo(a == b, name, "Got " + a + ", expected " + b,
+              Components.stack.caller);
   };
   this.todo_isnot = function test_todo_isnot(a, b, name) {
-    self.todo(a != b, name, "Didn't expect " + a + ", but got it");
+    self.todo(a != b, name, "Didn't expect " + a + ", but got it",
+              Components.stack.caller);
   };
   this.info = function test_info(name) {
-    self.__browserTest.addResult(new testMessage(name));
+    aTest.addResult(new testMessage(name));
   };
 
   this.executeSoon = function test_executeSoon(func) {
-    let tm = Cc["@mozilla.org/thread-manager;1"].getService(Ci.nsIThreadManager);
-
-    tm.mainThread.dispatch({
+    Services.tm.mainThread.dispatch({
       run: function() {
         func();
       }
@@ -405,7 +520,13 @@ function testScope(aTester, aTest) {
       // StopIteration means test is finished.
       self.finish();
     } catch (ex) {
-      aTest.addResult(new testResult(false, "Exception thrown", ex, false));
+      var isExpected = !!self.SimpleTest.isExpectingUncaughtException();
+      if (!self.SimpleTest.isIgnoringAllUncaughtExceptions()) {
+        aTest.addResult(new testResult(isExpected, "Exception thrown", ex, false));
+        self.SimpleTest.expectUncaughtException(false);
+      } else {
+        aTest.addResult(new testMessage("Exception thrown: " + ex));
+      }
       self.finish();
     }
   };
@@ -434,15 +555,16 @@ function testScope(aTester, aTest) {
     self.SimpleTest.copyToProfile(filename);
   };
 
-  this.expectUncaughtException = function test_expectUncaughtException() {
-    self.SimpleTest.expectUncaughtException();
+  this.expectUncaughtException = function test_expectUncaughtException(aExpecting) {
+    self.SimpleTest.expectUncaughtException(aExpecting);
+  };
+
+  this.ignoreAllUncaughtExceptions = function test_ignoreAllUncaughtExceptions(aIgnoring) {
+    self.SimpleTest.ignoreAllUncaughtExceptions(aIgnoring);
   };
 
   this.finish = function test_finish() {
     self.__done = true;
-    if (self.SimpleTest._expectingUncaughtException) {
-      self.ok(false, "expectUncaughtException was called but no uncaught exception was detected!");
-    }
     if (self.__waitTimer) {
       self.executeSoon(function() {
         if (self.__done && self.__waitTimer) {

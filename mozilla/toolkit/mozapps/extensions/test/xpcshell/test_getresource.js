@@ -3,7 +3,7 @@
  */
 
 // install.rdf size, icon.png size, subfile.txt size
-const ADDON_SIZE = 635 + 15 + 26;
+const ADDON_SIZE = 672 + 15 + 26;
 
 // This verifies the functionality of getResourceURI
 // There are two cases - with a filename it returns an nsIFileURL to the filename
@@ -68,12 +68,24 @@ function run_test() {
 
         a1.uninstall();
 
-        restartManager();
+        try {
+          // hasResource should never throw an exception.
+          do_check_false(a1.hasResource("icon.png"));
+        } catch (e) {
+          do_check_true(false);
+        }
 
-        AddonManager.getAddonByID("addon1@tests.mozilla.org", function(newa1) {
-          do_check_eq(newa1, null);
+        AddonManager.getInstallForFile(do_get_addon("test_getresource"), function(aInstall) {
+          do_check_false(a1.hasResource("icon.png"));
+          do_check_true(aInstall.addon.hasResource("icon.png"));
 
-          do_test_finished();
+          restartManager();
+
+          AddonManager.getAddonByID("addon1@tests.mozilla.org", function(newa1) {
+            do_check_eq(newa1, null);
+
+            do_test_finished();
+          });
         });
       });
     });

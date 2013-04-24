@@ -1,45 +1,13 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Mozilla Foundation.
- * Portions created by the Initial Developer are Copyright (C) 2006
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Alexander Surkov <surkov.alexander@gmail.com> (original author)
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsXFormsFormControlsAccessible.h"
 
-#include "States.h"
 #include "nsTextEquivUtils.h"
+#include "Role.h"
+#include "States.h"
 
 using namespace mozilla::a11y;
 
@@ -48,15 +16,15 @@ using namespace mozilla::a11y;
 ////////////////////////////////////////////////////////////////////////////////
 
 nsXFormsLabelAccessible::
-  nsXFormsLabelAccessible(nsIContent *aContent, nsIWeakReference *aShell) :
-  nsXFormsAccessible(aContent, aShell)
+  nsXFormsLabelAccessible(nsIContent* aContent, DocAccessible* aDoc) :
+  nsXFormsAccessible(aContent, aDoc)
 {
 }
 
-PRUint32
+role
 nsXFormsLabelAccessible::NativeRole()
 {
-  return nsIAccessibleRole::ROLE_LABEL;
+  return roles::LABEL;
 }
 
 nsresult
@@ -70,7 +38,7 @@ void
 nsXFormsLabelAccessible::Description(nsString& aDescription)
 {
   nsTextEquivUtils::
-    GetTextEquivFromIDRefs(this, nsAccessibilityAtoms::aria_describedby,
+    GetTextEquivFromIDRefs(this, nsGkAtoms::aria_describedby,
                            aDescription);
 }
 
@@ -80,15 +48,15 @@ nsXFormsLabelAccessible::Description(nsString& aDescription)
 ////////////////////////////////////////////////////////////////////////////////
 
 nsXFormsOutputAccessible::
-  nsXFormsOutputAccessible(nsIContent *aContent, nsIWeakReference *aShell) :
-  nsXFormsAccessible(aContent, aShell)
+  nsXFormsOutputAccessible(nsIContent* aContent, DocAccessible* aDoc) :
+  nsXFormsAccessible(aContent, aDoc)
 {
 }
 
-PRUint32
+role
 nsXFormsOutputAccessible::NativeRole()
 {
-  return nsIAccessibleRole::ROLE_STATICTEXT;
+  return roles::STATICTEXT;
 }
 
 
@@ -97,32 +65,31 @@ nsXFormsOutputAccessible::NativeRole()
 ////////////////////////////////////////////////////////////////////////////////
 
 nsXFormsTriggerAccessible::
-  nsXFormsTriggerAccessible(nsIContent *aContent, nsIWeakReference *aShell) :
-  nsXFormsAccessible(aContent, aShell)
+  nsXFormsTriggerAccessible(nsIContent* aContent, DocAccessible* aDoc) :
+  nsXFormsAccessible(aContent, aDoc)
 {
 }
 
-PRUint32
+role
 nsXFormsTriggerAccessible::NativeRole()
 {
-  return nsIAccessibleRole::ROLE_PUSHBUTTON;
+  return roles::PUSHBUTTON;
 }
 
-NS_IMETHODIMP
-nsXFormsTriggerAccessible::GetValue(nsAString& aValue)
+void
+nsXFormsTriggerAccessible::Value(nsString& aValue)
 {
   aValue.Truncate();
-  return NS_OK;
 }
 
-PRUint8
+uint8_t
 nsXFormsTriggerAccessible::ActionCount()
 {
   return 1;
 }
 
 NS_IMETHODIMP
-nsXFormsTriggerAccessible::GetActionName(PRUint8 aIndex, nsAString& aName)
+nsXFormsTriggerAccessible::GetActionName(uint8_t aIndex, nsAString& aName)
 {
   if (aIndex == eAction_Click) {
     aName.AssignLiteral("press");
@@ -132,7 +99,7 @@ nsXFormsTriggerAccessible::GetActionName(PRUint8 aIndex, nsAString& aName)
 }
 
 NS_IMETHODIMP
-nsXFormsTriggerAccessible::DoAction(PRUint8 aIndex)
+nsXFormsTriggerAccessible::DoAction(uint8_t aIndex)
 {
   if (aIndex != eAction_Click)
     return NS_ERROR_INVALID_ARG;
@@ -147,27 +114,30 @@ nsXFormsTriggerAccessible::DoAction(PRUint8 aIndex)
 ////////////////////////////////////////////////////////////////////////////////
 
 nsXFormsInputAccessible::
-  nsXFormsInputAccessible(nsIContent *aContent, nsIWeakReference *aShell) :
-  nsXFormsEditableAccessible(aContent, aShell)
+  nsXFormsInputAccessible(nsIContent* aContent, DocAccessible* aDoc) :
+  nsXFormsEditableAccessible(aContent, aDoc)
 {
 }
 
-NS_IMPL_ISUPPORTS_INHERITED3(nsXFormsInputAccessible, nsAccessible, nsHyperTextAccessible, nsIAccessibleText, nsIAccessibleEditableText)
+NS_IMPL_ISUPPORTS_INHERITED2(nsXFormsInputAccessible,
+                             Accessible,
+                             nsIAccessibleText,
+                             nsIAccessibleEditableText)
 
-PRUint32
+role
 nsXFormsInputAccessible::NativeRole()
 {
-  return nsIAccessibleRole::ROLE_ENTRY;
+  return roles::ENTRY;
 }
 
-PRUint8
+uint8_t
 nsXFormsInputAccessible::ActionCount()
 {
   return 1;
 }
 
 NS_IMETHODIMP
-nsXFormsInputAccessible::GetActionName(PRUint8 aIndex, nsAString& aName)
+nsXFormsInputAccessible::GetActionName(uint8_t aIndex, nsAString& aName)
 {
   if (aIndex != eAction_Click)
     return NS_ERROR_INVALID_ARG;
@@ -177,7 +147,7 @@ nsXFormsInputAccessible::GetActionName(PRUint8 aIndex, nsAString& aName)
 }
 
 NS_IMETHODIMP
-nsXFormsInputAccessible::DoAction(PRUint8 aIndex)
+nsXFormsInputAccessible::DoAction(uint8_t aIndex)
 {
   if (aIndex != eAction_Click)
     return NS_ERROR_INVALID_ARG;
@@ -192,21 +162,21 @@ nsXFormsInputAccessible::DoAction(PRUint8 aIndex)
 ////////////////////////////////////////////////////////////////////////////////
 
 nsXFormsInputBooleanAccessible::
-  nsXFormsInputBooleanAccessible(nsIContent *aContent, nsIWeakReference *aShell) :
-  nsXFormsAccessible(aContent, aShell)
+  nsXFormsInputBooleanAccessible(nsIContent* aContent, DocAccessible* aDoc) :
+  nsXFormsAccessible(aContent, aDoc)
 {
 }
 
-PRUint32
+role
 nsXFormsInputBooleanAccessible::NativeRole()
 {
-  return nsIAccessibleRole::ROLE_CHECKBUTTON;
+  return roles::CHECKBUTTON;
 }
 
-PRUint64
+uint64_t
 nsXFormsInputBooleanAccessible::NativeState()
 {
-  PRUint64 state = nsXFormsAccessible::NativeState();
+  uint64_t state = nsXFormsAccessible::NativeState();
 
   nsAutoString value;
   nsCOMPtr<nsIDOMNode> DOMNode(do_QueryInterface(mContent));
@@ -219,14 +189,14 @@ nsXFormsInputBooleanAccessible::NativeState()
   return state;
 }
 
-PRUint8
+uint8_t
 nsXFormsInputBooleanAccessible::ActionCount()
 {
   return 1;
 }
 
 NS_IMETHODIMP
-nsXFormsInputBooleanAccessible::GetActionName(PRUint8 aIndex, nsAString& aName)
+nsXFormsInputBooleanAccessible::GetActionName(uint8_t aIndex, nsAString& aName)
 {
   if (aIndex != eAction_Click)
     return NS_ERROR_INVALID_ARG;
@@ -245,7 +215,7 @@ nsXFormsInputBooleanAccessible::GetActionName(PRUint8 aIndex, nsAString& aName)
 }
 
 NS_IMETHODIMP
-nsXFormsInputBooleanAccessible::DoAction(PRUint8 aIndex)
+nsXFormsInputBooleanAccessible::DoAction(uint8_t aIndex)
 {
   if (aIndex != eAction_Click)
     return NS_ERROR_INVALID_ARG;
@@ -260,15 +230,15 @@ nsXFormsInputBooleanAccessible::DoAction(PRUint8 aIndex)
 ////////////////////////////////////////////////////////////////////////////////
 
 nsXFormsInputDateAccessible::
-  nsXFormsInputDateAccessible(nsIContent *aContent, nsIWeakReference *aShell) :
-  nsXFormsContainerAccessible(aContent, aShell)
+  nsXFormsInputDateAccessible(nsIContent* aContent, DocAccessible* aDoc) :
+  nsXFormsContainerAccessible(aContent, aDoc)
 {
 }
 
-PRUint32
+role
 nsXFormsInputDateAccessible::NativeRole()
 {
-  return nsIAccessibleRole::ROLE_DROPLIST;
+  return roles::DROPLIST;
 }
 
 
@@ -277,27 +247,27 @@ nsXFormsInputDateAccessible::NativeRole()
 ////////////////////////////////////////////////////////////////////////////////
 
 nsXFormsSecretAccessible::
-  nsXFormsSecretAccessible(nsIContent *aContent, nsIWeakReference *aShell) :
-  nsXFormsInputAccessible(aContent, aShell)
+  nsXFormsSecretAccessible(nsIContent* aContent, DocAccessible* aDoc) :
+  nsXFormsInputAccessible(aContent, aDoc)
 {
 }
 
-PRUint32
+role
 nsXFormsSecretAccessible::NativeRole()
 {
-  return nsIAccessibleRole::ROLE_PASSWORD_TEXT;
+  return roles::PASSWORD_TEXT;
 }
 
-PRUint64
+uint64_t
 nsXFormsSecretAccessible::NativeState()
 {
   return nsXFormsInputAccessible::NativeState() | states::PROTECTED;
 }
 
-NS_IMETHODIMP
-nsXFormsSecretAccessible::GetValue(nsAString& aValue)
+void
+nsXFormsSecretAccessible::Value(nsString& aValue)
 {
-  return NS_ERROR_FAILURE;
+  aValue.Truncate();
 }
 
 
@@ -306,23 +276,23 @@ nsXFormsSecretAccessible::GetValue(nsAString& aValue)
 ////////////////////////////////////////////////////////////////////////////////
 
 nsXFormsRangeAccessible::
-  nsXFormsRangeAccessible(nsIContent *aContent, nsIWeakReference *aShell) :
-  nsXFormsAccessible(aContent, aShell)
+  nsXFormsRangeAccessible(nsIContent* aContent, DocAccessible* aDoc) :
+  nsXFormsAccessible(aContent, aDoc)
 {
 }
 
-PRUint32
+role
 nsXFormsRangeAccessible::NativeRole()
 {
-  return nsIAccessibleRole::ROLE_SLIDER;
+  return roles::SLIDER;
 }
 
-PRUint64
+uint64_t
 nsXFormsRangeAccessible::NativeState()
 {
-  PRUint64 state = nsXFormsAccessible::NativeState();
+  uint64_t state = nsXFormsAccessible::NativeState();
 
-  PRUint32 isInRange = nsIXFormsUtilityService::STATE_NOT_A_RANGE;
+  uint32_t isInRange = nsIXFormsUtilityService::STATE_NOT_A_RANGE;
   nsCOMPtr<nsIDOMNode> DOMNode(do_QueryInterface(mContent));
   nsresult rv = sXFormsService->IsInRange(DOMNode, &isInRange);
   NS_ENSURE_SUCCESS(rv, state);
@@ -343,7 +313,7 @@ nsXFormsRangeAccessible::GetMaximumValue(double *aMaximumValue)
   nsresult rv = sXFormsService->GetRangeEnd(DOMNode, value);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRInt32 error = NS_OK;
+  nsresult error = NS_OK;
   *aMaximumValue = value.ToDouble(&error);
   return error;
 }
@@ -358,7 +328,7 @@ nsXFormsRangeAccessible::GetMinimumValue(double *aMinimumValue)
   nsresult rv = sXFormsService->GetRangeStart(DOMNode, value);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRInt32 error = NS_OK;
+  nsresult error = NS_OK;
   *aMinimumValue = value.ToDouble(&error);
   return error;
 }
@@ -373,7 +343,7 @@ nsXFormsRangeAccessible::GetMinimumIncrement(double *aMinimumIncrement)
   nsresult rv = sXFormsService->GetRangeStep(DOMNode, value);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRInt32 error = NS_OK;
+  nsresult error = NS_OK;
   *aMinimumIncrement = value.ToDouble(&error);
   return error;
 }
@@ -388,7 +358,7 @@ nsXFormsRangeAccessible::GetCurrentValue(double *aCurrentValue)
   nsresult rv = sXFormsService->GetValue(DOMNode, value);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  PRInt32 error = NS_OK;
+  nsresult error = NS_OK;
   *aCurrentValue = value.ToDouble(&error);
   return error;
 }
@@ -399,17 +369,17 @@ nsXFormsRangeAccessible::GetCurrentValue(double *aCurrentValue)
 ////////////////////////////////////////////////////////////////////////////////
 
 nsXFormsSelectAccessible::
-  nsXFormsSelectAccessible(nsIContent *aContent, nsIWeakReference *aShell) :
-  nsXFormsContainerAccessible(aContent, aShell)
+  nsXFormsSelectAccessible(nsIContent* aContent, DocAccessible* aDoc) :
+  nsXFormsContainerAccessible(aContent, aDoc)
 {
 }
 
-PRUint64
+uint64_t
 nsXFormsSelectAccessible::NativeState()
 {
-  PRUint64 state = nsXFormsContainerAccessible::NativeState();
+  uint64_t state = nsXFormsContainerAccessible::NativeState();
 
-  PRUint32 isInRange = nsIXFormsUtilityService::STATE_NOT_A_RANGE;
+  uint32_t isInRange = nsIXFormsUtilityService::STATE_NOT_A_RANGE;
   nsCOMPtr<nsIDOMNode> DOMNode(do_QueryInterface(mContent));
   nsresult rv = sXFormsService->IsInRange(DOMNode, &isInRange);
   NS_ENSURE_SUCCESS(rv, state);
@@ -426,22 +396,21 @@ nsXFormsSelectAccessible::NativeState()
 ////////////////////////////////////////////////////////////////////////////////
 
 nsXFormsChoicesAccessible::
-  nsXFormsChoicesAccessible(nsIContent *aContent, nsIWeakReference *aShell) :
-  nsXFormsAccessible(aContent, aShell)
+  nsXFormsChoicesAccessible(nsIContent* aContent, DocAccessible* aDoc) :
+  nsXFormsAccessible(aContent, aDoc)
 {
 }
 
-PRUint32
+role
 nsXFormsChoicesAccessible::NativeRole()
 {
-  return nsIAccessibleRole::ROLE_GROUPING;
+  return roles::GROUPING;
 }
 
-NS_IMETHODIMP
-nsXFormsChoicesAccessible::GetValue(nsAString& aValue)
+void
+nsXFormsChoicesAccessible::Value(nsString& aValue)
 {
   aValue.Truncate();
-  return NS_OK;
 }
 
 void
@@ -456,15 +425,15 @@ nsXFormsChoicesAccessible::CacheChildren()
 ////////////////////////////////////////////////////////////////////////////////
 
 nsXFormsSelectFullAccessible::
-  nsXFormsSelectFullAccessible(nsIContent *aContent, nsIWeakReference *aShell) :
-  nsXFormsSelectableAccessible(aContent, aShell)
+  nsXFormsSelectFullAccessible(nsIContent* aContent, DocAccessible* aDoc) :
+  nsXFormsSelectableAccessible(aContent, aDoc)
 {
 }
 
-PRUint32
+role
 nsXFormsSelectFullAccessible::NativeRole()
 {
-  return nsIAccessibleRole::ROLE_GROUPING;
+  return roles::GROUPING;
 }
 
 void
@@ -479,21 +448,21 @@ nsXFormsSelectFullAccessible::CacheChildren()
 ////////////////////////////////////////////////////////////////////////////////
 
 nsXFormsItemCheckgroupAccessible::
-  nsXFormsItemCheckgroupAccessible(nsIContent *aContent, nsIWeakReference *aShell) :
-  nsXFormsSelectableItemAccessible(aContent, aShell)
+  nsXFormsItemCheckgroupAccessible(nsIContent* aContent, DocAccessible* aDoc) :
+  nsXFormsSelectableItemAccessible(aContent, aDoc)
 {
 }
 
-PRUint32
+role
 nsXFormsItemCheckgroupAccessible::NativeRole()
 {
-  return nsIAccessibleRole::ROLE_CHECKBUTTON;
+  return roles::CHECKBUTTON;
 }
 
-PRUint64
+uint64_t
 nsXFormsItemCheckgroupAccessible::NativeState()
 {
-  PRUint64 state = nsXFormsSelectableItemAccessible::NativeState();
+  uint64_t state = nsXFormsSelectableItemAccessible::NativeState();
 
   if (IsSelected())
     state |= states::CHECKED;
@@ -502,7 +471,7 @@ nsXFormsItemCheckgroupAccessible::NativeState()
 }
 
 NS_IMETHODIMP
-nsXFormsItemCheckgroupAccessible::GetActionName(PRUint8 aIndex, nsAString& aName)
+nsXFormsItemCheckgroupAccessible::GetActionName(uint8_t aIndex, nsAString& aName)
 {
   if (aIndex != eAction_Click)
     return NS_ERROR_INVALID_ARG;
@@ -521,21 +490,21 @@ nsXFormsItemCheckgroupAccessible::GetActionName(PRUint8 aIndex, nsAString& aName
 ////////////////////////////////////////////////////////////////////////////////
 
 nsXFormsItemRadiogroupAccessible::
-  nsXFormsItemRadiogroupAccessible(nsIContent *aContent, nsIWeakReference *aShell) :
-  nsXFormsSelectableItemAccessible(aContent, aShell)
+  nsXFormsItemRadiogroupAccessible(nsIContent* aContent, DocAccessible* aDoc) :
+  nsXFormsSelectableItemAccessible(aContent, aDoc)
 {
 }
 
-PRUint32
+role
 nsXFormsItemRadiogroupAccessible::NativeRole()
 {
-  return nsIAccessibleRole::ROLE_RADIOBUTTON;
+  return roles::RADIOBUTTON;
 }
 
-PRUint64
+uint64_t
 nsXFormsItemRadiogroupAccessible::NativeState()
 {
-  PRUint64 state = nsXFormsSelectableItemAccessible::NativeState();
+  uint64_t state = nsXFormsSelectableItemAccessible::NativeState();
 
   if (IsSelected())
     state |= states::CHECKED;
@@ -544,7 +513,7 @@ nsXFormsItemRadiogroupAccessible::NativeState()
 }
 
 NS_IMETHODIMP
-nsXFormsItemRadiogroupAccessible::GetActionName(PRUint8 aIndex, nsAString& aName)
+nsXFormsItemRadiogroupAccessible::GetActionName(uint8_t aIndex, nsAString& aName)
 {
   if (aIndex != eAction_Click)
     return NS_ERROR_INVALID_ARG;
@@ -559,23 +528,23 @@ nsXFormsItemRadiogroupAccessible::GetActionName(PRUint8 aIndex, nsAString& aName
 ////////////////////////////////////////////////////////////////////////////////
 
 nsXFormsSelectComboboxAccessible::
-  nsXFormsSelectComboboxAccessible(nsIContent *aContent, nsIWeakReference *aShell) :
-  nsXFormsSelectableAccessible(aContent, aShell)
+  nsXFormsSelectComboboxAccessible(nsIContent* aContent, DocAccessible* aDoc) :
+  nsXFormsSelectableAccessible(aContent, aDoc)
 {
 }
 
-PRUint32
+role
 nsXFormsSelectComboboxAccessible::NativeRole()
 {
-  return nsIAccessibleRole::ROLE_COMBOBOX;
+  return roles::COMBOBOX;
 }
 
-PRUint64
+uint64_t
 nsXFormsSelectComboboxAccessible::NativeState()
 {
-  PRUint64 state = nsXFormsSelectableAccessible::NativeState();
+  uint64_t state = nsXFormsSelectableAccessible::NativeState();
 
-  PRBool isOpen = PR_FALSE;
+  bool isOpen = false;
   nsCOMPtr<nsIDOMNode> DOMNode(do_QueryInterface(mContent));
   nsresult rv = sXFormsService->IsDropmarkerOpen(DOMNode, &isOpen);
   NS_ENSURE_SUCCESS(rv, state);
@@ -585,13 +554,19 @@ nsXFormsSelectComboboxAccessible::NativeState()
   else
     state |= states::COLLAPSED;
 
-  return state | states::HASPOPUP | states::FOCUSABLE;
+  return state | states::HASPOPUP;
 }
 
-PRBool
-nsXFormsSelectComboboxAccessible::GetAllowsAnonChildAccessibles()
+uint64_t
+nsXFormsSelectComboboxAccessible::NativeInteractiveState() const
 {
-  return PR_TRUE;
+  return NativelyUnavailable() ? states::UNAVAILABLE : states::FOCUSABLE;
+}
+
+bool
+nsXFormsSelectComboboxAccessible::CanHaveAnonChildren()
+{
+  return true;
 }
 
 
@@ -600,34 +575,36 @@ nsXFormsSelectComboboxAccessible::GetAllowsAnonChildAccessibles()
 ////////////////////////////////////////////////////////////////////////////////
 
 nsXFormsItemComboboxAccessible::
-  nsXFormsItemComboboxAccessible(nsIContent *aContent, nsIWeakReference *aShell) :
-  nsXFormsSelectableItemAccessible(aContent, aShell)
+  nsXFormsItemComboboxAccessible(nsIContent* aContent, DocAccessible* aDoc) :
+  nsXFormsSelectableItemAccessible(aContent, aDoc)
 {
 }
 
-PRUint32
+role
 nsXFormsItemComboboxAccessible::NativeRole()
 {
-  return nsIAccessibleRole::ROLE_LISTITEM;
+  return roles::LISTITEM;
 }
 
-PRUint64
+uint64_t
 nsXFormsItemComboboxAccessible::NativeState()
 {
-  PRUint64 state = nsXFormsSelectableItemAccessible::NativeState();
-
-  if (state & states::UNAVAILABLE)
-    return state;
-
-  state |= states::SELECTABLE;
+  uint64_t state = nsXFormsSelectableItemAccessible::NativeState();
   if (IsSelected())
     state |= states::SELECTED;
 
   return state;
 }
 
+uint64_t
+nsXFormsItemComboboxAccessible::NativeInteractiveState() const
+{
+  return NativelyUnavailable() ?
+    states::UNAVAILABLE : states::FOCUSABLE | states::SELECTABLE;
+}
+
 NS_IMETHODIMP
-nsXFormsItemComboboxAccessible::GetActionName(PRUint8 aIndex, nsAString& aName)
+nsXFormsItemComboboxAccessible::GetActionName(uint8_t aIndex, nsAString& aName)
 {
   if (aIndex != eAction_Click)
     return NS_ERROR_INVALID_ARG;

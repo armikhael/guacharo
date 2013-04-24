@@ -1,41 +1,8 @@
 /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
  * vim: sw=4 ts=4 et :
- * ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is mozilla.org code.
- *
- * The Initial Developer of the Original Code is
- * Netscape Communications Corporation.
- * Portions created by the Initial Developer are Copyright (C) 1998
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *   Chris Jones <jones.chris.g@gmail.com>
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either of the GNU General Public License Version 2 or later (the "GPL"),
- * or the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
- * ***** END LICENSE BLOCK ***** */
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "TestHarness.h"
 
@@ -133,9 +100,9 @@ MutexContention()
     gLock1 = new Mutex("lock1");
     // PURPOSELY not checking for OOM.  YAY!
 
-    PRThread* t1 = spawn(MutexContention_thread, nsnull);
-    PRThread* t2 = spawn(MutexContention_thread, nsnull);
-    PRThread* t3 = spawn(MutexContention_thread, nsnull);
+    PRThread* t1 = spawn(MutexContention_thread, nullptr);
+    PRThread* t2 = spawn(MutexContention_thread, nullptr);
+    PRThread* t3 = spawn(MutexContention_thread, nullptr);
 
     PR_JoinThread(t1);
     PR_JoinThread(t2);
@@ -166,9 +133,9 @@ MonitorContention()
 {
     gMon1 = new Monitor("mon1");
 
-    PRThread* t1 = spawn(MonitorContention_thread, nsnull);
-    PRThread* t2 = spawn(MonitorContention_thread, nsnull);
-    PRThread* t3 = spawn(MonitorContention_thread, nsnull);
+    PRThread* t1 = spawn(MonitorContention_thread, nullptr);
+    PRThread* t2 = spawn(MonitorContention_thread, nullptr);
+    PRThread* t3 = spawn(MonitorContention_thread, nullptr);
 
     PR_JoinThread(t1);
     PR_JoinThread(t2);
@@ -203,9 +170,9 @@ MonitorContention2()
 {
     gMon2 = new Monitor("mon1");
 
-    PRThread* t1 = spawn(MonitorContention2_thread, nsnull);
-    PRThread* t2 = spawn(MonitorContention2_thread, nsnull);
-    PRThread* t3 = spawn(MonitorContention2_thread, nsnull);
+    PRThread* t1 = spawn(MonitorContention2_thread, nullptr);
+    PRThread* t2 = spawn(MonitorContention2_thread, nullptr);
+    PRThread* t3 = spawn(MonitorContention2_thread, nullptr);
 
     PR_JoinThread(t1);
     PR_JoinThread(t2);
@@ -218,7 +185,7 @@ MonitorContention2()
 
 
 static Monitor* gMon3;
-static PRInt32 gMonFirst;
+static int32_t gMonFirst;
 
 static void
 MonitorSyncSanity_thread(void* /*arg*/)
@@ -244,10 +211,10 @@ MonitorSyncSanity()
 {
     gMon3 = new Monitor("monitor::syncsanity");
    
-    for (PRInt32 i = 0; i < 10000; ++i) {
+    for (int32_t i = 0; i < 10000; ++i) {
         gMonFirst = 1;
-        PRThread* ping = spawn(MonitorSyncSanity_thread, nsnull);
-        PRThread* pong = spawn(MonitorSyncSanity_thread, nsnull);
+        PRThread* ping = spawn(MonitorSyncSanity_thread, nullptr);
+        PRThread* pong = spawn(MonitorSyncSanity_thread, nullptr);
         PR_JoinThread(ping);
         PR_JoinThread(pong);
     }
@@ -262,7 +229,7 @@ MonitorSyncSanity()
 //
 static Mutex* gCvlock1;
 static CondVar* gCv1;
-static PRInt32 gCvFirst;
+static int32_t gCvFirst;
 
 static void
 CondVarSanity_thread(void* /*arg*/)
@@ -285,10 +252,10 @@ CondVarSanity()
     gCvlock1 = new Mutex("cvlock1");
     gCv1 = new CondVar(*gCvlock1, "cvlock1");
 
-    for (PRInt32 i = 0; i < 10000; ++i) {
+    for (int32_t i = 0; i < 10000; ++i) {
         gCvFirst = 1;
-        PRThread* ping = spawn(CondVarSanity_thread, nsnull);
-        PRThread* pong = spawn(CondVarSanity_thread, nsnull);
+        PRThread* ping = spawn(CondVarSanity_thread, nullptr);
+        PRThread* pong = spawn(CondVarSanity_thread, nullptr);
         PR_JoinThread(ping);
         PR_JoinThread(pong);
     }

@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 #ifdef DEF
 DEF(This)
 DEF(is)
@@ -121,14 +125,14 @@ int print_status() {
  * following sections as part of the PT_TLS segment. */
 __thread int foo[1024];
 
-__attribute__((constructor)) void end_test() {
+void end_test() {
     static int count = 0;
     /* Only exit when both constructors have been called */
     if (++count == 2)
         ret = 0;
 }
 
-__attribute__((constructor)) void test() {
+void test() {
     int i = 0, j = 0;
 #define DEF_(a,i,w) \
     if (a[i++] != str_ ## w) return;

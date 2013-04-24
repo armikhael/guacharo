@@ -15,26 +15,41 @@
 **/
 
 var SimpleTest = { };
-
 var parentRunner = null;
-if (parent) {
-    parentRunner = parent.TestRunner;
-    if (!parentRunner && parent.wrappedJSObject) {
-        parentRunner = parent.wrappedJSObject.TestRunner;
-    }
-}
 
-// running in e10s build and need to use IPC?
-var ipcMode = false;
-if (parentRunner) {
-    ipcMode = parentRunner.ipcMode;
-} else if (typeof SpecialPowers != 'undefined') {
-    ipcMode = SpecialPowers.hasContentProcesses();
-}
+// In normal test runs, the window that has a TestRunner in its parent is
+// the primary window.  In single test runs, if there is no parent and there
+// is no opener then it is the primary window.
+var isPrimaryTestWindow = !!parent.TestRunner || (parent == window && !opener);
+
+// Finds the TestRunner for this test run and the SpecialPowers object (in
+// case it is not defined) from a parent/opener window.
+//
+// Finding the SpecialPowers object is needed when we have ChromePowers in
+// harness.xul and we need SpecialPowers in the iframe, and also for tests
+// like test_focus.xul where we open a window which opens another window which
+// includes SimpleTest.js.
+(function() {
+    function ancestor(w) {
+        return w.parent != w ? w.parent : w.opener;
+    }
+
+    var w = ancestor(window);
+    while (w && (!parentRunner || !window.SpecialPowers)) {
+        if (!parentRunner) {
+            parentRunner = w.TestRunner;
+            if (!parentRunner && w.wrappedJSObject) {
+                parentRunner = w.wrappedJSObject.TestRunner;
+            }
+        }
+        if (!window.SpecialPowers) {
+            window.SpecialPowers = w.SpecialPowers;
+        }
+        w = ancestor(w);
+    }
+})();
 
 /* Helper functions pulled out of various MochiKit modules */
-var reprRegistry = [];
-
 if (typeof(repr) == 'undefined') {
     function repr(o) {
         if (typeof(o) == "undefined") {
@@ -48,17 +63,16 @@ if (typeof(repr) == 'undefined') {
             } else if (typeof(o.repr) == 'function' && o.repr != arguments.callee) {
                 return o.repr();
             }
-            return reprRegistry.match(o);
-        } catch (e) {
-            try {
-                if (typeof(o.NAME) == 'string' && (
-                        o.toString == Function.prototype.toString ||
-                        o.toString == Object.prototype.toString
-                    )) {
-                    return o.NAME;
-                }
-            } catch (e) {
+       } catch (e) {
+       }
+       try {
+            if (typeof(o.NAME) == 'string' && (
+                    o.toString == Function.prototype.toString ||
+                    o.toString == Object.prototype.toString
+                )) {
+                return o.NAME;
             }
+        } catch (e) {
         }
         try {
             var ostring = (o + "");
@@ -226,15 +240,22 @@ SimpleTest.ok = function (condition, name, diag) {
 **/
 SimpleTest.is = function (a, b, name) {
     var pass = (a == b);
-    var diag = pass ? repr(a) + " should equal " + repr(b)
-                    : "got " + repr(a) + ", expected " + repr(b)
+    var diag = pass ? "" : "got " + repr(a) + ", expected " + repr(b)
     SimpleTest.ok(pass, name, diag);
 };
 
 SimpleTest.isnot = function (a, b, name) {
     var pass = (a != b);
-    var diag = pass ? repr(a) + " should not equal " + repr(b)
-                    : "didn't expect " + repr(a) + ", but got it";
+    var diag = pass ? "" : "didn't expect " + repr(a) + ", but got it";
+    SimpleTest.ok(pass, name, diag);
+};
+
+/**
+ * Roughly equivalent to ok(a===b, name)
+**/
+SimpleTest.ise = function (a, b, name) {
+    var pass = (a === b);
+    var diag = pass ? "" : "got " + repr(a) + ", strictly expected " + repr(b)
     SimpleTest.ok(pass, name, diag);
 };
 
@@ -260,6 +281,7 @@ SimpleTest._logResult = function(test, passString, failString) {
     var msg = [resultString, url, diagnostic].join(" | ");
     if (parentRunner) {
         if (isError) {
+            parentRunner.addFailedTest(url);
             parentRunner.error(msg);
         } else {
             parentRunner.log(msg);
@@ -270,7 +292,7 @@ SimpleTest._logResult = function(test, passString, failString) {
 };
 
 SimpleTest.info = function(name, message) {
-    this._logResult({result:true, name:name, diag:message}, "TEST-INFO");
+    SimpleTest._logResult({result:true, name:name, diag:message}, "TEST-INFO");
 };
 
 /**
@@ -299,11 +321,6 @@ SimpleTest.report = function () {
     var passed = 0;
     var failed = 0;
     var todo = 0;
-
-    // Report tests which did not actually check anything.
-    if (SimpleTest._tests.length == 0)
-      // ToDo: Do s/todo/ok/ when all the tests are fixed. (Bug 483407)
-      SimpleTest.todo(false, "[SimpleTest.report()] No checks actually run.");
 
     var tallyAndCreateDiv = function (test) {
             var cls, msg, div;
@@ -452,6 +469,7 @@ SimpleTest.requestLongerTimeout = function (factor) {
 SimpleTest.waitForFocus_started = false;
 SimpleTest.waitForFocus_loaded = false;
 SimpleTest.waitForFocus_focused = false;
+SimpleTest._pendingWaitForFocusCount = 0;
 
 /**
  * If the page is not yet loaded, waits for the load event. In addition, if
@@ -472,59 +490,29 @@ SimpleTest.waitForFocus_focused = false;
  *        true if targetWindow.location is 'about:blank'. Defaults to false
  */
 SimpleTest.waitForFocus = function (callback, targetWindow, expectBlankPage) {
+    SimpleTest._pendingWaitForFocusCount++;
     if (!targetWindow)
       targetWindow = window;
-
-    if (ipcMode) {
-      var domutils = targetWindow.QueryInterface(Components.interfaces.nsIInterfaceRequestor).
-                     getInterface(Components.interfaces.nsIDOMWindowUtils);
-
-      //TODO: make this support scenarios where we run test standalone and not inside of TestRunner only
-      if (parent && parent.ipcWaitForFocus) {
-          parent.contentAsyncEvent("waitForFocus", {"callback":callback, "targetWindow":domutils.outerWindowID});
-      }
-      return;
-    }
 
     SimpleTest.waitForFocus_started = false;
     expectBlankPage = !!expectBlankPage;
 
-    netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
-    var fm = Components.classes["@mozilla.org/focus-manager;1"].
-                        getService(Components.interfaces.nsIFocusManager);
-
-    var childTargetWindow = { };
-    fm.getFocusedElementForWindow(targetWindow, true, childTargetWindow);
+    var childTargetWindow = {};
+    SpecialPowers.getFocusedElementForWindow(targetWindow, true, childTargetWindow);
     childTargetWindow = childTargetWindow.value;
 
     function info(msg) {
         SimpleTest.info(msg);
     }
-
-    function debugFocusLog(prefix) {
-        netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
-
-        var baseWindow = targetWindow.QueryInterface(Components.interfaces.nsIInterfaceRequestor)
-                                     .getInterface(Components.interfaces.nsIWebNavigation)
-                                     .QueryInterface(Components.interfaces.nsIBaseWindow);
-        info(prefix + " -- loaded: " + targetWindow.document.readyState +
-           " active window: " +
-               (fm.activeWindow ? "(" + fm.activeWindow + ") " + fm.activeWindow.location : "<no window active>") +
-           " focused window: " +
-               (fm.focusedWindow ? "(" + fm.focusedWindow + ") " + fm.focusedWindow.location : "<no window focused>") +
-           " desired window: (" + targetWindow + ") " + targetWindow.location +
-           " child window: (" + childTargetWindow + ") " + childTargetWindow.location +
-           " docshell visible: " + baseWindow.visibility);
+    function getHref(aWindow) {
+      return SpecialPowers.getPrivilegedProps(aWindow, 'location.href');
     }
 
-    debugFocusLog("before wait for focus");
-
     function maybeRunTests() {
-        debugFocusLog("maybe run tests <load:" +
-                      SimpleTest.waitForFocus_loaded + ", focus:" + SimpleTest.waitForFocus_focused + ">");
         if (SimpleTest.waitForFocus_loaded &&
             SimpleTest.waitForFocus_focused &&
             !SimpleTest.waitForFocus_started) {
+            SimpleTest._pendingWaitForFocusCount--;
             SimpleTest.waitForFocus_started = true;
             setTimeout(callback, 0, targetWindow);
         }
@@ -532,8 +520,6 @@ SimpleTest.waitForFocus = function (callback, targetWindow, expectBlankPage) {
 
     function waitForEvent(event) {
         try {
-            debugFocusLog("waitForEvent called <type:" + event.type + ", target" + event.target + ">");
-
             // Check to make sure that this isn't a load event for a blank or
             // non-blank page that wasn't desired.
             if (event.type == "load" && (expectBlankPage != (event.target.location == "about:blank")))
@@ -555,7 +541,7 @@ SimpleTest.waitForFocus = function (callback, targetWindow, expectBlankPage) {
     // to load its content, and we want to skip over any intermediate blank
     // pages that load. This issue is described in bug 554873.
     SimpleTest.waitForFocus_loaded =
-        (expectBlankPage == (targetWindow.location == "about:blank")) &&
+        (expectBlankPage == (getHref(targetWindow) == "about:blank")) &&
         targetWindow.document.readyState == "complete";
     if (!SimpleTest.waitForFocus_loaded) {
         info("must wait for load");
@@ -564,22 +550,21 @@ SimpleTest.waitForFocus = function (callback, targetWindow, expectBlankPage) {
 
     // Check if the desired window is already focused.
     var focusedChildWindow = { };
-    if (fm.activeWindow) {
-        fm.getFocusedElementForWindow(fm.activeWindow, true, focusedChildWindow);
+    if (SpecialPowers.activeWindow()) {
+        SpecialPowers.getFocusedElementForWindow(SpecialPowers.activeWindow(), true, focusedChildWindow);
         focusedChildWindow = focusedChildWindow.value;
     }
 
     // If this is a child frame, ensure that the frame is focused.
     SimpleTest.waitForFocus_focused = (focusedChildWindow == childTargetWindow);
     if (SimpleTest.waitForFocus_focused) {
-        info("already focused");
         // If the frame is already focused and loaded, call the callback directly.
         maybeRunTests();
     }
     else {
         info("must wait for focus");
         childTargetWindow.addEventListener("focus", waitForEvent, true);
-        childTargetWindow.focus();
+        SpecialPowers.focus(childTargetWindow);
     }
 };
 
@@ -611,25 +596,11 @@ SimpleTest.__defineGetter__("_waitForClipboardMonotonicCounter", function () {
 });
 SimpleTest.waitForClipboard = function(aExpectedStringOrValidatorFn, aSetupFn,
                                        aSuccessFn, aFailureFn, aFlavor) {
-    if (ipcMode) {
-      //TODO: support waitForClipboard via events to chrome
-      dump("E10S_TODO: bug 573735 addresses adding support for this");
-      return;
-    }
-
-    netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
-
-    var cbSvc = Components.classes["@mozilla.org/widget/clipboard;1"].
-                getService(Components.interfaces.nsIClipboard);
-
     var requestedFlavor = aFlavor || "text/unicode";
-
-    function dataToString(aData)
-      aData.QueryInterface(Components.interfaces.nsISupportsString).data;
 
     // Build a default validator function for common string input.
     var inputValidatorFn = typeof(aExpectedStringOrValidatorFn) == "string"
-        ? function(aData) aData && dataToString(aData) == aExpectedStringOrValidatorFn
+        ? function(aData) aData == aExpectedStringOrValidatorFn
         : aExpectedStringOrValidatorFn;
 
     // reset for the next use
@@ -638,8 +609,6 @@ SimpleTest.waitForClipboard = function(aExpectedStringOrValidatorFn, aSetupFn,
     }
 
     function wait(validatorFn, successFn, failureFn, flavor) {
-        netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
-
         if (++SimpleTest.waitForClipboard_polls > 50) {
             // Log the failure.
             SimpleTest.ok(false, "Timed out while polling clipboard for pasted data.");
@@ -648,15 +617,7 @@ SimpleTest.waitForClipboard = function(aExpectedStringOrValidatorFn, aSetupFn,
             return;
         }
 
-        var xferable = Components.classes["@mozilla.org/widget/transferable;1"].
-                       createInstance(Components.interfaces.nsITransferable);
-        xferable.addDataFlavor(flavor);
-        cbSvc.getData(xferable, cbSvc.kGlobalClipboard);
-        var data = {};
-        try {
-            xferable.getTransferData(flavor, data, {});
-        } catch (e) {}
-        data = data.value || null;
+        var data = SpecialPowers.getClipboardData(flavor);
 
         if (validatorFn(data)) {
             // Don't show the success message when waiting for preExpectedVal
@@ -674,10 +635,8 @@ SimpleTest.waitForClipboard = function(aExpectedStringOrValidatorFn, aSetupFn,
     // First we wait for a known value different from the expected one.
     var preExpectedVal = SimpleTest._waitForClipboardMonotonicCounter +
                          "-waitForClipboard-known-value";
-    var cbHelperSvc = Components.classes["@mozilla.org/widget/clipboardhelper;1"].
-                      getService(Components.interfaces.nsIClipboardHelper);
-    cbHelperSvc.copyString(preExpectedVal);
-    wait(function(aData) aData && dataToString(aData) == preExpectedVal,
+    SpecialPowers.clipboardCopyString(preExpectedVal);
+    wait(function(aData) aData  == preExpectedVal,
          function() {
            // Call the original setup fn
            aSetupFn();
@@ -690,25 +649,8 @@ SimpleTest.waitForClipboard = function(aExpectedStringOrValidatorFn, aSetupFn,
  * working (or finish).
  */
 SimpleTest.executeSoon = function(aFunc) {
-    // Once SpecialPowers is available in chrome mochitests, we can replace the
-    // body of this function with a call to SpecialPowers.executeSoon().
-    if ("Components" in window && "classes" in window.Components) {
-        try {
-            netscape.security.PrivilegeManager
-              .enablePrivilege("UniversalXPConnect");
-            var tm = Components.classes["@mozilla.org/thread-manager;1"]
-                       .getService(Components.interfaces.nsIThreadManager);
-
-            tm.mainThread.dispatch({
-                run: function() {
-                    aFunc();
-                }
-            }, Components.interfaces.nsIThread.DISPATCH_NORMAL);
-            return;
-        } catch (ex) {
-            // If the above fails (most likely because of enablePrivilege
-            // failing), fall through to the setTimeout path.
-        }
+    if ("SpecialPowers" in window) {
+        return SpecialPowers.executeSoon(aFunc, window);
     }
     setTimeout(aFunc, 0);
 }
@@ -721,6 +663,22 @@ SimpleTest.finish = function () {
     if (SimpleTest._expectingUncaughtException) {
         SimpleTest.ok(false, "expectUncaughtException was called but no uncaught exception was detected!");
     }
+    if (SimpleTest._pendingWaitForFocusCount != 0) {
+        SimpleTest.is(SimpleTest._pendingWaitForFocusCount, 0,
+                      "[SimpleTest.finish()] waitForFocus() was called a "
+                      + "different number of times from the number of "
+                      + "callbacks run.  Maybe the test terminated "
+                      + "prematurely -- be sure to use "
+                      + "SimpleTest.waitForExplicitFinish().");
+    }
+    if (SimpleTest._tests.length == 0) {
+        SimpleTest.ok(false, "[SimpleTest.finish()] No checks actually run. "
+                           + "(You need to call ok(), is(), or similar "
+                           + "functions at least once.  Make sure you use "
+                           + "SimpleTest.waitForExplicitFinish() if you need "
+                           + "it.)");
+    }
+
     if (parentRunner) {
         /* We're running in an iframe, and the parent has a TestRunner */
         parentRunner.testFinished(SimpleTest._tests);
@@ -744,16 +702,52 @@ SimpleTest.expectChildProcessCrash = function () {
  * Indicates to the test framework that the next uncaught exception during
  * the test is expected, and should not cause a test failure.
  */
-SimpleTest.expectUncaughtException = function () {
-    SimpleTest._expectingUncaughtException = true;
+SimpleTest.expectUncaughtException = function (aExpecting) {
+    SimpleTest._expectingUncaughtException = aExpecting === void 0 || !!aExpecting;
 };
 
+/**
+ * Returns whether the test has indicated that it expects an uncaught exception
+ * to occur.
+ */
+SimpleTest.isExpectingUncaughtException = function () {
+    return SimpleTest._expectingUncaughtException;
+};
 
-addLoadEvent(function() {
-    if (SimpleTest._stopOnLoad) {
-        SimpleTest.finish();
-    }
-});
+/**
+ * Indicates to the test framework that all of the uncaught exceptions
+ * during the test are known problems that should be fixed in the future,
+ * but which should not cause the test to fail currently.
+ */
+SimpleTest.ignoreAllUncaughtExceptions = function (aIgnoring) {
+    SimpleTest._ignoringAllUncaughtExceptions = aIgnoring === void 0 || !!aIgnoring;
+};
+
+/**
+ * Returns whether the test has indicated that all uncaught exceptions should be
+ * ignored.
+ */
+SimpleTest.isIgnoringAllUncaughtExceptions = function () {
+    return SimpleTest._ignoringAllUncaughtExceptions;
+};
+
+/**
+ * Resets any state this SimpleTest object has.  This is important for
+ * browser chrome mochitests, which reuse the same SimpleTest object
+ * across a run.
+ */
+SimpleTest.reset = function () {
+    SimpleTest._ignoringAllUncaughtExceptions = false;
+    SimpleTest._expectingUncaughtException = false;
+};
+
+if (isPrimaryTestWindow) {
+    addLoadEvent(function() {
+        if (SimpleTest._stopOnLoad) {
+            SimpleTest.finish();
+        }
+    });
+}
 
 //  --------------- Test.Builder/Test.More isDeeply() -----------------
 
@@ -957,6 +951,7 @@ SimpleTest.isa = function (object, clas) {
 var ok = SimpleTest.ok;
 var is = SimpleTest.is;
 var isnot = SimpleTest.isnot;
+var ise = SimpleTest.ise;
 var todo = SimpleTest.todo;
 var todo_is = SimpleTest.todo_is;
 var todo_isnot = SimpleTest.todo_isnot;
@@ -965,22 +960,20 @@ var info = SimpleTest.info;
 
 var gOldOnError = window.onerror;
 window.onerror = function simpletestOnerror(errorMsg, url, lineNumber) {
-    var funcIdentifier = "[SimpleTest/SimpleTest.js, window.onerror]";
-
     // Log the message.
     // XXX Chrome mochitests sometimes trigger this window.onerror handler,
-    // but there are a number of uncaught JS exceptions from those tests
-    // currently, so we can't log them as errors just yet.  For now, when
-    // not in a plain mochitest, just dump it so that the error is visible but
-    // doesn't cause a test failure.  See bug 652494.
-    var message = "An error occurred: " + errorMsg + " at " + url + ":" + lineNumber;
-    var isPlainMochitest = window.location.protocol != "chrome:";
+    // but there are a number of uncaught JS exceptions from those tests.
+    // For now, for tests that self identify as having unintentional uncaught
+    // exceptions, just dump it so that the error is visible but doesn't cause
+    // a test failure.  See bug 652494.
     var isExpected = !!SimpleTest._expectingUncaughtException;
-    if (isPlainMochitest) {
-        SimpleTest.ok(isExpected, funcIdentifier, message);
+    var message = (isExpected ? "expected " : "") + "uncaught exception";
+    var error = errorMsg + " at " + url + ":" + lineNumber;
+    if (!SimpleTest._ignoringAllUncaughtExceptions) {
+        SimpleTest.ok(isExpected, message, error);
         SimpleTest._expectingUncaughtException = false;
     } else {
-        SimpleTest.info(funcIdentifier + " " + message);
+        SimpleTest.todo(false, message + ": " + error);
     }
     // There is no Components.stack.caller to log. (See bug 511888.)
 
