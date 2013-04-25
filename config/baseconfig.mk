@@ -1,9 +1,9 @@
 INCLUDED_AUTOCONF_MK = 1
 
-includedir := $(includedir)/$(MOZ_APP_NAME)
-idldir = $(datadir)/idl/$(MOZ_APP_NAME)
-installdir = $(libdir)/$(MOZ_APP_NAME)
-sdkdir = $(libdir)/$(MOZ_APP_NAME)-devel
+includedir := $(includedir)/$(MOZ_APP_NAME)-$(MOZ_APP_VERSION)
+idldir = $(datadir)/idl/$(MOZ_APP_NAME)-$(MOZ_APP_VERSION)
+installdir = $(libdir)/$(MOZ_APP_NAME)-$(MOZ_APP_VERSION)
+sdkdir = $(libdir)/$(MOZ_APP_NAME)-devel-$(MOZ_APP_VERSION)
 MOZILLA_SRCDIR = $(topsrcdir)/mozilla
 MOZDEPTH = $(DEPTH)/mozilla
 DIST = $(MOZDEPTH)/dist

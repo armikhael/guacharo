@@ -363,7 +363,6 @@ Service::getSingleton()
     return gService;
   }
 
-#if 0
   // Ensure that we are using the same version of SQLite that we compiled with
   // or newer.  Our configure check ensures we are using a new enough version
   // at compile time.
@@ -379,7 +378,6 @@ Service::getSingleton()
     }
     ::PR_Abort();
   }
-#endif
 
   gService = new Service();
   if (gService) {
@@ -538,8 +536,7 @@ static int sqliteMemSize(void *p)
 
 static int sqliteMemRoundup(int n)
 {
-  if (je_malloc_usable_size_in_advance)
-  	n = je_malloc_usable_size_in_advance(n);
+  n = je_malloc_usable_size_in_advance(n);
 
   // jemalloc can return blocks of size 2 and 4, but SQLite requires that all
   // allocations be 8-aligned.  So we round up sub-8 requests to 8.  This

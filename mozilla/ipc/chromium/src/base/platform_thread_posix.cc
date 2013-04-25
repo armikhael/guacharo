@@ -9,7 +9,7 @@
 
 #if defined(OS_MACOSX)
 #include <mach/mach.h>
-#elif defined(OS_LINUX) || defined(__GLIBC__) || defined(__GNU__)
+#elif defined(OS_LINUX)
 #include <sys/syscall.h>
 #if !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__) && !defined(__DragonFly__)
 #include <sys/prctl.h>
@@ -42,11 +42,7 @@ PlatformThreadId PlatformThread::CurrentId() {
   // TODO(BSD): find a better thread ID
   return (intptr_t)(pthread_self());
 #elif defined(OS_LINUX)
-#ifdef __NR_gettid
   return syscall(__NR_gettid);
-#else
-  return getpid();
-#endif
 #endif
 }
 

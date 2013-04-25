@@ -43,7 +43,6 @@ enum {
 #define BITS_PER_HEX_DIGIT      4
 
 static const char kUserPref[] = "user_pref";
-static const char kLockPref[] = "lockPref";
 static const char kPref[] = "pref";
 static const char kTrue[] = "true";
 static const char kFalse[] = "false";
@@ -130,7 +129,7 @@ pref_DoCallback(PrefParseState *ps)
     default:
         break;
     }
-    (*ps->reader)(ps->closure, ps->lb, value, ps->vtype, ps->fdefault, ps->flock);
+    (*ps->reader)(ps->closure, ps->lb, value, ps->vtype, ps->fdefault);
     return true;
 }
 
@@ -189,7 +188,6 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
                 ps->vb    = NULL;
                 ps->vtype = PREF_INVALID;
                 ps->fdefault = false;
-                ps->flock = false;
             }
             switch (c) {
             case '/':       /* begin comment block or line? */
@@ -200,9 +198,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
                 break;
             case 'u':       /* indicating user_pref */
             case 'p':       /* indicating pref */
-            case 'l':       /* indicating lockPref */
-                ps->smatch = (c == 'u' ? kUserPref :
-                                         (c == 'p' ? kPref : kLockPref));
+                ps->smatch = (c == 'u' ? kUserPref : kPref);
                 ps->sindex = 1;
                 ps->nextstate = PREF_PARSE_UNTIL_OPEN_PAREN;
                 state = PREF_PARSE_MATCH_STRING;
@@ -246,8 +242,7 @@ PREF_ParseBuf(PrefParseState *ps, const char *buf, int bufLen)
         /* name parsing */
         case PREF_PARSE_UNTIL_NAME:
             if (c == '\"' || c == '\'') {
-                ps->fdefault = (ps->smatch != kUserPref);
-                ps->flock = (ps->smatch == kLockPref);
+                ps->fdefault = (ps->smatch == kPref);
                 ps->quotechar = c;
                 ps->nextstate = PREF_PARSE_UNTIL_COMMA; /* return here when done */
                 state = PREF_PARSE_QUOTED_STRING;

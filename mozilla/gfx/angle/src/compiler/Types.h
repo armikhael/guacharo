@@ -7,7 +7,6 @@
 #ifndef _TYPES_INCLUDED
 #define _TYPES_INCLUDED
 
-#include <cstdlib>
 #include "compiler/BaseTypes.h"
 #include "compiler/Common.h"
 #include "compiler/compilerdebug.h"
