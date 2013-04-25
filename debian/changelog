@@ -1,6 +1,7 @@
 guacharo (17.0.5-2) experimental; urgency=low
 
   * Primera versión de Guácharo 17 para Canaima GNU/Linux.
+  * [64d89d5] Desaplicando parches.
 
  -- Luis Alejandro Martínez Faneyth <luis@huntingbears.com.ve>  Thu, 25 Apr 2013 09:50:13 -0430
 
