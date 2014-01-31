@@ -1,0 +1,37 @@
+Description: <short summary of the patch>
+ TODO: Put a short summary on the line above and replace this paragraph
+ with a longer explanation of this change. Complete the meta-information
+ with other relevant fields (see below for details). To make it easier, the
+ information below has been extracted from the changelog. Adjust it or drop
+ it.
+ .
+ icedove (17.0.10-1~deb7u1) stable-security; urgency=low
+ .
+   * [6f2593b] Imported Upstream version 17.0.10
+     - MFSA 2013-93 aka CVE-2013-5590
+     - MFSA 2013-95 aka CVE-2013-5604
+     - MFSA 2013-96 aka CVE-2013-5595
+     - MFSA 2013-98 aka CVE-2013-5597
+     - MFSA 2013-100 CVE-2013-5599, CVE-2013-5600, CVE-2013-5601
+     - MFSA 2013-101 aka CVE-2013-5602
+Author: Christoph Goehre <chris@sigxcpu.org>
+
+---
+The information above should follow the Patch Tagging Guidelines, please
+checkout http://dep.debian.net/deps/dep3/ to learn about the format. Here
+are templates for supplementary fields that you might want to add:
+
+Origin: <vendor|upstream|other>, <url of original patch>
+Bug: <url in upstream bugtracker>
+Bug-Debian: http://bugs.debian.org/<bugnumber>
+Bug-Ubuntu: https://launchpad.net/bugs/<bugnumber>
+Forwarded: <no|not-needed|url proving that it has been forwarded>
+Reviewed-By: <name and email of someone who approved the patch>
+Last-Update: <YYYY-MM-DD>
+
+--- /dev/null
++++ icedove-17.0.10/.treestate
+@@ -0,0 +1,3 @@
++[treestate]
++src_update_version = 2
++
