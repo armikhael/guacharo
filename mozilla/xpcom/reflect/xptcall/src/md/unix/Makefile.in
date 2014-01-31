@@ -396,6 +396,17 @@ CPPSRCS		:= xptcinvoke_linux_s390x.cpp xptcstubs_linux_s390x.cpp
 CXXFLAGS	+= -fno-strict-aliasing -fno-inline -fomit-frame-pointer -mbackchain
 endif
 
+############
+# SuperH
+############
+#
+#
+# Currently, tested on sh4 and sh4a (non sh4al and sh4al-dsp..)
+ifeq ($(OS_ARCH),Linux)
+ifneq (,$(filter sh4 sh4a,$(OS_TEST)))
+CPPSRCS		:= xptcinvoke_linux_sh.cpp xptcstubs_linux_sh.cpp
+endif
+endif
 
 # we don't want the shared lib, but we want to force the creation of a static lib.
 FORCE_STATIC_LIB = 1

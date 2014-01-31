@@ -3,10 +3,10 @@
 After downlading the sources debian/repack.py is used 
 to repackage the tarball
 
-    python guacharo/debian/repack.py -p guacharo -u 16.0.1 \
+    python icedove/debian/repack.py -p icedove -u 16.0.1 \
            thunderbird-16.0.1.source.tar.bz2
-    cd guacharo
-    git-import-orig ../guacharo_16.0.1.orig.tar.bz2
+    cd icedove
+    git-import-orig ../icedove_16.0.1.orig.tar.bz2
     
 Alternatively uscan should do the right thing:
 

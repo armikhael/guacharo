@@ -17,7 +17,6 @@
 #include <unistd.h>
 #if MOZ_HAVE_EXECINFO_H
 #include <execinfo.h>
-#include <sys/sysctl.h>
 #endif
 
 #include "base/basictypes.h"

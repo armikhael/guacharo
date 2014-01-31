@@ -184,6 +184,9 @@ preload(const char *file)
 static void
 ReadDependentCB(const char *aDependentLib, bool do_preload)
 {
+    char lib[MAXPATHLEN];
+    if (realpath(aDependentLib, lib))
+        aDependentLib = lib;
 #if defined(LINUX) && !defined(ANDROID)
     if (do_preload)
         preload(aDependentLib);

@@ -102,26 +102,13 @@ struct Cell
 #endif
 };
 
-/*
- * Page size is 4096 by default, except for SPARC, where it is 8192.
- * Note: Do not use JS_CPU_SPARC here, this header is used outside JS.
- * Bug 692267: Move page size definition to gc/Memory.h and include it
- *             directly once jsgc.h is no longer an installed header.
- */
-#if defined(SOLARIS) && (defined(__sparc) || defined(__sparcv9))
-const size_t PageShift = 13;
-#else
-const size_t PageShift = 12;
-#endif
-const size_t PageSize = size_t(1) << PageShift;
+const size_t ArenaShift = 12;
+const size_t ArenaSize = size_t(1) << ArenaShift;
+const size_t ArenaMask = ArenaSize - 1;
 
 const size_t ChunkShift = 20;
 const size_t ChunkSize = size_t(1) << ChunkShift;
 const size_t ChunkMask = ChunkSize - 1;
-
-const size_t ArenaShift = PageShift;
-const size_t ArenaSize = PageSize;
-const size_t ArenaMask = ArenaSize - 1;
 
 /*
  * This is the maximum number of arenas we allow in the FreeCommitted state
@@ -821,7 +808,7 @@ struct Chunk
 
     /* Search for a decommitted arena to allocate. */
     unsigned findDecommittedArenaOffset();
-    ArenaHeader* fetchNextDecommittedArena();
+    ArenaHeader* fetchNextDecommittedArena(JSRuntime *rt);
 
   public:
     /* Unlink and return the freeArenasHead. */

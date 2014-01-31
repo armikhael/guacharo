@@ -26730,7 +26730,7 @@ esac
 echo "$ac_t""Creating Python virtualenv" 1>&6
 rm -rf _virtualenv
 mkdir -p _virtualenv
-MACOSX_DEPLOYMENT_TARGET= PYTHONDONTWRITEBYTECODE= $PYTHON $_topsrcdir/python/virtualenv/virtualenv.py --system-site-packages ./_virtualenv
+MACOSX_DEPLOYMENT_TARGET= PYTHONDONTWRITEBYTECODE= $PYTHON /usr/share/pyshared/virtualenv.py --system-site-packages ./_virtualenv
 case "$host_os" in
 mingw*)
     PYTHON=$MOZ_BUILD_ROOT/_virtualenv/Scripts/python.exe

@@ -4,8 +4,8 @@ libdir=${sdkdir}lib
 includedir=${sdkdir}include
 idldir=${sdkdir}idl
 
-Name: guacharo
-Description: Guacharo/Thunderbird Development Files
+Name: icedove
+Description: Icedove/Thunderbird Development Files
 Version: 3.0
 Requires: nspr >= 4.8.2
 Libs: -L${libdir} -lxpcomglue_s -lxul -lxpcom -lmozjs -lmozalloc -lldap60 -lprldap60

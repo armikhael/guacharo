@@ -202,8 +202,8 @@ ifeq ($(OS_ARCH), IRIX)
 EXTRA_LIBS = -L$(dist_libdir) -l$(LBER_LIBNAME) $(OS_LIBS) -lc
 endif
 
-ifeq ($(OS_ARCH), Linux)
-EXTRA_LIBS = -L$(dist_libdir) -l$(LBER_LIBNAME)
+ifneq (,$(filter Linux GNU GNU_%, $(OS_ARCH)))
+EXTRA_LIBS = -L$(dist_libdir) -l$(LBER_LIBNAME) -lpthread
 endif
 
 ifeq ($(OS_ARCH), WINNT)
