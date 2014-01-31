@@ -472,15 +472,13 @@ FinalizeArenas(FreeOp *fop,
 }
 
 static inline Chunk *
-AllocChunk(JSRuntime *rt)
-{
-    return static_cast<Chunk *>(MapAlignedPages(rt, ChunkSize, ChunkSize));
+AllocChunk() {
+    return static_cast<Chunk *>(MapAlignedPages(ChunkSize, ChunkSize));
 }
 
 static inline void
-FreeChunk(JSRuntime *rt, Chunk *p)
-{
-    UnmapPages(rt, static_cast<void *>(p), ChunkSize);
+FreeChunk(Chunk *p) {
+    UnmapPages(static_cast<void *>(p), ChunkSize);
 }
 
 inline bool
@@ -570,25 +568,25 @@ ChunkPool::expire(JSRuntime *rt, bool releaseAll)
 }
 
 static void
-FreeChunkList(JSRuntime *rt, Chunk *chunkListHead)
+FreeChunkList(Chunk *chunkListHead)
 {
     while (Chunk *chunk = chunkListHead) {
         JS_ASSERT(!chunk->info.numArenasFreeCommitted);
         chunkListHead = chunk->info.next;
-        FreeChunk(rt, chunk);
+        FreeChunk(chunk);
     }
 }
 
 void
 ChunkPool::expireAndFree(JSRuntime *rt, bool releaseAll)
 {
-    FreeChunkList(rt, expire(rt, releaseAll));
+    FreeChunkList(expire(rt, releaseAll));
 }
 
 /* static */ Chunk *
 Chunk::allocate(JSRuntime *rt)
 {
-    Chunk *chunk = AllocChunk(rt);
+    Chunk *chunk = static_cast<Chunk *>(AllocChunk());
 
 #ifdef JSGC_ROOT_ANALYSIS
     // Our poison pointers are not guaranteed to be invalid on 64-bit
@@ -601,7 +599,7 @@ Chunk::allocate(JSRuntime *rt)
     // were marked as uncommitted, but it's a little complicated to avoid
     // clobbering pre-existing unrelated mappings.
     while (IsPoisonedPtr(chunk))
-        chunk = AllocChunk(rt);
+        chunk = static_cast<Chunk *>(AllocChunk());
 #endif
 
     if (!chunk)
@@ -617,7 +615,7 @@ Chunk::release(JSRuntime *rt, Chunk *chunk)
 {
     JS_ASSERT(chunk);
     chunk->prepareToBeFreed(rt);
-    FreeChunk(rt, chunk);
+    FreeChunk(chunk);
 }
 
 inline void
@@ -733,7 +731,7 @@ Chunk::findDecommittedArenaOffset()
 }
 
 ArenaHeader *
-Chunk::fetchNextDecommittedArena(JSRuntime *rt)
+Chunk::fetchNextDecommittedArena()
 {
     JS_ASSERT(info.numArenasFreeCommitted == 0);
     JS_ASSERT(info.numArenasFree > 0);
@@ -744,7 +742,7 @@ Chunk::fetchNextDecommittedArena(JSRuntime *rt)
     decommittedArenas.unset(offset);
 
     Arena *arena = &arenas[offset];
-    MarkPagesInUse(rt, arena, ArenaSize);
+    MarkPagesInUse(arena, ArenaSize);
     arena->aheader.setAsNotAllocated();
 
     return &arena->aheader;
@@ -778,7 +776,7 @@ Chunk::allocateArena(JSCompartment *comp, AllocKind thingKind)
 
     ArenaHeader *aheader = JS_LIKELY(info.numArenasFreeCommitted > 0)
                            ? fetchNextFreeArena(rt)
-                           : fetchNextDecommittedArena(rt);
+                           : fetchNextDecommittedArena();
     aheader->init(comp, thingKind);
     if (JS_UNLIKELY(!hasAvailableArenas()))
         removeFromAvailableList();
@@ -881,8 +879,6 @@ static const int64_t JIT_SCRIPT_RELEASE_TYPES_INTERVAL = 60 * 1000 * 1000;
 JSBool
 js_InitGC(JSRuntime *rt, uint32_t maxbytes)
 {
-    InitMemorySubsystem(rt);
-
     if (!rt->gcChunkSet.init(INITIAL_CHUNK_CAPACITY))
         return false;
 
@@ -2745,7 +2741,7 @@ DecommitArenasFromAvailableList(JSRuntime *rt, Chunk **availableListHeadp)
                 Maybe<AutoUnlockGC> maybeUnlock;
                 if (!rt->isHeapBusy())
                     maybeUnlock.construct(rt);
-                ok = MarkPagesUnused(rt, aheader->getArena(), ArenaSize);
+                ok = MarkPagesUnused(aheader->getArena(), ArenaSize);
             }
 
             if (ok) {
@@ -2775,7 +2771,7 @@ DecommitArenasFromAvailableList(JSRuntime *rt, Chunk **availableListHeadp)
                 JS_ASSERT(chunk->info.prevp);
             }
 
-            if (rt->gcChunkAllocationSinceLastGC || !ok) {
+            if (rt->gcChunkAllocationSinceLastGC) {
                 /*
                  * The allocator thread has started to get new chunks. We should stop
                  * to avoid decommitting arenas in just allocated chunks.
@@ -2813,7 +2809,7 @@ ExpireChunksAndArenas(JSRuntime *rt, bool shouldShrink)
 {
     if (Chunk *toFree = rt->gcChunkPool.expire(rt, shouldShrink)) {
         AutoUnlockGC unlock(rt);
-        FreeChunkList(rt, toFree);
+        FreeChunkList(toFree);
     }
 
     if (shouldShrink)

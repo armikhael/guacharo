@@ -14,6 +14,7 @@ PARALLEL_DIRS = \
   app \
   setup \
   stub \
+  examples \
   $(NULL)
 
 ifdef MAKENSISU

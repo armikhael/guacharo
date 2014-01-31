@@ -3645,18 +3645,6 @@ if test -n "$JSGC_GENERATIONAL"; then
     AC_DEFINE(JSGC_GENERATIONAL)
 fi
 
-dnl system libffi Support
-dnl ========================================================
-MOZ_ARG_ENABLE_BOOL(system-ffi,
-[  --enable-system-ffi       Use system libffi (located with pkgconfig)],
-    MOZ_NATIVE_FFI=1 )
-
-if test -n "$MOZ_NATIVE_FFI"; then
-    PKG_CHECK_MODULES(MOZ_FFI, libffi)
-fi
-
-AC_SUBST(MOZ_NATIVE_FFI)
-
 dnl ========================================================
 dnl = Perform moving GC stack rooting analysis
 dnl ========================================================

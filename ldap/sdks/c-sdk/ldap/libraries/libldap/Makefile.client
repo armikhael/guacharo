@@ -177,7 +177,7 @@ EXTRA_LIBS = -L$(NSCP_DISTDIR)/$(OBJDIR_NAME)/lib -l$(LBER_LIBNAME)
 EXTRA_LIBS += -L$(NSCP_DISTDIR)/lib
 endif
 
-ifneq (,$(filter Linux GNU GNU_%, $(OS_ARCH)))
+ifeq ($(OS_ARCH), Linux)
 EXTRA_LIBS = -L$(NSCP_DISTDIR)/$(OBJDIR_NAME)/lib -l$(LBER_LIBNAME)
 EXTRA_LIBS += -L$(NSCP_DISTDIR)/lib
 endif
@@ -253,7 +253,7 @@ endif
 ifeq ($(OS_ARCH), AIX)
 	$(LINK_LIB) ../liblber/$(OBJDIR_NAME)/*.a
 else
-ifneq (,$(filter Linux GNU GNU_%, $(OS_ARCH)))
+ifeq ($(OS_ARCH), Linux)
 	$(LINK_LIB) ../liblber/$(OBJDIR_NAME)/*.a
 else
 	$(LINK_LIB) $(EXTRA_LIBS)

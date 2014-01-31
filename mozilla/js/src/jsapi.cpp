@@ -1054,6 +1054,8 @@ JS_NewRuntime(uint32_t maxbytes)
 #undef MSG_DEF
 #endif /* DEBUG */
 
+        InitMemorySubsystem();
+
         js_NewRuntimeWasCalled = JS_TRUE;
     }
 

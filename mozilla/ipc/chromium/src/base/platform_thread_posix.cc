@@ -9,11 +9,11 @@
 
 #if defined(OS_MACOSX)
 #include <mach/mach.h>
-#elif defined(OS_LINUX) || defined(__GLIBC__) || defined(__GNU__)
+#elif defined(OS_LINUX)
 #include <sys/syscall.h>
-#if !defined(__FreeBSD_kernel__) && !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__) && !defined(__DragonFly__) && !defined(__GNU__)
+#if !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__) && !defined(__DragonFly__)
 #include <sys/prctl.h>
-#elif !defined(__NetBSD__) && !defined(__FreeBSD_kernel__) && !defined(__GNU__)
+#elif !defined(__NetBSD__)
 #include <pthread_np.h>
 #endif
 #include <unistd.h>
@@ -38,15 +38,11 @@ PlatformThreadId PlatformThread::CurrentId() {
   // into the kernel.
 #if defined(OS_MACOSX)
   return mach_thread_self();
-#elif defined(__FreeBSD_kernel__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__) || defined(__GNU__)
+#elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
   // TODO(BSD): find a better thread ID
   return (intptr_t)(pthread_self());
 #elif defined(OS_LINUX)
-#ifdef __NR_gettid
   return syscall(__NR_gettid);
-#else
-  return getpid();
-#endif
 #endif
 }
 
@@ -91,7 +87,7 @@ void PlatformThread::SetName(const char* name) {
   pthread_set_name_np(pthread_self(), name);
 #elif defined(__NetBSD__)
   pthread_setname_np(pthread_self(), "%s", (void *)name);
-#elif !defined(__FreeBSD_kernel__) && !defined(__GNU__)
+#else
   prctl(PR_SET_NAME, reinterpret_cast<uintptr_t>(name), 0, 0, 0); 
 #endif
 }

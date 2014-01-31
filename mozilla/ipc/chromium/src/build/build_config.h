@@ -17,7 +17,7 @@
 // A set of macros to use for platform detection.
 #if defined(__APPLE__)
 #define OS_MACOSX 1
-#elif defined(__linux__) || defined(ANDROID) || defined(__GLIBC__) || defined(__GNU__)
+#elif defined(__linux__) || defined(ANDROID)
 #define OS_LINUX 1
 #elif defined(__OpenBSD__)
 #define OS_OPENBSD 1

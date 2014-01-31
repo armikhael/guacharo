@@ -176,8 +176,7 @@ void PREF_ReaderCallback( void *closure,
                           const char *pref,
                           PrefValue   value,
                           PrefType    type,
-                          bool        isDefault,
-                          bool        isLocked);
+                          bool        isDefault);
 
 PR_END_EXTERN_C
 #endif
