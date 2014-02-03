@@ -21,7 +21,7 @@ debian/tmp/usr/lib/@DEB_MOZ_APPLICATION@/components/lib*.so
 debian/tmp/usr/lib/@DEB_MOZ_APPLICATION@/components/binary.manifest
 debian/tmp/usr/lib/@DEB_MOZ_APPLICATION@/chrome.manifest
 
-debian/icedove.js etc/@DEB_MOZ_APPLICATION@/pref
+debian/guacharo.js etc/@DEB_MOZ_APPLICATION@/pref
 debian/vendor.js usr/share/@DEB_MOZ_APPLICATION@/defaults/pref
 
 debian/account-autoconfig/* usr/share/@DEB_MOZ_APPLICATION@/isp

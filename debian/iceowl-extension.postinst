@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-if test -e /usr/lib/icedove/.autoreg; then
-  touch /usr/lib/icedove/.autoreg
+if test -e /usr/lib/guacharo/.autoreg; then
+  touch /usr/lib/guacharo/.autoreg
 fi
 
 #DEBHELPER#

@@ -5,7 +5,7 @@ Description: <short summary of the patch>
  information below has been extracted from the changelog. Adjust it or drop
  it.
  .
- icedove (17.0.10-1~deb7u1) stable-security; urgency=low
+ guacharo (17.0.10-1~deb7u1) stable-security; urgency=low
  .
    * [6f2593b] Imported Upstream version 17.0.10
      - MFSA 2013-93 aka CVE-2013-5590
@@ -30,7 +30,7 @@ Reviewed-By: <name and email of someone who approved the patch>
 Last-Update: <YYYY-MM-DD>
 
 --- /dev/null
-+++ icedove-17.0.10/.treestate
++++ guacharo-17.0.10/.treestate
 @@ -0,0 +1,3 @@
 +[treestate]
 +src_update_version = 2
