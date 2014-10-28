@@ -1,7 +1,7 @@
 Source: guacharo
 Section: mail
 Priority: optional
-Maintainer: Christoph Goehre <chris@sigxcpu.org>
+Maintainer: Carlos Espinoza <carlosarmikhael@gmail.com>
 Uploaders: Guido Günther <agx@sigxcpu.org>
 Build-Depends: bzip2,
 	debhelper (>= 5),
